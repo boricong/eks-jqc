@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
@@ -17,9 +17,27 @@ async function changeActor(event: Event) {
     select.value = store.actorId;
     return;
   }
-  store.switchActor(target);
+  try {
+    await store.switchActor(target);
+  } catch (error) {
+    store.notify((error as Error).message);
+    select.value = store.actorId;
+  }
   menuOpen.value = false;
 }
+async function refreshOnFocus() {
+  if (store.signedIn && !store.loading)
+    try {
+      await store.refresh();
+    } catch (error) {
+      store.notify((error as Error).message);
+    }
+}
+onMounted(() => {
+  void store.initialize();
+  window.addEventListener('focus', refreshOnFocus);
+});
+onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
 </script>
 <template>
   <div class="app" :class="{ 'home-theme': isHome }">
@@ -41,7 +59,7 @@ async function changeActor(event: Event) {
         <nav class="primary-nav" :class="{ expanded: menuOpen }" aria-label="주 메뉴">
           <RouterLink to="/" :class="{ active: isHome }" @click="menuOpen = false">홈</RouterLink>
           <RouterLink
-            v-if="store.actor.role === 'learner'"
+            v-if="store.hasRole('learner')"
             to="/qualifications"
             :class="{
               active:
@@ -52,14 +70,14 @@ async function changeActor(event: Event) {
             >자격 취득</RouterLink
           >
           <RouterLink
-            v-if="store.actor.role === 'ft'"
+            v-if="store.hasRole('ft')"
             to="/evaluations"
             :class="{ active: route.path.startsWith('/evaluations') }"
             @click="menuOpen = false"
             >FT 평가</RouterLink
           >
           <RouterLink
-            v-if="store.actor.role === 'admin'"
+            v-if="store.hasRole('admin')"
             to="/admin/qualifications"
             :class="{ active: route.path.startsWith('/admin') }"
             @click="menuOpen = false"
@@ -67,22 +85,34 @@ async function changeActor(event: Event) {
           >
         </nav>
         <div class="account">
-          <span
-            class="prototype-label"
-            title="가상 데이터로 동작하는 화면 시안입니다. 새로고침하면 초기 상태로 돌아갑니다."
-            >화면 시안</span
+          <span class="prototype-label" title="로컬 계정 선택으로 사용하는 검증용 MVP입니다."
+            >검증용 MVP</span
           >
           <span class="avatar" aria-hidden="true">{{ store.actor.name.slice(0, 1) }}</span>
           <label class="sr-only" for="actor">접속 계정</label>
-          <select id="actor" :value="store.actorId" @change="changeActor">
-            <option v-for="user in store.data.users" :key="user.id" :value="user.id">
-              {{ user.name }} · {{ roles[user.role] }}
+          <select id="actor" :value="store.actorId" :disabled="store.loading" @change="changeActor">
+            <option disabled value="">계정 선택</option>
+            <option v-for="user in store.actors" :key="user.id" :value="user.id">
+              {{ user.name }} · {{ user.roles.map((role) => roles[role]).join(' · ') }}
             </option>
           </select>
         </div>
       </div>
     </header>
-    <main id="main" tabindex="-1"><RouterView /></main>
+    <main id="main" tabindex="-1">
+      <div v-if="store.loading" class="container page empty-state" role="status">불러오는 중</div>
+      <RouterView v-else-if="store.signedIn" />
+      <div v-else class="container page empty-state spacious">
+        <h1>접속 계정 선택</h1>
+        <p class="muted">상단에서 검증에 사용할 계정을 선택해 주세요.</p>
+        <p v-if="store.connectionError" class="error-message" role="alert">
+          {{ store.connectionError }}
+        </p>
+        <button v-if="store.connectionError" class="button secondary" @click="store.initialize()">
+          다시 연결
+        </button>
+      </div>
+    </main>
     <footer class="site-footer">
       <div class="footer-inner"><span>EKS · 직무자격인증</span><span>검증용</span></div>
     </footer>

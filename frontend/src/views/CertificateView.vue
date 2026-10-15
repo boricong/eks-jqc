@@ -9,14 +9,14 @@ const store = useDemo(),
 const a = computed(() => {
   const a = store.assignment(String(route.params.id));
   return a?.certifiedAt &&
-    (store.actor.role === 'admin' || a.learnerId === store.actorId || a.ftId === store.actorId)
+    (store.hasRole('admin') || a.learnerId === store.actorId || a.ftId === store.actorId)
     ? a
     : undefined;
 });
 const back = computed(() =>
-  store.actor.role === 'admin'
+  store.hasRole('admin')
     ? '/admin/results'
-    : store.actor.role === 'ft'
+    : store.hasRole('ft')
       ? '/evaluations'
       : '/qualifications?filter=certified',
 );
@@ -43,6 +43,7 @@ const back = computed(() =>
         }}<small>필수 과정 수료</small></span
       >
     </div>
+    <p class="small-label">인증 {{ a.certification?.id }}</p>
     <p v-if="a.excludedReason" class="error-message">검증 제외 · {{ a.excludedReason }}</p>
     <section class="panel evidence-panel">
       <div class="section-heading"><h2>수료 근거</h2></div>
@@ -58,10 +59,16 @@ const back = computed(() =>
         >
           <span>{{ kind === 'objective' ? '객관식' : '실기' }}</span
           ><StatusBadge status="passed" /><span
-            >{{ e.history.find((h) => h.kind === kind && h.result === 'passed')?.round }}회</span
+            >{{
+              e.history.find(
+                (h) => h.id === e.completion?.evidence.find((ev) => ev.kind === kind)?.attemptId,
+              )?.round
+            }}회</span
           ><span class="muted">{{
             new Date(
-              e.history.find((h) => h.kind === kind && h.result === 'passed')!.date,
+              e.history.find(
+                (h) => h.id === e.completion?.evidence.find((ev) => ev.kind === kind)?.attemptId,
+              )!.date,
             ).toLocaleDateString('ko-KR')
           }}</span>
         </div>

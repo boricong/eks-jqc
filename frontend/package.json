@@ -1,5 +1,5 @@
 {
-  "name": "eks-jqc-frontend-preview",
+  "name": "@eks/frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,8 @@
     "pinia": "^3.0.0",
     "pretendard": "^1.3.9",
     "vue": "^3.5.0",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "@eks/contracts": "0.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

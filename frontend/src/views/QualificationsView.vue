@@ -8,11 +8,20 @@ const store = useDemo(),
   route = useRoute(),
   router = useRouter();
 const search = ref('');
-const filter = computed(() => (route.query.filter === 'certified' ? 'certified' : 'active'));
+const filter = computed(() =>
+  route.query.filter === 'excluded'
+    ? 'excluded'
+    : route.query.filter === 'certified'
+      ? 'certified'
+      : 'active',
+);
 const list = computed(() =>
-  store.myAssignments.filter(
+  store.data.assignments.filter(
     (a) =>
-      Boolean(a.certifiedAt) === (filter.value === 'certified') &&
+      a.learnerId === store.actorId &&
+      (filter.value === 'excluded'
+        ? !!a.excludedReason
+        : !a.excludedReason && Boolean(a.certifiedAt) === (filter.value === 'certified')) &&
       store
         .qualification(a.qualificationId)
         .title.toLowerCase()
@@ -41,6 +50,13 @@ const list = computed(() =>
           @click="router.replace({ query: { filter: 'certified' } })"
         >
           인증 완료 <span>{{ store.myAssignments.filter((a) => a.certifiedAt).length }}</span>
+        </button>
+        <button
+          :class="{ active: filter === 'excluded' }"
+          :aria-pressed="filter === 'excluded'"
+          @click="router.replace({ query: { filter: 'excluded' } })"
+        >
+          검증 제외
         </button>
       </div>
       <label class="search-field"
@@ -72,7 +88,9 @@ const list = computed(() =>
             ><span
               :style="{ width: `${(store.completedCount(a) / a.enrollments.length) * 100}%` }"
             ></span></span></span
-        ><StatusBadge v-if="a.certifiedAt" status="certified" /><span v-else class="inline-action"
+        ><StatusBadge v-if="a.excludedReason" status="excluded" /><StatusBadge
+          v-else-if="a.certifiedAt"
+          status="certified" /><span v-else class="inline-action"
           >진행하기<AppIcon name="arrow" :size="18" /></span
       ></RouterLink>
     </div>

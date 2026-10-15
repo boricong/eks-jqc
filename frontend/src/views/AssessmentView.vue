@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
+import { useAttemptDraft } from '../composables/useAttemptDraft';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -34,21 +35,25 @@ const valid = computed(
 const stage = ref<'edit' | 'review' | 'result'>('edit');
 const error = ref(''),
   materialOpen = ref(false);
-watch(
-  () => route.fullPath,
-  () => {
-    stage.value = 'edit';
-    error.value = '';
-  },
-  { immediate: true },
-);
+const busy = ref(false);
+const {
+  attempt,
+  draft,
+  status: saveStatus,
+  error: saveError,
+  conflict,
+  load,
+  flush,
+  changed,
+  canLeave,
+} = useAttemptDraft(() => store.actorId);
 const answered = computed(
-  () => c.value?.questions.filter((q) => e.value?.answers[q.id] !== undefined).length || 0,
+  () => c.value?.questions.filter((q) => draft.value.answers[q.id] !== undefined).length || 0,
 );
 const judged = computed(
   () =>
     c.value?.practicalItems.filter(
-      (i) => e.value?.verdicts[i.id]?.value && e.value?.verdicts[i.id]?.evidence.trim(),
+      (i) => draft.value.verdicts[i.id]?.value && draft.value.verdicts[i.id]?.evidence.trim(),
     ).length || 0,
 );
 const isResult = computed(
@@ -79,14 +84,14 @@ function review() {
   error.value = '';
   if (isObjective.value && answered.value !== c.value!.questions.length) {
     error.value = '미응답 문항을 확인해 주세요.';
-    const missing = c.value!.questions.find((q) => e.value!.answers[q.id] === undefined)!;
+    const missing = c.value!.questions.find((q) => draft.value.answers[q.id] === undefined)!;
     focusItem(missing.id);
     return;
   }
   if (isFT.value && judged.value !== c.value!.practicalItems.length) {
     error.value = '판정과 근거를 모두 입력해 주세요.';
     const missing = c.value!.practicalItems.find(
-      (i) => !e.value!.verdicts[i.id]?.value || !e.value!.verdicts[i.id]?.evidence.trim(),
+      (i) => !draft.value.verdicts[i.id]?.value || !draft.value.verdicts[i.id]?.evidence.trim(),
     )!;
     focusItem(missing.id);
     return;
@@ -94,26 +99,92 @@ function review() {
   stage.value = 'review';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function submit() {
+async function prepare() {
+  busy.value = true;
+  error.value = '';
+  stage.value = 'edit';
   try {
-    if (isObjective.value) store.submitObjective(a.value!.id, c.value!.id);
-    else store.evaluate(a.value!.id, c.value!.id);
+    if (!valid.value || !a.value || !c.value || !e.value) {
+      load(null);
+      return;
+    }
+    if (isObjective.value && e.value.objective !== 'passed')
+      load(await store.startAttempt(a.value.id, c.value.id, 'objective'));
+    else if (isFT.value && e.value.practical === 'waiting')
+      load(e.value.activeAttempts.practical || null);
+    else load(null);
+  } catch (err) {
+    error.value = (err as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+async function submit() {
+  if (busy.value || !attempt.value) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await flush();
+    await store.command(`/attempts/${attempt.value.id}/submit`, {
+      revision: attempt.value.revision,
+    });
+    load(null);
     stage.value = 'result';
-    error.value = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    error.value = (err as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+function verdict(id: string, patch: Partial<Verdict>) {
+  const previous = draft.value.verdicts[id] || { value: '', evidence: '' };
+  draft.value.verdicts[id] = { ...previous, ...patch };
+  changed();
+  if (judged.value === c.value!.practicalItems.length) error.value = '';
+}
+function answer(id: string, value: number) {
+  draft.value.answers[id] = value;
+  changed();
+  if (answered.value === c.value!.questions.length) error.value = '';
+}
+async function requestPractical() {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await store.requestPractical(a.value!.id, c.value!.id);
+  } catch (err) {
+    error.value = (err as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+async function reloadDraft() {
+  if (!window.confirm('현재 입력을 서버에 저장된 내용으로 바꿀까요?')) return;
+  try {
+    await store.refresh();
+    await prepare();
   } catch (err) {
     error.value = (err as Error).message;
   }
 }
-function verdict(id: string, patch: Partial<Verdict>) {
-  const previous = e.value!.verdicts[id] || { value: '', evidence: '' };
-  store.saveVerdict(a.value!.id, c.value!.id, id, { ...previous, ...patch });
-  if (judged.value === c.value!.practicalItems.length) error.value = '';
+async function retrySave() {
+  try {
+    await flush();
+  } catch {
+    /* saveError retains the actionable message */
+  }
 }
-function answer(id: string, value: number) {
-  store.saveAnswer(a.value!.id, c.value!.id, id, value);
-  if (answered.value === c.value!.questions.length) error.value = '';
-}
+watch(
+  () => route.fullPath,
+  () => {
+    void prepare();
+  },
+  { immediate: true },
+);
+onBeforeRouteLeave(canLeave);
+onBeforeRouteUpdate(canLeave);
 </script>
 <template>
   <div v-if="valid && a && e && c" class="container page assessment-page">
@@ -143,7 +214,11 @@ function answer(id: string, value: number) {
           ><span v-else>{{ store.qualification(a.qualificationId).title }}</span>
         </div>
       </div>
-      <button v-if="c.material && !isResult" class="button secondary" @click="materialOpen = true">
+      <button
+        v-if="(c.material || c.materialUrl) && !isResult"
+        class="button secondary"
+        @click="materialOpen = true"
+      >
         <AppIcon name="file" :size="18" />학습자료
       </button>
     </div>
@@ -173,7 +248,8 @@ function answer(id: string, value: number) {
         ><button
           v-if="isObjective && result === 'failed'"
           class="button primary"
-          @click="stage = 'edit'"
+          @click="prepare"
+          :disabled="busy"
         >
           다시 응시<AppIcon name="retry" :size="18" /></button
         ><RouterLink
@@ -190,7 +266,12 @@ function answer(id: string, value: number) {
       </div>
     </div>
     <div v-else class="assessment-layout">
-      <div class="assessment-main">
+      <div v-if="saveError" class="error-message save-error" role="alert">
+        <span>{{ saveError }}</span>
+        <button v-if="!conflict" class="button secondary" @click="retrySave">저장 재시도</button>
+        <button class="button secondary" @click="reloadDraft">다시 불러오기</button>
+      </div>
+      <div class="assessment-main" :aria-busy="busy">
         <div v-if="error" class="error-message" role="alert">
           <AppIcon name="alert" :size="18" />{{ error }}
         </div>
@@ -206,12 +287,12 @@ function answer(id: string, value: number) {
                 v-for="(option, i) in q.choices"
                 :key="i"
                 class="choice"
-                :class="{ chosen: e.answers[q.id] === i }"
+                :class="{ chosen: draft.answers[q.id] === i }"
                 ><input
                   type="radio"
                   :name="q.id"
                   :value="i"
-                  :checked="e.answers[q.id] === i"
+                  :checked="draft.answers[q.id] === i"
                   @change="answer(q.id, i)"
                 /><span>{{ option }}</span></label
               >
@@ -234,20 +315,20 @@ function answer(id: string, value: number) {
               <span class="small-label">{{ item.mandatory ? '필수' : '선택' }}</span>
             </div>
             <p class="criterion">{{ item.criterion }}</p>
-            <fieldset class="verdict-options">
+            <fieldset class="verdict-options" :disabled="busy || !attempt">
               <legend class="sr-only">{{ item.title }} 판정</legend>
-              <label class="choice" :class="{ chosen: e.verdicts[item.id]?.value === 'pass' }"
+              <label class="choice" :class="{ chosen: draft.verdicts[item.id]?.value === 'pass' }"
                 ><input
                   type="radio"
                   :name="item.id"
-                  :checked="e.verdicts[item.id]?.value === 'pass'"
+                  :checked="draft.verdicts[item.id]?.value === 'pass'"
                   @change="verdict(item.id, { value: 'pass' })"
                 />통과</label
-              ><label class="choice" :class="{ chosen: e.verdicts[item.id]?.value === 'fail' }"
+              ><label class="choice" :class="{ chosen: draft.verdicts[item.id]?.value === 'fail' }"
                 ><input
                   type="radio"
                   :name="item.id"
-                  :checked="e.verdicts[item.id]?.value === 'fail'"
+                  :checked="draft.verdicts[item.id]?.value === 'fail'"
                   @change="verdict(item.id, { value: 'fail' })"
                 />미통과</label
               >
@@ -255,8 +336,9 @@ function answer(id: string, value: number) {
             <label class="field"
               ><span>판정 근거</span
               ><textarea
+                :disabled="busy || !attempt"
                 rows="2"
-                :value="e.verdicts[item.id]?.evidence || ''"
+                :value="draft.verdicts[item.id]?.evidence || ''"
                 @input="
                   verdict(item.id, { evidence: ($event.target as HTMLTextAreaElement).value })
                 "
@@ -270,7 +352,7 @@ function answer(id: string, value: number) {
                 <span class="question-number">{{ String(i + 1).padStart(2, '0') }}</span>
                 <div>
                   <h2>{{ q.prompt }}</h2>
-                  <p>{{ q.choices[e.answers[q.id]!] }}</p>
+                  <p>{{ q.choices[draft.answers[q.id]!] }}</p>
                 </div>
                 <button class="text-link" @click="stage = 'edit'">수정</button>
               </div>
@@ -281,9 +363,9 @@ function answer(id: string, value: number) {
                 <div>
                   <h2>{{ item.title }}</h2>
                   <StatusBadge
-                    :status="e.verdicts[item.id]?.value === 'pass' ? 'passed' : 'failed'"
+                    :status="draft.verdicts[item.id]?.value === 'pass' ? 'passed' : 'failed'"
                   />
-                  <p class="evidence-text">{{ e.verdicts[item.id]?.evidence }}</p>
+                  <p class="evidence-text">{{ draft.verdicts[item.id]?.evidence }}</p>
                 </div>
                 <button class="text-link" @click="stage = 'edit'">수정</button>
               </div>
@@ -325,6 +407,11 @@ function answer(id: string, value: number) {
           </div></template
         >
         <div class="actionbar">
+          <span v-if="attempt" class="save-status" role="status">{{
+            { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[
+              saveStatus
+            ]
+          }}</span>
           <span class="muted">{{
             isObjective
               ? `${answered} / ${c.questions.length} 응답`
@@ -336,16 +423,27 @@ function answer(id: string, value: number) {
             <button v-if="stage === 'review'" class="button secondary" @click="stage = 'edit'">
               이전</button
             ><RouterLink v-else :to="returnPath" class="button secondary">나가기</RouterLink
-            ><button v-if="stage === 'review'" class="button primary" @click="submit">
+            ><button
+              v-if="stage === 'review'"
+              class="button primary"
+              :disabled="busy || conflict"
+              @click="submit"
+            >
               {{ isFT ? '평가 확정' : '제출' }}<AppIcon name="check" :size="18" /></button
-            ><button v-else-if="isObjective || isFT" class="button primary" @click="review">
+            ><button
+              v-else-if="isObjective || isFT"
+              class="button primary"
+              :disabled="busy || !attempt || conflict"
+              @click="review"
+            >
               {{ isFT ? '판정 확인' : '답안 확인' }}<AppIcon name="arrow" :size="18" /></button
             ><RouterLink v-else-if="e.practical === 'waiting'" :to="nextPath" class="button primary"
               >다른 과정 보기<AppIcon name="arrow" :size="18" /></RouterLink
             ><button
               v-else-if="e.practical !== 'passed'"
               class="button primary"
-              @click="store.requestPractical(a.id, c.id)"
+              :disabled="busy"
+              @click="requestPractical"
             >
               {{ e.practical === 'failed' ? '다시 요청' : '평가 요청'
               }}<AppIcon name="arrow" :size="18" />
@@ -361,8 +459,8 @@ function answer(id: string, value: number) {
               <button
                 v-for="(q, i) in c.questions"
                 :key="q.id"
-                :class="{ answered: e.answers[q.id] !== undefined }"
-                :aria-label="`${i + 1}번 문항 ${e.answers[q.id] !== undefined ? '응답 완료' : '미응답'}`"
+                :class="{ answered: draft.answers[q.id] !== undefined }"
+                :aria-label="`${i + 1}번 문항 ${draft.answers[q.id] !== undefined ? '응답 완료' : '미응답'}`"
                 @click="
                   stage = 'edit';
                   focusItem(q.id);
@@ -381,7 +479,8 @@ function answer(id: string, value: number) {
                 v-for="(item, i) in c.practicalItems"
                 :key="item.id"
                 :class="{
-                  answered: e.verdicts[item.id]?.value && e.verdicts[item.id]?.evidence.trim(),
+                  answered:
+                    draft.verdicts[item.id]?.value && draft.verdicts[item.id]?.evidence.trim(),
                 }"
                 :aria-label="`${i + 1}번 판정 항목`"
                 @click="
@@ -411,8 +510,15 @@ function answer(id: string, value: number) {
       </aside>
     </div>
     <AppDialog v-model:open="materialOpen" :title="`${c.title} · 학습자료`"
-      ><div class="material-content">{{ c.material }}</div></AppDialog
-    >
+      ><div class="material-content">{{ c.material }}</div>
+      <a
+        v-if="c.materialUrl"
+        :href="c.materialUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="button secondary"
+        >자료 열기<AppIcon name="diagonal" :size="16" /></a
+    ></AppDialog>
   </div>
   <div v-else class="container page empty-state">
     <h1>평가를 찾을 수 없습니다.</h1>

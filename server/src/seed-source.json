@@ -1,9 +1,30 @@
 {
   "users": [
-    { "id": "learner-1", "name": "김민서", "role": "learner" },
-    { "id": "ft-1", "name": "박준호", "role": "ft" },
-    { "id": "admin-1", "name": "이서연", "role": "admin" },
-    { "id": "learner-2", "name": "정하린", "role": "learner" }
+    {
+      "id": "learner-1",
+      "name": "김민서",
+      "role": "learner"
+    },
+    {
+      "id": "ft-1",
+      "name": "박준호",
+      "role": "ft"
+    },
+    {
+      "id": "admin-1",
+      "name": "이서연",
+      "role": "admin"
+    },
+    {
+      "id": "learner-2",
+      "name": "정하린",
+      "role": "learner"
+    },
+    {
+      "id": "ft-2",
+      "name": "오지훈",
+      "role": "ft"
+    }
   ],
   "qualifications": [
     {
@@ -75,14 +96,24 @@
         {
           "id": "d2-q1",
           "prompt": "기록에 포함할 항목은 무엇인가요?",
-          "choices": ["대상 이름과 확인한 값", "파일 색상", "점심 메뉴", "개인 일정"],
+          "choices": [
+            "대상 이름과 확인한 값",
+            "파일 색상",
+            "점심 메뉴",
+            "개인 일정"
+          ],
           "correct": 0,
           "points": 1
         },
         {
           "id": "d2-q2",
           "prompt": "기록을 마친 뒤 확인할 내용은 무엇인가요?",
-          "choices": ["글꼴 종류", "항목의 누락 여부", "화면 밝기", "파일 크기"],
+          "choices": [
+            "글꼴 종류",
+            "항목의 누락 여부",
+            "화면 밝기",
+            "파일 크기"
+          ],
           "correct": 1,
           "points": 1
         }
@@ -178,7 +209,10 @@
               "round": 1,
               "result": "passed",
               "date": "2026-10-15T01:00:00.000Z",
-              "answers": { "d1-q1": 0, "d1-q2": 1 }
+              "answers": {
+                "d1-q1": 0,
+                "d1-q2": 1
+              }
             },
             {
               "id": "attempt-2",
@@ -187,8 +221,14 @@
               "result": "failed",
               "date": "2026-10-15T02:00:00.000Z",
               "verdicts": {
-                "d1-p1": { "value": "pass", "evidence": "자료의 이름과 버전을 확인함." },
-                "d1-p2": { "value": "fail", "evidence": "기록란에 버전이 누락됨." }
+                "d1-p1": {
+                  "value": "pass",
+                  "evidence": "자료의 이름과 버전을 확인함."
+                },
+                "d1-p2": {
+                  "value": "fail",
+                  "evidence": "기록란에 버전이 누락됨."
+                }
               }
             }
           ]

@@ -5,7 +5,8 @@ import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
-import type { Assignment, Course, Notice, Qualification } from '../types';
+import ComparisonPanel from '../components/ComparisonPanel.vue';
+import type { Assignment, Course, Notice, Qualification, AuditEvent, Verdict } from '../types';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
@@ -14,10 +15,12 @@ const sections = [
   { id: 'courses', name: '과정 관리', icon: 'book' },
   { id: 'assignments', name: '자격 배정', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },
+  { id: 'comparisons', name: '기준 검증', icon: 'check' },
   { id: 'notices', name: '공지 관리', icon: 'notice' },
 ];
 const section = computed(() => String(route.params.section));
 const title = computed(() => sections.find((s) => s.id === section.value)!.name);
+const busy = ref(false);
 const query = ref(''),
   filter = ref('all'),
   errors = ref<string[]>([]),
@@ -84,28 +87,20 @@ const assignments = computed(() =>
   ),
 );
 const notices = computed(() => store.data.notices.filter((n) => matches(n.title)));
-function createCatalog() {
-  const id = crypto.randomUUID();
-  if (section.value === 'courses') {
-    store.data.courses.push({
-      id,
-      title: '',
-      version: 1,
-      status: 'draft',
-      mode: 'both',
-      passScore: null,
-      material: '',
-      instruction: '매뉴얼 참고 가능 · 타인의 도움 없이 수행',
-      questions: [],
-      practicalItems: [],
-    });
-  } else {
-    store.data.qualifications.push({ id, title: '', version: 1, status: 'draft', courseIds: [] });
+async function createCatalog() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const result = await store.createCatalog(section.value);
+    await router.push(`/admin/${section.value}/${result.id}`);
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
   }
-  router.push(`/admin/${section.value}/${id}`);
 }
-function saveCatalog(publish = false) {
-  if (!editor.value || readOnly.value) return;
+async function saveCatalog(publish = false) {
+  if (!editor.value || readOnly.value || busy.value) return;
   errors.value = publish
     ? courseDraft.value
       ? store.courseErrors(courseDraft.value)
@@ -115,24 +110,40 @@ function saveCatalog(publish = false) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
-  if (publish) editor.value.status = 'published';
-  if (courseDraft.value) {
-    const i = store.data.courses.findIndex((c) => c.id === courseDraft.value!.id);
-    store.data.courses[i] = plain(courseDraft.value);
-  } else {
-    const i = store.data.qualifications.findIndex((q) => q.id === qualificationDraft.value!.id);
-    store.data.qualifications[i] = plain(qualificationDraft.value!);
+  busy.value = true;
+  try {
+    const result = await store.saveCatalog(section.value, plain(editor.value), publish);
+    if (courseDraft.value) courseDraft.value = plain(store.course(result.id));
+    else qualificationDraft.value = plain(store.qualification(result.id));
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
   }
-  store.notify(publish ? '사용 등록했습니다.' : '초안을 저장했습니다.');
 }
-function cloneVersion() {
-  const item = plain(editor.value!);
-  item.id = crypto.randomUUID();
-  item.status = 'draft';
-  item.version += 1;
-  if (courseDraft.value) store.data.courses.push(item as Course);
-  else store.data.qualifications.push(item as Qualification);
-  router.push(`/admin/${section.value}/${item.id}`);
+async function reloadCatalog() {
+  if (!window.confirm('저장하지 않은 내용을 버리고 다시 불러올까요?')) return;
+  try {
+    await store.refresh();
+    if (courseDraft.value) courseDraft.value = plain(store.course(courseDraft.value.id));
+    else if (qualificationDraft.value)
+      qualificationDraft.value = plain(store.qualification(qualificationDraft.value.id));
+    errors.value = [];
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  }
+}
+async function cloneVersion() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const result = await store.cloneCatalog(section.value, editor.value!.id);
+    await router.push(`/admin/${section.value}/${result.id}`);
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
+  }
 }
 function addQuestion() {
   courseDraft.value!.questions.push({
@@ -141,6 +152,7 @@ function addQuestion() {
     choices: ['', ''],
     correct: null,
     points: 1,
+    category: 'written',
   });
 }
 function addPractical() {
@@ -151,9 +163,11 @@ function addPractical() {
     mandatory: true,
   });
 }
-function addAssignment() {
+async function addAssignment() {
+  if (busy.value) return;
+  busy.value = true;
   try {
-    store.addAssignment(
+    await store.addAssignment(
       assignmentForm.value.qualificationId,
       assignmentForm.value.learnerId,
       assignmentForm.value.ftId,
@@ -162,29 +176,34 @@ function addAssignment() {
     errors.value = [];
   } catch (error) {
     errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
   }
 }
 function openAssignment(a: Assignment, action: 'exclude' | 'ft') {
   selectedAssignment.value = a;
   assignmentAction.value = action;
   reason.value = '';
-  ftId.value = a.ftId;
+  ftId.value = a.ftId || '';
   errors.value = [];
 }
-function changeAssignment() {
-  if (!reason.value.trim()) {
-    errors.value = ['변경 사유를 입력해 주세요.'];
-    return;
+async function changeAssignment() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    await store.changeAssignment(
+      selectedAssignment.value!,
+      assignmentAction.value,
+      reason.value.trim(),
+      ftId.value,
+    );
+    selectedAssignment.value = null;
+    errors.value = [];
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
   }
-  if (assignmentAction.value === 'exclude') {
-    selectedAssignment.value!.excludedReason = reason.value.trim();
-    store.notify('검증 대상에서 제외했습니다.');
-  } else {
-    selectedAssignment.value!.ftId = ftId.value;
-    store.notify('FT를 변경했습니다.');
-  }
-  selectedAssignment.value = null;
-  errors.value = [];
 }
 function editNotice(n?: Notice) {
   noticeDraft.value = n
@@ -195,22 +214,55 @@ function editNotice(n?: Notice) {
         body: '',
         date: new Date().toISOString().slice(0, 10),
         published: true,
+        revision: 1,
       };
   errors.value = [];
 }
-function saveNotice() {
-  if (!noticeDraft.value?.title.trim() || !noticeDraft.value.body.trim()) {
-    errors.value = ['제목과 내용을 입력해 주세요.'];
-    return;
+async function saveNotice() {
+  if (!noticeDraft.value || busy.value) return;
+  busy.value = true;
+  try {
+    await store.saveNotice(plain(noticeDraft.value));
+    noticeDraft.value = null;
+    errors.value = [];
+  } catch (error) {
+    errors.value = [(error as Error).message];
+  } finally {
+    busy.value = false;
   }
-  const i = store.data.notices.findIndex((n) => n.id === noticeDraft.value!.id);
-  if (i < 0) store.data.notices.unshift(plain(noticeDraft.value));
-  else store.data.notices[i] = plain(noticeDraft.value);
-  noticeDraft.value = null;
-  errors.value = [];
-  store.notify('공지를 저장했습니다.');
 }
+const needsFT = computed(() =>
+  store
+    .qualification(assignmentForm.value.qualificationId)
+    ?.courseIds.some((id) => store.requiredKinds(store.course(id)).includes('practical')),
+);
 const labels = { objective: '객관식', practical: '실기', both: '객관식 · 실기' };
+const auditLabels: Record<string, string> = {
+  'assignment.create': '자격 배정',
+  'assignment.ft': 'FT 변경',
+  'assignment.exclude': '검증 제외',
+  'attempt.start': '평가 시작',
+  'attempt.submit': '평가 확정',
+  seed: '초기 데이터',
+  'comparison.create': '비교 초안',
+  'comparison.save': '비교 저장',
+  'comparison.finalize': '비교 확정',
+  'comparison.correct': '비교 정정',
+};
+function archivedDrafts(ev: AuditEvent) {
+  return (ev.details.archivedDrafts || []) as unknown as {
+    attemptId: string;
+    evaluatorId?: string;
+    verdicts: Record<string, Verdict>;
+  }[];
+}
+function itemTitle(id: string) {
+  return (
+    store.data.courses.flatMap((c) => c.practicalItems).find((i) => i.id === id)?.title ||
+    '실기 항목'
+  );
+}
+
 function canLeave() {
   const source = courseDraft.value
     ? store.data.courses.find((c) => c.id === courseDraft.value!.id)
@@ -243,6 +295,13 @@ onBeforeRouteUpdate(canLeave);
       </nav>
     </aside>
     <div class="admin-content">
+      <div
+        v-if="errors.length && !editor && !assignmentOpen && !selectedAssignment && !noticeDraft"
+        class="error-message"
+        role="alert"
+      >
+        {{ errors.join(' · ') }}
+      </div>
       <template v-if="editor">
         <RouterLink :to="`/admin/${section}`" class="back-link"
           ><AppIcon name="back" :size="16" />{{ title }}</RouterLink
@@ -253,7 +312,7 @@ onBeforeRouteUpdate(canLeave);
             <StatusBadge :status="readOnly ? 'published' : 'catalogDraft'" /><span
               class="small-label"
               >v{{ editor.version }}</span
-            ><button v-if="readOnly" class="button primary" @click="cloneVersion">
+            ><button v-if="readOnly" class="button primary" :disabled="busy" @click="cloneVersion">
               <AppIcon name="plus" :size="18" />새 버전
             </button>
           </div>
@@ -264,6 +323,9 @@ onBeforeRouteUpdate(canLeave);
             <li v-for="error in errors" :key="error">{{ error }}</li>
           </ul>
         </div>
+        <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
+          다시 불러오기
+        </button>
         <div class="panel editor-panel">
           <label class="field"
             ><span>{{ courseDraft ? '과정명' : '자격명' }}</span
@@ -309,10 +371,17 @@ onBeforeRouteUpdate(canLeave);
             <label class="field"
               ><span>학습자료</span
               ><textarea v-model="courseDraft.material" :disabled="readOnly" rows="3" /></label
+            ><label class="field"
+              ><span>학습자료 URL</span
+              ><input
+                v-model="courseDraft.materialUrl"
+                :disabled="readOnly"
+                type="url"
+                placeholder="https://" /></label
           ></template>
         </div>
         <template v-if="courseDraft"
-          ><div class="list-toolbar">
+          ><div v-if="section !== 'comparisons'" class="list-toolbar">
             <div class="tabs">
               <button
                 v-if="courseDraft.mode !== 'practical'"
@@ -356,6 +425,13 @@ onBeforeRouteUpdate(canLeave);
                 <label class="field"
                   ><span>문항</span><textarea v-model="q.prompt" :disabled="readOnly" rows="2" />
                 </label>
+                <label class="field"
+                  ><span>문항 분류</span
+                  ><select v-model="q.category" :disabled="readOnly">
+                    <option value="written">필기</option>
+                    <option value="case">Case</option>
+                  </select></label
+                >
                 <fieldset class="options-editor">
                   <legend>선택지 · 정답 선택</legend>
                   <div v-for="(_, i) in q.choices" :key="i" class="option-editor">
@@ -452,7 +528,7 @@ onBeforeRouteUpdate(canLeave);
           <span class="muted">초안 · v{{ editor.version }}</span>
           <div class="actions">
             <button class="button secondary" @click="saveCatalog()">초안 저장</button
-            ><button class="button primary" @click="saveCatalog(true)">
+            ><button class="button primary" :disabled="busy" @click="saveCatalog(true)">
               사용 등록<AppIcon name="check" :size="18" />
             </button>
           </div>
@@ -464,6 +540,7 @@ onBeforeRouteUpdate(canLeave);
           <button
             v-if="section === 'qualifications' || section === 'courses'"
             class="button primary"
+            :disabled="busy"
             @click="createCatalog"
           >
             <AppIcon name="plus" :size="18" />{{
@@ -472,17 +549,23 @@ onBeforeRouteUpdate(canLeave);
           ><button
             v-else-if="section === 'assignments'"
             class="button primary"
+            :disabled="busy"
             @click="
               assignmentOpen = true;
               errors = [];
             "
           >
             <AppIcon name="plus" :size="18" />자격 배정</button
-          ><button v-else-if="section === 'notices'" class="button primary" @click="editNotice()">
+          ><button
+            v-else-if="section === 'notices'"
+            class="button primary"
+            :disabled="busy"
+            @click="editNotice()"
+          >
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </div>
-        <div class="list-toolbar">
+        <div v-if="section !== 'comparisons'" class="list-toolbar">
           <div class="filter-controls">
             <label class="search-field"
               ><AppIcon name="search" :size="18" /><input
@@ -649,7 +732,10 @@ onBeforeRouteUpdate(canLeave);
               </p>
               <section v-for="e in a.enrollments" :key="e.courseId" class="result-course">
                 <div class="section-heading">
-                  <h2>{{ store.course(e.courseId).title }}</h2>
+                  <h2>
+                    {{ store.course(e.courseId).title }}
+                    <span class="small-label">v{{ store.course(e.courseId).version }}</span>
+                  </h2>
                   <StatusBadge v-if="store.complete(e)" status="complete" />
                 </div>
                 <details v-for="h in [...e.history].reverse()" :key="h.id" class="attempt-detail">
@@ -661,15 +747,29 @@ onBeforeRouteUpdate(canLeave);
                     ><AppIcon name="down" :size="16" />
                   </summary>
                   <div v-if="h.kind === 'objective'" class="attempt-items">
+                    <p class="small-label">
+                      득점 {{ h.earned }} / {{ h.total }} · 합격 기준
+                      {{ store.course(e.courseId).passScore }}%
+                    </p>
                     <div v-for="q in store.course(e.courseId).questions" :key="q.id">
-                      <p>{{ q.prompt }}</p>
+                      <p>
+                        {{ q.prompt }}
+                        <span class="small-label"
+                          >{{ h.itemResults?.find((r) => r.itemId === q.id)?.earned }} /
+                          {{ q.points }}점</span
+                        >
+                      </p>
                       <span class="muted"
                         >응답 {{ q.choices[h.answers?.[q.id] ?? -1] }} · 정답
-                        {{ q.correct === null ? '미정' : q.choices[q.correct] }}</span
+                        {{ q.correct == null ? '미정' : q.choices[q.correct] }}</span
                       >
                     </div>
                   </div>
                   <div v-else class="attempt-items">
+                    <p class="small-label">
+                      평가자 {{ store.username(h.evaluatorId) }} ·
+                      {{ new Date(h.date).toLocaleString('ko-KR') }}
+                    </p>
                     <div v-for="item in store.course(e.courseId).practicalItems" :key="item.id">
                       <p>
                         {{ item.title }}
@@ -681,8 +781,55 @@ onBeforeRouteUpdate(canLeave);
                     </div>
                   </div>
                 </details>
+                <p v-if="e.completion" class="small-label">
+                  수료 {{ e.completion.id }} ·
+                  {{ new Date(e.completion.date).toLocaleString('ko-KR') }}
+                </p>
                 <p v-if="!e.history.length" class="muted">평가 이력이 없습니다.</p>
               </section>
+              <details class="attempt-detail">
+                <summary>변경 이력</summary>
+                <div
+                  v-for="ev in store.data.audits.filter((x) => x.assignmentId === a.id)"
+                  :key="ev.id"
+                  class="audit-row"
+                >
+                  <p>
+                    {{ auditLabels[ev.action] || ev.action }} · {{ store.username(ev.actorId) }} ·
+                    {{ new Date(ev.date).toLocaleString('ko-KR') }}
+                  </p>
+                  <p class="muted">{{ ev.reason }}</p>
+                  <details v-if="ev.action === 'assignment.ft'">
+                    <summary>이전 FT 초안</summary>
+                    <p class="muted">
+                      {{ store.username(String(ev.details.previousFtId)) }} →
+                      {{ store.username(String(ev.details.nextFtId)) }}
+                    </p>
+                    <section v-for="archived in archivedDrafts(ev)" :key="archived.attemptId">
+                      <div
+                        v-for="(value, itemId) in archived.verdicts"
+                        :key="itemId"
+                        class="audit-row"
+                      >
+                        <p>
+                          {{ itemTitle(String(itemId)) }} ·
+                          {{
+                            value.value === 'pass'
+                              ? '통과'
+                              : value.value === 'fail'
+                                ? '미통과'
+                                : '미판정'
+                          }}
+                        </p>
+                        <p class="muted">{{ value.evidence || '근거 미입력' }}</p>
+                      </div>
+                      <p v-if="!Object.keys(archived.verdicts).length" class="muted">
+                        작성한 판정이 없습니다.
+                      </p>
+                    </section>
+                  </details>
+                </div>
+              </details>
               <RouterLink
                 v-if="a.certifiedAt"
                 :to="`/certifications/${a.id}`"
@@ -693,6 +840,7 @@ onBeforeRouteUpdate(canLeave);
           </details>
           <p v-if="!assignments.length" class="panel empty-state">검색 결과가 없습니다.</p>
         </div>
+        <ComparisonPanel v-else-if="section === 'comparisons'" />
         <div v-else-if="section === 'notices'" class="table-panel">
           <table>
             <thead>
@@ -738,7 +886,7 @@ onBeforeRouteUpdate(canLeave);
           ><span>대상자</span
           ><select v-model="assignmentForm.learnerId">
             <option
-              v-for="u in store.data.users.filter((u) => u.role === 'learner')"
+              v-for="u in store.data.users.filter((u) => u.roles.includes('learner'))"
               :key="u.id"
               :value="u.id"
             >
@@ -758,9 +906,10 @@ onBeforeRouteUpdate(canLeave);
           </select></label
         ><label class="field"
           ><span>담당 FT</span
-          ><select v-model="assignmentForm.ftId">
+          ><select v-model="assignmentForm.ftId" :disabled="!needsFT">
+            <option value="">미지정</option>
             <option
-              v-for="u in store.data.users.filter((u) => u.role === 'ft')"
+              v-for="u in store.data.users.filter((u) => u.roles.includes('ft'))"
               :key="u.id"
               :value="u.id"
             >
@@ -769,7 +918,9 @@ onBeforeRouteUpdate(canLeave);
           </select></label
         ><template #footer
           ><button class="button secondary" @click="assignmentOpen = false">취소</button
-          ><button class="button primary" @click="addAssignment">배정</button></template
+          ><button class="button primary" :disabled="busy" @click="addAssignment">
+            배정
+          </button></template
         ></AppDialog
       >
       <AppDialog
@@ -785,7 +936,7 @@ onBeforeRouteUpdate(canLeave);
           ><span>담당 FT</span
           ><select v-model="ftId">
             <option
-              v-for="u in store.data.users.filter((u) => u.role === 'ft')"
+              v-for="u in store.data.users.filter((u) => u.roles.includes('ft'))"
               :key="u.id"
               :value="u.id"
             >
@@ -797,7 +948,7 @@ onBeforeRouteUpdate(canLeave);
         <label class="field"><span>변경 사유</span><textarea v-model="reason" rows="3" /></label
         ><template #footer
           ><button class="button secondary" @click="selectedAssignment = null">취소</button
-          ><button class="button primary" @click="changeAssignment">
+          ><button class="button primary" :disabled="busy" @click="changeAssignment">
             {{ assignmentAction === 'ft' ? '변경' : '검증 제외' }}
           </button></template
         ></AppDialog
@@ -813,7 +964,9 @@ onBeforeRouteUpdate(canLeave);
           ></template
         ><template #footer
           ><button class="button secondary" @click="noticeDraft = null">취소</button
-          ><button class="button primary" @click="saveNotice">저장</button></template
+          ><button class="button primary" :disabled="busy" @click="saveNotice">
+            저장
+          </button></template
         ></AppDialog
       >
     </div>

@@ -44,7 +44,7 @@ export const router = createRouter({
     },
     { path: '/admin', redirect: '/admin/qualifications' },
     {
-      path: '/admin/:section(qualifications|courses|assignments|results|notices)/:id?',
+      path: '/admin/:section(qualifications|courses|assignments|results|comparisons|notices)/:id?',
       name: 'admin',
       component: AdminView,
       meta: { role: 'admin' },
@@ -52,9 +52,21 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const store = useDemo();
-  if (to.meta.role && to.meta.role !== store.actor.role) return '/';
+  await store.initialize();
+  if (
+    (!store.signedIn ||
+      (to.meta.role && !store.hasRole(to.meta.role as 'learner' | 'ft' | 'admin'))) &&
+    to.path !== '/'
+  )
+    return '/';
+  if (store.signedIn)
+    try {
+      await store.refresh();
+    } catch (error) {
+      store.notify((error as Error).message);
+    }
 });
 router.afterEach((to, from) => {
   if (to.path === from.path) return;

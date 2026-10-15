@@ -1,0 +1,31 @@
+{
+  "name": "eks-jqc",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "server",
+    "shared"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run typecheck && npm run build -w frontend",
+    "typecheck": "tsc -p server/tsconfig.json && npm run typecheck -w frontend",
+    "test": "node --import tsx --test server/tests/*.test.ts",
+    "test:e2e": "npm run test:e2e -w frontend",
+    "data:init": "node --import tsx server/src/cli.ts init",
+    "data:backup": "node --import tsx server/src/cli.ts backup",
+    "data:restore": "node --import tsx server/src/cli.ts restore",
+    "data:unlock": "node --import tsx server/src/cli.ts unlock",
+    "start": "node --import tsx server/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0"
+  }
+}

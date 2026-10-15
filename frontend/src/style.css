@@ -2525,3 +2525,56 @@ a {
     animation: none !important;
   }
 }
+:disabled {
+  cursor: not-allowed;
+}
+.save-status {
+  color: var(--ink-secondary, #554e7b);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.save-error {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+.comparison-fields {
+  min-width: 0;
+  margin: 24px 0;
+}
+.comparison-fields legend {
+  font-size: 16px;
+  font-weight: 480;
+  padding: 0 8px;
+}
+.comparison-create {
+  display: flex;
+  align-items: end;
+  gap: 20px;
+}
+.comparison-create .field {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.comparison-create .button {
+  flex-shrink: 0;
+}
+.audit-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #edecfb;
+}
+.audit-detail {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 12px;
+}
+@media (max-width: 767px) {
+  .comparison-create {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .save-error {
+    flex-direction: column;
+  }
+}

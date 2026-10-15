@@ -11,7 +11,7 @@ const store = useDemo(),
   router = useRouter();
 const assignment = computed(() => {
   const a = store.assignment(String(route.params.id));
-  return a?.learnerId === store.actorId && !a.excludedReason ? a : undefined;
+  return a?.learnerId === store.actorId ? a : undefined;
 });
 const selected = computed(
   () =>
@@ -76,6 +76,9 @@ function assessmentPath(kind: Kind) {
         {{ assignment.enrollments.length }} 과정 수료</span
       >
     </div>
+    <p v-if="assignment.excludedReason" class="error-message">
+      검증 제외 · {{ assignment.excludedReason }}
+    </p>
     <div class="workspace-grid">
       <aside class="course-sidebar">
         <h2 class="small-heading">과정</h2>
@@ -125,9 +128,15 @@ function assessmentPath(kind: Kind) {
             >필수</span
           >
         </div>
-        <button class="material-row" :disabled="!course.material" @click="materialOpen = true">
+        <button
+          class="material-row"
+          :disabled="!course.material && !course.materialUrl"
+          @click="materialOpen = true"
+        >
           <span class="material-icon"><AppIcon name="file" /></span><span>학습자료</span
-          ><span class="muted">{{ course.material ? '자료 보기' : '등록된 자료 없음' }}</span
+          ><span class="muted">{{
+            course.material || course.materialUrl ? '자료 보기' : '등록된 자료 없음'
+          }}</span
           ><AppIcon name="diagonal" :size="18" />
         </button>
         <div class="assessment-grid">
@@ -160,7 +169,8 @@ function assessmentPath(kind: Kind) {
               }}
             </p>
             <div class="assessment-action">
-              <span v-if="selected[kind] === 'passed'" class="passed-caption"
+              <span v-if="assignment.excludedReason" class="muted">검증 제외</span
+              ><span v-else-if="selected[kind] === 'passed'" class="passed-caption"
                 ><AppIcon name="check" :size="16" />통과 유지</span
               ><RouterLink
                 v-else
@@ -190,8 +200,15 @@ function assessmentPath(kind: Kind) {
       </div>
     </div>
     <AppDialog v-model:open="materialOpen" :title="`${course.title} · 학습자료`"
-      ><div class="material-content">{{ course.material }}</div></AppDialog
-    >
+      ><div class="material-content">{{ course.material }}</div>
+      <a
+        v-if="course.materialUrl"
+        :href="course.materialUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="button secondary"
+        >자료 열기<AppIcon name="diagonal" :size="16" /></a
+    ></AppDialog>
   </div>
   <div v-else class="container page empty-state">
     <h1>자격을 찾을 수 없습니다.</h1>

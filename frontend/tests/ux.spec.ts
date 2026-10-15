@@ -1,9 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { test, expect, actor } from './fixtures';
 import path from 'node:path';
-const imagePath = (name: string) => path.resolve('../docs/preview', `${name}-1920x900.png`);
-async function actor(page: Page, id: string) {
-  await page.getByLabel('접속 계정').selectOption(id);
-}
+const imagePath = (name: string) => test.info().outputPath(`${name}-1920x900.png`);
 async function navigate(page: Page, href: string) {
   await page.evaluate((href) => {
     const a = document.createElement('a');
@@ -43,6 +41,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
+  await actor(page, 'learner-1');
   await expect(page.getByRole('heading', { name: '김민서 님' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '공지사항' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(900);
@@ -71,6 +70,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
 
 test('부분 통과 유지, 미통과 재응시, FT 평가와 자동 인증', async ({ page }) => {
   await page.goto('/');
+  await actor(page, 'learner-1');
   await page.getByRole('link', { name: '이어서 진행' }).click();
   await page.getByRole('link', { name: '다시 요청' }).click();
   await page.getByRole('button', { name: '다시 요청', exact: true }).click();
@@ -124,6 +124,7 @@ test('부분 통과 유지, 미통과 재응시, FT 평가와 자동 인증', as
 
 test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
   await page.goto('/');
+  await actor(page, 'learner-1');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '관리', exact: true }).click();
   await page.getByRole('link', { name: 'Recipe Management', exact: true }).click();
@@ -161,6 +162,7 @@ test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
 
 test('작은 화면과 키보드 접근', async ({ page }) => {
   await page.goto('/');
+  await actor(page, 'learner-1');
   for (const width of [1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await noOverflow(page);

@@ -1,24 +1,108 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import initial from '../data/demo.json';
-import type {
-  Assignment,
-  Course,
-  DemoState,
-  Enrollment,
-  Kind,
-  Qualification,
-  Verdict,
-} from '../types';
+import { api, mutate, ApiError } from '../api';
+import {
+  requiredKinds,
+  courseErrors,
+  qualificationErrors as checkQualification,
+  type Assignment,
+  type Course,
+  type Qualification,
+  type Kind,
+  type User,
+  type Workspace,
+  type Notice,
+} from '@eks/contracts';
 
-// Interaction prototype only. Replace this adapter with the approved server API.
-// Fictional answers here are public demo fixtures, not a secure assessment service.
-export const useDemo = defineStore('demo', () => {
-  const data = ref<DemoState>(structuredClone(initial) as DemoState);
-  const actorId = ref('learner-1');
-  const actor = computed(() => data.value.users.find((user) => user.id === actorId.value)!);
+export const useDemo = defineStore('workspace', () => {
+  const empty = (): Workspace => ({
+    users: [],
+    courses: [],
+    qualifications: [],
+    assignments: [],
+    notices: [],
+    comparisons: [],
+    audits: [],
+  });
+  const data = ref<Workspace>(empty()),
+    actors = ref<User[]>([]),
+    sessionActor = ref<User | null>(null),
+    initialized = ref(false),
+    loading = ref(false),
+    connectionError = ref('');
+  const actor = computed(() => ({
+    ...(sessionActor.value || { id: '', name: '', roles: [] }),
+    role: sessionActor.value?.roles[0] || 'learner',
+  }));
+  const actorId = computed(() => actor.value.id),
+    signedIn = computed(() => !!sessionActor.value);
+  const hasRole = (role: User['roles'][number]) => actor.value.roles.includes(role);
   const toast = ref('');
   let toastTimer: ReturnType<typeof setTimeout>;
+  function notify(message: string) {
+    toast.value = message;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast.value = ''), 4500);
+  }
+  let boot: Promise<void> | undefined;
+  let refreshVersion = 0;
+  async function refresh() {
+    const version = ++refreshVersion;
+    const scope = actorId.value;
+    const result = await api<Workspace>('/workspace');
+    if (version === refreshVersion && scope === actorId.value) {
+      data.value = result;
+      connectionError.value = '';
+    }
+  }
+  async function initialize() {
+    if (boot) return boot;
+    boot = (async () => {
+      loading.value = true;
+      try {
+        actors.value = await api<User[]>('/actors');
+        try {
+          const result = await api<{ actor: User }>('/session');
+          sessionActor.value = result.actor;
+          await refresh();
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 401) throw error;
+          sessionActor.value = null;
+        }
+        initialized.value = true;
+        connectionError.value = '';
+      } catch (error) {
+        connectionError.value = (error as Error).message;
+        boot = undefined;
+      } finally {
+        loading.value = false;
+      }
+    })();
+    return boot;
+  }
+  async function switchActor(id: string) {
+    loading.value = true;
+    try {
+      const result = await api<{ actor: User }>('/session', {
+        method: 'POST',
+        body: JSON.stringify({ actorId: id }),
+      });
+      sessionActor.value = result.actor;
+      data.value = empty();
+      await refresh();
+      toast.value = '';
+    } catch (error) {
+      connectionError.value = (error as Error).message;
+      throw error;
+    } finally {
+      loading.value = false;
+    }
+  }
+  const qualification = (id: string) => data.value.qualifications.find((q) => q.id === id)!;
+  const course = (id: string) => data.value.courses.find((c) => c.id === id)!;
+  const assignment = (id: string) => data.value.assignments.find((a) => a.id === id);
+  const enrollmentFor = (aid: string, cid: string) =>
+    assignment(aid)?.enrollments.find((e) => e.courseId === cid);
   const myAssignments = computed(() =>
     data.value.assignments.filter((a) => a.learnerId === actorId.value && !a.excludedReason),
   );
@@ -30,243 +114,121 @@ export const useDemo = defineStore('demo', () => {
   const notices = computed(() =>
     data.value.notices.filter((n) => n.published).sort((a, b) => b.date.localeCompare(a.date)),
   );
-  function notify(message: string) {
-    toast.value = message;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (toast.value = ''), 4000);
-  }
-  function qualification(id: string) {
-    return data.value.qualifications.find((q) => q.id === id)!;
-  }
-  function course(id: string) {
-    return data.value.courses.find((c) => c.id === id)!;
-  }
-  function assignment(id: string) {
-    return data.value.assignments.find((a) => a.id === id);
-  }
-  function requiredKinds(c: Course): Kind[] {
-    return c.mode === 'both' ? ['objective', 'practical'] : [c.mode];
-  }
-  function complete(enrollment: Enrollment) {
-    return requiredKinds(course(enrollment.courseId)).every(
-      (kind) => enrollment[kind] === 'passed',
-    );
-  }
-  function completedCount(a: Assignment) {
-    return a.enrollments.filter(complete).length;
-  }
-  function assessmentCount(a: Assignment) {
-    return a.enrollments.reduce((n, e) => n + requiredKinds(course(e.courseId)).length, 0);
-  }
-  function passedCount(a: Assignment) {
-    return a.enrollments.reduce(
+  const complete = (e: Assignment['enrollments'][number]) => !!e.completion;
+  const completedCount = (a: Assignment) => a.enrollments.filter(complete).length;
+  const assessmentCount = (a: Assignment) =>
+    a.enrollments.reduce((n, e) => n + requiredKinds(course(e.courseId)).length, 0);
+  const passedCount = (a: Assignment) =>
+    a.enrollments.reduce(
       (n, e) => n + requiredKinds(course(e.courseId)).filter((k) => e[k] === 'passed').length,
       0,
     );
+  const username = (id: string | null | undefined) =>
+    actors.value.find((u) => u.id === id)?.name || '미지정';
+  type CommandResult = { id: string; revision: number; result?: 'passed' | 'failed' };
+  const pendingCommands = new Map<string, { key: string; result?: CommandResult }>();
+  async function command(path: string, body: unknown = {}, method = 'POST') {
+    const scope = actorId.value;
+    const signature = JSON.stringify({ path, body, method, scope });
+    const pending = pendingCommands.get(signature) || { key: crypto.randomUUID() };
+    pendingCommands.set(signature, pending);
+    try {
+      // Keep a confirmed result until its updated view is loaded. A failed refresh
+      // must not turn a user's retry into another mutation with a new request ID.
+      if (!pending.result)
+        pending.result = await mutate<CommandResult>(path, body, method, scope, pending.key);
+      await refresh();
+      pendingCommands.delete(signature);
+      return pending.result;
+    } catch (error) {
+      if (!pending.result && error instanceof ApiError && error.status >= 400 && error.status < 500)
+        pendingCommands.delete(signature);
+      throw error;
+    }
   }
-  function username(id: string) {
-    return data.value.users.find((u) => u.id === id)?.name ?? '미지정';
-  }
-  function switchActor(id: string) {
-    actorId.value = id;
-    toast.value = '';
-  }
-  function certify(a: Assignment) {
-    if (!a.excludedReason && a.enrollments.length && a.enrollments.every(complete))
-      a.certifiedAt ??= new Date().toISOString();
-  }
-  function enrollmentFor(aid: string, cid: string) {
-    return assignment(aid)?.enrollments.find((e) => e.courseId === cid);
-  }
-  function editableAssignment(aid: string, role: 'learner' | 'ft') {
-    const a = assignment(aid);
-    if (
-      !a ||
-      a.excludedReason ||
-      actor.value.role !== role ||
-      (role === 'learner'
-        ? a.learnerId !== actorId.value
-        : a.ftId !== actorId.value || a.learnerId === actorId.value)
-    )
-      throw new Error('처리할 수 없는 평가입니다.');
-    return a;
-  }
-  function saveAnswer(aid: string, cid: string, qid: string, value: number) {
-    editableAssignment(aid, 'learner');
+  async function startAttempt(aid: string, cid: string, kind: Kind) {
     const e = enrollmentFor(aid, cid)!;
-    if (e.objective === 'passed') return;
-    e.answers[qid] = value;
-    e.objective = 'draft';
+    await command(`/enrollments/${encodeURIComponent(e.id)}/attempts`, { kind });
+    return enrollmentFor(aid, cid)!.activeAttempts[kind]!;
   }
-  function submitObjective(aid: string, cid: string) {
-    const a = editableAssignment(aid, 'learner'),
-      e = enrollmentFor(aid, cid)!,
-      c = course(cid);
-    if (e.objective === 'passed' || !requiredKinds(c).includes('objective')) return;
-    if (c.questions.some((q) => e.answers[q.id] === undefined))
-      throw new Error('모든 문항에 답해 주세요.');
-    const total = c.questions.reduce((n, q) => n + q.points, 0);
-    const earned = c.questions.reduce(
-      (n, q) => n + (e.answers[q.id] === q.correct ? q.points : 0),
-      0,
-    );
-    e.objective = earned * 100 >= total * (c.passScore ?? 100) ? 'passed' : 'failed';
-    e.history.push({
-      id: crypto.randomUUID(),
-      kind: 'objective',
-      round: e.history.filter((h) => h.kind === 'objective').length + 1,
-      result: e.objective,
-      date: new Date().toISOString(),
-      answers: { ...e.answers },
-    });
-    e.answers = {};
-    certify(a);
-    return e.objective;
-  }
-  function requestPractical(aid: string, cid: string) {
-    editableAssignment(aid, 'learner');
-    const e = enrollmentFor(aid, cid)!;
-    if (
-      !requiredKinds(course(cid)).includes('practical') ||
-      ['waiting', 'passed'].includes(e.practical)
-    )
-      return;
-    e.practical = 'waiting';
-    e.verdicts = {};
+  async function requestPractical(aid: string, cid: string) {
+    await startAttempt(aid, cid, 'practical');
     notify('실기 평가를 요청했습니다.');
   }
-  function saveVerdict(aid: string, cid: string, id: string, verdict: Verdict) {
-    editableAssignment(aid, 'ft');
-    const e = enrollmentFor(aid, cid)!;
-    if (e.practical !== 'waiting') return;
-    e.verdicts[id] = { ...verdict };
-  }
-  function evaluate(aid: string, cid: string) {
-    const a = editableAssignment(aid, 'ft'),
-      e = enrollmentFor(aid, cid)!,
-      c = course(cid);
-    if (e.practical !== 'waiting') return;
-    if (
-      c.practicalItems.some((i) => !e.verdicts[i.id]?.value || !e.verdicts[i.id]?.evidence.trim())
-    )
-      throw new Error('각 항목의 판정과 근거를 입력해 주세요.');
-    e.practical = c.practicalItems
-      .filter((i) => i.mandatory)
-      .every((i) => e.verdicts[i.id]?.value === 'pass')
-      ? 'passed'
-      : 'failed';
-    e.history.push({
-      id: crypto.randomUUID(),
-      kind: 'practical',
-      round: e.history.filter((h) => h.kind === 'practical').length + 1,
-      result: e.practical,
-      date: new Date().toISOString(),
-      verdicts: JSON.parse(JSON.stringify(e.verdicts)),
-    });
-    certify(a);
-    notify('평가를 확정했습니다.');
-  }
-  function addAssignment(qid: string, learnerId: string, ftId: string) {
-    if (actor.value.role !== 'admin') throw new Error('관리자만 배정할 수 있습니다.');
-    const q = qualification(qid);
-    if (
-      q.status !== 'published' ||
-      !q.courseIds.length ||
-      q.courseIds.some((cid) => course(cid)?.status !== 'published')
-    )
-      throw new Error('사용 중인 자격을 선택해 주세요.');
-    if (
-      !data.value.users.some((u) => u.id === learnerId && u.role === 'learner') ||
-      !data.value.users.some((u) => u.id === ftId && u.role === 'ft') ||
-      learnerId === ftId
-    )
-      throw new Error('대상자와 FT를 확인해 주세요.');
-    if (
-      data.value.assignments.some(
-        (a) => a.learnerId === learnerId && a.qualificationId === qid && !a.excludedReason,
-      )
-    )
-      throw new Error('이미 배정된 자격입니다.');
-    data.value.assignments.push({
-      id: crypto.randomUUID(),
-      qualificationId: qid,
-      learnerId,
-      ftId,
-      assignedAt: new Date().toISOString().slice(0, 10),
-      enrollments: q.courseIds.map((courseId) => ({
-        courseId,
-        objective: 'ready',
-        practical: 'ready',
-        answers: {},
-        verdicts: {},
-        history: [],
-      })),
-    });
+  async function addAssignment(qualificationId: string, learnerId: string, ftId: string | null) {
+    await command('/assignments', { qualificationId, learnerId, ftId: ftId || null });
     notify('자격을 배정했습니다.');
   }
-  function courseErrors(c: Course) {
-    const errors: string[] = [];
-    if (!c.title.trim()) errors.push('과정명을 입력해 주세요.');
-    if (requiredKinds(c).includes('objective')) {
-      if (!c.passScore || !Number.isInteger(c.passScore) || c.passScore < 1 || c.passScore > 100)
-        errors.push('객관식 합격 기준을 1~100으로 입력해 주세요.');
-      if (!c.questions.length) errors.push('객관식 문항을 추가해 주세요.');
-      c.questions.forEach((q, i) => {
-        if (
-          !q.prompt.trim() ||
-          q.choices.length < 2 ||
-          q.choices.some((v) => !v.trim()) ||
-          q.correct === null ||
-          !q.choices[q.correct] ||
-          !Number.isInteger(q.points) ||
-          q.points <= 0
-        )
-          errors.push(`객관식 ${i + 1}번의 문항·선택지·정답·배점을 확인해 주세요.`);
-      });
-    }
-    if (requiredKinds(c).includes('practical')) {
-      if (!c.practicalItems.some((i) => i.mandatory))
-        errors.push('필수 실기 항목을 추가해 주세요.');
-      if (c.practicalItems.some((i) => !i.title.trim() || !i.criterion.trim()))
-        errors.push('실기 항목과 판정 기준을 입력해 주세요.');
-    }
-    return errors;
+  async function createCatalog(section: string) {
+    return command(`/${section}`);
   }
-  function qualificationErrors(q: Qualification) {
-    const errors: string[] = [];
-    if (!q.title.trim()) errors.push('자격명을 입력해 주세요.');
-    if (!q.courseIds.length) errors.push('필수 과정을 선택해 주세요.');
-    if (q.courseIds.some((id) => course(id)?.status !== 'published'))
-      errors.push('필수 과정을 먼저 사용 등록해 주세요.');
-    return errors;
+  async function saveCatalog(section: string, item: Course | Qualification, publish: boolean) {
+    const result = await command(
+      `/${section}/${item.id}${publish ? '/publish' : ''}`,
+      item,
+      publish ? 'POST' : 'PUT',
+    );
+    notify(publish ? '사용 등록했습니다.' : '초안을 저장했습니다.');
+    return result;
+  }
+  async function cloneCatalog(section: string, id: string) {
+    return command(`/${section}/${id}/versions`);
+  }
+  async function changeAssignment(
+    a: Assignment,
+    action: 'exclude' | 'ft',
+    reason: string,
+    ftId: string,
+  ) {
+    await command(`/assignments/${a.id}/${action === 'exclude' ? 'exclusion' : 'ft'}`, {
+      revision: a.revision,
+      reason,
+      ftId,
+    });
+    notify(action === 'exclude' ? '검증 대상에서 제외했습니다.' : 'FT를 변경했습니다.');
+  }
+  async function saveNotice(n: Notice) {
+    await command('/notices', n);
+    notify('공지를 저장했습니다.');
   }
   return {
     data,
+    actors,
     actor,
     actorId,
+    initialized,
+    loading,
+    connectionError,
+    signedIn,
+    hasRole,
+    initialize,
+    refresh,
+    switchActor,
     toast,
-    myAssignments,
-    ftAssignments,
-    notices,
     notify,
     qualification,
     course,
     assignment,
     enrollmentFor,
-    requiredKinds,
+    myAssignments,
+    ftAssignments,
+    notices,
     complete,
     completedCount,
     assessmentCount,
     passedCount,
     username,
-    switchActor,
-    saveAnswer,
-    submitObjective,
-    requestPractical,
-    saveVerdict,
-    evaluate,
-    addAssignment,
+    requiredKinds,
     courseErrors,
-    qualificationErrors,
+    qualificationErrors: (q: Qualification) => checkQualification(q, data.value.courses),
+    command,
+    startAttempt,
+    requestPractical,
+    addAssignment,
+    createCatalog,
+    saveCatalog,
+    cloneCatalog,
+    changeAssignment,
+    saveNotice,
   };
 });
