@@ -9,35 +9,36 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { State } from "@eks/contracts";
+import type { State, OrganizationDocument } from "@eks/contracts";
+import { seedOrganizations, validateOrganizations } from "./organizations.ts";
+import { demand, DomainError } from "./errors.ts";
+export { demand, DomainError } from "./errors.ts";
 import { validateState } from "./integrity.ts";
 
-export class DomainError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public code = "INVALID_REQUEST",
-  ) {
-    super(message);
+export class SerialQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+  run<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(operation);
+    this.tail = next.catch(() => {});
+    return next;
+  }
+  async idle() {
+    await this.tail;
   }
 }
-export function demand(
-  value: unknown,
-  status: number,
-  message: string,
-  code?: string,
-): asserts value {
-  if (!value) throw new DomainError(status, message, code);
-}
-export class JsonStore {
-  private state!: State;
-  private queue: Promise<unknown> = Promise.resolve();
+type Document = { revision: number; requests: State["requests"] };
+export class FileStore<T extends Document> {
+  protected state!: T;
   private token = randomUUID();
-  private closed = false;
+  protected closed = false;
   readonly lockPath: string;
   readonly backupDir: string;
   beforeReplace?: () => void | Promise<void>;
-  constructor(readonly file: string) {
+  constructor(
+    readonly file: string,
+    protected validate: (input: unknown) => T,
+    protected queue = new SerialQueue(),
+  ) {
     this.lockPath = `${file}.lock`;
     this.backupDir = path.resolve(
       path.dirname(file),
@@ -45,7 +46,7 @@ export class JsonStore {
       path.basename(file, ".json"),
     );
   }
-  private async lock() {
+  protected async lock() {
     await mkdir(path.dirname(this.file), { recursive: true });
     try {
       await mkdir(this.lockPath);
@@ -69,16 +70,16 @@ export class JsonStore {
   async load() {
     await this.lock();
     try {
-      this.state = validateState(JSON.parse(await readFile(this.file, "utf8")));
+      this.state = this.validate(JSON.parse(await readFile(this.file, "utf8")));
     } catch (e) {
       await this.release();
       throw new Error(
-        `저장소를 열 수 없습니다. data:init 또는 data:restore를 확인하세요. ${String(e)}`,
+        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 기존 v1/v2 데이터는 data:migrate, 손상 파일은 백업 복구 절차를 확인하세요. ${String(e)}`,
       );
     }
     return this;
   }
-  async initialize(state: State) {
+  async initialize(state: T) {
     await this.lock();
     try {
       try {
@@ -87,17 +88,17 @@ export class JsonStore {
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
       }
-      this.state = validateState(state);
+      this.state = this.validate(state);
       await this.writeAtomic(this.file, this.state);
     } finally {
       await this.release();
     }
   }
-  snapshot(): State {
+  snapshot(): T {
     if (this.closed) throw new DomainError(503, "저장소가 닫혔습니다.");
     return structuredClone(this.state);
   }
-  private async writeAtomic(file: string, state: State) {
+  protected async writeAtomic(file: string, state: unknown) {
     const temp = `${file}.${randomUUID()}.tmp`;
     try {
       const handle = await open(temp, "wx", 0o600);
@@ -108,28 +109,35 @@ export class JsonStore {
         await handle.close();
       }
       await rename(temp, file);
-      const dir = await open(path.dirname(file), "r");
-      try {
-        await dir.sync();
-      } finally {
-        await dir.close();
+      // Windows does not support fsync on directory handles.
+      if (process.platform !== "win32") {
+        const dir = await open(path.dirname(file), "r");
+        try {
+          await dir.sync();
+        } finally {
+          await dir.close();
+        }
       }
     } finally {
       await rm(temp, { force: true });
     }
   }
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(operation);
-    this.queue = next.catch(() => {});
-    return next;
+  protected enqueue<R>(operation: () => Promise<R>): Promise<R> {
+    return this.queue.run(operation);
   }
-  async transact<T>(
+  async transact<R>(
     actorId: string,
     key: string,
     fingerprint: string,
-    authorize: (s: State) => void,
-    update: (s: State) => T,
-  ): Promise<T> {
+    authorize: (s: T) => void,
+    update: (s: T) => R,
+    options: {
+      preserveBackup?: boolean;
+      backupPurpose?: "course-delete";
+      action?: string;
+      lv1OrganizationId?: string;
+    } = {},
+  ): Promise<R> {
     return this.enqueue(async () => {
       demand(!this.closed, 503, "저장소가 닫혔습니다.");
       authorize(this.state);
@@ -143,7 +151,7 @@ export class JsonStore {
           "같은 요청 식별자로 다른 내용을 보냈습니다.",
           "IDEMPOTENCY_CONFLICT",
         );
-        return structuredClone(previous.response) as T;
+        return structuredClone(previous.response) as R;
       }
       const next = structuredClone(this.state),
         response = update(next);
@@ -154,11 +162,18 @@ export class JsonStore {
         fingerprint,
         response: JSON.parse(JSON.stringify(response)),
         date: new Date().toISOString(),
+        action: options.action,
+        lv1OrganizationId: options.lv1OrganizationId,
       });
-      const checked = validateState(next);
+      const checked = this.validate(next);
       await mkdir(this.backupDir, { recursive: true });
       await this.writeAtomic(
-        path.join(this.backupDir, `state-${this.state.revision}.json`),
+        path.join(
+          this.backupDir,
+          options.preserveBackup
+            ? `before-${options.backupPurpose || "reset"}-${this.state.revision}-${randomUUID()}.json`
+            : `state-${this.state.revision}.json`,
+        ),
         this.state,
       );
       await this.beforeReplace?.();
@@ -168,7 +183,7 @@ export class JsonStore {
         // A directory sync can fail after rename. Reconcile memory with the actual file
         // so retrying the same request cannot apply a committed mutation twice.
         try {
-          this.state = validateState(
+          this.state = this.validate(
             JSON.parse(await readFile(this.file, "utf8")),
           );
         } catch {
@@ -201,12 +216,13 @@ export class JsonStore {
       return file;
     });
   }
-  async restore(source: string) {
+  async restore(source: string, check?: (next: T) => void) {
     await this.lock();
     try {
-      const restored = validateState(
+      const restored = this.validate(
         JSON.parse(await readFile(source, "utf8")),
       );
+      check?.(restored);
       await mkdir(this.backupDir, { recursive: true });
       try {
         const current = await readFile(this.file);
@@ -225,7 +241,7 @@ export class JsonStore {
       await this.release();
     }
   }
-  private async release() {
+  protected async release() {
     const owner = JSON.parse(
       await readFile(path.join(this.lockPath, "owner.json"), "utf8"),
     );
@@ -233,7 +249,7 @@ export class JsonStore {
       await rm(this.lockPath, { recursive: true, force: true });
   }
   async close() {
-    await this.queue;
+    await this.queue.idle();
     this.closed = true;
     await this.release();
   }
@@ -247,5 +263,120 @@ export class JsonStore {
       if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
     }
     await rm(lock, { recursive: true });
+  }
+}
+
+export class JsonStore extends FileStore<State> {
+  readonly organizations: FileStore<OrganizationDocument>;
+  constructor(
+    file: string,
+    organizationsFile = process.env.EKS_ORGANIZATIONS_FILE ||
+      path.resolve(path.dirname(file), "../master/organizations.json"),
+  ) {
+    const queue = new SerialQueue();
+    let organizations: FileStore<OrganizationDocument>;
+    super(
+      file,
+      (input) => validateState(input, organizations.snapshot()),
+      queue,
+    );
+    this.organizations = organizations = new FileStore(
+      organizationsFile,
+      validateOrganizations,
+      queue,
+    );
+  }
+  override async load() {
+    await this.organizations.load();
+    try {
+      await super.load();
+      return this;
+    } catch (error) {
+      await this.organizations.close();
+      throw error;
+    }
+  }
+  override async initialize(state: State) {
+    try {
+      await readFile(this.file);
+      throw new Error("기존 저장소는 초기화하지 않습니다.");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    try {
+      await readFile(this.organizations.file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await this.organizations.initialize(seedOrganizations());
+    }
+    await this.organizations.load();
+    try {
+      await super.initialize(state);
+    } finally {
+      await this.organizations.close();
+    }
+  }
+  override async restore(source: string) {
+    await this.organizations.load();
+    try {
+      await super.restore(source);
+    } finally {
+      await this.organizations.close();
+    }
+  }
+  override async close() {
+    await super.close();
+    await this.organizations.close();
+  }
+  async restoreOrganizations(source: string) {
+    // Maintenance command: validate the candidate against the locked runtime,
+    // without loading a possibly missing/corrupt organization file first.
+    await this.lock();
+    try {
+      const state = JSON.parse(await readFile(this.file, "utf8"));
+      await this.organizations.restore(source, (doc) => {
+        validateState(state, doc);
+      });
+    } finally {
+      await this.release();
+    }
+  }
+  async migrate(
+    transform: (input: unknown, doc: OrganizationDocument) => State,
+  ) {
+    // Explicit maintenance only: the normal load path never seeds or migrates.
+    await this.lock();
+    let orgLoaded = false;
+    try {
+      const raw = JSON.parse(await readFile(this.file, "utf8"));
+      if (raw.schemaVersion === 1 || raw.schemaVersion === 2) {
+        await mkdir(this.backupDir, { recursive: true });
+        await this.writeAtomic(
+          path.join(
+            this.backupDir,
+            `before-migration-${Date.now()}-${randomUUID()}.json`,
+          ),
+          raw,
+        );
+      }
+      try {
+        await readFile(this.organizations.file);
+      } catch (error) {
+        if (
+          (error as NodeJS.ErrnoException).code !== "ENOENT" ||
+          raw.schemaVersion !== 1
+        )
+          throw error;
+        await this.organizations.initialize(seedOrganizations());
+      }
+      await this.organizations.load();
+      orgLoaded = true;
+      const next = transform(raw, this.organizations.snapshot());
+      if (raw.schemaVersion === 3) return;
+      await this.writeAtomic(this.file, this.validate(next));
+    } finally {
+      if (orgLoaded) await this.organizations.close();
+      await this.release();
+    }
   }
 }

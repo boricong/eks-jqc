@@ -122,6 +122,7 @@ function assessmentPath(kind: Kind) {
       <div class="course-workspace">
         <div class="section-heading">
           <h2>{{ course.title }}</h2>
+          <StatusBadge v-if="course.operationalStatus === 'retired'" status="retired" />
           <StatusBadge v-if="store.complete(selected)" status="complete" /><span
             v-else
             class="small-label"

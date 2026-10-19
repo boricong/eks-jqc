@@ -1,5 +1,48 @@
 import { test, expect, actor } from './fixtures';
 
+test('김민서 요청 후 여러 탭에서 계정을 바꿔도 박준호가 평가 확정', async ({
+  page,
+  context,
+  backend,
+}) => {
+  await page.goto('/');
+  await actor(page, 'learner-1');
+  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '다시 요청' }).click();
+  await page.getByRole('button', { name: '다시 요청', exact: true }).click();
+  await expect(page.getByText('박준호 FT 평가 대기')).toBeVisible();
+
+  const ftPage = await context.newPage();
+  await ftPage.goto('/');
+  await actor(ftPage, 'ft-1');
+  await ftPage.getByRole('link', { name: 'FT 평가', exact: true }).click();
+  await ftPage.getByRole('link', { name: '평가하기' }).click();
+  await actor(page, 'learner-2');
+  for (const item of await ftPage.locator('.ft-item').all()) {
+    await item.getByLabel('통과', { exact: true }).check();
+    await item.getByLabel('판정 근거').fill('다른 탭 계정 전환 후에도 지정 FT가 독립 수행 확인');
+  }
+  await expect(ftPage.locator('.save-status')).toHaveText('저장됨');
+  await ftPage.reload();
+  await expect(ftPage.getByLabel('접속 계정')).toHaveValue('ft-1');
+  await expect(ftPage.locator('.ft-item').first().getByLabel('판정 근거')).toHaveValue(
+    '다른 탭 계정 전환 후에도 지정 FT가 독립 수행 확인',
+  );
+  await ftPage.getByRole('button', { name: '판정 확인', exact: true }).click();
+  await ftPage.getByRole('button', { name: '평가 확정', exact: true }).click();
+  await expect(ftPage.getByRole('heading', { name: '실기 평가를 확정했습니다.' })).toBeVisible();
+  await expect(
+    ftPage.getByText('김민서 님이 이 과정을 수료했습니다.', { exact: true }),
+  ).toBeVisible();
+  const submitted = backend.store
+    .snapshot()
+    .attempts.find((a) => a.kind === 'practical' && a.round === 2);
+  expect(submitted).toMatchObject({ evaluatorId: 'ft-1', status: 'submitted', result: 'passed' });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '정하린 님', exact: true })).toBeVisible();
+  await ftPage.screenshot({ path: test.info().outputPath('multi-tab-ft-confirmed.png') });
+});
+
 for (const failure of ['response', 'refresh'] as const) {
   test(`제출 저장 후 ${failure === 'response' ? '응답 유실' : '화면 갱신 실패'} 재시도`, async ({
     page,
@@ -98,10 +141,13 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).click();
   await expect(page.getByRole('button', { name: '답안 확인', exact: true })).toBeEnabled();
-  const view = await (await page.request.get('/api/workspace')).json(),
+  const tabId = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  const view = await (
+      await page.request.get('/api/workspace', { headers: { 'X-Session-Tab': tabId! } })
+    ).json(),
     attempt = view.assignments[0].enrollments[1].activeAttempts.objective;
   const response = await page.request.put(`/api/attempts/${attempt.id}/draft`, {
-    headers: { 'Idempotency-Key': 'other-tab-save' },
+    headers: { 'Idempotency-Key': 'other-tab-save', 'X-Session-Tab': tabId! },
     data: { revision: attempt.revision, answers: { 'd2-q1': 1 }, verdicts: {} },
   });
   expect(response.ok()).toBeTruthy();
@@ -128,7 +174,7 @@ test('FT 변경 후 이전 초안 보존과 새 FT 빈 입력', async ({ page, b
   await item.getByLabel('판정 근거').fill('이전 FT가 관찰한 초안');
   await expect(page.locator('.save-status')).toHaveText('저장됨');
   await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await page.getByRole('link', { name: '자격 배정', exact: true }).click();
   await page.locator('tbody tr summary').click();
   await page.getByRole('button', { name: 'FT 변경' }).click();
@@ -153,7 +199,7 @@ test('FT 변경 후 이전 초안 보존과 새 FT 빈 입력', async ({ page, b
 test('과정별 실제 수행 비교·확정·정정 원본 보존', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await page.getByRole('link', { name: '기준 검증', exact: true }).click();
   await page.getByRole('button', { name: '비교 기록 추가' }).click();
   await page.getByLabel('객관식 회차').selectOption('attempt-1');
@@ -190,16 +236,26 @@ test('과정별 실제 수행 비교·확정·정정 원본 보존', async ({ pa
 test('개발 서버에서 서버 초기 데이터와 런타임 파일 노출 차단', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'learner-1');
-  const root = process.cwd().replace(/\/frontend$/, '');
+  const root = process
+    .cwd()
+    .replaceAll('\\', '/')
+    .replace(/\/frontend$/, '');
   for (const file of [
     `${root}/server/src/seed-source.json`,
+    `${root}/server/src/organization-seed.json`,
     backend.store.file,
+    backend.store.organizations.file,
     `${root}/.git/config`,
   ]) {
-    const response = await page.request.get(`/@fs${file}`);
+    const response = await page.request.get(
+      `/@fs/${file.replaceAll('\\', '/').replace(/^\//, '')}`,
+    );
     expect(response.status()).toBe(403);
   }
-  const view = await (await page.request.get('/api/workspace')).json();
+  const tabId = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  const view = await (
+    await page.request.get('/api/workspace', { headers: { 'X-Session-Tab': tabId! } })
+  ).json();
   expect(
     view.courses.every((c: any) => c.questions.every((q: any) => q.correct === undefined)),
   ).toBeTruthy();

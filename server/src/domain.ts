@@ -9,15 +9,23 @@ import {
   requiredKinds,
   courseErrors,
   qualificationErrors,
+  qualificationUseErrors,
   type State,
-  type User,
+  type UserView as User,
+  type OrganizationDocument,
+  type ResetScope,
+  ResetScopeSchema,
+  organizationEntries,
   type AssessmentAttempt,
   type Workspace,
   type StoredAssignment,
   type Kind,
   type AuditEvent,
+  type ProgressSummary,
 } from "@eks/contracts";
 import { demand } from "./storage.ts";
+import { userView, organization, systemOperator } from "./organizations.ts";
+import { changeCourseLifecycle, courseUsage } from "./course-lifecycle.ts";
 
 const now = () => new Date().toISOString();
 const uid = () => randomUUID();
@@ -27,17 +35,22 @@ function find<T extends { id: string }>(list: T[], id: string): T {
   demand(value, 404, "기록을 찾을 수 없습니다.");
   return value;
 }
-function hasRole(u: User, role: User["roles"][number]) {
-  demand(u.roles.includes(role), 403, "접근 권한이 없습니다.");
-}
 function owner(a: StoredAssignment, u: User) {
-  return u.roles.includes("admin") && a.ownerAdminId === u.id;
+  return (
+    u.roles.includes("admin") && a.lv1OrganizationId === u.lv1OrganizationId
+  );
 }
 export function canRead(a: StoredAssignment, u: User) {
   return (
+    u.roles.includes("system_operator") ||
     owner(a, u) ||
-    (u.roles.includes("learner") && a.learnerId === u.id) ||
-    (u.roles.includes("ft") && a.ftId === u.id && a.learnerId !== u.id)
+    (a.lv1OrganizationId === u.lv1OrganizationId &&
+      u.roles.includes("learner") &&
+      a.learnerId === u.id) ||
+    (a.lv1OrganizationId === u.lv1OrganizationId &&
+      u.roles.includes("ft") &&
+      a.ftId === u.id &&
+      a.learnerId !== u.id)
   );
 }
 function active(a: StoredAssignment) {
@@ -61,7 +74,7 @@ const reasonSchema = z
   .trim()
   .min(1, "변경 사유를 입력해 주세요.")
   .max(2000);
-function audit(
+function recordAudit(
   s: State,
   u: User,
   action: string,
@@ -69,9 +82,11 @@ function audit(
   reason = "",
   assignmentId?: string,
   details: AuditEvent["details"] = {},
+  scope = u.lv1OrganizationId,
 ) {
   s.audits.push({
     id: uid(),
+    lv1OrganizationId: action === "progress.reset" ? undefined : scope,
     actorId: u.id,
     date: now(),
     action,
@@ -93,13 +108,51 @@ export function authorize(
   action: string,
   target: string,
   body: any,
+  managementLv1?: string,
 ) {
+  if (action === "progress.reset") {
+    systemOperator(u);
+    return;
+  }
   if (
     action.startsWith("catalog.") ||
     action.startsWith("notice.") ||
     action === "assignment.create"
   ) {
-    hasRole(u, "admin");
+    demand(managementLv1, 403, "관리할 Lv1 조직을 선택해 주세요.");
+    if (action.startsWith("catalog.") && action !== "catalog.create") {
+      const list = target === "courses" ? s.courses : s.qualifications;
+      const item = find(
+        list as { id: string; lv1OrganizationId: string }[],
+        body.id,
+      );
+      demand(
+        item.lv1OrganizationId === managementLv1,
+        403,
+        "소속 Lv1의 기준만 관리할 수 있습니다.",
+      );
+    }
+    if (action.startsWith("notice.") && body.id) {
+      const notice = s.notices.find((n) => n.id === body.id);
+      if (notice)
+        demand(
+          notice.lv1OrganizationId === managementLv1,
+          403,
+          "소속 Lv1의 공지만 관리할 수 있습니다.",
+        );
+    }
+    if (action === "assignment.create")
+      demand(
+        find(s.qualifications, body.qualificationId).lv1OrganizationId ===
+          managementLv1,
+        403,
+        "소속 Lv1의 자격만 배정할 수 있습니다.",
+      );
+    return;
+  }
+  if (action.startsWith("course.")) {
+    demand(managementLv1, 403, "관리할 Lv1 조직을 선택해 주세요.");
+    courseUsage(s, target, managementLv1);
     return;
   }
   let a: StoredAssignment;
@@ -114,8 +167,17 @@ export function authorize(
     demand(false, 404, "지원하지 않는 요청입니다.");
   }
   if (action.startsWith("assignment.") || action.startsWith("comparison."))
-    demand(owner(a, u), 403, "담당 운영자만 변경할 수 있습니다.");
+    demand(
+      managementLv1 && a.lv1OrganizationId === managementLv1,
+      403,
+      "선택한 Lv1의 업무만 변경할 수 있습니다.",
+    );
   else {
+    demand(
+      a.lv1OrganizationId === u.lv1OrganizationId,
+      403,
+      "다른 Lv1의 평가를 처리할 수 없습니다.",
+    );
     const kind =
       action === "attempt.start" ? body.kind : find(s.attempts, target).kind;
     if (action === "attempt.start" || kind === "objective")
@@ -211,7 +273,120 @@ export function execute(
   action: string,
   target: string,
   body: any,
+  organizations: OrganizationDocument,
+  managementLv1?: string,
 ): any {
+  const scope = managementLv1 || u.lv1OrganizationId;
+  const audit = (
+    state: State,
+    actor: User,
+    action: string,
+    targetId: string,
+    reason = "",
+    assignmentId?: string,
+    details: AuditEvent["details"] = {},
+  ) =>
+    recordAudit(
+      state,
+      actor,
+      action,
+      targetId,
+      reason,
+      assignmentId,
+      details,
+      scope,
+    );
+  const participant = (id: string | null, role: "learner" | "ft") => {
+    const user = s.users.find((user) => user.id === id);
+    demand(
+      user && user.roles.includes(role),
+      422,
+      "학습자·FT 역할을 확인해 주세요.",
+    );
+    const view = userView(user, organizations);
+    demand(
+      view.lv1OrganizationId === scope && view.organizationActive,
+      422,
+      "같은 Lv1의 사용 중인 조직에 소속된 사용자를 선택해 주세요.",
+    );
+    return view;
+  };
+  if (action === "progress.reset") {
+    const input = z
+      .object({
+        revision: z.number().int().nonnegative(),
+        confirmation: z.literal("초기화"),
+        scope: ResetScopeSchema,
+      })
+      .parse(body);
+    expected(s, input.revision);
+    if (input.scope.type === "organization")
+      demand(
+        organization(organizations, input.scope.lv1OrganizationId).level === 1,
+        422,
+        "Lv1 조직을 선택해 주세요.",
+      );
+    const { counts } = progressSummary(s, input.scope);
+    const affected = new Set(
+      s.assignments
+        .filter((a) => inScope(a.lv1OrganizationId, input.scope))
+        .map((a) => a.id),
+    );
+    const enrollments = new Set(
+      s.enrollments
+        .filter((e) => affected.has(e.assignmentId))
+        .map((e) => e.id),
+    );
+    s.attempts = s.attempts.filter((r) => !enrollments.has(r.enrollmentId));
+    s.completions = s.completions.filter(
+      (r) => !enrollments.has(r.enrollmentId),
+    );
+    s.certifications = s.certifications.filter(
+      (r) => !affected.has(r.assignmentId),
+    );
+    s.comparisons = s.comparisons.filter(
+      (r) => !enrollments.has(r.enrollmentId),
+    );
+    s.requests = s.requests.filter(
+      (r) =>
+        !(
+          r.lv1OrganizationId &&
+          inScope(r.lv1OrganizationId, input.scope) &&
+          (!r.action ||
+            r.action === "legacy" ||
+            r.action.startsWith("attempt.") ||
+            r.action.startsWith("comparison."))
+        ),
+    );
+    s.audits = s.audits.filter(
+      (ev) =>
+        !(
+          ev.assignmentId &&
+          affected.has(ev.assignmentId) &&
+          (ev.action.startsWith("attempt.") ||
+            ev.action.startsWith("comparison."))
+        ),
+    );
+    for (const event of s.audits)
+      if (event.assignmentId && affected.has(event.assignmentId))
+        delete event.details.archivedDrafts;
+    const id = uid();
+    audit(
+      s,
+      u,
+      action,
+      id,
+      "MVP 반복 테스트를 위한 진행 내역 초기화",
+      undefined,
+      { counts, scope: input.scope },
+    );
+    return { id, revision: s.revision + 1 };
+  }
+  if (action.startsWith("course.")) {
+    const result = changeCourseLifecycle(s, u, action, target, body, scope);
+    audit(s, u, action, target, result.reason, undefined, result.details);
+    return result.response;
+  }
   if (action.startsWith("catalog.")) {
     const isCourse = target === "courses",
       list = isCourse ? s.courses : s.qualifications;
@@ -219,6 +394,7 @@ export function execute(
       const id = uid(),
         base = {
           id,
+          lv1OrganizationId: scope,
           entityId: id,
           version: 1,
           revision: 1,
@@ -228,6 +404,7 @@ export function execute(
       if (isCourse)
         s.courses.push({
           ...base,
+          operationalStatus: "active",
           mode: "both",
           passScore: null,
           material: "",
@@ -263,6 +440,14 @@ export function execute(
         revision: 1,
         status: "draft" as const,
         publishedAt: undefined,
+        ...(isCourse
+          ? {
+              operationalStatus: "active",
+              retiredAt: undefined,
+              retiredBy: undefined,
+              retirementReason: undefined,
+            }
+          : {}),
       };
       if (isCourse) s.courses.push(CourseSchema.parse(clone));
       else s.qualifications.push(QualificationSchema.parse(clone));
@@ -280,17 +465,26 @@ export function execute(
     const parsed = (isCourse ? CourseSchema : QualificationSchema).parse({
       ...body,
       id: item.id,
+      lv1OrganizationId: item.lv1OrganizationId,
       entityId: item.entityId,
       version: item.version,
       parentId: item.parentId,
       status: "draft",
       publishedAt: undefined,
       revision: item.revision + 1,
+      ...(isCourse
+        ? {
+            operationalStatus: "active",
+            retiredAt: undefined,
+            retiredBy: undefined,
+            retirementReason: undefined,
+          }
+        : {}),
     });
     if (!isCourse)
       demand(
         (parsed as State["qualifications"][number]).courseIds.every((id) =>
-          s.courses.some((c) => c.id === id),
+          s.courses.some((c) => c.id === id && c.lv1OrganizationId === scope),
         ),
         422,
         "과정을 찾을 수 없습니다.",
@@ -298,7 +492,7 @@ export function execute(
     if (action === "catalog.publish") {
       const errors = isCourse
         ? courseErrors(parsed as State["courses"][number])
-        : qualificationErrors(
+        : qualificationUseErrors(
             parsed as State["qualifications"][number],
             s.courses,
           );
@@ -325,11 +519,15 @@ export function execute(
         })
         .parse(body),
       q = find(s.qualifications, input.qualificationId);
+    const learner = participant(input.learnerId, "learner");
+    if (input.ftId) participant(input.ftId, "ft");
     demand(
       q.status === "published" && !qualificationErrors(q, s.courses).length,
       422,
       "사용 중인 자격을 선택해 주세요.",
     );
+    const availabilityErrors = qualificationUseErrors(q, s.courses);
+    demand(!availabilityErrors.length, 422, availabilityErrors.join("\n"));
     demand(
       s.users.some(
         (x) => x.id === input.learnerId && x.roles.includes("learner"),
@@ -363,6 +561,9 @@ export function execute(
       id,
       ftId: needsFT ? input.ftId : null,
       ownerAdminId: u.id,
+      lv1OrganizationId: scope,
+      organizationPath: learner.organizationPath,
+      organizationSource: "assigned",
       revision: 1,
       assignedAt: now(),
     });
@@ -383,6 +584,7 @@ export function execute(
       audit(s, u, action, a.id, reason, a.id);
     } else {
       const ftId = idSchema.parse(body.ftId);
+      participant(ftId, "ft");
       demand(
         ftId !== a.learnerId &&
           s.users.some((x) => x.id === ftId && x.roles.includes("ft")),
@@ -442,6 +644,12 @@ export function execute(
     active(a);
     const kind = z.enum(["objective", "practical"]).parse(body.kind);
     demand(requiredKinds(c).includes(kind), 422, "필수 평가가 아닙니다.");
+    if (kind === "practical")
+      demand(
+        s.users.some((user) => user.id === a.ftId && user.roles.includes("ft")),
+        409,
+        "담당 FT의 역할이 변경되었습니다. 조직 관리자에게 FT 재배정을 요청해 주세요.",
+      );
     demand(
       !s.attempts.some(
         (t) =>
@@ -531,6 +739,7 @@ export function execute(
     const n = NoticeSchema.parse({
       ...body,
       id: current?.id || uid(),
+      lv1OrganizationId: current?.lv1OrganizationId || scope,
       date: body.date || now().slice(0, 10),
       revision: current ? current.revision + 1 : 1,
     });
@@ -588,6 +797,7 @@ export function execute(
       );
       const next = {
         ...structuredClone(record),
+        ownerAdminId: u.id,
         id: uid(),
         revision: 1,
         status: "draft" as const,
@@ -670,6 +880,40 @@ export function execute(
   demand(false, 404, "지원하지 않는 요청입니다.");
 }
 
+export const inScope = (lv1: string, scope: ResetScope) =>
+  scope.type === "all" || scope.lv1OrganizationId === lv1;
+export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
+  const assignments = new Set(
+    s.assignments
+      .filter((a) => inScope(a.lv1OrganizationId, scope))
+      .map((a) => a.id),
+  );
+  const enrollments = new Set(
+    s.enrollments
+      .filter((e) => assignments.has(e.assignmentId))
+      .map((e) => e.id),
+  );
+  return {
+    revision: s.revision,
+    scope,
+    counts: {
+      objectiveAttempts: s.attempts.filter(
+        (t) => enrollments.has(t.enrollmentId) && t.kind === "objective",
+      ).length,
+      practicalAttempts: s.attempts.filter(
+        (t) => enrollments.has(t.enrollmentId) && t.kind === "practical",
+      ).length,
+      completions: s.completions.filter((r) => enrollments.has(r.enrollmentId))
+        .length,
+      certifications: s.certifications.filter((r) =>
+        assignments.has(r.assignmentId),
+      ).length,
+      comparisons: s.comparisons.filter((r) => enrollments.has(r.enrollmentId))
+        .length,
+    },
+  };
+}
+
 export function attemptView(
   s: State,
   u: User,
@@ -678,7 +922,7 @@ export function attemptView(
   const { a } = context(s, t.enrollmentId);
   demand(canRead(a, u), 403, "접근 권한이 없습니다.");
   const copy = structuredClone(t),
-    full = owner(a, u),
+    full = owner(a, u) || u.roles.includes("system_operator"),
     practicalFT =
       u.roles.includes("ft") && a.ftId === u.id && a.learnerId !== u.id;
   if (!full) {
@@ -695,20 +939,77 @@ export function attemptView(
   }
   return copy;
 }
-export function workspace(s: State, u: User): Workspace {
-  const assignments = s.assignments.filter((a) => canRead(a, u));
+export function workspace(
+  s: State,
+  u: User,
+  organizations: OrganizationDocument,
+  lv1?: string,
+): Workspace {
+  const operator = u.roles.includes("system_operator");
+  if (lv1) {
+    demand(
+      organization(organizations, lv1).level === 1,
+      422,
+      "Lv1 조직을 선택해 주세요.",
+    );
+    demand(
+      operator || lv1 === u.lv1OrganizationId,
+      403,
+      "다른 Lv1을 조회할 수 없습니다.",
+    );
+  }
+  const visibleScope = (id: string) =>
+    operator ? !lv1 || id === lv1 : id === u.lv1OrganizationId;
+  const assignments = s.assignments.filter(
+    (a) => visibleScope(a.lv1OrganizationId) && canRead(a, u),
+  );
   const qids = new Set(assignments.map((a) => a.qualificationId)),
     cids = new Set(
       s.enrollments
         .filter((e) => assignments.some((a) => a.id === e.assignmentId))
         .map((e) => e.courseId),
     );
-  const admin = u.roles.includes("admin");
+  const admin = u.roles.includes("admin") || operator;
   return {
-    users: s.users,
-    qualifications: s.qualifications.filter((q) => admin || qids.has(q.id)),
+    actor: u,
+    management: {
+      lv1OrganizationId: operator
+        ? lv1 || null
+        : u.roles.includes("admin")
+          ? u.lv1OrganizationId
+          : null,
+      canManage: operator ? !!lv1 : u.roles.includes("admin"),
+    },
+    organizations: organizationEntries(organizations).filter(
+      (e) => operator || e.lv1OrganizationId === u.lv1OrganizationId,
+    ),
+    users: s.users
+      .map((user) => userView(user, organizations))
+      .filter(
+        (user) =>
+          visibleScope(user.lv1OrganizationId) &&
+          (admin ||
+            user.id === u.id ||
+            assignments.some((a) =>
+              [a.learnerId, a.ftId, a.ownerAdminId].includes(user.id),
+            ) ||
+            s.attempts.some(
+              (t) =>
+                t.evaluatorId === user.id &&
+                assignments.some((a) =>
+                  s.enrollments.some(
+                    (e) => e.id === t.enrollmentId && e.assignmentId === a.id,
+                  ),
+                ),
+            )),
+      ),
+    qualifications: s.qualifications.filter(
+      (q) => visibleScope(q.lv1OrganizationId) && (admin || qids.has(q.id)),
+    ),
     courses: s.courses
-      .filter((c) => admin || cids.has(c.id))
+      .filter(
+        (c) => visibleScope(c.lv1OrganizationId) && (admin || cids.has(c.id)),
+      )
       .map((c) => {
         const copy = structuredClone(c);
         if (!admin)
@@ -763,7 +1064,7 @@ export function workspace(s: State, u: User): Workspace {
                     result: v.result!,
                     date: v.date!,
                     evaluatorId: v.evaluatorId,
-                    ...(owner(a, u)
+                    ...(admin
                       ? {
                           answers: v.answers,
                           verdicts: v.verdicts,
@@ -780,14 +1081,26 @@ export function workspace(s: State, u: User): Workspace {
           }),
       };
     }),
-    notices: s.notices.filter((n) => admin || n.published),
-    comparisons: s.comparisons.filter((c) => admin && c.ownerAdminId === u.id),
+    notices: s.notices.filter(
+      (n) => visibleScope(n.lv1OrganizationId) && (admin || n.published),
+    ),
+    comparisons: s.comparisons.filter(
+      (c) =>
+        admin &&
+        s.enrollments.some(
+          (e) =>
+            e.id === c.enrollmentId &&
+            assignments.some((a) => a.id === e.assignmentId),
+        ),
+    ),
     audits: s.audits.filter(
       (ev) =>
         admin &&
         (ev.assignmentId
-          ? assignments.some((a) => a.id === ev.assignmentId && owner(a, u))
-          : true),
+          ? assignments.some((a) => a.id === ev.assignmentId)
+          : ev.lv1OrganizationId
+            ? visibleScope(ev.lv1OrganizationId)
+            : operator),
     ),
   };
 }

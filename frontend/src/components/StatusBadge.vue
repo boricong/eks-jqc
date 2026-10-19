@@ -4,6 +4,7 @@ import AppIcon from './AppIcon.vue';
 const props = defineProps<{ status: string; label?: string }>();
 const names: Record<string, string> = {
   ready: '미시작',
+  retired: '운영 종료',
   draft: '작성 중',
   waiting: '평가 대기',
   passed: '통과',

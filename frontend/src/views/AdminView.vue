@@ -5,11 +5,27 @@ import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
+import ManagementContext from '../components/ManagementContext.vue';
+import CourseLifecycle from '../components/CourseLifecycle.vue';
 import ComparisonPanel from '../components/ComparisonPanel.vue';
 import type { Assignment, Course, Notice, Qualification, AuditEvent, Verdict } from '../types';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
+const organizationData = computed(() => {
+  const data = store.data,
+    root = store.managementLv1;
+  const assignments = data.assignments.filter((a) => a.lv1OrganizationId === root);
+  return {
+    ...data,
+    assignments,
+    users: data.users.filter((u) => u.lv1OrganizationId === root),
+    courses: data.courses.filter((c) => c.lv1OrganizationId === root),
+    qualifications: data.qualifications.filter((q) => q.lv1OrganizationId === root),
+    notices: data.notices.filter((n) => n.lv1OrganizationId === root),
+    audits: data.audits.filter((e) => e.lv1OrganizationId === root),
+  };
+});
 const sections = [
   { id: 'qualifications', name: '자격 관리', icon: 'award' },
   { id: 'courses', name: '과정 관리', icon: 'book' },
@@ -47,19 +63,25 @@ watch(
   () => route.fullPath,
   () => {
     query.value = '';
-    filter.value = 'all';
+    filter.value = section.value === 'courses' ? 'active' : 'all';
+    assignmentOpen.value = false;
+    selectedAssignment.value = null;
+    noticeDraft.value = null;
+    reason.value = '';
+    ftId.value = '';
+    assignmentForm.value = { qualificationId: '', learnerId: '', ftId: '' };
     errors.value = [];
     courseDraft.value = null;
     qualificationDraft.value = null;
     if (route.params.id && section.value === 'courses') {
-      const c = store.data.courses.find((c) => c.id === route.params.id);
+      const c = organizationData.value.courses.find((c) => c.id === route.params.id);
       if (c) {
         courseDraft.value = plain(c);
         editorTab.value = c.mode === 'practical' ? 'practical' : 'objective';
       }
     }
     if (route.params.id && section.value === 'qualifications') {
-      const q = store.data.qualifications.find((q) => q.id === route.params.id);
+      const q = organizationData.value.qualifications.find((q) => q.id === route.params.id);
       if (q) qualificationDraft.value = plain(q);
     }
   },
@@ -67,17 +89,25 @@ watch(
 );
 const matches = (text: string) => text.toLowerCase().includes(query.value.toLowerCase());
 const qualifications = computed(() =>
-  store.data.qualifications.filter(
+  organizationData.value.qualifications.filter(
     (q) => matches(q.title) && (filter.value === 'all' || q.status === filter.value),
   ),
 );
 const courses = computed(() =>
-  store.data.courses.filter(
-    (c) => matches(c.title) && (filter.value === 'all' || c.status === filter.value),
+  organizationData.value.courses.filter(
+    (c) =>
+      matches(c.title) &&
+      (filter.value === 'all' ||
+        (filter.value === 'active' && c.operationalStatus !== 'retired') ||
+        (filter.value === 'retired' && c.operationalStatus === 'retired') ||
+        (filter.value === 'draft' && c.status === 'draft') ||
+        (filter.value === 'published' &&
+          c.status === 'published' &&
+          c.operationalStatus === 'active')),
   ),
 );
 const assignments = computed(() =>
-  store.data.assignments.filter(
+  organizationData.value.assignments.filter(
     (a) =>
       matches(store.qualification(a.qualificationId).title + ' ' + store.username(a.learnerId)) &&
       (filter.value === 'all' ||
@@ -86,13 +116,13 @@ const assignments = computed(() =>
         (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt)),
   ),
 );
-const notices = computed(() => store.data.notices.filter((n) => matches(n.title)));
+const notices = computed(() => organizationData.value.notices.filter((n) => matches(n.title)));
 async function createCatalog() {
   if (busy.value) return;
   busy.value = true;
   try {
     const result = await store.createCatalog(section.value);
-    await router.push(`/admin/${section.value}/${result.id}`);
+    await router.push(store.managementLink(`/admin/${section.value}/${result.id}`));
   } catch (error) {
     errors.value = [(error as Error).message];
   } finally {
@@ -138,7 +168,7 @@ async function cloneVersion() {
   busy.value = true;
   try {
     const result = await store.cloneCatalog(section.value, editor.value!.id);
-    await router.push(`/admin/${section.value}/${result.id}`);
+    await router.push(store.managementLink(`/admin/${section.value}/${result.id}`));
   } catch (error) {
     errors.value = [(error as Error).message];
   } finally {
@@ -162,6 +192,36 @@ function addPractical() {
     criterion: '',
     mandatory: true,
   });
+}
+function openAssignmentDialog() {
+  const data = organizationData.value;
+  const learners = data.users.filter((u) => u.roles.includes('learner') && u.organizationActive);
+  const qualifications = data.qualifications.filter(
+    (q) => q.status === 'published' && !store.retiredCourses(q).length,
+  );
+  if (!qualifications.some((q) => q.id === assignmentForm.value.qualificationId))
+    assignmentForm.value.qualificationId = qualifications[0]?.id || '';
+  if (!learners.some((u) => u.id === assignmentForm.value.learnerId))
+    assignmentForm.value.learnerId =
+      learners.find(
+        (u) =>
+          !data.assignments.some(
+            (a) =>
+              a.learnerId === u.id &&
+              a.qualificationId === assignmentForm.value.qualificationId &&
+              !a.excludedReason,
+          ),
+      )?.id ||
+      learners[0]?.id ||
+      '';
+  const fts = data.users.filter(
+    (u) =>
+      u.roles.includes('ft') && u.organizationActive && u.id !== assignmentForm.value.learnerId,
+  );
+  if (!fts.some((u) => u.id === assignmentForm.value.ftId))
+    assignmentForm.value.ftId = fts[0]?.id || '';
+  assignmentOpen.value = true;
+  errors.value = [];
 }
 async function addAssignment() {
   if (busy.value) return;
@@ -210,6 +270,7 @@ function editNotice(n?: Notice) {
     ? plain(n)
     : {
         id: crypto.randomUUID(),
+        lv1OrganizationId: store.managementLv1,
         title: '',
         body: '',
         date: new Date().toISOString().slice(0, 10),
@@ -258,22 +319,37 @@ function archivedDrafts(ev: AuditEvent) {
 }
 function itemTitle(id: string) {
   return (
-    store.data.courses.flatMap((c) => c.practicalItems).find((i) => i.id === id)?.title ||
-    '실기 항목'
+    organizationData.value.courses.flatMap((c) => c.practicalItems).find((i) => i.id === id)
+      ?.title || '실기 항목'
   );
 }
 
 function canLeave() {
+  if (!store.managementAccess) return true;
   const source = courseDraft.value
-    ? store.data.courses.find((c) => c.id === courseDraft.value!.id)
+    ? organizationData.value.courses.find((c) => c.id === courseDraft.value!.id)
     : qualificationDraft.value
-      ? store.data.qualifications.find((q) => q.id === qualificationDraft.value!.id)
+      ? organizationData.value.qualifications.find((q) => q.id === qualificationDraft.value!.id)
       : null;
+  if (store.writing) {
+    store.notify('저장이 끝난 뒤 이동해 주세요.');
+    return false;
+  }
+  if (
+    (noticeDraft.value || assignmentOpen.value || selectedAssignment.value) &&
+    !window.confirm(
+      '작성 중인 입력이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
+    )
+  )
+    return false;
   return (
+    !store.canEnterManagement ||
     !editor.value ||
     readOnly.value ||
     JSON.stringify(source) === JSON.stringify(editor.value) ||
-    window.confirm('저장하지 않은 변경 사항이 있습니다. 나갈까요?')
+    window.confirm(
+      '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
+    )
   );
 }
 onBeforeRouteLeave(canLeave);
@@ -281,20 +357,25 @@ onBeforeRouteUpdate(canLeave);
 </script>
 <template>
   <div class="container page admin-shell">
+    <ManagementContext />
     <aside class="admin-sidebar">
+      <p class="organization-context">{{ store.managementOrganization?.name }}</p>
       <h2 class="small-heading">관리</h2>
       <nav aria-label="관리 메뉴">
         <RouterLink
           v-for="s in sections"
           :key="s.id"
-          :to="`/admin/${s.id}`"
+          :to="store.managementLink(`/admin/${s.id}`)"
           :class="{ active: section === s.id }"
           :aria-current="section === s.id ? 'page' : undefined"
           ><AppIcon :name="s.icon" :size="18" />{{ s.name }}</RouterLink
         >
       </nav>
     </aside>
-    <div class="admin-content">
+    <div v-if="!store.managementReady" class="empty-state">
+      관리할 Lv1 조직을 선택하면 인증 업무를 관리할 수 있습니다.
+    </div>
+    <div v-else class="admin-content">
       <div
         v-if="errors.length && !editor && !assignmentOpen && !selectedAssignment && !noticeDraft"
         class="error-message"
@@ -303,15 +384,21 @@ onBeforeRouteUpdate(canLeave);
         {{ errors.join(' · ') }}
       </div>
       <template v-if="editor">
-        <RouterLink :to="`/admin/${section}`" class="back-link"
+        <RouterLink :to="store.managementLink(`/admin/${section}`)" class="back-link"
           ><AppIcon name="back" :size="16" />{{ title }}</RouterLink
         >
         <div class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 과정' : '새 자격') }}</h1>
           <div class="actions">
-            <StatusBadge :status="readOnly ? 'published' : 'catalogDraft'" /><span
-              class="small-label"
-              >v{{ editor.version }}</span
+            <StatusBadge
+              :status="
+                courseDraft?.operationalStatus === 'retired'
+                  ? 'retired'
+                  : readOnly
+                    ? 'published'
+                    : 'catalogDraft'
+              "
+            /><span class="small-label">v{{ editor.version }}</span
             ><button v-if="readOnly" class="button primary" :disabled="busy" @click="cloneVersion">
               <AppIcon name="plus" :size="18" />새 버전
             </button>
@@ -326,6 +413,35 @@ onBeforeRouteUpdate(canLeave);
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
           다시 불러오기
         </button>
+        <CourseLifecycle
+          v-if="courseDraft"
+          :key="courseDraft.id"
+          :course="store.course(courseDraft.id) || courseDraft"
+          :disabled="busy"
+          @changed="courseDraft = plain(store.course(courseDraft.id))"
+          @deleted="
+            courseDraft = null;
+            router.push(store.managementLink('/admin/courses'));
+          "
+        />
+        <p
+          v-if="qualificationDraft && store.retiredCourses(qualificationDraft).length"
+          class="error-message"
+        >
+          신규 배정 불가 ·
+          {{
+            store
+              .retiredCourses(qualificationDraft)
+              .map((c) => `${c.title} v${c.version}`)
+              .join(', ')
+          }}
+          운영 종료.
+          {{
+            readOnly
+              ? '새 버전에서 종료 과정을 제거하거나 대체해 주세요.'
+              : '사용 등록 전에 종료 과정을 제거하거나 대체해 주세요.'
+          }}
+        </p>
         <div class="panel editor-panel">
           <label class="field"
             ><span>{{ courseDraft ? '과정명' : '자격명' }}</span
@@ -334,14 +450,21 @@ onBeforeRouteUpdate(canLeave);
           <template v-if="qualificationDraft"
             ><fieldset class="course-selection">
               <legend>필수 과정</legend>
-              <label v-for="c in store.data.courses" :key="c.id" class="choice"
+              <label v-for="c in organizationData.courses" :key="c.id" class="choice"
                 ><input
                   v-model="qualificationDraft.courseIds"
                   type="checkbox"
                   :value="c.id"
                   :disabled="readOnly" /><span>{{ c.title || '이름 없음' }}</span
                 ><span class="muted">v{{ c.version }}</span
-                ><StatusBadge :status="c.status === 'draft' ? 'catalogDraft' : 'published'"
+                ><StatusBadge
+                  :status="
+                    c.operationalStatus === 'retired'
+                      ? 'retired'
+                      : c.status === 'draft'
+                        ? 'catalogDraft'
+                        : 'published'
+                  "
               /></label></fieldset
           ></template>
           <template v-if="courseDraft"
@@ -550,10 +673,7 @@ onBeforeRouteUpdate(canLeave);
             v-else-if="section === 'assignments'"
             class="button primary"
             :disabled="busy"
-            @click="
-              assignmentOpen = true;
-              errors = [];
-            "
+            @click="openAssignmentDialog"
           >
             <AppIcon name="plus" :size="18" />자격 배정</button
           ><button
@@ -581,6 +701,8 @@ onBeforeRouteUpdate(canLeave);
                 "
                 :aria-label="`${title} 검색`" /></label
             ><select v-if="section !== 'notices'" v-model="filter" aria-label="상태 필터">
+              <option v-if="section === 'courses'" value="active">초안 · 운영 중</option>
+              <option v-if="section === 'courses'" value="retired">운영 종료</option>
               <option value="all">전체 상태</option>
               <template v-if="section === 'qualifications' || section === 'courses'"
                 ><option value="draft">초안</option>
@@ -607,18 +729,30 @@ onBeforeRouteUpdate(canLeave);
             <tbody>
               <tr v-for="q in qualifications" :key="q.id">
                 <td>
-                  <RouterLink :to="`/admin/qualifications/${q.id}`" class="table-title">{{
-                    q.title || '이름 없음'
-                  }}</RouterLink>
+                  <RouterLink
+                    :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+                    class="table-title"
+                    >{{ q.title || '이름 없음' }}</RouterLink
+                  >
                 </td>
                 <td>v{{ q.version }}</td>
                 <td>{{ q.courseIds.length }}과정</td>
                 <td>
                   <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : 'published'" />
+                  <p v-if="store.retiredCourses(q).length" class="muted">
+                    신규 배정 불가 ·
+                    {{
+                      store
+                        .retiredCourses(q)
+                        .map((c) => `${c.title} v${c.version}`)
+                        .join(', ')
+                    }}
+                    운영 종료
+                  </p>
                 </td>
                 <td>
                   <RouterLink
-                    :to="`/admin/qualifications/${q.id}`"
+                    :to="store.managementLink(`/admin/qualifications/${q.id}`)"
                     class="icon-button"
                     :aria-label="`${q.title} 상세`"
                     ><AppIcon name="chevron" :size="18"
@@ -643,18 +777,28 @@ onBeforeRouteUpdate(canLeave);
             <tbody>
               <tr v-for="c in courses" :key="c.id">
                 <td>
-                  <RouterLink :to="`/admin/courses/${c.id}`" class="table-title">{{
-                    c.title || '이름 없음'
-                  }}</RouterLink>
+                  <RouterLink
+                    :to="store.managementLink(`/admin/courses/${c.id}`)"
+                    class="table-title"
+                    >{{ c.title || '이름 없음' }}</RouterLink
+                  >
                 </td>
                 <td>v{{ c.version }}</td>
                 <td class="muted">{{ labels[c.mode] }}</td>
                 <td>
-                  <StatusBadge :status="c.status === 'draft' ? 'catalogDraft' : 'published'" />
+                  <StatusBadge
+                    :status="
+                      c.operationalStatus === 'retired'
+                        ? 'retired'
+                        : c.status === 'draft'
+                          ? 'catalogDraft'
+                          : 'published'
+                    "
+                  />
                 </td>
                 <td>
                   <RouterLink
-                    :to="`/admin/courses/${c.id}`"
+                    :to="store.managementLink(`/admin/courses/${c.id}`)"
                     class="icon-button"
                     :aria-label="`${c.title} 상세`"
                     ><AppIcon name="chevron" :size="18"
@@ -736,7 +880,10 @@ onBeforeRouteUpdate(canLeave);
                     {{ store.course(e.courseId).title }}
                     <span class="small-label">v{{ store.course(e.courseId).version }}</span>
                   </h2>
-                  <StatusBadge v-if="store.complete(e)" status="complete" />
+                  <StatusBadge v-if="store.complete(e)" status="complete" /><StatusBadge
+                    v-if="store.course(e.courseId).operationalStatus === 'retired'"
+                    status="retired"
+                  />
                 </div>
                 <details v-for="h in [...e.history].reverse()" :key="h.id" class="attempt-detail">
                   <summary>
@@ -790,7 +937,7 @@ onBeforeRouteUpdate(canLeave);
               <details class="attempt-detail">
                 <summary>변경 이력</summary>
                 <div
-                  v-for="ev in store.data.audits.filter((x) => x.assignmentId === a.id)"
+                  v-for="ev in organizationData.audits.filter((x) => x.assignmentId === a.id)"
                   :key="ev.id"
                   class="audit-row"
                 >
@@ -832,7 +979,7 @@ onBeforeRouteUpdate(canLeave);
               </details>
               <RouterLink
                 v-if="a.certifiedAt"
-                :to="`/certifications/${a.id}`"
+                :to="store.managementLink(`/certifications/${a.id}`)"
                 class="button secondary"
                 >인증 근거 보기<AppIcon name="arrow" :size="16"
               /></RouterLink>
@@ -886,22 +1033,32 @@ onBeforeRouteUpdate(canLeave);
           ><span>대상자</span
           ><select v-model="assignmentForm.learnerId">
             <option
-              v-for="u in store.data.users.filter((u) => u.roles.includes('learner'))"
+              v-for="u in organizationData.users.filter(
+                (u) => u.roles.includes('learner') && u.organizationActive,
+              )"
               :key="u.id"
               :value="u.id"
             >
-              {{ u.name }}
+              {{ u.name }} ·
+              {{
+                u.organizationPath
+                  .slice(1)
+                  .map((o) => o.name)
+                  .join(' › ') || 'Lv1 직속'
+              }}
             </option>
           </select></label
         ><label class="field"
           ><span>자격</span
           ><select v-model="assignmentForm.qualificationId">
             <option
-              v-for="q in store.data.qualifications.filter((q) => q.status === 'published')"
+              v-for="q in organizationData.qualifications.filter((q) => q.status === 'published')"
               :key="q.id"
               :value="q.id"
+              :disabled="!!store.retiredCourses(q).length"
             >
-              {{ q.title }} · v{{ q.version }}
+              {{ q.title }} · v{{ q.version
+              }}{{ store.retiredCourses(q).length ? ' · 신규 배정 불가 (운영 종료 과정)' : '' }}
             </option>
           </select></label
         ><label class="field"
@@ -909,16 +1066,36 @@ onBeforeRouteUpdate(canLeave);
           ><select v-model="assignmentForm.ftId" :disabled="!needsFT">
             <option value="">미지정</option>
             <option
-              v-for="u in store.data.users.filter((u) => u.roles.includes('ft'))"
+              v-for="u in organizationData.users.filter(
+                (u) =>
+                  u.roles.includes('ft') &&
+                  u.organizationActive &&
+                  u.id !== (selectedAssignment?.learnerId || assignmentForm.learnerId),
+              )"
               :key="u.id"
               :value="u.id"
             >
-              {{ u.name }}
+              {{ u.name }} ·
+              {{
+                u.organizationPath
+                  .slice(1)
+                  .map((o) => o.name)
+                  .join(' › ') || 'Lv1 직속'
+              }}
             </option>
           </select></label
         ><template #footer
           ><button class="button secondary" @click="assignmentOpen = false">취소</button
-          ><button class="button primary" :disabled="busy" @click="addAssignment">
+          ><button
+            class="button primary"
+            :disabled="
+              busy ||
+              !assignmentForm.qualificationId ||
+              !assignmentForm.learnerId ||
+              !store.managementOrganization?.effectiveActive
+            "
+            @click="addAssignment"
+          >
             배정
           </button></template
         ></AppDialog
@@ -936,11 +1113,17 @@ onBeforeRouteUpdate(canLeave);
           ><span>담당 FT</span
           ><select v-model="ftId">
             <option
-              v-for="u in store.data.users.filter((u) => u.roles.includes('ft'))"
+              v-for="u in organizationData.users.filter((u) => u.roles.includes('ft'))"
               :key="u.id"
               :value="u.id"
             >
-              {{ u.name }}
+              {{ u.name }} ·
+              {{
+                u.organizationPath
+                  .slice(1)
+                  .map((o) => o.name)
+                  .join(' › ') || 'Lv1 직속'
+              }}
             </option>
           </select></label
         >

@@ -19,7 +19,7 @@ const draft = ref<Comparison | null>(null),
   reason = ref('');
 const entries = computed(() =>
   store.data.assignments
-    .filter((a) => a.ownerAdminId === store.actorId)
+    .filter((a) => a.lv1OrganizationId === store.managementLv1)
     .flatMap((a) =>
       a.enrollments.map((e) => ({
         a,
@@ -64,7 +64,7 @@ function load() {
   baseline.value = JSON.stringify(draft.value);
   error.value = '';
 }
-watch(() => route.params.id, load, { immediate: true });
+watch(() => route.fullPath, load, { immediate: true });
 watch(
   activeEntries,
   (list) => {
@@ -89,7 +89,7 @@ async function create() {
     const result = await store.command(
       `/enrollments/${encodeURIComponent(selectedEnrollment.value)}/comparisons`,
     );
-    await router.push(`/admin/comparisons/${result.id}`);
+    await router.push(store.managementLink(`/admin/comparisons/${result.id}`));
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -123,7 +123,7 @@ async function correct() {
       reason: reason.value,
     });
     correctionOpen.value = false;
-    await router.push(`/admin/comparisons/${result.id}`);
+    await router.push(store.managementLink(`/admin/comparisons/${result.id}`));
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -140,7 +140,12 @@ async function reload() {
   }
 }
 const canLeave = () =>
-  !dirty.value || window.confirm('저장하지 않은 비교 기록이 있습니다. 나갈까요?');
+  !store.writing &&
+  (!store.managementAccess ||
+    !dirty.value ||
+    window.confirm(
+      '저장하지 않은 비교 기록이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
+    ));
 onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 function beforeUnload(e: BeforeUnloadEvent) {
@@ -158,7 +163,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
       {{ error }} <button class="text-link" @click="reload">다시 불러오기</button>
     </div>
     <template v-if="draft && selected">
-      <RouterLink to="/admin/comparisons" class="back-link"
+      <RouterLink :to="store.managementLink('/admin/comparisons')" class="back-link"
         ><AppIcon name="back" :size="16" />비교 기록</RouterLink
       >
       <div class="section-heading">
@@ -181,7 +186,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
       </p>
       <p v-if="draft.supersedesId" class="muted">
         정정 사유: {{ draft.correctionReason }} ·
-        <RouterLink :to="`/admin/comparisons/${draft.supersedesId}`" class="text-link"
+        <RouterLink
+          :to="store.managementLink(`/admin/comparisons/${draft.supersedesId}`)"
+          class="text-link"
           >원본 보기</RouterLink
         >
       </p>
@@ -270,7 +277,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
           <template v-else-if="!selected.a.excludedReason"
             ><RouterLink
               v-if="store.data.comparisons.some((r) => r.supersedesId === draft!.id)"
-              :to="`/admin/comparisons/${store.data.comparisons.find((r) => r.supersedesId === draft!.id)!.id}`"
+              :to="
+                store.managementLink(
+                  `/admin/comparisons/${store.data.comparisons.find((r) => r.supersedesId === draft!.id)!.id}`,
+                )
+              "
               class="button secondary"
               >정정 기록 보기</RouterLink
             ><button
@@ -342,9 +353,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
           <tbody>
             <tr v-for="r in rows" :key="r.id">
               <td>
-                <RouterLink :to="`/admin/comparisons/${r.id}`" class="table-title text-link">{{
-                  label(r)
-                }}</RouterLink>
+                <RouterLink
+                  :to="store.managementLink(`/admin/comparisons/${r.id}`)"
+                  class="table-title text-link"
+                  >{{ label(r) }}</RouterLink
+                >
               </td>
               <td>{{ r.observedAt || '—' }}</td>
               <td>{{ r.status === 'draft' ? '초안' : comparisonLabels[r.outcome!] }}</td>

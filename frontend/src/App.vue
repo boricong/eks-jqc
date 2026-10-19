@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
+import { roleLabels, type Role } from '@eks/contracts';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
 const menuOpen = ref(false);
 const isHome = computed(() => route.name === 'home');
-const roles = { learner: '학습자', ft: 'FT', admin: '운영자' };
+const roles = roleLabels;
+watch(
+  [
+    () => store.signedIn,
+    () => store.actor.roles.join(','),
+    () => route.meta.role,
+    () => route.meta.management,
+  ],
+  () => {
+    const required = route.meta.role as Role | undefined;
+    if (
+      store.signedIn &&
+      ((required && !store.hasRole(required)) || (route.meta.management && !store.managementAccess))
+    )
+      void router.replace('/');
+  },
+);
 async function changeActor(event: Event) {
   const select = event.target as HTMLSelectElement;
   const target = select.value;
@@ -77,11 +94,18 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
             >FT 평가</RouterLink
           >
           <RouterLink
-            v-if="store.hasRole('admin')"
+            v-if="store.canEnterManagement"
             to="/admin/qualifications"
             :class="{ active: route.path.startsWith('/admin') }"
             @click="menuOpen = false"
-            >관리</RouterLink
+            >인증 업무 관리</RouterLink
+          >
+          <RouterLink
+            v-if="store.hasRole('system_operator')"
+            to="/system/organizations"
+            :class="{ active: route.path.startsWith('/system') }"
+            @click="menuOpen = false"
+            >시스템 운영</RouterLink
           >
         </nav>
         <div class="account">
@@ -90,17 +114,29 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
           >
           <span class="avatar" aria-hidden="true">{{ store.actor.name.slice(0, 1) }}</span>
           <label class="sr-only" for="actor">접속 계정</label>
-          <select id="actor" :value="store.actorId" :disabled="store.loading" @change="changeActor">
+          <select
+            id="actor"
+            :value="store.actorId"
+            :disabled="store.loading || !!store.writing"
+            @change="changeActor"
+          >
             <option disabled value="">계정 선택</option>
             <option v-for="user in store.actors" :key="user.id" :value="user.id">
-              {{ user.name }} · {{ user.roles.map((role) => roles[role]).join(' · ') }}
+              {{ user.name }} · {{ user.roles.map((role) => roles[role]).join(' · ') }} ·
+              {{ user.organizationPath[0]?.name.split('(')[0] }}
             </option>
           </select>
         </div>
       </div>
     </header>
     <main id="main" tabindex="-1">
-      <div v-if="store.loading" class="container page empty-state" role="status">불러오는 중</div>
+      <div
+        v-if="store.loading || store.contextLoading"
+        class="container page empty-state"
+        role="status"
+      >
+        불러오는 중
+      </div>
       <RouterView v-else-if="store.signedIn" />
       <div v-else class="container page empty-state spacious">
         <h1>접속 계정 선택</h1>

@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "revision": 0,
+  "roots": [
+    {
+      "id": "org-photo",
+      "name": "Foundry Photo기술팀(글로벌 제조&인프라총괄)",
+      "active": true,
+      "children": [
+        {
+          "id": "org-photo-fmg",
+          "name": "FMG",
+          "active": true,
+          "children": [
+            {
+              "id": "org-photo-pyeongtaek",
+              "name": "평택",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-photo-pyeongtaek-1",
+                  "name": "RE A조",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-pyeongtaek-2",
+                  "name": "RE B조",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-pyeongtaek-3",
+                  "name": "RE C조",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-pyeongtaek-4",
+                  "name": "RE D조",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-pyeongtaek-5",
+                  "name": "현장운영",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "org-photo-hwaseong",
+              "name": "화성",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-photo-hwaseong-operations",
+                  "name": "현장운영",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "org-photo-cert",
+          "name": "인증 업무",
+          "active": true,
+          "children": [
+            {
+              "id": "org-photo-equipment",
+              "name": "설비",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-photo-equipment-1",
+                  "name": "12인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-equipment-2",
+                  "name": "8인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-equipment-3",
+                  "name": "혁신",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-equipment-4",
+                  "name": "FMG",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "org-photo-process",
+              "name": "공정",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-photo-process-1",
+                  "name": "12인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-process-2",
+                  "name": "8인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-photo-process-3",
+                  "name": "혁신",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "org-etch",
+      "name": "Foundry Etch기술팀(글로벌 제조&인프라총괄)",
+      "active": true,
+      "children": [
+        {
+          "id": "org-etch-cert",
+          "name": "인증 업무",
+          "active": true,
+          "children": [
+            {
+              "id": "org-etch-equipment",
+              "name": "설비",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-etch-equipment-1",
+                  "name": "12인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-etch-equipment-2",
+                  "name": "8인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-etch-equipment-3",
+                  "name": "혁신",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-etch-equipment-4",
+                  "name": "FMG",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "org-etch-process",
+              "name": "공정",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-etch-process-1",
+                  "name": "12인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-etch-process-2",
+                  "name": "8인치",
+                  "active": true,
+                  "children": []
+                },
+                {
+                  "id": "org-etch-process-3",
+                  "name": "혁신",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "org-fab",
+      "name": "Foundry FAB운영혁신그룹(글로벌 제조&인프라총괄)",
+      "active": true,
+      "children": [
+        {
+          "id": "org-fab-talent-2",
+          "name": "인재양성",
+          "active": true,
+          "children": [
+            {
+              "id": "org-fab-talent-3",
+              "name": "인재양성",
+              "active": true,
+              "children": [
+                {
+                  "id": "org-fab-talent-4",
+                  "name": "인재양성",
+                  "active": true,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "audits": [],
+  "requests": []
+}

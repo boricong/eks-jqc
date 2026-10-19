@@ -4,18 +4,32 @@ import { api, mutate, ApiError } from '../api';
 import {
   requiredKinds,
   courseErrors,
-  qualificationErrors as checkQualification,
+  qualificationUseErrors as checkQualification,
+  retiredCourses,
   type Assignment,
   type Course,
   type Qualification,
   type Kind,
-  type User,
+  type UserView as User,
   type Workspace,
   type Notice,
 } from '@eks/contracts';
 
 export const useDemo = defineStore('workspace', () => {
+  const anonymous: User = {
+    id: '',
+    name: '',
+    roles: [],
+    organizationId: '',
+    revision: 1,
+    lv1OrganizationId: '',
+    organizationPath: [],
+    organizationActive: false,
+  };
   const empty = (): Workspace => ({
+    actor: anonymous,
+    management: { lv1OrganizationId: null, canManage: false },
+    organizations: [],
     users: [],
     courses: [],
     qualifications: [],
@@ -31,12 +45,53 @@ export const useDemo = defineStore('workspace', () => {
     loading = ref(false),
     connectionError = ref('');
   const actor = computed(() => ({
-    ...(sessionActor.value || { id: '', name: '', roles: [] }),
+    ...(sessionActor.value || anonymous),
     role: sessionActor.value?.roles[0] || 'learner',
   }));
   const actorId = computed(() => actor.value.id),
     signedIn = computed(() => !!sessionActor.value);
   const hasRole = (role: User['roles'][number]) => actor.value.roles.includes(role);
+  const workspaceScope = ref(''),
+    contextLoading = ref(false),
+    writing = ref(0);
+  const canEnterManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
+  const managementAccess = computed(
+    () =>
+      canEnterManagement.value &&
+      (hasRole('system_operator') ||
+        !workspaceScope.value ||
+        workspaceScope.value === actor.value.lv1OrganizationId),
+  );
+  const managementLv1 = computed(() =>
+    hasRole('system_operator')
+      ? workspaceScope.value
+      : hasRole('admin')
+        ? actor.value.lv1OrganizationId
+        : '',
+  );
+  const managementReady = computed(
+    () =>
+      managementAccess.value &&
+      !!managementLv1.value &&
+      data.value.management.canManage &&
+      data.value.management.lv1OrganizationId === managementLv1.value,
+  );
+  const managementOrganization = computed(() =>
+    data.value.organizations.find((o) => o.id === managementLv1.value),
+  );
+  function managementLink(path: string, lv1 = managementLv1.value) {
+    return { path, query: lv1 ? { lv1OrganizationId: lv1 } : {} };
+  }
+  function managementPath(path: string) {
+    if (!managementReady.value) throw new Error('관리할 Lv1 조직을 먼저 선택해 주세요.');
+    return `${path}${path.includes('?') ? '&' : '?'}lv1OrganizationId=${encodeURIComponent(managementLv1.value)}`;
+  }
+  function rememberedManagement() {
+    return sessionStorage.getItem(`eks-management-${actorId.value}`) || '';
+  }
+  function rememberManagement(lv1: string) {
+    sessionStorage.setItem(`eks-management-${actorId.value}`, lv1);
+  }
   const toast = ref('');
   let toastTimer: ReturnType<typeof setTimeout>;
   function notify(message: string) {
@@ -48,11 +103,31 @@ export const useDemo = defineStore('workspace', () => {
   let refreshVersion = 0;
   async function refresh() {
     const version = ++refreshVersion;
-    const scope = actorId.value;
-    const result = await api<Workspace>('/workspace');
-    if (version === refreshVersion && scope === actorId.value) {
-      data.value = result;
-      connectionError.value = '';
+    const scope = actorId.value,
+      lv1 = workspaceScope.value;
+    try {
+      const [result, currentActors] = await Promise.all([
+        api<Workspace>(`/workspace${lv1 ? `?lv1OrganizationId=${encodeURIComponent(lv1)}` : ''}`),
+        api<User[]>('/actors'),
+      ]);
+      if (version === refreshVersion && scope === actorId.value && lv1 === workspaceScope.value) {
+        data.value = result;
+        sessionActor.value = result.actor;
+        actors.value = currentActors;
+        connectionError.value = '';
+      }
+    } catch (error) {
+      if (version !== refreshVersion || scope !== actorId.value || lv1 !== workspaceScope.value)
+        return;
+      // A revoked global role can make a previously selected workspace forbidden.
+      // Reload identity independently so the UI stops offering those operations.
+      if (error instanceof ApiError && error.status === 403) {
+        const current = await api<{ actor: User }>('/session');
+        if (version === refreshVersion && scope === actorId.value && lv1 === workspaceScope.value) {
+          sessionActor.value = current.actor;
+        }
+      }
+      throw error;
     }
   }
   async function initialize() {
@@ -89,6 +164,7 @@ export const useDemo = defineStore('workspace', () => {
       });
       sessionActor.value = result.actor;
       data.value = empty();
+      workspaceScope.value = '';
       await refresh();
       toast.value = '';
     } catch (error) {
@@ -128,10 +204,15 @@ export const useDemo = defineStore('workspace', () => {
   type CommandResult = { id: string; revision: number; result?: 'passed' | 'failed' };
   const pendingCommands = new Map<string, { key: string; result?: CommandResult }>();
   async function command(path: string, body: unknown = {}, method = 'POST') {
+    const managed =
+      /^\/(courses|qualifications|assignments|notices|comparisons)(\/|$)/.test(path) ||
+      /^\/enrollments\/[^/]+\/comparisons$/.test(path);
+    if (managed) path = managementPath(path);
     const scope = actorId.value;
     const signature = JSON.stringify({ path, body, method, scope });
     const pending = pendingCommands.get(signature) || { key: crypto.randomUUID() };
     pendingCommands.set(signature, pending);
+    writing.value++;
     try {
       // Keep a confirmed result until its updated view is loaded. A failed refresh
       // must not turn a user's retry into another mutation with a new request ID.
@@ -144,6 +225,8 @@ export const useDemo = defineStore('workspace', () => {
       if (!pending.result && error instanceof ApiError && error.status >= 400 && error.status < 500)
         pendingCommands.delete(signature);
       throw error;
+    } finally {
+      writing.value--;
     }
   }
   async function startAttempt(aid: string, cid: string, kind: Kind) {
@@ -201,6 +284,19 @@ export const useDemo = defineStore('workspace', () => {
     connectionError,
     signedIn,
     hasRole,
+    workspaceScope,
+    contextLoading,
+    writing,
+    canEnterManagement,
+    managementAccess,
+    managementLv1,
+    managementReady,
+    managementOrganization,
+    managementLink,
+    managementPath,
+    rememberedManagement,
+    rememberManagement,
+    retiredCourses: (q: Qualification) => retiredCourses(q, data.value.courses),
     initialize,
     refresh,
     switchActor,

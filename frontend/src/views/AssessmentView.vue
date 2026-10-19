@@ -61,9 +61,25 @@ const isResult = computed(
     stage.value === 'result' ||
     (isObjective.value
       ? e.value?.objective === 'passed'
-      : isFT.value && e.value?.practical !== 'waiting'),
+      : isFT.value && ['passed', 'failed'].includes(e.value?.practical || '')),
 );
 const result = computed(() => (isObjective.value ? e.value?.objective : e.value?.practical));
+const learnerName = computed(() => (a.value ? store.username(a.value.learnerId) : '학습자'));
+const resultHeading = computed(() => {
+  if (isFT.value) return stage.value === 'result' ? '실기 평가를 확정했습니다.' : '실기 평가 결과';
+  return result.value === 'passed'
+    ? e.value && store.complete(e.value)
+      ? '과정을 수료했습니다.'
+      : '평가를 통과했습니다.'
+    : '객관식 평가에 다시 응시할 수 있습니다.';
+});
+const ftResultMessage = computed(() => {
+  if (!e.value) return '';
+  if (result.value !== 'passed')
+    return `${learnerName.value} 님의 실기 평가 결과는 미통과입니다. 학습자가 다시 요청하면 재평가할 수 있습니다.`;
+  if (store.complete(e.value)) return `${learnerName.value} 님이 이 과정을 수료했습니다.`;
+  return `${learnerName.value} 님이 실기 평가를 통과했습니다. 과정 수료에는 객관식 평가 통과가 필요합니다.`;
+});
 const returnPath = computed(() =>
   isFT.value ? '/evaluations' : `/qualifications/${a.value?.id}?course=${c.value?.id}`,
 );
@@ -209,9 +225,12 @@ onBeforeRouteUpdate(canLeave);
           }}
         </h1>
         <div class="heading-meta">
-          <span>{{ c.title }}</span
-          ><span v-if="isFT">{{ store.username(a.learnerId) }}</span
+          <StatusBadge v-if="c.operationalStatus === 'retired'" status="retired" /><span>{{
+            c.title
+          }}</span
+          ><span v-if="isFT">학습자 {{ learnerName }}</span
           ><span v-else>{{ store.qualification(a.qualificationId).title }}</span>
+          <span v-if="isFT">평가자 {{ store.actor.name }}</span>
         </div>
       </div>
       <button
@@ -227,15 +246,8 @@ onBeforeRouteUpdate(canLeave);
         <AppIcon :name="result === 'passed' ? 'check' : 'retry'" :size="36" />
       </div>
       <StatusBadge :status="result || 'ready'" />
-      <h2>
-        {{
-          result === 'passed'
-            ? store.complete(e)
-              ? '과정을 수료했습니다.'
-              : '평가를 통과했습니다.'
-            : '다시 평가할 수 있습니다.'
-        }}
-      </h2>
+      <h2>{{ resultHeading }}</h2>
+      <p v-if="isFT" class="muted">{{ ftResultMessage }}</p>
       <div class="result-assessments">
         <span v-for="kind in store.requiredKinds(c)" :key="kind"
           >{{ kind === 'objective' ? '객관식' : '실기' }}<StatusBadge :status="e[kind]"
@@ -256,7 +268,8 @@ onBeforeRouteUpdate(canLeave);
           v-else-if="a.certifiedAt"
           class="button primary"
           :to="`/certifications/${a.id}`"
-          >인증 보기<AppIcon name="award" :size="18" /></RouterLink
+          >{{ isFT ? '학습자 인증 보기' : '인증 보기'
+          }}<AppIcon name="award" :size="18" /></RouterLink
         ><RouterLink
           v-else-if="!isFT"
           class="button primary"
@@ -264,6 +277,10 @@ onBeforeRouteUpdate(canLeave);
           >{{ store.complete(e) ? '다음 과정' : '이어서 진행' }}<AppIcon name="arrow" :size="18"
         /></RouterLink>
       </div>
+    </div>
+    <div v-else-if="isFT && !attempt && !busy" class="panel empty-state">
+      <h2>학습자의 실기 평가 요청을 기다리고 있습니다.</h2>
+      <RouterLink to="/evaluations" class="button secondary">평가 목록</RouterLink>
     </div>
     <div v-else class="assessment-layout">
       <div v-if="saveError" class="error-message save-error" role="alert">
@@ -301,7 +318,7 @@ onBeforeRouteUpdate(canLeave);
         >
         <template v-else-if="isFT && stage === 'edit'"
           ><p class="evaluation-instruction">
-            <AppIcon name="book" :size="18" />{{ c.instruction }}
+            <AppIcon name="book" :size="18" />학습자 수행 조건 · {{ c.instruction }}
           </p>
           <section
             v-for="(item, index) in c.practicalItems"
@@ -421,7 +438,7 @@ onBeforeRouteUpdate(canLeave);
           }}</span>
           <div class="actions">
             <button v-if="stage === 'review'" class="button secondary" @click="stage = 'edit'">
-              이전</button
+              {{ isFT ? '판정 수정' : '답안 수정' }}</button
             ><RouterLink v-else :to="returnPath" class="button secondary">나가기</RouterLink
             ><button
               v-if="stage === 'review'"
@@ -492,7 +509,11 @@ onBeforeRouteUpdate(canLeave);
               </button>
             </div>
             <div class="aside-meta">
-              <span>담당 FT</span><span>{{ store.username(a.ftId) }}</span
+              <template v-if="isFT"
+                ><span>학습자</span><span>{{ learnerName }}</span></template
+              >
+              <span>{{ isFT ? '평가자' : '담당 FT' }}</span
+              ><span>{{ store.username(a.ftId) }}</span
               ><span>필수 항목</span
               ><span>{{ c.practicalItems.filter((i) => i.mandatory).length }}</span
               ><span>평가 회차</span
@@ -501,7 +522,7 @@ onBeforeRouteUpdate(canLeave);
           >
         </div>
         <div class="aside-context">
-          <span class="small-label">과정 현황</span>
+          <span class="small-label">{{ isFT ? '학습자 과정 현황' : '과정 현황' }}</span>
           <div v-for="kind in store.requiredKinds(c)" :key="kind">
             <span>{{ kind === 'objective' ? '객관식' : '실기' }}</span
             ><StatusBadge :status="e[kind]" />

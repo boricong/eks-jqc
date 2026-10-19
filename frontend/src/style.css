@@ -2569,6 +2569,22 @@ a {
   font-family: inherit;
   font-size: 12px;
 }
+.test-progress-panel > p {
+  line-height: 1.6;
+}
+.reset-counts {
+  margin: 24px 0;
+}
+.reset-counts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lavender);
+}
+.reset-counts dd {
+  margin: 0;
+}
 @media (max-width: 767px) {
   .comparison-create {
     align-items: stretch;
@@ -2576,5 +2592,314 @@ a {
   }
   .save-error {
     flex-direction: column;
+  }
+}
+
+/* Organization operations share the existing restrained administration layout. */
+.organization-context {
+  font-size: 12px;
+  color: var(--slate);
+  overflow-wrap: anywhere;
+  margin-bottom: 20px;
+}
+.organization-path {
+  overflow-wrap: anywhere;
+}
+.home-heading .organization-path {
+  font-size: 13px;
+  margin-top: 10px;
+  max-width: 760px;
+}
+.system-shell .admin-content > .muted {
+  margin: 12px 0 24px;
+}
+.organization-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.25fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 24px;
+}
+.organization-tree {
+  padding: 20px 14px;
+}
+.organization-tree > .field,
+.organization-tree > .actions {
+  margin: 0 6px 16px;
+}
+.organization-nodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.organization-nodes li {
+  display: flex;
+  align-items: flex-start;
+  margin: 2px 0;
+}
+.tree-toggle,
+.tree-toggle-placeholder {
+  width: 24px;
+  min-width: 24px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tree-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--slate);
+}
+.tree-node {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  text-align: left;
+  gap: 6px;
+  padding: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.tree-node:hover,
+.tree-node.selected {
+  background: var(--lavender);
+}
+.tree-node .small-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+.tree-node > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.tree-node small {
+  color: var(--slate);
+}
+.organization-detail > .organization-path {
+  margin: 0 0 24px;
+  font-size: 12px;
+}
+.organization-detail .field {
+  margin-bottom: 18px;
+}
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.organization-detail .muted {
+  margin-bottom: 20px;
+}
+.organization-extra-actions {
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.organization-extra-actions .button {
+  font-size: 12px;
+  padding: 8px 12px;
+}
+.organization-history {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.organization-history summary,
+.record-detail summary,
+.attempt-readonly summary {
+  cursor: pointer;
+}
+.organization-history article {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+  font-size: 12px;
+}
+.system-shell pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.organization-select {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.organization-select .field {
+  margin: 0;
+}
+.role-choices {
+  margin: 20px 0;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.role-choices legend {
+  font-size: 13px;
+  color: var(--slate);
+  margin-bottom: 6px;
+}
+.user-editor {
+  margin-bottom: 24px;
+}
+.user-editor h2 {
+  margin-bottom: 20px;
+}
+.user-editor .muted {
+  font-size: 12px;
+  margin-bottom: 20px;
+}
+.system-filters {
+  align-items: end;
+  gap: 16px;
+  margin-top: 24px;
+}
+.system-filters .field {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.system-shell .table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.system-shell table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.system-shell th {
+  text-align: left;
+  color: var(--slate);
+  font-weight: 450;
+  background: var(--surface-tint);
+}
+.system-shell th,
+.system-shell td {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.system-shell td.organization-path {
+  max-width: 400px;
+  font-size: 12px;
+}
+.system-shell tr:last-child td {
+  border-bottom: 0;
+}
+.system-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  margin: 24px 0;
+}
+.system-tabs button {
+  background: none;
+  border: 0;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--slate);
+  border-bottom: 2px solid transparent;
+}
+.system-tabs button.active {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.system-records {
+  display: grid;
+  gap: 16px;
+}
+.record-detail {
+  padding: 22px;
+}
+.record-detail summary {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.record-detail p,
+.record-detail article {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.record-detail h3 {
+  font-size: 16px;
+}
+.readonly-course {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.attempt-readonly {
+  padding: 14px 0;
+}
+.preserve-lines {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.system-shell .test-progress-panel {
+  margin-top: 24px;
+}
+@media (max-width: 1000px) {
+  .organization-layout {
+    grid-template-columns: 1fr;
+  }
+  .organization-nodes {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 640px) {
+  .organization-select {
+    grid-template-columns: 1fr;
+  }
+  .system-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.management-context {
+  grid-column: 1 / -1;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.management-context .field {
+  margin: 0;
+  flex: 1 1 360px;
+  min-width: 0;
+}
+.management-context select {
+  max-width: 100%;
+  width: 100%;
+}
+.course-lifecycle {
+  margin: 16px 0 24px;
+}
+.status-retired {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  .management-context {
+    padding: 16px;
+    gap: 12px;
+  }
+  .management-context .field {
+    flex-basis: 100%;
   }
 }

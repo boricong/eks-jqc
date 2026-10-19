@@ -8,13 +8,21 @@ export class ApiError extends Error {
   }
 }
 const pending = new Map<string, string>();
+// sessionStorage survives reloads and keeps independently opened tabs separate.
+const tabStorageKey = 'eks-session-tab';
+const sessionTab = sessionStorage.getItem(tabStorageKey) || crypto.randomUUID();
+sessionStorage.setItem(tabStorageKey, sessionTab);
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
       credentials: 'same-origin',
       ...init,
-      headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
+      headers: {
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
+        'X-Session-Tab': sessionTab,
+      },
     });
   } catch {
     throw new ApiError(0, '서버에 연결할 수 없습니다. 입력을 유지한 상태에서 다시 시도해 주세요.');

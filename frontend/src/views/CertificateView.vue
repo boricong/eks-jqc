@@ -9,16 +9,23 @@ const store = useDemo(),
 const a = computed(() => {
   const a = store.assignment(String(route.params.id));
   return a?.certifiedAt &&
-    (store.hasRole('admin') || a.learnerId === store.actorId || a.ftId === store.actorId)
+    (store.hasRole('system_operator') ||
+      store.hasRole('admin') ||
+      a.learnerId === store.actorId ||
+      a.ftId === store.actorId)
     ? a
     : undefined;
 });
 const back = computed(() =>
-  store.hasRole('admin')
-    ? '/admin/results'
-    : store.hasRole('ft')
-      ? '/evaluations'
-      : '/qualifications?filter=certified',
+  store.canEnterManagement && route.query.lv1OrganizationId
+    ? store.managementLink('/admin/results')
+    : store.hasRole('system_operator')
+      ? '/system/overview'
+      : store.hasRole('admin')
+        ? '/admin/results'
+        : store.hasRole('ft')
+          ? '/evaluations'
+          : '/qualifications?filter=certified',
 );
 </script>
 <template>
@@ -43,6 +50,10 @@ const back = computed(() =>
         }}<small>필수 과정 수료</small></span
       >
     </div>
+    <p class="muted">
+      {{ a.organizationPath.map((o) => o.name).join(' › ') }} ·
+      {{ a.organizationSource === 'migration' ? '이관 시 소속' : '배정 당시 소속' }}
+    </p>
     <p class="small-label">인증 {{ a.certification?.id }}</p>
     <p v-if="a.excludedReason" class="error-message">검증 제외 · {{ a.excludedReason }}</p>
     <section class="panel evidence-panel">
@@ -50,7 +61,10 @@ const back = computed(() =>
       <details v-for="e in a.enrollments" :key="e.courseId" class="evidence-course">
         <summary>
           <span>{{ store.course(e.courseId).title }}</span
-          ><StatusBadge status="complete" /><AppIcon name="down" :size="16" />
+          ><StatusBadge status="complete" /><StatusBadge
+            v-if="store.course(e.courseId).operationalStatus === 'retired'"
+            status="retired"
+          /><AppIcon name="down" :size="16" />
         </summary>
         <div
           v-for="kind in store.requiredKinds(store.course(e.courseId))"

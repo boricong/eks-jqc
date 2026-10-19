@@ -44,40 +44,59 @@ const stats = computed(() =>
             to: '/evaluations',
           },
           {
-            label: '평가 완료',
+            label: '평가 완료 과정',
             value: store.ftAssignments.reduce(
               (n, a) =>
-                n +
-                a.enrollments.reduce(
-                  (m, e) => m + e.history.filter((h) => h.kind === 'practical').length,
-                  0,
-                ),
+                n + a.enrollments.filter((e) => ['passed', 'failed'].includes(e.practical)).length,
               0,
             ),
             icon: 'check',
             to: '/evaluations?filter=done',
           },
         ]
-      : [
-          {
-            label: '자격 초안',
-            value: store.data.qualifications.filter((q) => q.status === 'draft').length,
-            icon: 'file',
-            to: '/admin/qualifications',
-          },
-          {
-            label: '과정 초안',
-            value: store.data.courses.filter((c) => c.status === 'draft').length,
-            icon: 'book',
-            to: '/admin/courses',
-          },
-          {
-            label: '진행 중인 배정',
-            value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason).length,
-            icon: 'users',
-            to: '/admin/assignments',
-          },
-        ],
+      : store.actor.role === 'system_operator'
+        ? [
+            {
+              label: 'Lv1 조직',
+              value: store.data.organizations.filter((o) => o.level === 1).length,
+              icon: 'users',
+              to: '/system/organizations',
+            },
+            {
+              label: '등록 사용자',
+              value: store.data.users.length,
+              icon: 'users',
+              to: '/system/users',
+            },
+            {
+              label: '진행 중인 배정',
+              value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason)
+                .length,
+              icon: 'clipboard',
+              to: '/system/overview',
+            },
+          ]
+        : [
+            {
+              label: '자격 초안',
+              value: store.data.qualifications.filter((q) => q.status === 'draft').length,
+              icon: 'file',
+              to: '/admin/qualifications',
+            },
+            {
+              label: '과정 초안',
+              value: store.data.courses.filter((c) => c.status === 'draft').length,
+              icon: 'book',
+              to: '/admin/courses',
+            },
+            {
+              label: '진행 중인 배정',
+              value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason)
+                .length,
+              icon: 'users',
+              to: '/admin/assignments',
+            },
+          ],
 );
 </script>
 <template>
@@ -85,6 +104,9 @@ const stats = computed(() =>
     <div class="page-heading home-heading">
       <div>
         <h1>{{ store.actor.name }} 님</h1>
+        <p class="muted organization-path">
+          {{ store.actor.organizationPath.map((p) => p.name).join(' › ') }}
+        </p>
       </div>
       <span class="muted home-date">{{
         new Intl.DateTimeFormat('ko-KR', {
@@ -115,7 +137,9 @@ const stats = computed(() =>
                 ? '진행 중인 자격'
                 : store.actor.role === 'ft'
                   ? '평가 요청'
-                  : '기준 관리'
+                  : store.actor.role === 'system_operator'
+                    ? '시스템 운영'
+                    : '기준 관리'
             }}
           </h2>
           <RouterLink
@@ -181,6 +205,14 @@ const stats = computed(() =>
             <AppIcon name="check" :size="28" /><span>대기 중인 평가가 없습니다.</span>
           </div></template
         >
+        <template v-else-if="store.actor.role === 'system_operator'"
+          ><RouterLink to="/system/organizations" class="simple-row"
+            >조직 트리 관리<AppIcon name="chevron" /></RouterLink
+          ><RouterLink to="/system/users" class="simple-row"
+            >사용자 소속·역할 관리<AppIcon name="chevron" /></RouterLink
+          ><RouterLink to="/system/overview" class="simple-row"
+            >전체 조직 업무 조회<AppIcon name="chevron" /></RouterLink
+        ></template>
         <template v-else
           ><RouterLink
             v-for="q in store.data.qualifications.filter((q) => q.status === 'draft')"

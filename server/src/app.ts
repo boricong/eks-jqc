@@ -5,9 +5,29 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { z } from "zod";
-import type { User } from "@eks/contracts";
+import {
+  ResetScopeSchema,
+  organizationEntries,
+  type UserView,
+  type State,
+} from "@eks/contracts";
+import {
+  userView,
+  organization,
+  systemOperator,
+  changeOrganization,
+  changeUser,
+} from "./organizations.ts";
 import { JsonStore, DomainError, demand } from "./storage.ts";
-import { authorize, execute, workspace, attemptView } from "./domain.ts";
+import { isManagementAction, managementScope } from "./management.ts";
+import { courseUsage } from "./course-lifecycle.ts";
+import {
+  authorize,
+  execute,
+  workspace,
+  attemptView,
+  progressSummary,
+} from "./domain.ts";
 
 export async function buildApp(
   store: JsonStore,
@@ -27,8 +47,17 @@ export async function buildApp(
     "http://127.0.0.1:5186",
     "http://127.0.0.1:5187",
   ];
-  const actor = (request: FastifyRequest): User => {
-    const sid = request.cookies.eks_session,
+  function sessionCookie(request: FastifyRequest) {
+    const tab = request.headers["x-session-tab"];
+    if (tab === undefined) return "eks_session";
+    const id = z.string().uuid().parse(tab);
+    return `eks_session_${id}`;
+  }
+  const actor = (
+    request: FastifyRequest,
+    state: State = store.snapshot(),
+  ): UserView => {
+    const sid = request.cookies[sessionCookie(request)],
       session = sid ? sessions.get(sid) : undefined;
     demand(
       session && session.expires > Date.now(),
@@ -36,9 +65,9 @@ export async function buildApp(
       "접속 계정을 선택해 주세요.",
       "SESSION_REQUIRED",
     );
-    const u = store.snapshot().users.find((u) => u.id === session.actorId);
+    const u = state.users.find((u) => u.id === session.actorId);
     demand(u, 401, "접속 계정을 선택해 주세요.");
-    return u;
+    return userView(u, store.organizations.snapshot());
   };
   app.addHook("onRequest", async (request) => {
     if (
@@ -70,12 +99,10 @@ export async function buildApp(
       });
     const err = error as Error & { statusCode?: number };
     if (err.statusCode && err.statusCode < 500)
-      return reply
-        .status(err.statusCode)
-        .send({
-          code: "INVALID_REQUEST",
-          message: "요청 형식을 확인해 주세요.",
-        });
+      return reply.status(err.statusCode).send({
+        code: "INVALID_REQUEST",
+        message: "요청 형식을 확인해 주세요.",
+      });
     request.log.error({ err }, "request failed");
     return reply.status(503).send({
       code: "STORAGE_UNAVAILABLE",
@@ -87,7 +114,11 @@ export async function buildApp(
     ok: true,
     revision: store.snapshot().revision,
   }));
-  app.get("/api/actors", async () => store.snapshot().users);
+  app.get("/api/actors", async () =>
+    store
+      .snapshot()
+      .users.map((u) => userView(u, store.organizations.snapshot())),
+  );
   app.get("/api/session", async (request) => ({ actor: actor(request) }));
   app.post("/api/session", async (request, reply) => {
     const { actorId } = z
@@ -95,31 +126,68 @@ export async function buildApp(
         .parse(request.body),
       u = store.snapshot().users.find((u) => u.id === actorId);
     demand(u, 422, "계정을 확인해 주세요.");
-    if (request.cookies.eks_session)
-      sessions.delete(request.cookies.eks_session);
+    const cookieName = sessionCookie(request);
+    if (request.cookies[cookieName])
+      sessions.delete(request.cookies[cookieName]);
     for (const [key, session] of sessions)
       if (session.expires < Date.now()) sessions.delete(key);
     const token = randomBytes(32).toString("hex");
     sessions.set(token, { actorId, expires: Date.now() + 8 * 60 * 60 * 1000 });
-    reply.setCookie("eks_session", token, {
+    reply.setCookie(cookieName, token, {
       httpOnly: true,
       sameSite: "strict",
       path: "/api",
       maxAge: 8 * 60 * 60,
     });
-    return { actor: u };
+    return { actor: userView(u, store.organizations.snapshot()) };
   });
   app.delete("/api/session", async (request, reply) => {
-    if (request.cookies.eks_session)
-      sessions.delete(request.cookies.eks_session);
-    reply.clearCookie("eks_session", { path: "/api" });
+    const cookieName = sessionCookie(request);
+    if (request.cookies[cookieName])
+      sessions.delete(request.cookies[cookieName]);
+    reply.clearCookie(cookieName, { path: "/api" });
     return { ok: true };
   });
   app.get("/api/workspace", async (request) =>
-    workspace(store.snapshot(), actor(request)),
+    workspace(
+      store.snapshot(),
+      actor(request),
+      store.organizations.snapshot(),
+      z
+        .object({ lv1OrganizationId: z.string().optional() })
+        .parse(request.query).lv1OrganizationId,
+    ),
   );
+  app.get("/api/testing/progress", async (request) => {
+    systemOperator(actor(request));
+    const query = z
+      .object({
+        scope: z.enum(["all", "organization"]),
+        lv1OrganizationId: z.string().optional(),
+      })
+      .parse(request.query);
+    const scope = ResetScopeSchema.parse({
+      type: query.scope,
+      lv1OrganizationId: query.lv1OrganizationId,
+    });
+    if (scope.type === "organization")
+      demand(
+        organization(store.organizations.snapshot(), scope.lv1OrganizationId)
+          .level === 1,
+        422,
+        "Lv1 조직을 선택해 주세요.",
+      );
+    return progressSummary(store.snapshot(), scope);
+  });
   app.get("/api/home", async (request) => {
-    const view = workspace(store.snapshot(), actor(request));
+    const view = workspace(
+      store.snapshot(),
+      actor(request),
+      store.organizations.snapshot(),
+      z
+        .object({ lv1OrganizationId: z.string().optional() })
+        .parse(request.query).lv1OrganizationId,
+    );
     return {
       assignments: view.assignments.filter((a) => !a.excludedReason),
       notices: view.notices.filter((n) => n.published),
@@ -135,10 +203,25 @@ export async function buildApp(
   ] as const) {
     app.get(
       `/api/${name}`,
-      async (request) => workspace(store.snapshot(), actor(request))[name],
+      async (request) =>
+        workspace(
+          store.snapshot(),
+          actor(request),
+          store.organizations.snapshot(),
+          z
+            .object({ lv1OrganizationId: z.string().optional() })
+            .parse(request.query).lv1OrganizationId,
+        )[name],
     );
     app.get(`/api/${name}/:id`, async (request) => {
-      const view = workspace(store.snapshot(), actor(request)),
+      const view = workspace(
+          store.snapshot(),
+          actor(request),
+          store.organizations.snapshot(),
+          z
+            .object({ lv1OrganizationId: z.string().optional() })
+            .parse(request.query).lv1OrganizationId,
+        ),
         id = (request.params as any).id,
         result = view[name].find((x) => x.id === id);
       demand(result, 404, "기록을 찾을 수 없습니다.");
@@ -153,7 +236,14 @@ export async function buildApp(
     return attemptView(s, u, t);
   });
   app.get("/api/assignments/:id/results", async (request) => {
-    const view = workspace(store.snapshot(), actor(request)),
+    const view = workspace(
+        store.snapshot(),
+        actor(request),
+        store.organizations.snapshot(),
+        z
+          .object({ lv1OrganizationId: z.string().optional() })
+          .parse(request.query).lv1OrganizationId,
+      ),
       a = view.assignments.find((a) => a.id === (request.params as any).id);
     demand(a, 404, "과제를 찾을 수 없습니다.");
     return {
@@ -162,7 +252,14 @@ export async function buildApp(
     };
   });
   app.get("/api/assignments/:id/certification", async (request) => {
-    const view = workspace(store.snapshot(), actor(request)),
+    const view = workspace(
+        store.snapshot(),
+        actor(request),
+        store.organizations.snapshot(),
+        z
+          .object({ lv1OrganizationId: z.string().optional() })
+          .parse(request.query).lv1OrganizationId,
+      ),
       a = view.assignments.find((a) => a.id === (request.params as any).id);
     demand(a?.certification, 404, "인증을 찾을 수 없습니다.");
     return {
@@ -172,7 +269,7 @@ export async function buildApp(
     };
   });
   const mutation = (
-    method: "POST" | "PUT",
+    method: "POST" | "PUT" | "DELETE",
     url: string,
     action: string,
     target?: (p: any) => string,
@@ -197,15 +294,145 @@ export async function buildApp(
         const fingerprint = createHash("sha256")
           .update(JSON.stringify({ method, url: request.url, body: payload }))
           .digest("hex");
+        const requestedScope = z
+          .object({ lv1OrganizationId: z.string().optional() })
+          .parse(request.query).lv1OrganizationId;
+        let scope: string | undefined;
+        const transactionOptions = {
+          preserveBackup:
+            action === "progress.reset" || action === "course.delete",
+          backupPurpose:
+            action === "course.delete" ? ("course-delete" as const) : undefined,
+          action,
+          lv1OrganizationId: undefined as string | undefined,
+        };
         return store.transact(
           u.id,
           key,
           fingerprint,
-          (s) => authorize(s, u, action, targetId, payload),
-          (s) => execute(s, u, action, targetId, payload),
+          (s) => {
+            const current = actor(request, s);
+            scope = isManagementAction(action)
+              ? managementScope(
+                  current,
+                  store.organizations.snapshot(),
+                  requestedScope,
+                )
+              : undefined;
+            transactionOptions.lv1OrganizationId =
+              action === "progress.reset"
+                ? undefined
+                : scope || current.lv1OrganizationId;
+            const previous = s.requests.find(
+              (r) => r.actorId === current.id && r.key === key,
+            );
+            if (scope && previous) {
+              demand(
+                previous.fingerprint === fingerprint,
+                409,
+                "같은 요청 식별자로 다른 내용을 보냈습니다.",
+                "IDEMPOTENCY_CONFLICT",
+              );
+              // Deleted drafts no longer exist. Authenticate against the stored original
+              // scope before returning the successful response from the request ledger.
+              if (action === "course.delete" && previous.action === action) {
+                demand(
+                  previous.lv1OrganizationId === scope,
+                  403,
+                  "원래 요청의 관리 대상 조직을 확인해 주세요.",
+                );
+                return;
+              }
+            }
+            authorize(s, current, action, targetId, payload, scope);
+          },
+          (s) =>
+            execute(
+              s,
+              actor(request, s),
+              action,
+              targetId,
+              payload,
+              store.organizations.snapshot(),
+              scope,
+            ),
+          transactionOptions,
         );
       },
     });
+  app.get("/api/system/organizations", async (request) => {
+    systemOperator(actor(request));
+    const doc = store.organizations.snapshot(),
+      users = store.snapshot().users;
+    const entries = organizationEntries(doc);
+    return {
+      revision: doc.revision,
+      roots: doc.roots,
+      audits: doc.audits,
+      entries: entries.map((entry) => ({
+        ...entry,
+        userCount: users.filter((u) =>
+          entries
+            .find((e) => e.id === u.organizationId)
+            ?.path.some((p) => p.id === entry.id),
+        ).length,
+      })),
+    };
+  });
+  app.get("/api/system/users", async (request) => {
+    systemOperator(actor(request));
+    return store
+      .snapshot()
+      .users.map((u) => userView(u, store.organizations.snapshot()));
+  });
+  for (const section of ["organizations", "users"] as const) {
+    for (const method of ["POST", "PATCH"] as const)
+      app.route({
+        method,
+        url: `/api/system/${section}${method === "PATCH" ? "/:id" : ""}`,
+        handler: async (request) => {
+          const u = actor(request);
+          systemOperator(u);
+          const target =
+            method === "PATCH"
+              ? (request.params as { id: string }).id
+              : undefined;
+          const body = request.body || {};
+          const key = z
+            .string()
+            .min(1)
+            .max(160)
+            .parse(request.headers["idempotency-key"]);
+          const fingerprint = createHash("sha256")
+            .update(JSON.stringify({ method, url: request.url, body }))
+            .digest("hex");
+          if (section === "organizations")
+            return store.organizations.transact(
+              u.id,
+              key,
+              fingerprint,
+              () => systemOperator(actor(request)),
+              (doc) => changeOrganization(doc, actor(request), target, body),
+              { action: "organization.change" },
+            );
+          return store.transact(
+            u.id,
+            key,
+            fingerprint,
+            (s) => systemOperator(actor(request, s)),
+            (s) =>
+              changeUser(
+                s,
+                store.organizations.snapshot(),
+                actor(request, s),
+                target,
+                body,
+              ),
+            { action: "user.change" },
+          );
+        },
+      });
+  }
   for (const section of ["courses", "qualifications"]) {
     mutation("POST", `/api/${section}`, "catalog.create", () => section);
     mutation("PUT", `/api/${section}/:id`, "catalog.save", () => section);
@@ -222,6 +449,23 @@ export async function buildApp(
       () => section,
     );
   }
+  app.get("/api/courses/:id/usage", async (request) => {
+    const scope = managementScope(
+      actor(request),
+      store.organizations.snapshot(),
+      z
+        .object({ lv1OrganizationId: z.string().optional() })
+        .parse(request.query).lv1OrganizationId,
+    );
+    return courseUsage(
+      store.snapshot(),
+      (request.params as { id: string }).id,
+      scope,
+    );
+  });
+  mutation("DELETE", "/api/courses/:id", "course.delete");
+  mutation("POST", "/api/courses/:id/retirement", "course.retire");
+  mutation("POST", "/api/courses/:id/reactivation", "course.reactivate");
   mutation("POST", "/api/assignments", "assignment.create", () => "");
   mutation("POST", "/api/assignments/:id/ft", "assignment.ft");
   mutation("POST", "/api/assignments/:id/exclusion", "assignment.exclude");
@@ -229,6 +473,7 @@ export async function buildApp(
   mutation("PUT", "/api/attempts/:id/draft", "attempt.save");
   mutation("POST", "/api/attempts/:id/submit", "attempt.submit");
   mutation("POST", "/api/notices", "notice.save", () => "");
+  mutation("POST", "/api/testing/progress/reset", "progress.reset", () => "");
   mutation("POST", "/api/enrollments/:id/comparisons", "comparison.create");
   mutation("PUT", "/api/comparisons/:id", "comparison.save");
   mutation("POST", "/api/comparisons/:id/finalize", "comparison.finalize");

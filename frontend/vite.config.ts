@@ -13,7 +13,7 @@ export default defineConfig({
         fileURLToPath(new URL('../shared', import.meta.url)),
         fileURLToPath(new URL('../node_modules', import.meta.url)),
       ],
-      deny: ['**/server/**', '**/data/runtime/**', '**/data/backups/**', '**/.git/**', '**/.env*'],
+      deny: ['**/server/**', '**/data/**', '**/.git/**', '**/.env*'],
     },
     proxy: { '/api': process.env.API_TARGET || 'http://127.0.0.1:5187' },
   },

@@ -18,6 +18,8 @@
     "test": "node --import tsx --test server/tests/*.test.ts",
     "test:e2e": "npm run test:e2e -w frontend",
     "data:init": "node --import tsx server/src/cli.ts init",
+    "data:migrate": "node --import tsx server/src/cli.ts migrate",
+    "data:organizations:restore": "node --import tsx server/src/cli.ts organizations:restore",
     "data:backup": "node --import tsx server/src/cli.ts backup",
     "data:restore": "node --import tsx server/src/cli.ts restore",
     "data:unlock": "node --import tsx server/src/cli.ts unlock",

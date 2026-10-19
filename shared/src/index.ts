@@ -1,7 +1,20 @@
 import { z } from "zod";
+import {
+  OrganizationPathSchema,
+  RequestRecordSchema,
+  type OrganizationEntry,
+  type ResetScope,
+} from "./organizations.ts";
+export * from "./organizations.ts";
 
-export const RoleSchema = z.enum(["learner", "ft", "admin"]);
+export const RoleSchema = z.enum(["learner", "ft", "admin", "system_operator"]);
 export type Role = z.infer<typeof RoleSchema>;
+export const roleLabels: Record<Role, string> = {
+  learner: "학습자",
+  ft: "FT",
+  admin: "조직 관리자",
+  system_operator: "시스템 운영자",
+};
 export const KindSchema = z.enum(["objective", "practical"]);
 export type Kind = z.infer<typeof KindSchema>;
 export type AssessmentState =
@@ -28,8 +41,15 @@ export const UserSchema = z.object({
   id,
   name: z.string().min(1).max(100),
   roles: z.array(RoleSchema).min(1),
+  organizationId: id,
+  revision: z.number().int().positive(),
 });
 export type User = z.infer<typeof UserSchema>;
+export interface UserView extends User {
+  lv1OrganizationId: string;
+  organizationPath: { id: string; name: string }[];
+  organizationActive: boolean;
+}
 export const QuestionSchema = z.object({
   id,
   prompt: text,
@@ -48,6 +68,7 @@ export const PracticalItemSchema = z.object({
 export type PracticalItem = z.infer<typeof PracticalItemSchema>;
 const revision = {
   id,
+  lv1OrganizationId: id,
   entityId: id,
   version: z.number().int().positive(),
   revision: z.number().int().positive(),
@@ -58,6 +79,10 @@ const revision = {
 };
 export const CourseSchema = z.object({
   ...revision,
+  operationalStatus: z.enum(["active", "retired"]),
+  retiredAt: z.iso.datetime().optional(),
+  retiredBy: id.optional(),
+  retirementReason: z.string().trim().min(1).max(2000).optional(),
   mode: z.enum(["both", "objective", "practical"]),
   passScore: z.number().int().min(1).max(100).nullable(),
   material: text,
@@ -118,6 +143,9 @@ export const EnrollmentSchema = z.object({
 });
 export const AssignmentSchema = z.object({
   id,
+  lv1OrganizationId: id,
+  organizationPath: OrganizationPathSchema,
+  organizationSource: z.enum(["assigned", "migration"]),
   qualificationId: id,
   learnerId: id,
   ftId: id.nullable(),
@@ -148,6 +176,7 @@ export const CertificationSchema = z.object({
 export type Certification = z.infer<typeof CertificationSchema>;
 export const NoticeSchema = z.object({
   id,
+  lv1OrganizationId: id,
   title: z.string().min(1).max(300),
   body: text.min(1),
   date: z.iso.date(),
@@ -157,6 +186,7 @@ export const NoticeSchema = z.object({
 export type Notice = z.infer<typeof NoticeSchema>;
 export const AuditSchema = z.object({
   id,
+  lv1OrganizationId: id.optional(),
   actorId: id,
   date: z.iso.datetime(),
   action: id,
@@ -206,7 +236,7 @@ export const comparisonLabels = {
   pending: "비교 보류",
 };
 export const StateSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(3),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
   courses: z.array(CourseSchema),
@@ -219,17 +249,20 @@ export const StateSchema = z.object({
   notices: z.array(NoticeSchema),
   comparisons: z.array(ComparisonSchema),
   audits: z.array(AuditSchema),
-  requests: z.array(
-    z.object({
-      actorId: id,
-      key: id,
-      fingerprint: z.string(),
-      response: z.json(),
-      date: z.iso.datetime(),
-    }),
-  ),
+  requests: z.array(RequestRecordSchema),
 });
 export type State = z.infer<typeof StateSchema>;
+export interface ProgressSummary {
+  revision: number;
+  scope: ResetScope;
+  counts: {
+    objectiveAttempts: number;
+    practicalAttempts: number;
+    completions: number;
+    certifications: number;
+    comparisons: number;
+  };
+}
 
 // Client projections contain only the fields accessible to the selected actor.
 export interface Attempt extends Partial<Draft> {
@@ -260,13 +293,35 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
-  users: User[];
+  actor: UserView;
+  management: { lv1OrganizationId: string | null; canManage: boolean };
+  organizations: OrganizationEntry[];
+  users: UserView[];
   courses: Course[];
   qualifications: Qualification[];
   assignments: Assignment[];
   notices: Notice[];
   comparisons: Comparison[];
   audits: AuditEvent[];
+}
+
+export interface CourseUsage {
+  courseId: string;
+  lv1OrganizationId: string;
+  courseRevision: number;
+  stateRevision: number;
+  canDelete: boolean;
+  blockers: string[];
+  qualifications: Pick<Qualification, "id" | "title" | "version" | "status">[];
+  successorVersions: { id: string; version: number }[];
+  counts: {
+    assignments: number;
+    enrollments: number;
+    attempts: number;
+    completions: number;
+    certifications: number;
+    comparisons: number;
+  };
 }
 export type DemoState = Workspace;
 export const requiredKinds = (course: Pick<Course, "mode">): Kind[] =>
@@ -321,4 +376,23 @@ export function qualificationErrors(
       (id) => courses.find((c) => c.id === id)?.status !== "published",
     ) && "필수 과정을 먼저 사용 등록해 주세요.",
   ].filter(Boolean) as string[];
+}
+
+// Eligibility for NEW use only. Historical qualifications and awards remain valid.
+export function retiredCourses(q: Qualification, courses: Course[]): Course[] {
+  return courses.filter(
+    (c) => q.courseIds.includes(c.id) && c.operationalStatus === "retired",
+  );
+}
+export function qualificationUseErrors(
+  q: Qualification,
+  courses: Course[],
+): string[] {
+  return [
+    ...qualificationErrors(q, courses),
+    ...retiredCourses(q, courses).map(
+      (c) =>
+        `운영 종료된 과정 ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
+    ),
+  ];
 }

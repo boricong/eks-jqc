@@ -7,6 +7,8 @@ import AssessmentView from './views/AssessmentView.vue';
 import EvaluationsView from './views/EvaluationsView.vue';
 import CertificateView from './views/CertificateView.vue';
 import AdminView from './views/AdminView.vue';
+import SystemView from './views/SystemView.vue';
+import type { Role } from '@eks/contracts';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -47,7 +49,13 @@ export const router = createRouter({
       path: '/admin/:section(qualifications|courses|assignments|results|comparisons|notices)/:id?',
       name: 'admin',
       component: AdminView,
-      meta: { role: 'admin' },
+      meta: { management: true },
+    },
+    { path: '/system', redirect: '/system/organizations' },
+    {
+      path: '/system/:section(organizations|users|overview|testing)',
+      component: SystemView,
+      meta: { role: 'system_operator' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -57,18 +65,66 @@ router.beforeEach(async (to) => {
   await store.initialize();
   if (
     (!store.signedIn ||
-      (to.meta.role && !store.hasRole(to.meta.role as 'learner' | 'ft' | 'admin'))) &&
+      (to.meta.management && !store.canEnterManagement) ||
+      (to.meta.role && !store.hasRole(to.meta.role as Role))) &&
     to.path !== '/'
   )
     return '/';
+  const managed =
+    !!to.meta.management ||
+    (to.name === 'certificate' && store.canEnterManagement && !!to.query.lv1OrganizationId);
+  if (
+    managed &&
+    store.hasRole('system_operator') &&
+    to.query.lv1OrganizationId === undefined &&
+    store.rememberedManagement()
+  )
+    return {
+      ...to,
+      query: { ...to.query, lv1OrganizationId: store.rememberedManagement() },
+      replace: true,
+    };
+});
+// Resolve the new workspace only AFTER component leave/update guards have
+// accepted navigation, so a scope change cannot unmount an unsaved editor.
+router.beforeResolve(async (to) => {
+  const store = useDemo();
+  const managed =
+    !!to.meta.management ||
+    (to.name === 'certificate' && store.canEnterManagement && !!to.query.lv1OrganizationId);
+  const lv1 = managed
+    ? typeof to.query.lv1OrganizationId === 'string'
+      ? to.query.lv1OrganizationId
+      : store.hasRole('system_operator')
+        ? ''
+        : store.actor.lv1OrganizationId
+    : '';
+  const previous = store.workspaceScope;
+  if (previous !== lv1) {
+    if (store.writing) {
+      store.notify('저장이 끝난 뒤 조직을 전환해 주세요.');
+      return false;
+    }
+    store.contextLoading = true;
+    store.workspaceScope = lv1;
+  }
   if (store.signedIn)
     try {
       await store.refresh();
+      if (
+        (to.meta.management && !store.canEnterManagement) ||
+        (to.meta.role && !store.hasRole(to.meta.role as Role))
+      )
+        return '/';
+      if (managed && store.hasRole('system_operator')) store.rememberManagement(lv1);
     } catch (error) {
+      store.workspaceScope = previous;
       store.notify((error as Error).message);
+      return false;
     }
 });
 router.afterEach((to, from) => {
+  useDemo().contextLoading = false;
   if (to.path === from.path) return;
   requestAnimationFrame(() => {
     const main = document.querySelector<HTMLElement>('#main');

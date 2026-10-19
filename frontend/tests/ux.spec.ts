@@ -59,7 +59,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await page.getByRole('link', { name: '응시하기', exact: true }).click();
   await screenshot(page, 'objective');
   await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page.getByRole('heading', { name: '자격 관리', exact: true })).toBeVisible();
   await screenshot(page, 'admin');
   await page.getByRole('link', { name: '과정 관리', exact: true }).click();
@@ -84,7 +84,9 @@ test('부분 통과 유지, 미통과 재응시, FT 평가와 자동 인증', as
   await page.getByLabel('글꼴 종류', { exact: true }).check();
   await page.getByRole('button', { name: '답안 확인', exact: true }).click();
   await page.getByRole('button', { name: '제출', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '다시 평가할 수 있습니다.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '객관식 평가에 다시 응시할 수 있습니다.' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: '다시 응시', exact: true }).click();
   await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
   await page.getByLabel('항목의 누락 여부', { exact: true }).check();
@@ -108,7 +110,10 @@ test('부분 통과 유지, 미통과 재응시, FT 평가와 자동 인증', as
     if (i === 0) await screenshot(page, 'ft-evaluation');
     await page.getByRole('button', { name: '판정 확인', exact: true }).click();
     await page.getByRole('button', { name: '평가 확정', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '과정을 수료했습니다.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '실기 평가를 확정했습니다.' })).toBeVisible();
+    await expect(
+      page.getByText('김민서 님이 이 과정을 수료했습니다.', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('link', { name: '평가 목록', exact: true }).click();
   }
   await actor(page, 'learner-1');
@@ -126,7 +131,7 @@ test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'learner-1');
   await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await page.getByRole('link', { name: 'Recipe Management', exact: true }).click();
   await page.getByRole('button', { name: '사용 등록' }).click();
   await expect(page.getByRole('alert')).toContainText('필수 과정을 먼저');
@@ -148,7 +153,7 @@ test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
   await page.getByRole('link', { name: '이어서 진행' }).click();
   await expect(page.getByRole('heading', { name: '평가 흐름 체험' })).toBeVisible();
   await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await page.getByRole('link', { name: '자격 배정', exact: true }).click();
   const row = page.locator('tbody tr').filter({ hasText: '정하린' });
   await row.locator('summary').click();
@@ -178,7 +183,7 @@ test('작은 화면과 키보드 접근', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await actor(page, 'admin-1');
   await page.getByRole('button', { name: '메뉴', exact: true }).click();
-  await page.getByRole('link', { name: '관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await noOverflow(page);
   await page.setViewportSize({ width: 1920, height: 900 });
   await actor(page, 'learner-1');

@@ -5,21 +5,26 @@ import {
   type AssessmentAttempt,
 } from "@eks/contracts";
 import { validateState } from "./integrity.ts";
+import { PHOTO_ID, seedOrganizations, organization } from "./organizations.ts";
 
 export function seedState(): State {
   const source = JSON.parse(
     readFileSync(new URL("./seed-source.json", import.meta.url), "utf8"),
   );
   const state: State = {
-    schemaVersion: 1,
+    schemaVersion: 3,
     revision: 0,
     users: source.users.map((u: any) => ({
       id: u.id,
       name: u.name,
       roles: u.roles || [u.role],
+      organizationId: PHOTO_ID,
+      revision: 1,
     })),
     courses: source.courses.map((c: any) => ({
       ...c,
+      operationalStatus: "active",
+      lv1OrganizationId: PHOTO_ID,
       entityId: c.id,
       revision: 1,
       materialUrl: "",
@@ -33,6 +38,7 @@ export function seedState(): State {
     })),
     qualifications: source.qualifications.map((q: any) => ({
       ...q,
+      lv1OrganizationId: PHOTO_ID,
       entityId: q.id,
       revision: 1,
       ...(q.status === "published"
@@ -44,11 +50,22 @@ export function seedState(): State {
     attempts: [],
     completions: [],
     certifications: [],
-    notices: source.notices.map((n: any) => ({ ...n, revision: 1 })),
+    notices: source.notices.map((n: any) => ({
+      ...n,
+      revision: 1,
+      lv1OrganizationId: PHOTO_ID,
+    })),
     comparisons: [],
     audits: [],
     requests: [],
   };
+  state.users.push({
+    id: "operator-1",
+    name: "시스템 운영자",
+    roles: ["system_operator"],
+    organizationId: PHOTO_ID,
+    revision: 1,
+  });
   for (const a of source.assignments) {
     state.assignments.push({
       id: a.id,
@@ -56,6 +73,9 @@ export function seedState(): State {
       learnerId: a.learnerId,
       ftId: a.ftId,
       ownerAdminId: "admin-1",
+      lv1OrganizationId: PHOTO_ID,
+      organizationPath: organization(seedOrganizations(), PHOTO_ID).path,
+      organizationSource: "assigned",
       assignedAt: `${a.assignedAt}T00:00:00.000Z`,
       revision: 1,
     });
@@ -92,6 +112,7 @@ export function seedState(): State {
   }
   state.audits.push({
     id: "seed-event",
+    lv1OrganizationId: PHOTO_ID,
     actorId: "admin-1",
     date: "2026-10-15T00:00:00.000Z",
     action: "seed",
@@ -100,5 +121,5 @@ export function seedState(): State {
     reason: "가상 데이터 초기화",
     details: { fictional: true },
   });
-  return validateState(StateSchema.parse(state));
+  return validateState(StateSchema.parse(state), seedOrganizations());
 }

@@ -51,7 +51,7 @@ const rows = computed(() => (done.value ? history.value : waiting.value));
             <th>과정</th>
             <th>자격</th>
             <th>평가 회차</th>
-            <th>상태</th>
+            <th>{{ done ? '학습자 실기 결과' : '상태' }}</th>
             <th><span class="sr-only">행동</span></th>
           </tr>
         </thead>

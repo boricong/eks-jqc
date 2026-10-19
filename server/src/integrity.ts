@@ -4,13 +4,54 @@ import {
   qualificationErrors,
   requiredKinds,
   type State,
+  type OrganizationDocument,
+  organizationEntries,
 } from "@eks/contracts";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`저장 데이터 무결성 오류: ${message}`);
 }
-export function validateState(input: unknown): State {
+export function validateState(
+  input: unknown,
+  organizations?: OrganizationDocument,
+): State {
   const s = StateSchema.parse(input);
+  check(
+    s.users.some((u) => u.roles.includes("system_operator")),
+    "시스템 운영자 누락",
+  );
+  for (const user of s.users)
+    check(new Set(user.roles).size === user.roles.length, "역할 중복");
+  const entries = organizations ? organizationEntries(organizations) : [];
+  const rootOf = (id: string) =>
+    entries.find(
+      (e) => e.id === s.users.find((u) => u.id === id)?.organizationId,
+    )?.lv1OrganizationId;
+  if (organizations) {
+    for (const user of s.users)
+      check(
+        entries.some((e) => e.id === user.organizationId),
+        "사용자 조직 참조",
+      );
+    for (const record of [
+      ...s.courses,
+      ...s.qualifications,
+      ...s.assignments,
+      ...s.notices,
+    ])
+      check(
+        entries.some((e) => e.id === record.lv1OrganizationId && e.level === 1),
+        "Lv1 조직 참조",
+      );
+    for (const event of [...s.audits, ...s.requests])
+      if (event.lv1OrganizationId)
+        check(
+          entries.some(
+            (e) => e.id === event.lv1OrganizationId && e.level === 1,
+          ),
+          "이력 Lv1 참조",
+        );
+  }
   for (const key of [
     "users",
     "courses",
@@ -42,18 +83,37 @@ export function validateState(input: unknown): State {
             (parent) =>
               parent.id === item.parentId &&
               parent.entityId === item.entityId &&
+              parent.lv1OrganizationId === item.lv1OrganizationId &&
               parent.version < item.version &&
               parent.status === "published",
           ),
           "기준 버전 계보",
         );
   }
-  for (const c of s.courses)
+  for (const c of s.courses) {
+    if (c.operationalStatus === "retired")
+      check(
+        c.status === "published" &&
+          c.retiredAt &&
+          c.retirementReason &&
+          s.users.some((u) => u.id === c.retiredBy),
+        "과정 운영 종료 근거",
+      );
+    else
+      check(
+        !c.retiredAt && !c.retiredBy && !c.retirementReason,
+        "운영 중 과정의 종료 정보",
+      );
     if (c.status === "published")
       check(!courseErrors(c).length, "사용 중인 과정 기준 누락");
+  }
   for (const q of s.qualifications) {
     check(
-      q.courseIds.every((id) => s.courses.some((c) => c.id === id)),
+      q.courseIds.every((id) =>
+        s.courses.some(
+          (c) => c.id === id && c.lv1OrganizationId === q.lv1OrganizationId,
+        ),
+      ),
       "과정 참조 누락",
     );
     if (q.status === "published")
@@ -64,13 +124,28 @@ export function validateState(input: unknown): State {
   }
   for (const a of s.assignments) {
     const q = s.qualifications.find((q) => q.id === a.qualificationId);
-    check(q?.status === "published", "배정된 자격 버전");
     check(
-      s.users.some((u) => u.id === a.learnerId && u.roles.includes("learner")),
+      q?.status === "published" && q.lv1OrganizationId === a.lv1OrganizationId,
+      "배정된 자격 버전·Lv1",
+    );
+    check(
+      a.organizationPath[0]?.id === a.lv1OrganizationId,
+      "배정 당시 조직 경로",
+    );
+    if (organizations)
+      check(
+        rootOf(a.learnerId) === a.lv1OrganizationId &&
+          (!a.ftId || rootOf(a.ftId) === a.lv1OrganizationId),
+        "배정 사용자 Lv1 불일치",
+      );
+    // Identity is permanent; current roles are enforced by mutation authorization.
+    // Reset must preserve assignments/roles even after a completed user's role changed.
+    check(
+      s.users.some((u) => u.id === a.learnerId),
       "학습자 참조",
     );
     check(
-      s.users.some((u) => u.id === a.ownerAdminId && u.roles.includes("admin")),
+      s.users.some((u) => u.id === a.ownerAdminId),
       "담당 운영자 참조",
     );
     if (
@@ -81,8 +156,7 @@ export function validateState(input: unknown): State {
       )
     )
       check(
-        a.ftId !== a.learnerId &&
-          s.users.some((u) => u.id === a.ftId && u.roles.includes("ft")),
+        a.ftId !== a.learnerId && s.users.some((u) => u.id === a.ftId),
         "FT 배정",
       );
     const es = s.enrollments.filter((e) => e.assignmentId === a.id);
@@ -171,9 +245,7 @@ export function validateState(input: unknown): State {
       } else {
         check(
           t.evaluatorId !== a.learnerId &&
-            s.users.some(
-              (u) => u.id === t.evaluatorId && u.roles.includes("ft"),
-            ),
+            s.users.some((u) => u.id === t.evaluatorId),
           "확정 평가자",
         );
         check(
@@ -287,7 +359,7 @@ export function validateState(input: unknown): State {
         a &&
         comp.courseId === e.courseId &&
         comp.learnerId === a.learnerId &&
-        comp.ownerAdminId === a.ownerAdminId,
+        s.users.some((u) => u.id === comp.ownerAdminId),
       "비교 기록 참조",
     );
     check(
