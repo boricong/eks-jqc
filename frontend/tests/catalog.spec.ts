@@ -30,9 +30,9 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
   await page.goto('/');
   await actor(page, 'learner-1');
   await expect(page.locator('.home-columns')).toBeVisible();
-  expect(
-    await page.locator('.home-theme').evaluate((e) => getComputedStyle(e).backgroundColor),
-  ).toBe('rgb(244, 247, 251)');
+  expect(await page.locator('body').evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(
+    'rgb(246, 245, 244)',
+  );
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await overflow(page);

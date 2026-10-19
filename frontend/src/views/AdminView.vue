@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
@@ -10,6 +10,8 @@ import CourseLifecycle from '../components/CourseLifecycle.vue';
 import ComparisonPanel from '../components/ComparisonPanel.vue';
 import QualificationFields from '../components/QualificationFields.vue';
 import CourseLearningEditor from '../components/CourseLearningEditor.vue';
+import CourseAssessmentEditor from '../components/CourseAssessmentEditor.vue';
+import { courseIssues, type CourseIssue } from '../course-editor';
 import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
 import { useListView } from '../composables/useListView';
@@ -51,17 +53,24 @@ const sections = [
   { id: 'notices', name: '공지 관리', icon: 'notice' },
 ];
 const section = computed(() => String(route.params.section));
-const filterKey=()=>`eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
+const filterKey = () => `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
 const title = computed(() => sections.find((s) => s.id === section.value)!.name);
 const busy = ref(false);
 const query = ref(''),
   courseSearch = ref(''),
   filter = ref('all'),
-  errors = ref<string[]>([]),
-  editorTab = ref('objective');
-const learningEditor = ref<{ focusInvalid: () => boolean } | null>(null);
+  errors = ref<string[]>([]);
+const validationShown = ref(false);
+const assessmentEditor = ref<InstanceType<typeof CourseAssessmentEditor>>();
+const locatedIssues = computed(() =>
+  validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
+);
+const learningEditor = ref<InstanceType<typeof CourseLearningEditor>>();
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
+watch(locatedIssues, (issues) => {
+  if (validationShown.value && courseDraft.value) errors.value = issues.map((i) => i.message);
+});
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
 const readOnly = computed(() => editor.value?.status === 'published');
 const selectedAssignment = ref<Assignment | null>(null),
@@ -75,22 +84,25 @@ function plain<T>(item: T): T {
 watch(
   () => route.fullPath,
   () => {
-    let remembered:{query?:string;filter?:string}={};try{remembered=JSON.parse(localStorage.getItem(filterKey())||'{}');}catch{}
-    query.value = remembered.query||'';
+    let remembered: { query?: string; filter?: string } = {};
+    try {
+      remembered = JSON.parse(localStorage.getItem(filterKey()) || '{}');
+    } catch {}
+    query.value = remembered.query || '';
     courseSearch.value = '';
-    filter.value = remembered.filter||(section.value === 'courses' ? 'active' : 'all');
+    filter.value = remembered.filter || (section.value === 'courses' ? 'active' : 'all');
     selectedAssignment.value = null;
     noticeDraft.value = null;
     reason.value = '';
     ftId.value = '';
     errors.value = [];
+    validationShown.value = false;
     courseDraft.value = null;
     qualificationDraft.value = null;
     if (route.params.id && section.value === 'courses') {
       const c = organizationData.value.courses.find((c) => c.id === route.params.id);
       if (c) {
         courseDraft.value = plain(c);
-        editorTab.value = c.assessmentKinds[0] || 'objective';
       }
     }
     if (route.params.id && section.value === 'qualifications') {
@@ -123,9 +135,18 @@ const selectableCourses = computed(() => {
   const selected = new Set(qualificationDraft.value?.courseIds || []);
   const term = courseSearch.value.trim().toLocaleLowerCase();
   return organizationData.value.courses
-    .filter((c) => selected.has(c.id) || !term || `${c.title} v${c.version}`.toLocaleLowerCase().includes(term))
+    .filter(
+      (c) =>
+        selected.has(c.id) ||
+        !term ||
+        `${c.title} v${c.version}`.toLocaleLowerCase().includes(term),
+    )
     .slice()
-    .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)) || a.title.localeCompare(b.title, 'ko'));
+    .sort(
+      (a, b) =>
+        Number(selected.has(b.id)) - Number(selected.has(a.id)) ||
+        a.title.localeCompare(b.title, 'ko'),
+    );
 });
 const assignments = computed(() =>
   organizationData.value.assignments.filter(
@@ -143,10 +164,26 @@ const assignments = computed(() =>
   ),
 );
 const notices = computed(() => organizationData.value.notices.filter((n) => matches(n.title)));
-const listItems=computed<Array<Qualification|Course|Assignment|Notice>>(()=>section.value==='qualifications'?qualifications.value:section.value==='courses'?courses.value:section.value==='notices'?notices.value:assignments.value);
-const list=useListView(listItems,'admin',item=>'title'in item?item.title:store.username(item.learnerId));
-watch([query,filter],()=>{list.page=1;localStorage.setItem(filterKey(),JSON.stringify({query:query.value,filter:filter.value}));});
-const pageQualifications=computed(()=>list.rows as Qualification[]),pageCourses=computed(()=>list.rows as Course[]),pageAssignments=computed(()=>list.rows as Assignment[]),pageNotices=computed(()=>list.rows as Notice[]);
+const listItems = computed<Array<Qualification | Course | Assignment | Notice>>(() =>
+  section.value === 'qualifications'
+    ? qualifications.value
+    : section.value === 'courses'
+      ? courses.value
+      : section.value === 'notices'
+        ? notices.value
+        : assignments.value,
+);
+const list = useListView(listItems, 'admin', (item) =>
+  'title' in item ? item.title : store.username(item.learnerId),
+);
+watch([query, filter], () => {
+  list.page = 1;
+  localStorage.setItem(filterKey(), JSON.stringify({ query: query.value, filter: filter.value }));
+});
+const pageQualifications = computed(() => list.rows as Qualification[]),
+  pageCourses = computed(() => list.rows as Course[]),
+  pageAssignments = computed(() => list.rows as Assignment[]),
+  pageNotices = computed(() => list.rows as Notice[]);
 async function createCatalog() {
   if (busy.value) return;
   busy.value = true;
@@ -161,14 +198,23 @@ async function createCatalog() {
 }
 async function saveCatalog(publish = false) {
   if (!editor.value || readOnly.value || busy.value) return;
+  validationShown.value = publish;
   errors.value = publish
     ? courseDraft.value
-      ? store.courseErrors(courseDraft.value)
+      ? [
+          ...new Set([
+            ...store.courseErrors(courseDraft.value),
+            ...courseIssues(courseDraft.value).map((i) => i.message),
+          ]),
+        ]
       : store.qualificationErrors(qualificationDraft.value!)
     : [];
   if (errors.value.length) {
-    if (courseDraft.value) learningEditor.value?.focusInvalid();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (locatedIssues.value[0]) await focusIssue(locatedIssues.value[0]);
+    else {
+      await nextTick();
+      document.querySelector<HTMLElement>('.editor-errors')?.focus();
+    }
     return;
   }
   busy.value = true;
@@ -177,10 +223,25 @@ async function saveCatalog(publish = false) {
     if (courseDraft.value) courseDraft.value = plain(store.course(result.id));
     else qualificationDraft.value = plain(store.qualification(result.id));
   } catch (error) {
+    validationShown.value = false;
     errors.value = [(error as Error).message];
   } finally {
     busy.value = false;
   }
+}
+async function focusIssue(issue: CourseIssue) {
+  if (issue.kind === 'learning') {
+    await learningEditor.value?.focusIssue(issue);
+    return;
+  }
+  if (issue.kind !== 'basic') {
+    await assessmentEditor.value?.focusIssue(issue);
+    return;
+  }
+  await nextTick();
+  const input = document.querySelector<HTMLElement>(`[data-course-field="${issue.field}"]`);
+  input?.focus({ preventScroll: true });
+  input?.scrollIntoView({ block: 'center', behavior: 'instant' });
 }
 async function reloadCatalog() {
   if (!window.confirm('저장하지 않은 내용을 버리고 다시 불러올까요?')) return;
@@ -205,25 +266,6 @@ async function cloneVersion() {
   } finally {
     busy.value = false;
   }
-}
-const cryptoId = () => crypto.randomUUID();
-function addQuestion() {
-  courseDraft.value!.questions.push({
-    id: crypto.randomUUID(),
-    prompt: '',
-    choices: ['', ''],
-    correct: null,
-    points: 1,
-    category: 'written',
-  });
-}
-function addPractical() {
-  courseDraft.value!.practicalItems.push({
-    id: crypto.randomUUID(),
-    title: '',
-    criterion: '',
-    mandatory: true,
-  });
 }
 function openAssignment(a: Assignment, action: 'exclude' | 'ft') {
   selectedAssignment.value = a;
@@ -343,13 +385,19 @@ onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 </script>
 <template>
-  <div class="container page admin-shell" :data-density="list.density">
+  <div
+    class="container page admin-shell"
+    :class="{ 'individual-editor': !!editor }"
+    :data-density="list.density"
+  >
     <ManagementContext />
     <aside class="admin-sidebar">
       <p class="organization-context">{{ store.managementOrganization?.name }}</p>
       <h2 class="small-heading">관리</h2>
       <nav aria-label="관리 메뉴">
-        <RouterLink :to="store.managementLink('/admin/catalog')"><AppIcon name="file" :size="18"/>기준 일괄 관리</RouterLink>
+        <RouterLink :to="store.managementLink('/admin/catalog')"
+          ><AppIcon name="file" :size="18" />기준 일괄 관리</RouterLink
+        >
         <RouterLink
           v-for="s in sections"
           :key="s.id"
@@ -392,10 +440,18 @@ onBeforeRouteUpdate(canLeave);
             </button>
           </div>
         </div>
-        <div v-if="errors.length" class="error-message" role="alert">
+        <div v-if="errors.length" class="error-message editor-errors" role="alert" tabindex="-1">
           <AppIcon name="alert" :size="18" />
           <ul>
-            <li v-for="error in errors" :key="error">{{ error }}</li>
+            <template v-if="locatedIssues.length"
+              ><li v-for="(issue, i) in locatedIssues" :key="i">
+                <button type="button" class="text-link" @click="focusIssue(issue)">
+                  {{ issue.message }}
+                </button>
+              </li></template
+            ><template v-else
+              ><li v-for="error in errors" :key="error">{{ error }}</li></template
+            >
           </ul>
         </div>
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
@@ -433,285 +489,99 @@ onBeforeRouteUpdate(canLeave);
         <div class="panel editor-panel">
           <label class="field"
             ><span>{{ courseDraft ? '과정명' : '자격명' }}</span
-            ><input v-model="editor.title" :disabled="readOnly"
+            ><input
+              v-model="editor.title"
+              data-course-field="title"
+              :aria-invalid="locatedIssues.some((i) => i.kind === 'basic' && i.field === 'title')"
+              :disabled="readOnly || busy"
           /></label>
+          <p
+            v-if="locatedIssues.some((i) => i.kind === 'basic' && i.field === 'title')"
+            class="field-error"
+          >
+            과정명을 입력해 주세요.
+          </p>
           <template v-if="qualificationDraft">
-            <QualificationFields :qualification="qualificationDraft" :disabled="readOnly" />
+            <QualificationFields :qualification="qualificationDraft" :disabled="readOnly || busy" />
             <fieldset class="course-selection">
               <legend>필수 과정</legend>
-              <label class="field course-selection-search"><span>과정 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
-                <input v-model="courseSearch" type="search" placeholder="과정명 또는 버전 검색" aria-label="필수 과정 검색" />
+              <label class="field course-selection-search"
+                ><span>과정 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
+                <input
+                  v-model="courseSearch"
+                  type="search"
+                  placeholder="과정명 또는 버전 검색"
+                  aria-label="필수 과정 검색"
+                />
               </label>
               <div class="course-selection-list">
-              <label v-for="c in selectableCourses" :key="c.id" class="choice"
-                ><input
-                  v-model="qualificationDraft.courseIds"
-                  type="checkbox"
-                  :value="c.id"
-                  :disabled="readOnly" /><span>{{ c.title || '이름 없음' }}</span
-                ><span class="muted">v{{ c.version }}</span
-                ><StatusBadge
-                  :status="
-                    c.operationalStatus === 'retired'
-                      ? 'retired'
-                      : c.status === 'draft'
-                        ? 'catalogDraft'
-                        : 'published'
-                  "
-              /></label>
-              <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
-              </div></fieldset
-          ></template>
+                <label v-for="c in selectableCourses" :key="c.id" class="choice"
+                  ><input
+                    v-model="qualificationDraft.courseIds"
+                    type="checkbox"
+                    :value="c.id"
+                    :disabled="readOnly || busy" /><span>{{ c.title || '이름 없음' }}</span
+                  ><span class="muted">v{{ c.version }}</span
+                  ><StatusBadge
+                    :status="
+                      c.operationalStatus === 'retired'
+                        ? 'retired'
+                        : c.status === 'draft'
+                          ? 'catalogDraft'
+                          : 'published'
+                    "
+                /></label>
+                <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
+              </div>
+            </fieldset></template
+          >
           <template v-if="courseDraft"
             ><div class="form-grid">
               <fieldset class="assessment-kind-group">
                 <legend>필수 평가</legend>
                 <div class="assessment-kind-options">
-                <label v-for="(label, kind) in labels" :key="kind" class="checkbox-label"
-                  ><input
-                    v-model="courseDraft.assessmentKinds"
-                    type="checkbox"
-                    :value="kind"
-                    :disabled="readOnly"
-                    @change="editorTab = courseDraft.assessmentKinds[0] || 'objective'"
-                  />{{ label }}</label
-                >
+                  <label v-for="(label, kind) in labels" :key="kind" class="checkbox-label"
+                    ><input
+                      v-model="courseDraft.assessmentKinds"
+                      type="checkbox"
+                      :value="kind"
+                      :disabled="readOnly || busy"
+                      :data-course-field="kind === 'objective' ? 'assessmentKinds' : undefined"
+                    />{{ label }}</label
+                  >
                 </div>
               </fieldset>
-              <label v-if="courseDraft.assessmentKinds.includes('objective')" class="field"
-                ><span>객관식 합격 기준 (%)</span
-                ><input
-                  v-model.number="courseDraft.passScore"
-                  :disabled="readOnly"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="미정"
-              /></label>
             </div>
             <label class="field"
               ><span>학습자료</span
-              ><textarea v-model="courseDraft.material" :disabled="readOnly" rows="3" /></label
+              ><textarea
+                v-model="courseDraft.material"
+                :disabled="readOnly || busy"
+                rows="3"
+              /></label
             ><label class="field"
               ><span>학습자료 URL</span
               ><input
                 v-model="courseDraft.materialUrl"
-                :disabled="readOnly"
+                :disabled="readOnly || busy"
                 type="url"
                 placeholder="https://" /></label
           ></template>
         </div>
-        <CourseLearningEditor v-if="courseDraft" ref="learningEditor" :course="courseDraft" :disabled="readOnly" />
-        <template v-if="courseDraft"
-          ><div v-if="section !== 'comparisons'" class="list-toolbar">
-            <div class="tabs">
-              <button
-                v-if="courseDraft.assessmentKinds.includes('subjective')"
-                :class="{ active: editorTab === 'subjective' }"
-                :aria-pressed="editorTab === 'subjective'"
-                @click="editorTab = 'subjective'"
-              >
-                주관식 <span>{{ courseDraft.subjectiveQuestions.length }}</span>
-              </button>
-              <button
-                v-if="courseDraft.assessmentKinds.includes('objective')"
-                :class="{ active: editorTab === 'objective' }"
-                :aria-pressed="editorTab === 'objective'"
-                @click="editorTab = 'objective'"
-              >
-                객관식 <span>{{ courseDraft.questions.length }}</span></button
-              ><button
-                v-if="courseDraft.assessmentKinds.includes('practical')"
-                :class="{ active: editorTab === 'practical' }"
-                :aria-pressed="editorTab === 'practical'"
-                @click="editorTab = 'practical'"
-              >
-                실기 <span>{{ courseDraft.practicalItems.length }}</span>
-              </button>
-            </div>
-            <button
-              v-if="!readOnly"
-              class="button secondary"
-              @click="
-                editorTab === 'objective'
-                  ? addQuestion()
-                  : editorTab === 'subjective'
-                    ? courseDraft.subjectiveQuestions.push({
-                        id: cryptoId(),
-                        prompt: '',
-                        points: 1,
-                        rubric: '',
-                        modelAnswer: '',
-                      })
-                    : addPractical()
-              "
-            >
-              <AppIcon name="plus" :size="18" />{{
-                editorTab === 'objective' ? '문항 추가' : '항목 추가'
-              }}
-            </button>
-          </div>
-          <template v-if="editorTab === 'objective'"
-            ><details
-              v-for="(q, index) in courseDraft.questions"
-              :key="q.id"
-              class="editor-question panel"
-              :open="index === 0"
-            >
-              <summary>
-                <span class="question-number">{{ index + 1 }}</span
-                ><span>{{ q.prompt || '새 문항' }}</span
-                ><AppIcon name="down" :size="16" />
-              </summary>
-              <div class="editor-question-body">
-                <label class="field"
-                  ><span>문항</span><textarea v-model="q.prompt" :disabled="readOnly" rows="2" />
-                </label>
-                <label class="field"
-                  ><span>문항 분류</span
-                  ><select v-model="q.category" :disabled="readOnly">
-                    <option value="written">필기</option>
-                    <option value="case">Case</option>
-                  </select></label
-                >
-                <fieldset class="options-editor">
-                  <legend>선택지 · 정답 선택</legend>
-                  <div v-for="(_, i) in q.choices" :key="i" class="option-editor">
-                    <label
-                      ><input
-                        v-model="q.correct"
-                        :value="i"
-                        :disabled="readOnly"
-                        type="radio"
-                        :name="`correct-${q.id}`"
-                        :aria-label="`${i + 1}번 선택지를 정답으로 지정`" /></label
-                    ><input
-                      v-model="q.choices[i]"
-                      :disabled="readOnly"
-                      :aria-label="`${i + 1}번 선택지`"
-                    /><span v-if="q.correct === i" class="small-label">정답</span
-                    ><button
-                      v-if="!readOnly"
-                      class="icon-button"
-                      :aria-label="`${i + 1}번 선택지 삭제`"
-                      @click="
-                        q.choices.splice(i, 1);
-                        q.correct = null;
-                      "
-                    >
-                      <AppIcon name="close" :size="16" />
-                    </button>
-                  </div>
-                  <button v-if="!readOnly" class="text-link" @click="q.choices.push('')">
-                    <AppIcon name="plus" :size="16" />선택지 추가
-                  </button>
-                </fieldset>
-                <label class="field points-field"
-                  ><span>배점</span
-                  ><input
-                    v-model.number="q.points"
-                    :disabled="readOnly"
-                    type="number"
-                    min="1" /></label
-                ><button
-                  v-if="!readOnly"
-                  class="text-link"
-                  @click="courseDraft.questions.splice(index, 1)"
-                >
-                  문항 삭제
-                </button>
-              </div>
-            </details>
-            <div v-if="!courseDraft.questions.length" class="panel empty-state">
-              등록된 문항이 없습니다.
-            </div></template
-          >
-          <template v-else-if="editorTab === 'subjective'">
-            <section class="panel editor-panel">
-              <label class="field"
-                ><span>주관식 합격 기준 (%)</span
-                ><input
-                  v-model.number="courseDraft.subjectivePassScore"
-                  :disabled="readOnly"
-                  type="number"
-                  min="1"
-                  max="100"
-                  placeholder="미정"
-              /></label>
-            </section>
-            <section
-              v-for="(q, index) in courseDraft.subjectiveQuestions"
-              :key="q.id"
-              class="panel editor-panel"
-            >
-              <h2>주관식 {{ index + 1 }}</h2>
-              <label class="field"
-                ><span>문항</span><textarea v-model="q.prompt" :disabled="readOnly" rows="2" />
-              </label>
-              <label class="field"
-                ><span>배점</span
-                ><input v-model.number="q.points" :disabled="readOnly" type="number" min="1"
-              /></label>
-              <label class="field"
-                ><span>채점 기준 · 관리자·지정 FT만 조회</span
-                ><textarea v-model="q.rubric" :disabled="readOnly" rows="3" />
-              </label>
-              <label class="field"
-                ><span>모범답안 · 선택</span
-                ><textarea v-model="q.modelAnswer" :disabled="readOnly" rows="3" />
-              </label>
-              <button
-                v-if="!readOnly"
-                class="text-link"
-                @click="courseDraft.subjectiveQuestions.splice(index, 1)"
-              >
-                문항 삭제
-              </button>
-            </section>
-            <p v-if="!courseDraft.subjectiveQuestions.length" class="panel empty-state">
-              등록된 문항이 없습니다.
-            </p>
-          </template>
-          <template v-else
-            ><div class="panel editor-panel">
-              <label class="field"
-                ><span>수행 조건</span
-                ><input v-model="courseDraft.instruction" :disabled="readOnly"
-              /></label>
-            </div>
-            <div
-              v-for="(item, index) in courseDraft.practicalItems"
-              :key="item.id"
-              class="panel editor-panel"
-            >
-              <div class="section-heading">
-                <h2>항목 {{ index + 1 }}</h2>
-                <label class="checkbox-label"
-                  ><input
-                    v-model="item.mandatory"
-                    :disabled="readOnly"
-                    type="checkbox"
-                  />필수</label
-                >
-              </div>
-              <label class="field"
-                ><span>항목명</span><input v-model="item.title" :disabled="readOnly" /></label
-              ><label class="field"
-                ><span>판정 기준</span
-                ><textarea v-model="item.criterion" :disabled="readOnly" rows="2" /></label
-              ><button
-                v-if="!readOnly"
-                class="text-link"
-                @click="courseDraft.practicalItems.splice(index, 1)"
-              >
-                항목 삭제
-              </button>
-            </div>
-            <div v-if="!courseDraft.practicalItems.length" class="panel empty-state">
-              등록된 항목이 없습니다.
-            </div></template
-          ></template
-        >
+        <CourseLearningEditor
+          v-if="courseDraft"
+          ref="learningEditor"
+          :course="courseDraft"
+          :disabled="readOnly || busy"
+          :issues="locatedIssues"
+        />
+        <CourseAssessmentEditor
+          v-if="courseDraft"
+          ref="assessmentEditor"
+          :course="courseDraft"
+          :disabled="readOnly || busy"
+          :show-errors="validationShown"
+        />
         <div v-if="!readOnly" class="actionbar">
           <span class="muted">초안 · v{{ editor.version }}</span>
           <div class="actions">
@@ -778,7 +648,15 @@ onBeforeRouteUpdate(canLeave);
             </select>
           </div>
         </div>
-        <ListControls v-if="section!=='comparisons'" :count="list.count" :pages="list.pages" v-model:page="list.page" v-model:size="list.size" v-model:density="list.density" v-model:sort="list.sort"/>
+        <ListControls
+          v-if="section !== 'comparisons'"
+          :count="list.count"
+          :pages="list.pages"
+          v-model:page="list.page"
+          v-model:size="list.size"
+          v-model:density="list.density"
+          v-model:sort="list.sort"
+        />
         <PlanningPanel v-if="section === 'assignments'" :key="store.managementLv1" />
         <div v-if="section === 'qualifications'" class="table-panel">
           <table>
@@ -799,7 +677,9 @@ onBeforeRouteUpdate(canLeave);
                     class="table-title"
                     >{{ q.title || '이름 없음' }}</RouterLink
                   >
-                  <span v-if="q.description.includes('프로세스 검증용')" class="test-data-tag">시험 데이터</span>
+                  <span v-if="q.description.includes('프로세스 검증용')" class="test-data-tag"
+                    >시험 데이터</span
+                  >
                 </td>
                 <td>v{{ q.version }}</td>
                 <td>{{ q.courseIds.length }}과정</td>

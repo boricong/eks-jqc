@@ -4,20 +4,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
 import { roleLabels, type Role } from '@eks/contracts';
-import { theme, selectTheme, useActorTheme } from './theme';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
 const menuOpen = ref(false);
 const isHome = computed(() => route.name === 'home');
 const roles = roleLabels;
-watch(
-  [() => store.actorId, () => store.initialized],
-  ([id, initialized]) => {
-    if (initialized || id) useActorTheme(id);
-  },
-  { immediate: true },
-);
+
 watch(
   [
     () => store.signedIn,
@@ -58,6 +51,31 @@ async function refreshOnFocus() {
       store.notify((error as Error).message);
     }
 }
+function revealFocusedInput(event: FocusEvent) {
+  const element = event.target;
+  if (
+    !(element instanceof HTMLElement) ||
+    !element.matches('input, textarea, select, [role="tab"]')
+  )
+    return;
+  if (element.closest('dialog[open]')) return;
+  const bounds = element.getBoundingClientRect();
+  const covered = [...document.querySelectorAll<HTMLElement>('.actionbar, .catalog-save-bar')].some(
+    (bar) => {
+      if (bar.contains(element)) return false;
+      const area = bar.getBoundingClientRect();
+      return (
+        area.height > 0 &&
+        area.top < innerHeight &&
+        bounds.bottom > area.top &&
+        bounds.top < area.bottom &&
+        bounds.right > area.left &&
+        bounds.left < area.right
+      );
+    },
+  );
+  if (covered) element.scrollIntoView({ block: 'center', behavior: 'instant' });
+}
 onMounted(() => {
   void store.initialize();
   window.addEventListener('focus', refreshOnFocus);
@@ -65,7 +83,7 @@ onMounted(() => {
 onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
 </script>
 <template>
-  <div class="app" :class="{ 'home-theme': isHome }">
+  <div class="app" :class="{ 'home-page-shell': isHome }">
     <a class="skip-link" href="#main">본문으로 이동</a>
     <header class="topbar">
       <div class="topbar-inner">
@@ -132,17 +150,6 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
           </RouterLink>
         </nav>
         <div class="account">
-          <label class="theme-choice"
-            ><span class="sr-only">화면 테마</span
-            ><select
-              aria-label="화면 테마"
-              :value="theme"
-              @change="selectTheme(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="light">라이트</option>
-              <option value="dark">다크</option>
-            </select></label
-          >
           <span class="prototype-label" title="로컬 계정 선택으로 사용하는 검증용 MVP입니다."
             >검증용 MVP</span
           >
@@ -163,7 +170,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
         </div>
       </div>
     </header>
-    <main id="main" tabindex="-1">
+    <main id="main" tabindex="-1" @focusin="revealFocusedInput">
       <div
         v-if="store.loading || store.contextLoading"
         class="container page empty-state"

@@ -118,6 +118,7 @@ onMounted(async () => {
             : (values?.[String(cell.getValue())] ?? cell.getValue()),
         ),
       cellDblClick: (_e, cell) => {
+        if (props.disabled) return;
         if (
           ['prompt', 'material', 'instruction', 'criterion', 'rubric', 'modelAnswer'].includes(
             field,
@@ -134,12 +135,14 @@ onMounted(async () => {
     formatter: () => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'text-link';
+      b.className = 'text-link catalog-detail-button';
       b.textContent = '상세 편집';
       b.disabled = !!props.disabled;
       return b;
     },
-    cellClick: (_e, c) => emit('detail', rowKey(c.getRow().getData())),
+    cellClick: (_e, c) => {
+      if (!props.disabled) emit('detail', rowKey(c.getRow().getData()));
+    },
   });
   grid = new TabulatorFull(host.value!, {
     data: clone(props.rows),
@@ -178,7 +181,14 @@ onMounted(async () => {
   grid.on('rowSelectionChanged', (data) => (selected.value = data.map(rowKey)));
   grid.on('tableBuilt', focusTarget);
   grid.on('renderComplete', showErrors);
+  grid.on('renderComplete', syncDetailButtons);
 });
+function syncDetailButtons() {
+  host.value?.querySelectorAll<HTMLButtonElement>('.catalog-detail-button').forEach((button) => {
+    button.disabled = !!props.disabled;
+  });
+}
+watch(() => props.disabled, syncDetailButtons, { flush: 'post' });
 function showErrors() {
   if (!grid || !host.value) return;
   host.value.querySelectorAll('[aria-invalid]').forEach((e) => {

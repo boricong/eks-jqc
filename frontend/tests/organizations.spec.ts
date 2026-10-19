@@ -123,7 +123,7 @@ test('새 Lv1 관리자·학습자·FT 생성부터 기준 등록·배정·평�
   await practicalOnly(page);
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   await page.getByLabel('항목명', { exact: true }).fill('시험 항목');
-  await page.getByLabel('판정 기준', { exact: true }).fill('가상 작업을 독립적으로 수행한다.');
+  await page.getByLabel('관찰·판정 기준', { exact: true }).fill('가상 작업을 독립적으로 수행한다.');
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '새 버전', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '자격 관리', exact: true }).click();

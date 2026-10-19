@@ -92,13 +92,11 @@ test('Excel 수식 오류는 재검사로 사라지지 않으며 해당 값을 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: '수식오류.xlsx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer: Buffer.from(await book.xlsx.writeBuffer()),
-    });
+  await page.locator('input[type=file]').setInputFiles({
+    name: '수식오류.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from(await book.xlsx.writeBuffer()),
+  });
   await page.getByRole('button', { name: '초안 저장', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
@@ -132,9 +130,9 @@ test('자격·과정 중심 편집: 코드 없이 문항 작성, 제외 취소�
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('과정', { exact: true })).toHaveValue('demo-course-2');
   await dialog.getByLabel('문항', { exact: true }).fill('기록의 출처를 어떻게 확인하나요?');
-  await dialog.getByLabel('선택지 1', { exact: true }).fill('원본과 대조');
-  await dialog.getByLabel('선택지 2', { exact: true }).fill('확인 생략');
-  await dialog.getByLabel('정답', { exact: true }).selectOption('1');
+  await dialog.getByLabel('1번 선택지', { exact: true }).fill('원본과 대조');
+  await dialog.getByLabel('2번 선택지', { exact: true }).fill('확인 생략');
+  await dialog.getByLabel('1번 선택지를 정답으로 지정', { exact: true }).check();
   await dialog.getByRole('button', { name: '내용 반영' }).click();
   await page.getByRole('button', { name: '초안 저장', exact: true }).click();
   await page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
@@ -164,13 +162,11 @@ test('일부 초안 저장·등록은 다른 자격의 입력을 유지하고 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: '두자격.xlsx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer: await writeCatalogWorkbook(data),
-    });
+  await page.locator('input[type=file]').setInputFiles({
+    name: '두자격.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: await writeCatalogWorkbook(data),
+  });
   await page.getByRole('button', { name: '초안 저장', exact: true }).click();
   const review = page.getByRole('dialog');
   await review.locator('.catalog-review-list label').nth(1).getByRole('checkbox').uncheck();
@@ -245,7 +241,7 @@ test('브라우저 보관 실패를 알리고 저장 충돌에서도 입력과 �
   ).toBeEnabled();
 });
 
-test('새 자격의 준비 상태·한글 입력과 두 테마·좁은 화면', async ({ page }, testInfo) => {
+test('새 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화면', async ({ page }, testInfo) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
@@ -256,8 +252,8 @@ test('새 자격의 준비 상태·한글 입력과 두 테마·좁은 화면', 
   await page.getByLabel('과정명', { exact: true }).fill('설비 구성 확인');
   await page.getByLabel('객관식', { exact: true }).check();
   await page.getByLabel('주관식', { exact: true }).check();
-  for (const theme of ['light', 'dark']) {
-    await page.getByLabel('화면 테마').selectOption(theme);
+  for (const theme of ['single']) {
+    await expect(page.getByLabel('화면 테마')).toHaveCount(0);
     for (const width of [1920, 1440, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(

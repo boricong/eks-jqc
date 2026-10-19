@@ -1,442 +1,374 @@
 ---
 version: alpha
-name: Mercury Analysis
-description: An analysis of Mercury's design language — a fintech system that moves between a deep ink-violet night world on the homepage and a pale, near-white light world on its product and pricing pages, held together by one confident indigo action pill, soft translucent secondary pills, gently rounded cards and a quiet custom sans set at unusually light weights.
+name: Notion Analysis
+description: An analysis of Notion's design language — a warm, paper-calm productivity system built on an off-white canvas, near-black Inter type, and a single confident blue, punctuated by a playful multi-color sticker palette that does all the personality work while the chrome stays quiet.
 
 colors:
-  primary: "#5266eb"
+  primary: "#0075de"
+  primary-active: "#005bab"
+  secondary: "#213183"
   on-primary: "#ffffff"
-  periwinkle: "#9cb4e8"
-  canvas: "#fbfcfd"
+  canvas: "#ffffff"
+  canvas-soft: "#f6f5f4"
   surface: "#ffffff"
-  surface-tint: "#fbfbff"
-  lavender: "#edecfb"
-  night: "#171721"
-  night-raised: "#1e1e2a"
-  ink: "#28253b"
-  ink-secondary: "#554e7b"
-  on-dark: "#ededf3"
-  fog: "#c3c3cc"
-  slate: "#70707d"
+  ink: "#000000"
+  ink-secondary: "#31302e"
+  ink-muted: "#615d59"
+  ink-faint: "#a39e98"
+  hairline: "#e6e6e6"
+  accent-sky: "#62aef0"
+  accent-purple: "#d6b6f6"
+  accent-purple-deep: "#391c57"
+  accent-pink: "#ff64c8"
+  accent-orange: "#dd5b00"
+  accent-orange-deep: "#793400"
+  accent-teal: "#2a9d99"
+  accent-green: "#1aae39"
+  accent-brown: "#523410"
 
 typography:
-  display:
-    fontFamily: arcadiaDisplay
-    fontSize: 52px
-    fontWeight: 480
-    lineHeight: 1.1
-    letterSpacing: 0
-  stat:
-    fontFamily: arcadiaDisplay
-    fontSize: 60px
-    fontWeight: 480
-    lineHeight: 1.1
-    letterSpacing: 0
+  display-1:
+    fontFamily: NotionInter
+    fontSize: 64px
+    fontWeight: 700
+    lineHeight: 1.0
+    letterSpacing: -2.125px
+  display-2:
+    fontFamily: NotionInter
+    fontSize: 54px
+    fontWeight: 700
+    lineHeight: 1.04
+    letterSpacing: -1.875px
   heading-1:
-    fontFamily: arcadiaDisplay
-    fontSize: 42px
-    fontWeight: 480
-    lineHeight: 1.15
-    letterSpacing: 0.42px
+    fontFamily: NotionInter
+    fontSize: 40px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -1px
   heading-2:
-    fontFamily: arcadiaDisplay
-    fontSize: 28px
-    fontWeight: 480
-    lineHeight: 1.2
-    letterSpacing: 0.42px
-  lead:
-    fontFamily: arcadiaDisplay
-    fontSize: 24px
-    fontWeight: 480
-    lineHeight: 1.2
-    letterSpacing: 0.48px
-  body-lg:
-    fontFamily: arcadia
-    fontSize: 18px
-    fontWeight: 360
-    lineHeight: 1.35
-    letterSpacing: 0
-  body:
-    fontFamily: arcadia
+    fontFamily: NotionInter
+    fontSize: 26px
+    fontWeight: 700
+    lineHeight: 1.23
+    letterSpacing: -0.625px
+  heading-3:
+    fontFamily: NotionInter
+    fontSize: 22px
+    fontWeight: 700
+    lineHeight: 1.27
+    letterSpacing: -0.25px
+  title:
+    fontFamily: NotionInter
+    fontSize: 20px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: -0.125px
+  body-md:
+    fontFamily: NotionInter
     fontSize: 16px
     fontWeight: 400
-    lineHeight: 1.4
+    lineHeight: 1.5
     letterSpacing: 0
-  ui:
-    fontFamily: arcadia
+  body-sm:
+    fontFamily: NotionInter
+    fontSize: 15px
+    fontWeight: 400
+    lineHeight: 1.33
+    letterSpacing: 0
+  button:
+    fontFamily: NotionInter
     fontSize: 16px
-    fontWeight: 420
-    lineHeight: 1
-    letterSpacing: 0
-  ui-sm:
-    fontFamily: arcadia
-    fontSize: 14px
-    fontWeight: 420
-    lineHeight: 1
-    letterSpacing: 0.07px
-  eyebrow:
-    fontFamily: arcadia
-    fontSize: 14px
     fontWeight: 500
-    lineHeight: 1
-    letterSpacing: 0.28px
-  legal:
-    fontFamily: arcadia
-    fontSize: 12px
+    lineHeight: 1.5
+    letterSpacing: 0
+  caption:
+    fontFamily: NotionInter
+    fontSize: 14px
     fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: 0.24px
+    lineHeight: 1.43
+    letterSpacing: 0
+  eyebrow:
+    fontFamily: NotionInter
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 1.33
+    letterSpacing: 0.125px
 
 rounded:
-  none: 0px
   xs: 4px
-  sm: 8px
-  md: 12px
-  lg: 16px
-  xl: 32px
-  pill: 40px
+  sm: 5px
+  md: 8px
+  lg: 12px
+  xl: 16px
   full: 9999px
 
 spacing:
+  xxs: 4px
   xs: 8px
   sm: 12px
   md: 16px
-  lg: 20px
-  xl: 24px
+  lg: 24px
+  xl: 28px
   xxl: 32px
-  huge: 40px
-  section: 80px
-  section-lg: 128px
 
 components:
-  # ─── Brand-native components (extracted) ───
   nav-bar:
-    backgroundColor: "{colors.night}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.none}"
-    padding: "16px 32px"
-    height: 72px
-
-  nav-link:
-    textColor: "{colors.on-dark}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.pill}"
-    padding: "0px 20px"
-    height: 40px
-
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-sm}"
+    padding: 16px
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.xl}"
-    padding: "0px 20px"
-    height: 40px
-
-  button-glass-dark:
-    backgroundColor: "rgba(175, 178, 206, 0.2)"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.pill}"
-    padding: "0px 20px"
-    height: 40px
-
-  button-tint-dark:
-    backgroundColor: "rgba(156, 180, 232, 0.2)"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.pill}"
-    padding: "0px 20px"
-    height: 40px
-
-  button-tint-light:
-    backgroundColor: "rgba(82, 102, 235, 0.1)"
-    textColor: "{colors.ink}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.pill}"
-    padding: "0px 20px"
-    height: 40px
-
-  button-outline-light:
-    backgroundColor: "rgba(112, 115, 147, 0.1)"
-    textColor: "{colors.ink}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.pill}"
-    padding: "0px 20px"
-    height: 40px
-
-  button-small:
-    backgroundColor: "rgba(82, 102, 235, 0.1)"
-    textColor: "{colors.ink}"
-    typography: "{typography.ui-sm}"
-    rounded: "{rounded.pill}"
-    padding: "0px 16px"
-    height: 32px
-
-  button-icon-round:
-    textColor: "{colors.on-dark}"
+    typography: "{typography.button}"
     rounded: "{rounded.full}"
-
-  text-input:
-    textColor: "{colors.ink}"
-    typography: "{typography.ui}"
-    rounded: "{rounded.xl}"
-    padding: "0px 0px 0px 20px"
-    height: 46px
-
-  email-capture:
+  button-primary-pressed:
+    backgroundColor: "{colors.primary-active}"
+    textColor: "{colors.on-primary}"
+  button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    typography: "{typography.ui}"
+    typography: "{typography.button}"
     rounded: "{rounded.full}"
-
-  feature-card-dark:
-    backgroundColor: "{colors.night-raised}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.heading-2}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
-
-  feature-card-light:
-    backgroundColor: "{colors.lavender}"
-    textColor: "{colors.ink}"
-    typography: "{typography.heading-2}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
-
-  pricing-card:
-    backgroundColor: "{colors.surface-tint}"
-    textColor: "{colors.ink}"
-    typography: "{typography.heading-2}"
-    rounded: "{rounded.md}"
-
-  pricing-tier-column:
+  button-utility:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    typography: "{typography.body}"
-    rounded: "{rounded.none}"
-
-  toggle-switch:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.ink-secondary}"
-    typography: "{typography.ui}"
+    typography: "{typography.button}"
+    rounded: "{rounded.md}"
+    padding: 4px 14px
+  button-icon-circular:
+    backgroundColor: "rgba(0, 0, 0, 0.05)"
+    textColor: "{colors.on-primary}"
     rounded: "{rounded.full}"
-
-  accordion-row:
-    textColor: "{colors.ink}"
-    typography: "{typography.ui-sm}"
-    rounded: "{rounded.none}"
-    padding: "10px 0px"
-
-  eyebrow-label:
-    textColor: "{colors.ink-secondary}"
+  badge-pill:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.primary}"
     typography: "{typography.eyebrow}"
-    rounded: "{rounded.none}"
-
-  stat-block:
-    textColor: "{colors.on-dark}"
-    typography: "{typography.stat}"
-    rounded: "{rounded.none}"
-
-  quote-block:
+    rounded: "{rounded.full}"
+    padding: 4px 8px
+  feature-card:
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    typography: "{typography.lead}"
-    rounded: "{rounded.none}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  feature-card-elevated:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  pricing-plan-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.md}"
+    padding: 24px
+  pricing-plan-card-featured:
+    backgroundColor: "{colors.canvas-soft}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    padding: 24px
+  text-input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.xs}"
+    padding: 6px
+  hero-band:
+    backgroundColor: "{colors.secondary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.display-1}"
+    padding: 32px
+  footer:
+    backgroundColor: "{colors.canvas-soft}"
+    textColor: "{colors.ink-secondary}"
+    typography: "{typography.caption}"
+    padding: 32px
 
-  logo-strip:
-    textColor: "{colors.on-dark}"
-    rounded: "{rounded.none}"
-
-  site-footer:
-    backgroundColor: "{colors.night}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.legal}"
-    rounded: "{rounded.none}"
-
-  # ─── Examples (illustrative, kit-mirror) ───
-
+  # ─── Examples (illustrative) — auto-derived; resolve any TO_FILL markers below ───
   ex-pricing-tier:
     description: "Default Pricing tier card. Re-uses feature-card chrome with brand canvas-soft surface."
-    backgroundColor: "{colors.surface}"
+    backgroundColor: "{colors.canvas-soft}"
     textColor: "{colors.ink}"
-    borderColor: "{colors.fog}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
+    borderColor: "{colors.hairline}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
   ex-pricing-tier-featured:
     description: "Featured/highlighted tier — polarity-flipped surface (dark fill + light text in light mode, light fill + dark text in dark mode)."
     backgroundColor: "{colors.ink}"
     textColor: "{colors.on-primary}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
   ex-product-selector:
     description: "What's Included summary card — re-purposed for SaaS / B2B verticals (NOT a literal product gallery)."
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xl}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
   ex-cart-drawer:
     description: "Subscription summary — re-purposed for SaaS / B2B (line items per add-on, not literal cart)."
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xl}"
-    item-divider: "{colors.fog}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
+    item-divider: "{colors.hairline}"
   ex-app-shell-row:
     description: "Sidebar nav row inside the App Shell example. Active state uses brand primary as the indicator."
     backgroundColor: "{colors.canvas}"
     activeIndicator: "{colors.primary}"
     rounded: "{rounded.sm}"
-    padding: "{spacing.xs} {spacing.sm}"
+    padding: "{spacing.sm} {spacing.md}"
   ex-data-table-cell:
     description: "Default data-table th + td chrome. Header uses mono-caps eyebrow typography; body uses body-sm."
-    headerBackground: "{colors.surface}"
+    headerBackground: "{colors.canvas-soft}"
     headerTypography: "{typography.eyebrow}"
-    bodyTypography: "{typography.body}"
+    bodyTypography: "{typography.body-sm}"
     cellPadding: "{spacing.sm} {spacing.md}"
-    rowBorder: "{colors.fog}"
+    rowBorder: "{colors.hairline}"
   ex-auth-form-card:
     description: "Sign-in / sign-up card. Re-uses feature-card chrome with text-input primitives inside."
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
   ex-modal-card:
     description: "Modal dialog surface — same chrome as feature-card with elevated shadow."
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.lg}"
   ex-empty-state-card:
     description: "Empty-state illustration frame."
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.huge}"
-    captionTypography: "{typography.body}"
+    backgroundColor: "{colors.canvas-soft}"
+    rounded: "{rounded.xl}"
+    padding: "{spacing.xxl}"
+    captionTypography: "{typography.body-md}"
   ex-toast:
     description: "Toast notification surface — feature-card shape + medium shadow."
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.xl}"
     padding: "{spacing.sm} {spacing.md}"
-    typography: "{typography.body}"
+    typography: "{typography.body-sm}"
 
 ---
 
 
 ## Overview
 
-Mercury feels like a private bank that happens to be a software company: quiet, precise and slightly nocturnal. The homepage lives in a deep ink-violet night (`{colors.night}` — #171721). Headlines are pale lavender-white (`{colors.on-dark}`), cards sit one shade lifted (`{colors.night-raised}`), and product imagery glows softly out of the dark. Move to the product and pricing pages and the whole system flips to day: a near-white canvas (`{colors.canvas}`), deep plum-ink text (`{colors.ink}`) and pale lavender feature cards (`{colors.lavender}`). The nav bar and footer stay in the night colour on every page, so each light page is bracketed in dark.
+Notion looks like a well-organized desk in good daylight. The dominant surface is not pure white but a warm, paper-soft off-white — `{colors.canvas-soft}` (#f6f5f4) — that takes the clinical edge off the screen and makes long pages feel like a document rather than an app. Type is set in `NotionInter` (a tuned Inter) in near-black `{colors.ink}` at large, tightly-tracked weights, so headlines read as confident statements with very little letter-spacing slack at display sizes (`{typography.display-1}` pulls −2.125px of tracking at 64px). The whole system whispers in greys and blacks, then says exactly one thing in colour: a single, dependable blue, `{colors.primary}` (#0075de), reserved almost entirely for the primary call-to-action and inline links.
 
-One colour carries the actions in both worlds: Mercury Indigo (`{colors.primary}` — #5266eb). It fills the "Open account" pill in the nav and hero, the annual-pricing toggle, and the brand accent in plan names. Everything else that is clickable is softer: translucent secondary pills tinted with lavender-grey, periwinkle or a 10% wash of the indigo, all with generous 40px capsule corners. The effect is calm and confident, with one saturated button and everything around it whispering.
+Against that quiet chrome, Notion lets a **playful multi-colour sticker palette** carry all of the brand's personality — purple, pink, orange, teal, green and sky-blue appear as small illustrated blocks, app-icon stickers, and category dots scattered through the marketing pages. These colours never structure the layout or paint a CTA; they decorate. The discipline is deliberate: the interface stays monochrome-plus-blue so the content (and the cheerful illustrations) can breathe. The one exception to the bright daylight is the homepage hero, which inverts into a deep indigo "night" band (`{colors.secondary}`) with white type and glowing sticker constellations — a single dark island in an otherwise light document.
 
-Typography is Mercury's own custom family: arcadiaDisplay for headlines and arcadia for text, set at unusually light variable weights (360 for body copy, 420 for UI, 480 for headlines). Nothing on the page is bold in the usual sense. Headlines get presence from size and a hair of extra tracking, not weight.
+Surfaces are defined by hairlines and the faintest layered shadows rather than heavy elevation. Cards round at a friendly 12px (`{rounded.lg}`), the marketing CTAs are fully-pill-shaped (`{rounded.full}`), and utility buttons round at a tighter 8px (`{rounded.md}`). Nothing is loud; the brand's character comes from restraint plus one well-placed splash of joy.
 
 **Key Characteristics:**
-- Two native surface worlds: a dark homepage (`{colors.night}` / `{colors.night-raised}`) and light product pages (`{colors.canvas}` / `{colors.lavender}`), both framed by the night nav and footer.
-- A single saturated action colour, `{colors.primary}`, on a `{rounded.xl}` pill.
-- Secondary actions as translucent capsules (`{rounded.pill}`) rather than outlines or grey buttons.
-- Custom arcadia / arcadiaDisplay type at light variable weights (360–480).
-- Softly rounded cards (`{rounded.md}`) with generous `{spacing.xxl}` padding and no shadows.
-- Page rhythm: night nav → dark or light hero → alternating card grids → centered quote → closing CTA → night footer.
+- Warm paper-soft canvas `{colors.canvas-soft}` over pure white, never clinical
+- Near-black `{colors.ink}` `NotionInter` type with tight negative tracking at display sizes (`{typography.display-1}`)
+- Exactly one structural accent — Notion blue `{colors.primary}` — reserved for CTAs and links
+- A decorative-only multi-colour sticker palette (`{colors.accent-purple}`, `{colors.accent-pink}`, `{colors.accent-orange}`, `{colors.accent-teal}`, `{colors.accent-green}`, `{colors.accent-sky}`) that adds personality without ever painting structure
+- Pill-shaped marketing CTAs (`{rounded.full}`) contrasted with 8px utility buttons (`{rounded.md}`)
+- Elevation by hairline + barely-there layered shadow, not heavy drop-shadows
+- A single dark indigo hero "night" band (`{colors.secondary}`) inverting the otherwise daylight page rhythm
 
 ## Colors
 
-> Source pages analysed: the homepage, the pricing page, and the business-banking product page.
+> Source pages analysed: the Notion home page plus Pricing, Enterprise, Product (AI), Product (Agents), and Startups. Every secondary page resolved to the same core palette — Notion runs one tightly-scoped system across the marketing site.
 
 ### Brand & Accent
-- **Mercury Indigo** (`{colors.primary}` — #5266eb): "Open account" pills, the annual-pricing toggle, the brand accent in plan names ("Plus", "Pro"), and the 10% tint behind light-world secondary pills.
-- **On Primary** (`{colors.on-primary}` — #ffffff): labels on indigo.
-- **Periwinkle** (`{colors.periwinkle}` — #9cb4e8): used at 20% opacity as the fill of the "Contact sales" pill on dark sections.
+- **Notion Blue** (`{colors.primary}` — #0075de): the single structural accent. Primary CTA fill ("Get Notion free"), inline link colour, active-tab and focus signal. This is the only colour that ever paints an action.
+- **Pressed Blue** (`{colors.primary-active}` — #005bab): the darker press state of the primary CTA.
+- **Deep Indigo** (`{colors.secondary}` — #213183): the dark hero "night" band background and its sticker-constellation field; a deep brand-blue used for full-bleed inverted sections.
+
+The remaining colours form Notion's **decorative sticker palette** — they appear only as illustrated blocks, app stickers and category dots, never as CTAs or structural fills:
+- **Sticker Sky** (`{colors.accent-sky}` — #62aef0)
+- **Sticker Purple** (`{colors.accent-purple}` — #d6b6f6) / **Deep Purple** (`{colors.accent-purple-deep}` — #391c57)
+- **Sticker Pink** (`{colors.accent-pink}` — #ff64c8)
+- **Sticker Orange** (`{colors.accent-orange}` — #dd5b00) / **Deep Orange** (`{colors.accent-orange-deep}` — #793400)
+- **Sticker Teal** (`{colors.accent-teal}` — #2a9d99)
+- **Sticker Green** (`{colors.accent-green}` — #1aae39)
+- **Sticker Brown** (`{colors.accent-brown}` — #523410)
 
 ### Surface
-- **Canvas** (`{colors.canvas}` — #fbfcfd): light page background for the product and pricing pages.
-- **Surface** (`{colors.surface}` — #ffffff): tier columns inside the pricing card, and the email-capture field.
-- **Surface Tint** (`{colors.surface-tint}` — #fbfbff): the pricing comparison card wrapper, a whisper cooler than white.
-- **Lavender** (`{colors.lavender}` — #edecfb): feature and product cards on light pages.
-- **Night** (`{colors.night}` — #171721): nav bar, homepage canvas, and footer on every page.
-- **Night Raised** (`{colors.night-raised}` — #1e1e2a): feature and spotlight cards on the dark homepage.
+- **White** (`{colors.canvas}` / `{colors.surface}` — #ffffff): card and panel surfaces, nav bar, form fields.
+- **Warm Paper** (`{colors.canvas-soft}` — #f6f5f4): the signature page canvas and the footer band — a warm off-white that gives the whole site its document-like calm.
+- **Hairline** (`{colors.hairline}` — #e6e6e6): 1px card borders and dividers, a black-at-10%-on-white blend kept solid for token reuse.
 
 ### Text
-- **Ink** (`{colors.ink}` — #28253b): headlines and body on light pages.
-- **Ink Secondary** (`{colors.ink-secondary}` — #554e7b): descriptions, captions and eyebrows on light pages.
-- **On Dark** (`{colors.on-dark}` — #ededf3): headlines and primary text on night surfaces.
-- **Fog** (`{colors.fog}` — #c3c3cc): secondary text on night surfaces, nav eyebrows, and 1px rules between accordion rows on light pages.
-- **Slate** (`{colors.slate}` — #70707d): 1px dividers between list rows on the dark homepage.
+- **Ink** (`{colors.ink}` — #000000): primary headings and body text (rendered at ~95% alpha for a soft true-black).
+- **Warm Charcoal** (`{colors.ink-secondary}` — #31302e): secondary body copy and footer text.
+- **Stone** (`{colors.ink-muted}` — #615d59): supporting / muted copy.
+- **Ash** (`{colors.ink-faint}` — #a39e98): captions, metadata, placeholder text.
+
+### Semantic
+Notion's marketing surfaces do not expose a dedicated error/success palette in the system chrome — status is carried by the sticker palette (e.g. `{colors.accent-green}` for affirmative ticks) rather than a separate semantic ramp.
 
 ## Typography
 
 ### Font Family
-- **arcadiaDisplay**: Mercury's custom display face for headlines, stats and large quotes, at weight 480 with slight positive tracking at card sizes.
-- **arcadia**: the matching text face for body copy (360–400), UI labels and buttons (420), and small uppercase eyebrows (500).
+The entire system is set in **`NotionInter`** — Notion's tuned cut of Inter — with a fallback stack of `Inter, -apple-system, system-ui, "Segoe UI", Helvetica, Arial`. A single family carries everything from 64px display headlines to 12px eyebrows; there is no serif, no monospace display face. OpenType `lnum` (lining numerals) and `locl` features are enabled on body and heading roles.
 
 ### Hierarchy
 
-| Token | Family | Size | Weight | Line Height | Letter Spacing | Use |
-|---|---|---|---|---|---|---|
-| `{typography.stat}` | arcadiaDisplay | 60px | 480 | 1.1 | 0 | Large stat numerals ("300K+") |
-| `{typography.display}` | arcadiaDisplay | 52px | 480 | 1.1 | 0 | Hero headlines |
-| `{typography.heading-1}` | arcadiaDisplay | 42px | 480 | 1.15 | 0.42px | Section headlines |
-| `{typography.heading-2}` | arcadiaDisplay | 28px | 480 | 1.2 | 0.42px | Card titles, plan names |
-| `{typography.lead}` | arcadiaDisplay | 24px | 480 | 1.2 | 0.48px | Lead statements, pull quotes |
-| `{typography.body-lg}` | arcadia | 18px | 360 | 1.35 | 0 | Card descriptions, intro copy |
-| `{typography.body}` | arcadia | 16px | 400 | 1.4 | 0 | Default body copy |
-| `{typography.ui}` | arcadia | 16px | 420 | 1 | 0 | Buttons, nav, inputs |
-| `{typography.ui-sm}` | arcadia | 14px | 420 | 1 | 0.07px | Small pills, accordion labels |
-| `{typography.eyebrow}` | arcadia | 14px | 500 | 1 | 0.28px | Uppercase eyebrows ("COMPARE PLANS") |
-| `{typography.legal}` | arcadia | 12px | 400 | 1.4 | 0.24px | Disclaimers, footer fine print |
+| Token | Size | Weight | Line Height | Letter Spacing | Use |
+|---|---|---|---|---|---|
+| `{typography.display-1}` | 64px | 700 | 1.0 | −2.125px | Hero headline ("Meet the night shift") |
+| `{typography.display-2}` | 54px | 700 | 1.04 | −1.875px | Large section headlines |
+| `{typography.heading-1}` | 40px | 700 | 1.1 | −1px | Section headlines ("Plans and features") |
+| `{typography.heading-2}` | 26px | 700 | 1.23 | −0.625px | Sub-section headings |
+| `{typography.heading-3}` | 22px | 700 | 1.27 | −0.25px | Card titles |
+| `{typography.title}` | 20px | 600 | 1.4 | −0.125px | Feature titles, callouts |
+| `{typography.body-md}` | 16px | 400 | 1.5 | 0 | Default body copy |
+| `{typography.body-sm}` | 15px | 400 | 1.33 | 0 | Dense body, table rows, nav |
+| `{typography.button}` | 16px | 500 | 1.5 | 0 | Button labels |
+| `{typography.caption}` | 14px | 400 | 1.43 | 0 | Captions, footnotes |
+| `{typography.eyebrow}` | 12px | 600 | 1.33 | +0.125px | Pill badges, small labels |
 
 ### Principles
-- Light weights everywhere: body at 360, UI at 420, headlines at 480. Hierarchy comes from size and colour.
-- Headlines get a touch of positive tracking at card sizes instead of the usual negative tightening.
-- Uppercase is reserved for small eyebrows.
+Notion's type voice is **tight, heavy, and quiet-confident**. Headlines lean on weight 700 and aggressive negative tracking (more negative the larger the size) so display copy feels set, not stretched. Body copy stays at a comfortable 1.5 line-height for document readability. The contrast between a heavy 700 headline and a calm 400 body is the primary expressive lever — there is no decorative typography, only a clear hierarchy.
 
 ### Note on Font Substitutes
-arcadia and arcadiaDisplay are proprietary. Inter (variable, used at 350–480) is the closest open-source match for both. Keep the light weights, and add about 0.01em of tracking at display sizes to match arcadiaDisplay's open fit.
+`NotionInter` is a proprietary tuning of the open-source **Inter** family — substitute Inter directly. To approximate Notion's display tightness, apply the negative letter-spacing values in the table above explicitly (Inter at default tracking will read looser than `NotionInter`).
 
 ## Layout
 
 ### Spacing System
 - **Base unit**: 8px.
-- **Tokens**: `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 20px · `{spacing.xl}` 24px · `{spacing.xxl}` 32px · `{spacing.huge}` 40px · `{spacing.section}` 80px · `{spacing.section-lg}` 128px.
-- Cards pad `{spacing.xxl}` and pills pad 20px horizontally. Sections are separated by `{spacing.section}` to `{spacing.section-lg}` of vertical space on every page.
+- **Tokens (front matter)**: `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 24px · `{spacing.xl}` 28px · `{spacing.xxl}` 32px.
+- Card interior padding lands around `{spacing.lg}` (24px); utility buttons use a tight 4px/14px; form fields pad at `{spacing.xxs}`-scale 6px. Section gaps stack the larger steps.
 
 ### Grid & Container
-- Content is centered in a column of roughly 1100–1200px. Headlines are narrower (~600px) and centered.
-- Feature cards run in 2- and 3-up grids. The pricing card is a 3-column comparison table about 900px wide.
-- Split sections pair a text column with a product mockup.
+Content is centred in a wide max-width column (~1080–1300px on desktop per the extracted breakpoints) with generous outer gutters. Feature sections alternate between full-width text blocks and 2-up / 3-up card grids; the pricing page widens to a 4-column plan table. The dark hero spans full-bleed edge to edge while body sections respect the centred container.
 
 ### Whitespace Philosophy
-Generous vertical space and centered headlines give every section a calm, gallery-like pace. Cards rely on fill colour rather than borders to separate from the canvas.
+Whitespace is the primary grouping device. Sections are separated by large vertical gaps rather than rules, and cards sit on the warm canvas with quiet hairlines instead of heavy frames. The effect is document-like: airy, scannable, and never crowded.
 
 ### Responsive Strategy
 
 #### Breakpoints
 | Name | Width | Key Changes |
 |---|---|---|
-| Desktop | ≥ 1200px | Full nav with dropdown pills; 3-up grids; split sections side by side |
-| Laptop | 1024–1199px | Narrower container; headlines scale down fluidly |
-| Tablet | 768–1023px | Grids go 2-up; split sections stack |
-| Mobile | < 768px | Nav collapses to a menu; single-column cards; the pricing table becomes stacked tiers |
+| Wide | 1440px+ | Full multi-column grids, widest container |
+| Desktop | 1080–1300px | Standard centred container, 3-up card grids |
+| Tablet | 768–840px | Grids collapse to 2-up, nav begins condensing |
+| Mobile | ≤600px | Single-column stacks, hamburger nav, full-width CTAs |
 
 #### Touch Targets
-Pills are 40px tall and the email capture is 46px. On touch devices, pad hit areas to 44px.
+Pill CTAs (`button-primary`, `button-secondary`) and utility buttons (`button-utility`) carry comfortable tap padding; aim for a 44×44px minimum hit area on mobile by preserving vertical padding even as labels shrink.
 
 #### Collapsing Strategy
-- Nav dropdown pills collapse into a menu. The "Open account" pill stays visible.
-- Card grids reflow 3 → 2 → 1 columns.
-- Headline sizes are fluid and scale with the viewport.
-- The email capture stacks the field above the button on narrow screens.
+The top nav condenses to a hamburger below the tablet breakpoint; multi-column card grids collapse to a single stacked column; the pricing plan table reflows from 4 side-by-side columns into stacked plan cards. Section padding tightens but the warm-canvas rhythm is preserved.
 
 #### Image Behavior
-Product mockups and illustrations sit inside rounded cards (`{rounded.md}`) or float on the canvas. Hero photography on the homepage is full-bleed and fades into the night canvas.
+Product screenshots and illustration tiles sit inside rounded `{rounded.lg}` frames and scale fluidly within their grid cell. Sticker illustrations are small fixed-scale decorative assets that re-flow but do not crop.
 
 ## Elevation & Depth
 
 | Level | Treatment | Use |
 |---|---|---|
-| 0 — Flat | No shadow; separated by fill colour | Canvas, cards, pills |
-| 1 — Soft stack | Very faint layered shadow (≈2–9% ink) | Pricing card and product mockups on light pages |
-| 2 — Glow | Photography and luminous illustrations on `{colors.night}` | Homepage hero and feature art |
+| 0 — Flat | Hairline border `{colors.hairline}`, no shadow | Default cards on the warm canvas |
+| 1 — Soft | Layered micro-shadow: `rgba(0,0,0,0.01) 0 0.175px 1.041px`, `0.02 0 0.8px 2.925px`, `0.027 0 2.025px 7.847px`, `0.04 0 4px 18px` | Raised feature cards, floating buttons |
+| 2 — Elevated | Deeper 5-stop stack ending in `rgba(0,0,0,0.05) 0 23px 52px` | Modals, popovers, the elevated white pill on the dark hero |
 
-Depth is almost entirely tonal: cards lift by one step of colour, not by shadow. The only shadows are hair-thin, low-opacity stacks under the pricing card and floating product mockups.
+Notion's elevation philosophy is **barely-there**: shadows are built from many near-transparent layers so surfaces feel gently lifted off the paper rather than dramatically dropped. Most cards rely on a hairline alone.
 
 ### Decorative Depth
-The dark homepage uses luminous, softly-lit 3D illustrations (glowing orbs, light trails, fingerprint patterns) that give the night canvas atmosphere without gradients in the UI chrome itself.
+The brand's real depth cue is **illustration**, not shadow. The dark indigo hero (`{colors.secondary}`) uses glowing sticker stickers and a starfield to create a sense of a lit night scene, and feature sections layer small colourful app-icon stickers over plain surfaces to add playful dimensionality. Colour-blocked illustration tiles (purple, pink, orange, teal headers on otherwise-white cards) provide visual rhythm.
 
 ## Shapes
 
@@ -444,79 +376,76 @@ The dark homepage uses luminous, softly-lit 3D illustrations (glowing orbs, ligh
 
 | Token | Value | Use |
 |---|---|---|
-| `{rounded.none}` | 0px | Nav, footer, table columns |
-| `{rounded.xs}` | 4px | Small tags, checkboxes |
-| `{rounded.sm}` | 8px | Images, small controls, selects |
-| `{rounded.md}` | 12px | Feature cards, pricing card, regions |
-| `{rounded.lg}` | 16px | Larger panels and media frames |
-| `{rounded.xl}` | 32px | Primary "Open account" pill, input left edge |
-| `{rounded.pill}` | 40px | Secondary and nav pills |
-| `{rounded.full}` | 9999px | Round icon buttons, toggles, email capture |
+| `{rounded.xs}` | 4px | Form fields, small tags, inline chips |
+| `{rounded.sm}` | 5px | Menu items, list rows, status pills |
+| `{rounded.md}` | 8px | Utility / nav buttons, smaller cards |
+| `{rounded.lg}` | 12px | Feature cards, illustration frames, content tiles |
+| `{rounded.xl}` | 16px | Large containers, image wells |
+| `{rounded.full}` | 9999px | Marketing pill CTAs, badges, circular icon buttons |
 
 ### Photography Geometry
-Product screenshots and illustrations sit in `{rounded.md}` or `{rounded.lg}` frames. Hero photography is full-bleed. Customer logos appear as a flat monochrome strip.
+Product screenshots are framed in rounded `{rounded.lg}` / `{rounded.xl}` wells, typically full-bleed within their container with a hairline edge. Illustration tiles use colour-blocked header bands above white card bodies. Avatars and app-icon stickers are small, sometimes fully circular (`{rounded.full}`). There is no heavy art-direction crop — images scale within their rounded frame.
 
 ## Components
 
-> Only Default states are documented. Variants live as separate `components:` entries.
+> **No hover states documented.** Every spec below documents Default and Active/Pressed states only. Variants live as separate `components:` front-matter entries and are described in their own sub-blocks.
 
 ### Navigation
 
-**`nav-bar`**: a 72px `{colors.night}` bar on every page, with 16px × 32px padding. It holds the wordmark on the left, dropdown `nav-link` pills in the centre, and "Log in" plus a `button-primary` on the right.
-
-**`nav-link`**: transparent 40px pills (`{rounded.pill}`, 0 × 20px padding) in `{colors.on-dark}` `{typography.ui}` with small chevrons.
+**`nav-bar`** — Top navigation
+- White surface `{colors.canvas}`, `{colors.ink}` link text at `{typography.body-sm}`, padding `{spacing.md}`. Sits as a slim sticky bar; left wordmark, centre product/solutions menu links, right "Log in" text link plus a `button-utility` "Get Notion free" CTA. Condenses to a hamburger below the tablet breakpoint.
 
 ### Buttons
 
-**`button-primary`**: a `{colors.primary}` pill with a `{colors.on-primary}` `{typography.ui}` label, `{rounded.xl}` corners, 0 × 20px padding and 40px height. Used for "Open account".
+**`button-primary`** — Primary CTA ("Get Notion free")
+- Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.button}`, fully pill-shaped `{rounded.full}`. The single blue action on any page.
+- Pressed state lives in `button-primary-pressed` (background `{colors.primary-active}`); marketing buttons also apply a brief `scale(0.9)` press transform.
 
-**`button-glass-dark`**: a translucent lavender-grey pill (20% fill, with a 1px border at 36%) holding an `{colors.on-dark}` label. Used on the dark hero ("Launch demo").
+**`button-primary-pressed`**
+- Background `{colors.primary-active}`, text `{colors.on-primary}` — the depressed state of the primary CTA.
 
-**`button-tint-dark`**: a periwinkle pill at 20% opacity with an `{colors.on-dark}` label. Used for "Contact sales" on dark sections.
+**`button-secondary`** — Secondary CTA ("Request a demo")
+- White surface `{colors.surface}`, text `{colors.ink}`, type `{typography.button}`, pill `{rounded.full}`, carried by the soft Level-1 shadow. Pairs beside `button-primary` in the hero.
 
-**`button-tint-light`**: an indigo pill at 10% opacity with an `{colors.ink}` label. Used for "Explore demo" and the in-card "Open account" on light pages.
+**`button-utility`** — Nav / plan-select button
+- White surface `{colors.surface}`, text `{colors.ink}`, type `{typography.button}`, tighter `{rounded.md}` (8px), padding `4px 14px`, 1px `{colors.hairline}` border. Used for the nav CTA and pricing plan-select buttons where the marketing pill would be too large.
 
-**`button-outline-light`**: a grey-violet pill at 10% opacity with a 1px border at 22% and an `{colors.ink}` label. Used for "Contact sales" on light heroes.
-
-**`button-small`**: a 32px-tall version of `button-tint-light` in `{typography.ui-sm}` with 0 × 16px padding ("Expand all").
-
-**`button-icon-round`**: circular icon controls (`{rounded.full}`) for play/pause and the "+" affordance on spotlight cards.
-
-### Inputs & Forms
-
-**`text-input`**: an email field with `{typography.ui}` text, 20px left padding, 46px height, and `{rounded.xl}` on the left edge only, so it fuses to the button beside it.
-
-**`email-capture`**: the hero sign-up capsule, a `text-input` joined to a `button-primary` inside one rounded-full shell.
-
-**`toggle-switch`**: a `{colors.primary}` pill switch beside an `{colors.ink-secondary}` `{typography.ui}` label ("Annual Pricing (15% off)").
+**`button-icon-circular`** — Carousel / media control
+- Circular `{rounded.full}` control with a translucent `rgba(0,0,0,0.05)` fill and `{colors.on-primary}` glyph, used for slide and play/pause controls; applies a `scale(0.9)` press transform.
 
 ### Cards & Containers
 
-**`feature-card-dark`**: `{colors.night-raised}` fill, `{rounded.md}` corners, `{spacing.xxl}` padding, a `{typography.heading-2}` title in `{colors.on-dark}` and `{colors.fog}` body copy. Used for homepage spotlight and feature cards.
+**`feature-card`** — Content / feature card
+- White surface `{colors.surface}`, `{colors.ink}` text, `{typography.body-md}`, rounded `{rounded.lg}` (12px), padding `{spacing.lg}` (24px). The workhorse marketing card; often topped by a colour-blocked illustration band from the sticker palette. Default elevation is flat (hairline only).
 
-**`feature-card-light`**: the same shape on `{colors.lavender}`, with `{colors.ink}` titles and `{colors.ink-secondary}` `{typography.body-lg}` descriptions. Used for product-platform cards.
+**`feature-card-elevated`** — Raised feature card
+- Same chrome as `feature-card` with the soft Level-1 layered shadow for cards that float above the canvas (testimonials, floating product panels).
 
-**`pricing-card`**: a `{colors.surface-tint}` wrapper with `{rounded.md}` corners and a very faint shadow. It holds a header row with a `eyebrow-label` and `toggle-switch`, then three `pricing-tier-column`s.
+**`pricing-plan-card`** — Pricing plan column
+- White surface `{colors.surface}`, `{colors.ink}` text, `{typography.body-sm}`, rounded `{rounded.md}` (8px), padding `{spacing.lg}`. A bordered column listing a plan's price and feature checklist, with a `button-utility` select action.
 
-**`pricing-tier-column`**: a white column with the plan name in `{typography.heading-2}` (the plan suffix in `{colors.primary}`), the price, a `{colors.ink-secondary}` description, a `button-tint-light` or `button-primary`, and an icon-led feature list.
+**`pricing-plan-card-featured`** — Highlighted plan column
+- Warm `{colors.canvas-soft}` fill to lift the recommended tier off the white siblings, same `{rounded.md}` shape and padding. Distinguished by surface tint rather than a coloured border.
 
-**`accordion-row`**: a full-width row with a leading icon, a `{typography.ui-sm}` label, a trailing chevron, 10px vertical padding and a 1px `{colors.fog}` rule between rows. Used for plan comparison and FAQs.
+### Inputs & Forms
+
+**`text-input`** — Text / number field
+- White surface `{colors.surface}`, `{colors.ink}` text, `{typography.body-sm}`, 1px `rgb(221,221,221)` border, rounded `{rounded.xs}` (4px), padding `6px`. Square-ish corners deliberately tighter than the pill CTAs. Focus adds the soft Level-1 shadow.
 
 ### Signature Components
 
-**`eyebrow-label`**: uppercase `{typography.eyebrow}` in `{colors.ink-secondary}` on light pages and `{colors.fog}` on dark ("COMPARE PLANS").
+**`hero-band`** — Dark "night" hero
+- Full-bleed deep indigo `{colors.secondary}` band carrying `{typography.display-1}` white headline, sticker-constellation field, and a `button-primary` + `button-secondary` CTA pair. The single inverted dark island in an otherwise daylight page.
 
-**`stat-block`**: a `{typography.stat}` numeral in `{colors.on-dark}` over a small `{colors.fog}` caption, set in a row of four on the homepage.
+**`badge-pill`** — Eyebrow / category pill
+- White surface `{colors.surface}`, `{colors.primary}` text, `{typography.eyebrow}` (12px / 600), fully pill `{rounded.full}`, padding `4px 8px`. Small labels such as the pricing "Essential for staying organized" eyebrow and category tags.
 
-**`quote-block`**: a centered pull quote in `{typography.lead}` with attribution below in `{typography.body}`.
-
-**`logo-strip`**: a single row of monochrome customer wordmarks on the night canvas.
-
-**`site-footer`**: a `{colors.night}` band with multi-column link lists in `{colors.fog}`, column heads in `{colors.on-dark}`, and a long block of `{typography.legal}` disclaimers.
+**`footer`** — Site footer
+- Warm `{colors.canvas-soft}` band, `{colors.ink-secondary}` link text at `{typography.caption}`, padding `{spacing.xxl}`. Multi-column link directory closing every page.
 
 ### Examples (illustrative)
 
-> Auto-derived kit-mirror demonstration surfaces (`scripts/derive-examples-block.mjs`). Each `ex-*` entry references brand-native primitives so downstream consumers (`/preview-design`, `/generate-kit`) re-skin the same 10 surfaces consistently.
+> Kit-mirror demonstration surfaces. Each `ex-*` entry references brand-native primitives so downstream consumers (`/preview-design`, `/generate-kit`) re-skin the same 10 surfaces consistently.
 
 **`ex-pricing-tier`** — Default Pricing tier card. Re-uses feature-card chrome with brand canvas-soft surface.
 - Properties: `backgroundColor`, `textColor`, `borderColor`, `rounded`, `padding`
@@ -552,17 +481,32 @@ Product screenshots and illustrations sit in `{rounded.md}` or `{rounded.lg}` fr
 ## Do's and Don'ts
 
 ### Do
-- Use `{colors.primary}` for the single most important action on a view, usually "Open account".
-- Make secondary actions translucent pills (`{rounded.pill}`): lavender-grey or periwinkle on dark, indigo or grey-violet tints on light.
-- Frame light pages with the `{colors.night}` nav and footer.
-- Keep type light: `{typography.body-lg}` at 360, UI at 420, headlines at 480.
-- Separate cards from the canvas with fill (`{colors.lavender}`, `{colors.night-raised}`) rather than borders or heavy shadows.
-- Center section headlines and give sections `{spacing.section}` or more of vertical space.
+- Reserve `{colors.primary}` for the primary action, inline links, and the active/focus signal — nothing decorative.
+- Keep the page on the warm `{colors.canvas-soft}` canvas; use pure white `{colors.surface}` for cards and fields to create gentle figure/ground.
+- Let the sticker palette (`{colors.accent-pink}`, `{colors.accent-teal}`, `{colors.accent-orange}`, …) live only in illustrations, icon tiles and category dots.
+- Set headlines in heavy `{typography.display-1}`/`{typography.heading-1}` with their negative tracking applied explicitly.
+- Use pill `{rounded.full}` for marketing CTAs and tighter `{rounded.md}` for nav/utility buttons — the contrast is intentional.
+- Define surfaces with `{colors.hairline}` and the barely-there Level-1 shadow rather than heavy drop-shadows.
+- Reserve the deep indigo `{colors.secondary}` "night" treatment for a single hero moment, not repeated bands.
 
 ### Don't
-- Don't use more than one solid `{colors.primary}` button in a group. Everything else stays translucent.
-- Don't set text in heavy bold weights. The brand never goes above 500.
-- Don't use hard outlined buttons or square corners on actions.
-- Don't put light-world ink (`{colors.ink}`) on night surfaces or `{colors.on-dark}` on the light canvas.
-- Don't add strong drop shadows. Elevation is tonal.
-- Don't introduce status greens or oranges into the chrome. They belong to product mockups, not the interface.
+- Don't paint a CTA or structural fill in any sticker-palette colour — those are decoration only.
+- Don't introduce a second structural accent alongside `{colors.primary}`.
+- Don't put pill `{rounded.full}` radii on form fields — inputs stay tight at `{rounded.xs}` (4px).
+- Don't drop heavy shadows; Notion's elevation is many near-transparent layers, never a hard cast.
+- Don't set body copy in a heavy weight — keep 400 for readability and let weight 700 belong to headlines.
+- Don't place type on pure clinical white for full pages; the warm `{colors.canvas-soft}` is core to the brand calm.
+
+## EKS 업무 화면 적용 규칙 (2026-10-19)
+
+이 문서를 유일한 디자인 기준으로 사용한다. 아래 규칙은 위 브랜드 원칙을 인증 업무 화면에 적용하는 사용자 확정 사항이다. 기존 라이트/다크 선택 및 별도 테마 정책은 폐지한다. 마케팅 예시의 다크 hero, 대형 display, 장식 팔레트를 업무 화면에 새로 추가하지 않는다.
+
+- **단일 밝은 스타일:** 바탕 `#F6F5F4`, 패널·입력 `#FFFFFF`, 본문 `#000000`, 보조 설명 `#615D59`, 주요 행동 `#0075DE`, 눌림 `#005BAB`. 상태는 중립 배경과 아이콘·명칭으로 구분한다. 예전 브라우저 테마 설정은 읽거나 삭제하지 않는다.
+- **작업 폭:** 일반 화면·홈·개별 편집 최대 1280px, 관리 목록·시스템 운영·Excel 표 작업 최대 1760px. 역할별 홈 구성, 검색·필터·페이지, 목록 밀도 40/48px는 유지한다. 큰 표만 내부 가로 스크롤을 사용한다.
+- **글꼴·위계:** Inter 대체 글꼴과 한글 Pretendard를 사용한다. 제목 700(40/26/22px), 본문 400(16px), 관리 표 15px, 버튼 500. 좁은 화면의 큰 제목은 32px까지 줄인다. 목록·탭 요약 이외의 긴 내용은 줄바꿈하여 전부 읽을 수 있어야 한다.
+- **형태·간격:** 입력 4px, 보조 버튼 8px, 패널 12px, 대화상자 16px. 주요 행동은 pill 형태를 사용한다. 4·8·12·16·24·28·32px 간격 체계를 기본으로 하고 표·문항·일정은 업무 밀도에 맞춰 조정한다. 아이콘과 라벨은 flex/grid 정렬을 사용한다.
+- **대비:** `ink-faint`는 의미 있는 작은 글자에 사용하지 않는다. 종이색 배경의 작은 링크는 `#005BAB`을 사용한다. `hairline`은 장식 구분선이고 입력·필수 조작 경계는 `#615D59`로 구분한다. 일반 글자 4.5:1, 큰 글자·필수 조작 경계 3:1 이상을 검증한다.
+- **접근성:** 모바일 주요 조작은 44px 이상이다. 오류 입력을 중앙으로 이동하여 고정 저장 영역에 가리지 않는다. 대화상자는 제목·초점·키보드 닫기, 탭은 `tablist/tab/tabpanel`·연결 ID·선택 상태·좌우/Home/End 이동을 제공한다.
+- **학습 항목:** 작은 번호·항목명 탭(14px, 데스크톱 36px, 72~180px)을 사용한다. 필수 여부는 탭에서 생략하고 본문 체크박스에서 설정한다. 긴 탭은 말줄임·전체 이름 툴팁·가로 스크롤로 처리한다.
+- **평가 편집:** 객관식→주관식→실기 유형 탭, 유형별 설정, 작은 문항 탭, 한 문항의 내용 편집을 연결된 패널로 구성한다. 바깥 유형 탭과 내부 문항 탭은 모양·배경·크기로 구분한다. 선택지는 정답 라디오·번호·여러 줄 내용·삭제를 한 행에 제공한다. 주관식 모범답안과 채점 기준은 나란히 두고 모바일에서는 쌓는다.
+- **구현:** `design-tokens.css`의 단일 팔레트, `style.css` 공통/업무 레이아웃, `course-editor.css` 문항 편집, `catalog.css` 일괄 관리 구조를 사용한다. 이전 테마 CSS/스크립트는 유지하지 않는다. Tabulator는 앱/표 범위 선택자로 스타일링하여 지연 로딩에도 같은 팔레트를 적용한다.

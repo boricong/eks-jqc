@@ -102,7 +102,7 @@ test('새 Lv1 생성 후 운영자 기준·배정, 종료 후 기존 학습자·
   await practicalOnly(page);
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   await page.getByLabel('항목명', { exact: true }).fill('독립 수행');
-  await page.getByLabel('판정 기준', { exact: true }).fill('가상 조건에서 수행');
+  await page.getByLabel('관찰·판정 기준', { exact: true }).fill('가상 조건에서 수행');
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '운영 종료', exact: true })).toBeVisible();
   const course = backend.store.snapshot().courses.find((c) => c.title === '신규 조직 실기')!;

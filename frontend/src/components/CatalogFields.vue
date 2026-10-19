@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import ObjectiveChoices from './ObjectiveChoices.vue';
 import CatalogFieldErrors from './CatalogFieldErrors.vue';
 import type { CatalogIssue } from '@eks/contracts';
 import type { CatalogRow, CatalogTable } from '@eks/contracts';
@@ -22,18 +23,37 @@ const kinds = computed({
   },
 });
 const content = computed(() => props.row as Record<string, string>);
-const choices = computed(() =>
-  Array.from(
-    {
-      length: Math.max(
-        4,
-        ...Object.keys(props.row)
-          .filter((k) => /^choice\d+$/.test(k))
-          .map((k) => Number(k.slice(6))),
-      ),
-    },
-    (_, i) => i + 1,
-  ),
+const choices = computed({
+  get: () =>
+    Array.from(
+      {
+        length: Math.max(
+          0,
+          ...Object.keys(props.row)
+            .filter((k) => /^choice\d+$/.test(k))
+            .map((k) => Number(k.slice(6))),
+        ),
+      },
+      (_, i) => String(props.row['choice' + (i + 1)] ?? ''),
+    ),
+  set: (values: string[]) => {
+    Object.keys(props.row)
+      .filter((k) => /^choice\d+$/.test(k))
+      .forEach((k) => delete props.row[k]);
+    values.forEach((v, i) => (props.row['choice' + (i + 1)] = v));
+    emit('change');
+  },
+});
+const correct = computed({
+  get: () =>
+    props.row.correct == null || props.row.correct === '' ? null : Number(props.row.correct) - 1,
+  set: (v: number | null) => {
+    props.row.correct = v == null ? null : v + 1;
+    emit('change');
+  },
+});
+const choiceErrors = computed(() =>
+  Object.fromEntries((props.issues || []).map((i) => [i.column, i.message])),
 );
 </script>
 <template>
@@ -128,12 +148,6 @@ const choices = computed(() =>
     ></template>
     <template v-if="table === 'objective' || table === 'subjective'">
       <p class="muted">정답·모범답안·채점 기준은 관리자와 지정 평가자가 확인하는 정보입니다.</p>
-      <label class="field"
-        >문항<textarea v-model="content.prompt" data-field="prompt" rows="4" /><CatalogFieldErrors
-          :issues="issues"
-          field="prompt"
-        />
-      </label>
       <div class="form-grid">
         <label v-if="table === 'objective'" class="field"
           >문항 종류<select v-model="row.category" data-field="category" aria-label="문항 종류">
@@ -148,35 +162,22 @@ const choices = computed(() =>
             min="1" /><CatalogFieldErrors :issues="issues" field="points"
         /></label>
       </div>
-      <template v-if="table === 'objective'"
-        ><div class="catalog-choices">
-          <label v-for="n in choices" :key="n" class="field"
-            >선택지 {{ n
-            }}<input v-model="row[`choice${n}`]" :data-field="`choice${n}`" /><CatalogFieldErrors
-              :issues="issues"
-              field="`choice${n}`"
-          /></label>
-        </div>
-        <button
-          class="text-link"
-          type="button"
-          :disabled="choices.length >= 50"
-          @click="
-            row[`choice${choices.length + 1}`] = '';
-            emit('change');
-          "
-        >
-          선택지 추가</button
-        ><label class="field"
-          >정답<select v-model.number="row.correct" data-field="correct" aria-label="정답">
-            <option :value="null">정답 선택</option>
-            <option v-for="n in choices" :key="n" :value="n">
-              {{ n }}. {{ row[`choice${n}`] || '선택지 입력 필요' }}
-            </option></select
-          ><CatalogFieldErrors :issues="issues" field="correct" /></label
-      ></template>
-      <template v-else
-        ><label class="field"
+      <label class="field"
+        >문항<textarea v-model="content.prompt" data-field="prompt" rows="4" /><CatalogFieldErrors
+          :issues="issues"
+          field="prompt"
+        />
+      </label>
+
+      <ObjectiveChoices
+        v-if="table === 'objective'"
+        v-model:choices="choices"
+        v-model:correct="correct"
+        :disabled="disabled"
+        :errors="choiceErrors"
+      />
+      <div v-else class="subjective-fields">
+        <label class="field"
           >모범답안<textarea
             v-model="content.modelAnswer"
             data-field="modelAnswer"
@@ -185,8 +186,9 @@ const choices = computed(() =>
           >채점 기준<textarea
             v-model="content.rubric"
             data-field="rubric"
-            rows="4" /><CatalogFieldErrors :issues="issues" field="rubric" /></label
-      ></template>
+            rows="4" /><CatalogFieldErrors :issues="issues" field="rubric"
+        /></label>
+      </div>
     </template>
     <template v-if="table === 'practical'"
       ><label class="field"

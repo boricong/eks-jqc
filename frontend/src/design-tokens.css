@@ -1,0 +1,42 @@
+/* Single source palette: docs/DESIGN.md — application mapping is documented there. */
+:root {
+  --canvas: #f6f5f4;
+  --surface: #ffffff;
+  --surface-tint: #f6f5f4;
+  --table-header: #f6f5f4;
+  --ink: #000000;
+  --ink-secondary: #615d59;
+  --primary: #0075de;
+  --primary-hover: #005bab;
+  --on-primary: #ffffff;
+  --link: #005bab;
+  --link-hover: #005bab;
+  --line: #e6e6e6;
+  --control-border: #615d59;
+  --tint: #f6f5f4;
+  --progress: #0075de;
+  --progress-track: #e6e6e6;
+  --success: #31302e;
+  --success-bg: #f6f5f4;
+  --warning: #31302e;
+  --warning-bg: #f6f5f4;
+  --danger: #31302e;
+  --danger-bg: #f6f5f4;
+  --certified: #31302e;
+  --certified-bg: #f6f5f4;
+  --info: #31302e;
+  --info-bg: #f6f5f4;
+  --toast-bg: #ffffff;
+  --toast-ink: #000000;
+  --toast-line: #e6e6e6;
+  --shadow-soft: rgba(0, 0, 0, 0.04);
+  --shadow: rgba(0, 0, 0, 0.05);
+  --backdrop: rgba(0, 0, 0, 0.4);
+  --selection: #e6e6e6;
+  --selection-border: #0075de;
+  --elevation-soft:
+    0 0.175px 1.041px rgba(0, 0, 0, 0.01), 0 0.8px 2.925px rgba(0, 0, 0, 0.02),
+    0 2.025px 7.847px rgba(0, 0, 0, 0.027), 0 4px 18px rgba(0, 0, 0, 0.04);
+  --elevation-modal:
+    0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03), 0 23px 52px rgba(0, 0, 0, 0.05);
+}

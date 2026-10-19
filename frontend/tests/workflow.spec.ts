@@ -52,12 +52,12 @@ test('15종 가져오기부터 김민서 계획·학습·세 유형 평가·박�
 
   await page.getByLabel('교육 종류', { exact: true }).selectOption('ojt');
   await page.getByLabel('학습 항목명', { exact: true }).fill('독립 수행 OJT');
-  await page.getByRole('button', { name: /^주관식/ }).click();
+  await page.getByRole('tab', { name: /^주관식/ }).click();
   await page.getByLabel('주관식 합격 기준 (%)', { exact: true }).fill('60');
-  await page.getByRole('button', { name: '항목 추가', exact: true }).click();
+  await page.getByRole('button', { name: '문항 추가', exact: true }).click();
   await page.getByLabel('문항', { exact: true }).fill('오류 원인과 조치 방법을 설명하세요.');
   await page.getByLabel('배점', { exact: true }).fill('10');
-  await page.getByLabel('채점 기준 · 관리자·지정 FT만 조회').fill('원인과 조치 각각 5점');
+  await page.getByLabel('채점 기준', { exact: true }).fill('원인과 조치 각각 5점');
   await page.getByLabel('모범답안 · 선택').fill('학습자에게 비공개인 모범답안');
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '새 버전', exact: true })).toBeVisible();
