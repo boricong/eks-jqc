@@ -14,6 +14,7 @@ import { seedOrganizations, validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
 export { demand, DomainError } from "./errors.ts";
 import { validateState } from "./integrity.ts";
+import { reconcileNotifications } from "./notifications.ts";
 
 export class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
@@ -74,7 +75,7 @@ export class FileStore<T extends Document> {
     } catch (e) {
       await this.release();
       throw new Error(
-        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 기존 v1/v2 데이터는 data:migrate, 손상 파일은 백업 복구 절차를 확인하세요. ${String(e)}`,
+        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 기존 v1/v2/v3 데이터는 data:migrate, 손상 파일은 백업 복구 절차를 확인하세요. ${String(e)}`,
       );
     }
     return this;
@@ -133,7 +134,7 @@ export class FileStore<T extends Document> {
     update: (s: T) => R,
     options: {
       preserveBackup?: boolean;
-      backupPurpose?: "course-delete";
+      backupPurpose?: "course-delete" | "photo-setup" | "catalog-import" | "catalog-publish";
       action?: string;
       lv1OrganizationId?: string;
     } = {},
@@ -192,21 +193,24 @@ export class FileStore<T extends Document> {
         throw e;
       }
       this.state = checked;
-      // Keep autosave backups bounded; manual and pre-restore copies are never pruned.
-      try {
-        const files = (await readdir(this.backupDir))
-          .filter((name) => /^state-\d+\.json$/.test(name))
-          .sort((a, b) => Number(b.slice(6, -5)) - Number(a.slice(6, -5)));
-        await Promise.all(
-          files.slice(20).map((name) => rm(path.join(this.backupDir, name))),
-        );
-      } catch {
-        process.emitWarning(
-          "자동 백업 정리를 완료하지 못했습니다. 현재 저장은 완료되었습니다.",
-        );
-      }
+      await this.pruneBackups();
       return structuredClone(response);
     });
+  }
+  protected async pruneBackups() {
+    // Keep autosave backups bounded; manual and pre-restore copies are never pruned.
+    try {
+      const files = (await readdir(this.backupDir))
+        .filter((name) => /^state-\d+\.json$/.test(name))
+        .sort((a, b) => Number(b.slice(6, -5)) - Number(a.slice(6, -5)));
+      await Promise.all(
+        files.slice(20).map((name) => rm(path.join(this.backupDir, name))),
+      );
+    } catch {
+      process.emitWarning(
+        "자동 백업 정리를 완료하지 못했습니다. 현재 저장은 완료되었습니다.",
+      );
+    }
   }
   async backup() {
     return this.enqueue(async () => {
@@ -267,6 +271,35 @@ export class FileStore<T extends Document> {
 }
 
 export class JsonStore extends FileStore<State> {
+  async refreshNotifications(at = new Date().toISOString()) {
+    return this.enqueue(async () => {
+      demand(!this.closed, 503, "저장소가 닫혔습니다.");
+      const next = structuredClone(this.state);
+      if (!reconcileNotifications(next, at)) return;
+      next.revision++;
+      const checked = this.validate(next);
+      await mkdir(this.backupDir, { recursive: true });
+      await this.writeAtomic(
+        path.join(this.backupDir, `state-${this.state.revision}.json`),
+        this.state,
+      );
+      await this.beforeReplace?.();
+      try {
+        await this.writeAtomic(this.file, checked);
+      } catch (error) {
+        try {
+          this.state = this.validate(
+            JSON.parse(await readFile(this.file, "utf8")),
+          );
+        } catch {
+          this.closed = true;
+        }
+        throw error;
+      }
+      this.state = checked;
+      await this.pruneBackups();
+    });
+  }
   readonly organizations: FileStore<OrganizationDocument>;
   constructor(
     file: string,
@@ -349,7 +382,7 @@ export class JsonStore extends FileStore<State> {
     let orgLoaded = false;
     try {
       const raw = JSON.parse(await readFile(this.file, "utf8"));
-      if (raw.schemaVersion === 1 || raw.schemaVersion === 2) {
+      if ([1, 2, 3, 4].includes(raw.schemaVersion)) {
         await mkdir(this.backupDir, { recursive: true });
         await this.writeAtomic(
           path.join(
@@ -372,7 +405,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       const next = transform(raw, this.organizations.snapshot());
-      if (raw.schemaVersion === 3) return;
+      if (raw.schemaVersion === 5) return;
       await this.writeAtomic(this.file, this.validate(next));
     } finally {
       if (orgLoaded) await this.organizations.close();

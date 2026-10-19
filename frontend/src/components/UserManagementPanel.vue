@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import { roleLabels, type Role, type UserView, type OrganizationView } from '@eks/contracts';
 import OrganizationSelect from './OrganizationSelect.vue';
+import AppDialog from './AppDialog.vue';
+import ListControls from './ListControls.vue';
+import { useListView } from '../composables/useListView';
 import { useRoute } from 'vue-router';
 const route = useRoute();
 const store = useDemo();
@@ -30,6 +33,9 @@ const listed = computed(() =>
         .includes(query.value.toLowerCase()),
   ),
 );
+const list=useListView(listed,'users',user=>user.name);
+try {const preferences=JSON.parse(localStorage.getItem('eks-users-filter')||'{}');query.value=preferences.query||'';orgFilter.value=preferences.organization||'';}catch{}
+watch([query,orgFilter],()=>{list.page=1;localStorage.setItem('eks-users-filter',JSON.stringify({query:query.value,organization:orgFilter.value}));});
 async function load() {
   try {
     [users.value, doc.value] = await Promise.all([
@@ -100,8 +106,9 @@ onMounted(async () => {
     </div>
   </div>
   <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-  <section v-if="editing && doc" class="panel editor-panel user-editor">
-    <h2>{{ selected ? `${selected.name} 정보 수정` : '사용자 추가' }}</h2>
+  <AppDialog :open="editing && !!doc" :title="selected ? `${selected.name} 정보 수정` : '사용자 추가'" class="user-drawer" @update:open="editing=false">
+  <section v-if="editing && doc" class="user-editor">
+    <p v-if="selected" class="muted">{{selected.organizationPath.map(p=>p.name).join(' › ')}}</p>
     <form @submit.prevent="save">
       <label class="field"
         ><span>이름</span><input v-model="form.name" required maxlength="100" :disabled="busy"
@@ -135,6 +142,7 @@ onMounted(async () => {
       </div>
     </form>
   </section>
+  </AppDialog>
   <div class="list-toolbar system-filters">
     <label class="field"
       ><span>사용자 검색</span><input v-model="query" placeholder="이름 또는 조직 경로"
@@ -149,7 +157,8 @@ onMounted(async () => {
       </select></label
     >
   </div>
-  <div class="table-wrap">
+  <ListControls :count="list.count" :pages="list.pages" v-model:page="list.page" v-model:size="list.size" v-model:density="list.density" v-model:sort="list.sort"/>
+  <div class="table-wrap" :data-density="list.density">
     <table>
       <thead>
         <tr>
@@ -160,11 +169,11 @@ onMounted(async () => {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="user in listed" :key="user.id">
+        <tr v-for="user in list.rows" :key="user.id">
           <td>{{ user.name }}</td>
           <td>{{ user.roles.map((r) => labels[r]).join(' · ') }}</td>
-          <td class="organization-path">
-            {{ user.organizationPath.map((p) => p.name).join(' › ')
+          <td class="organization-path" :title="user.organizationPath.map(p=>p.name).join(' › ')">
+            {{ [user.organizationPath[0]?.name.split('(')[0],...(user.organizationPath.length>1?[user.organizationPath.at(-1)?.name]:[])].join(' › ')
             }}<span v-if="!user.organizationActive" class="small-label"> · 사용 중지 조직</span>
           </td>
           <td>

@@ -1,0 +1,98 @@
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from 'vue';
+import { learningTypeLabels, type Course } from '@eks/contracts';
+
+const props = defineProps<{ course: Course; disabled: boolean }>();
+const activeId = ref('');
+const item = computed(() => props.course.learningItems.find((value) => value.id === activeId.value));
+const index = computed(() => props.course.learningItems.findIndex((value) => value.id === activeId.value));
+const tablist = ref<HTMLElement | null>(null);
+const newId = () => crypto.randomUUID();
+
+watch(
+  () => [props.course.id, ...props.course.learningItems.map((value) => value.id)],
+  () => {
+    if (!props.course.learningItems.some((value) => value.id === activeId.value))
+      activeId.value = props.course.learningItems[0]?.id || '';
+  },
+  { immediate: true },
+);
+
+function add() {
+  const id = newId();
+  props.course.learningItems.push({ id, type: 'mtc', title: '', required: true });
+  activeId.value = id;
+  nextTick(() => document.getElementById(`learning-title-${id}`)?.focus());
+}
+function remove() {
+  if (index.value < 0) return;
+  const next = props.course.learningItems[index.value + 1] || props.course.learningItems[index.value - 1];
+  props.course.learningItems.splice(index.value, 1);
+  activeId.value = next?.id || '';
+  nextTick(() => tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+}
+function onTabsKeydown(event: KeyboardEvent) {
+  const key = event.key;
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+  event.preventDefault();
+  const ids = props.course.learningItems.map((value) => value.id);
+  if (!ids.length) return;
+  const position = ids.indexOf(activeId.value);
+  activeId.value = ids[
+    key === 'Home' ? 0 : key === 'End' ? ids.length - 1 :
+      (position + (key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length
+  ]!;
+  nextTick(() => tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+}
+function focusInvalid() {
+  const invalid = props.course.learningItems.find((value) => !value.title.trim());
+  if (!invalid) return false;
+  activeId.value = invalid.id;
+  nextTick(() => document.getElementById(`learning-title-${invalid.id}`)?.focus());
+  return true;
+}
+defineExpose({ focusInvalid });
+</script>
+<template>
+  <section class="panel editor-panel">
+    <div class="section-heading">
+      <h2>학습 항목</h2>
+      <button v-if="!disabled" class="button secondary" type="button" @click="add">학습 항목 추가</button>
+    </div>
+    <p class="muted">필수 항목은 학습자가 완료 기록을 남긴 뒤 평가를 시작합니다.</p>
+    <div v-if="course.learningItems.length" class="learning-tabs" role="tablist" aria-label="학습 항목" ref="tablist" @keydown="onTabsKeydown">
+      <button
+        v-for="(value, i) in course.learningItems"
+        :key="value.id"
+        type="button"
+        role="tab"
+        :id="`learning-tab-${value.id}`"
+        :aria-controls="activeId === value.id ? `learning-panel-${value.id}` : undefined"
+        :aria-selected="activeId === value.id"
+        :tabindex="activeId === value.id ? 0 : -1"
+        :class="{ active: activeId === value.id, invalid: !value.title.trim() }"
+        @click="activeId = value.id"
+      >
+        <span>{{ i + 1 }}. {{ value.title.trim() || '새 학습 항목' }}</span>
+        <small>{{ value.required ? '필수' : '선택' }}</small>
+      </button>
+    </div>
+    <div v-if="item" :id="`learning-panel-${item.id}`" role="tabpanel" :aria-labelledby="`learning-tab-${item.id}`" class="learning-tab-panel">
+      <div class="form-grid">
+        <label class="field"><span>교육 종류</span>
+          <select aria-label="교육 종류" v-model="item.type" :disabled="disabled">
+            <option v-for="(label, type) in learningTypeLabels" :key="type" :value="type">{{ label }}</option>
+          </select>
+        </label>
+        <label class="field"><span>학습 항목명</span>
+          <input :id="`learning-title-${item.id}`" v-model="item.title" :disabled="disabled" :aria-invalid="!item.title.trim()" />
+        </label>
+      </div>
+      <div class="learning-tab-actions">
+        <label class="checkbox-label"><input v-model="item.required" :disabled="disabled" type="checkbox" />필수 학습 항목</label>
+        <button v-if="!disabled" class="text-link" type="button" @click="remove">이 항목 삭제</button>
+      </div>
+    </div>
+    <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
+  </section>
+</template>

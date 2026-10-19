@@ -4,12 +4,20 @@ import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
 import { roleLabels, type Role } from '@eks/contracts';
+import { theme, selectTheme, useActorTheme } from './theme';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
 const menuOpen = ref(false);
 const isHome = computed(() => route.name === 'home');
 const roles = roleLabels;
+watch(
+  [() => store.actorId, () => store.initialized],
+  ([id, initialized]) => {
+    if (initialized || id) useActorTheme(id);
+  },
+  { immediate: true },
+);
 watch(
   [
     () => store.signedIn,
@@ -81,6 +89,8 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
             :class="{
               active:
                 route.path.startsWith('/qualifications') ||
+                route.path.startsWith('/plans') ||
+                route.path.startsWith('/completions') ||
                 route.path.startsWith('/certifications'),
             }"
             @click="menuOpen = false"
@@ -107,8 +117,32 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
             @click="menuOpen = false"
             >시스템 운영</RouterLink
           >
+          <RouterLink
+            v-if="store.signedIn"
+            to="/notifications"
+            :class="{ active: route.path === '/notifications' }"
+            @click="menuOpen = false"
+          >
+            알림
+            <span
+              v-if="store.data.notifications.some((n) => !n.readAt)"
+              class="notification-count"
+              >{{ store.data.notifications.filter((n) => !n.readAt).length }}</span
+            >
+          </RouterLink>
         </nav>
         <div class="account">
+          <label class="theme-choice"
+            ><span class="sr-only">화면 테마</span
+            ><select
+              aria-label="화면 테마"
+              :value="theme"
+              @change="selectTheme(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="light">라이트</option>
+              <option value="dark">다크</option>
+            </select></label
+          >
           <span class="prototype-label" title="로컬 계정 선택으로 사용하는 검증용 MVP입니다."
             >검증용 MVP</span
           >

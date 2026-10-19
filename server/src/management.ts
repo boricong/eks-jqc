@@ -3,9 +3,15 @@ import { demand } from "./errors.ts";
 import { organization } from "./organizations.ts";
 
 export const isManagementAction = (action: string) =>
-  ["catalog.", "course.", "assignment.", "comparison.", "notice."].some(
-    (prefix) => action.startsWith(prefix),
-  );
+  [
+    "catalog.",
+    "course.",
+    "assignment.",
+    "comparison.",
+    "notice.",
+    "template.",
+    "planning.",
+  ].some((prefix) => action.startsWith(prefix));
 
 // A management context never changes the actor's affiliation or roles.
 export function managementScope(

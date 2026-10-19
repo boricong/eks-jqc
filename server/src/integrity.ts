@@ -7,6 +7,7 @@ import {
   type OrganizationDocument,
   organizationEntries,
 } from "@eks/contracts";
+import { validateWorkflow } from "./workflow-integrity.ts";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`저장 데이터 무결성 오류: ${message}`);
@@ -38,6 +39,10 @@ export function validateState(
       ...s.qualifications,
       ...s.assignments,
       ...s.notices,
+      ...s.plans,
+      ...s.planningRequests,
+      ...s.notifications,
+      ...s.catalogBatches,
     ])
       check(
         entries.some((e) => e.id === record.lv1OrganizationId && e.level === 1),
@@ -50,6 +55,17 @@ export function validateState(
             (e) => e.id === event.lv1OrganizationId && e.level === 1,
           ),
           "이력 Lv1 참조",
+        );
+    for (const record of [...s.plans, ...s.planningRequests])
+      check(
+        rootOf(record.learnerId) === record.lv1OrganizationId,
+        "계획 사용자 Lv1 불일치",
+      );
+    for (const request of s.planningRequests)
+      if (request.ftId)
+        check(
+          rootOf(request.ftId) === request.lv1OrganizationId,
+          "계획 요청 FT Lv1 불일치",
         );
   }
   for (const key of [
@@ -64,6 +80,11 @@ export function validateState(
     "notices",
     "comparisons",
     "audits",
+    "plans",
+    "planningRequests",
+    "learningRecords",
+    "notifications",
+    "catalogBatches",
   ] as const)
     check(
       new Set(s[key].map((x) => x.id)).size === s[key].length,
@@ -149,6 +170,7 @@ export function validateState(
       "담당 운영자 참조",
     );
     if (
+      !a.planId &&
       q.courseIds.some((id) =>
         requiredKinds(s.courses.find((c) => c.id === id)!).includes(
           "practical",
@@ -198,12 +220,21 @@ export function validateState(
       ),
       "실기 항목",
     );
-    if (t.status === "in_progress") {
+    if (t.status !== "graded") {
       check(
         !t.result && !t.date && !activeKeys.has(key),
         "진행 중 응시 중복/결과",
       );
       activeKeys.add(key);
+      if (t.status === "submitted")
+        check(
+          t.kind === "subjective" &&
+            t.submittedAt &&
+            c.subjectiveQuestions.every((q) =>
+              t.subjectiveAnswers?.[q.id]?.trim(),
+            ),
+          "주관식 제출 답안 누락",
+        );
       check(
         !s.attempts.some(
           (other) =>
@@ -241,6 +272,40 @@ export function validateState(
               ),
             ),
           "문항별 채점 결과",
+        );
+      } else if (t.kind === "subjective") {
+        check(
+          t.submittedAt &&
+            t.evaluatorId !== a.learnerId &&
+            s.users.some((u) => u.id === t.evaluatorId),
+          "주관식 평가자·제출일",
+        );
+        check(
+          c.subjectiveQuestions.every(
+            (q) =>
+              t.subjectiveAnswers?.[q.id]?.trim() &&
+              t.grades?.[q.id]?.reason.trim() &&
+              t.grades[q.id]!.points <= q.points,
+          ),
+          "주관식 답안·채점 근거",
+        );
+        const total = c.subjectiveQuestions.reduce((n, q) => n + q.points, 0);
+        const earned = c.subjectiveQuestions.reduce(
+          (n, q) => n + t.grades![q.id]!.points,
+          0,
+        );
+        check(
+          t.total === total &&
+            t.earned === earned &&
+            t.result ===
+              (earned * 100 >= total * c.subjectivePassScore!
+                ? "passed"
+                : "failed"),
+          "주관식 점수·판정",
+        );
+        check(
+          t.result !== "failed" || t.feedback?.trim(),
+          "주관식 미통과 피드백",
         );
       } else {
         check(
@@ -366,7 +431,7 @@ export function validateState(
       comp.attemptIds.every((id) =>
         s.attempts.some(
           (t) =>
-            t.id === id && t.enrollmentId === e.id && t.status === "submitted",
+            t.id === id && t.enrollmentId === e.id && t.status === "graded",
         ),
       ),
       "비교 응시 참조",
@@ -427,5 +492,6 @@ export function validateState(
       s.requests.length,
     "요청 식별자 중복",
   );
+  validateWorkflow(s);
   return s;
 }

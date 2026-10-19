@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { kindLabels } from '@eks/contracts';
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { comparisonLabels, type Comparison, type Kind } from '@eks/contracts';
@@ -196,7 +197,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <legend>비교할 평가</legend>
         <div class="form-grid">
           <label v-for="kind in store.requiredKinds(selected.c)" :key="kind" class="field"
-            ><span>{{ kind === 'objective' ? '객관식' : '실기' }} 회차</span>
+            ><span>{{ kindLabels[kind] }} 회차</span>
             <select
               :value="
                 draft.attemptIds.find(

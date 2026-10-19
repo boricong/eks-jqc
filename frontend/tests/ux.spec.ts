@@ -1,3 +1,4 @@
+import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { test, expect, actor } from './fixtures';
 import path from 'node:path';
@@ -117,9 +118,9 @@ test('부분 통과 유지, 미통과 재응시, FT 평가와 자동 인증', as
     await page.getByRole('link', { name: '평가 목록', exact: true }).click();
   }
   await actor(page, 'learner-1');
-  await page.getByRole('link', { name: '검증용 인증' }).click();
+  await page.getByRole('link', { name: /현재 유효한 자격/ }).click();
   await page.locator('.qualification-row').click();
-  await expect(page.getByRole('heading', { name: '검증용 인증' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 인증서 · 검증용' })).toBeVisible();
   await expect(page.locator('.evidence-course')).toHaveCount(2);
   await page.locator('.evidence-course').first().locator('summary').click();
   await expect(page.locator('.evidence-course').first()).toContainText('1회');
@@ -139,10 +140,11 @@ test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
   await page.getByRole('link', { name: 'Recipe 편집', exact: true }).click();
   await page.getByRole('button', { name: '사용 등록' }).click();
   await expect(page.getByRole('alert')).toContainText('합격 기준');
-  await page.getByRole('link', { name: '자격 배정', exact: true }).click();
-  await page.getByRole('button', { name: '자격 배정' }).click();
-  await page.getByRole('button', { name: '배정', exact: true }).click();
-  await expect(page.locator('tbody')).toContainText('정하린');
+  await requestPlan(page, '정하린', 'ft-1');
+  await actor(page, 'learner-2');
+  await completePlan(page, '평가 흐름 체험');
+  await actor(page, 'admin-1');
+  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await page.getByRole('link', { name: '공지 관리', exact: true }).click();
   await page.getByRole('button', { name: '공지 등록' }).click();
   await page.getByLabel('제목', { exact: true }).fill('화면 검토 공지');
@@ -154,8 +156,12 @@ test('관리 초안 검증, 배정, 공지, 제외', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '평가 흐름 체험' })).toBeVisible();
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
-  await page.getByRole('link', { name: '자격 배정', exact: true }).click();
-  const row = page.locator('tbody tr').filter({ hasText: '정하린' });
+  await page.getByRole('link', { name: '대상자·계획', exact: true }).click();
+  const row = page
+    .locator('tbody tr')
+    .filter({ hasText: '정하린' })
+    .filter({ hasText: '평가 흐름 체험' })
+    .last();
   await row.locator('summary').click();
   await row.getByRole('button', { name: '검증 제외' }).click();
   await page.getByLabel('변경 사유').fill('중복 검증 시안');

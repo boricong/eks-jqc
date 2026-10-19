@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { api, mutate, ApiError } from '../api';
 import {
   requiredKinds,
-  courseErrors,
+  courseUseErrors as courseErrors,
   qualificationUseErrors as checkQualification,
   retiredCourses,
   type Assignment,
@@ -37,6 +37,9 @@ export const useDemo = defineStore('workspace', () => {
     notices: [],
     comparisons: [],
     audits: [],
+    planningRequests: [],
+    plans: [],
+    notifications: [],
   });
   const data = ref<Workspace>(empty()),
     actors = ref<User[]>([]),
@@ -201,12 +204,18 @@ export const useDemo = defineStore('workspace', () => {
     );
   const username = (id: string | null | undefined) =>
     actors.value.find((u) => u.id === id)?.name || '미지정';
-  type CommandResult = { id: string; revision: number; result?: 'passed' | 'failed' };
+  type CommandResult = {
+    id: string;
+    revision: number;
+    assignmentId?: string;
+    result?: 'passed' | 'failed';
+  };
   const pendingCommands = new Map<string, { key: string; result?: CommandResult }>();
   async function command(path: string, body: unknown = {}, method = 'POST') {
     const managed =
-      /^\/(courses|qualifications|assignments|notices|comparisons)(\/|$)/.test(path) ||
-      /^\/enrollments\/[^/]+\/comparisons$/.test(path);
+      /^\/(courses|qualifications|assignments|notices|comparisons|qualification-templates|planning-requests)(\/|$)/.test(
+        path,
+      ) || /^\/enrollments\/[^/]+\/comparisons$/.test(path);
     if (managed) path = managementPath(path);
     const scope = actorId.value;
     const signature = JSON.stringify({ path, body, method, scope });
@@ -237,10 +246,6 @@ export const useDemo = defineStore('workspace', () => {
   async function requestPractical(aid: string, cid: string) {
     await startAttempt(aid, cid, 'practical');
     notify('실기 평가를 요청했습니다.');
-  }
-  async function addAssignment(qualificationId: string, learnerId: string, ftId: string | null) {
-    await command('/assignments', { qualificationId, learnerId, ftId: ftId || null });
-    notify('자격을 배정했습니다.');
   }
   async function createCatalog(section: string) {
     return command(`/${section}`);
@@ -320,7 +325,6 @@ export const useDemo = defineStore('workspace', () => {
     command,
     startAttempt,
     requestPractical,
-    addAssignment,
     createCatalog,
     saveCatalog,
     cloneCatalog,

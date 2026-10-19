@@ -47,10 +47,12 @@ async function secondOrganization(f: Fixture) {
   const qualification = await f.call("admin-2", "/qualifications", {});
   await f.call("admin-2", `/qualifications/${qualification.id}/publish`, {
     title: "Etch 자격",
+    description: "Etch 직무 검증",
+    validity: { type: "unlimited", months: null, reminderDays: [] },
     courseIds: [course.id],
     revision: 1,
   });
-  const assignment = await f.call("admin-2", "/assignments", {
+  const assignment = await planAssignment(f, "admin-2", {
     qualificationId: qualification.id,
     learnerId: learner,
     ftId: ft,
@@ -243,7 +245,7 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
       learnerId: "learner-2",
       ftId: other.ft,
     },
-    422,
+    409,
   );
   await f.call(
     "admin-1",
@@ -341,7 +343,7 @@ test("소속·역할 변경·사용 중지 상속·과거 기록 보존·마지�
       learnerId: "learner-1",
       ftId: "ft-1",
     },
-    422,
+    409,
   );
   await finish(f, eid, "practical");
   await finish(f, "assignment-1:demo-course-2", "objective");
@@ -513,7 +515,7 @@ test("조직 백업·실패 보존·일반 데이터 복구가 조직 파일을 
     "조직 파일 손상",
   );
   await assert.rejects(
-    new JsonStore(f.file).initialize(seedState()),
+    new JsonStore(f.file).initialize(seedState(true)),
     /초기화하지 않습니다/,
   );
   assert.equal(
@@ -553,6 +555,7 @@ test("조직 백업·실패 보존·일반 데이터 복구가 조직 파일을 
 test("명시적 v1 이관·원본 백업·조직 보존·재실행 무변경", async (t) => {
   const f = await fixture(t);
   const source: any = f.store.snapshot();
+  legacyFields(source);
   source.schemaVersion = 1;
   source.users = source.users.filter((u: any) => u.id !== "operator-1");
   for (const user of source.users) {
@@ -576,10 +579,14 @@ test("명시적 v1 이관·원본 백업·조직 보존·재실행 무변경", a
   await writeFile(f.file, JSON.stringify(source));
   await new JsonStore(f.file).migrate(migrateState);
   const migrated = JSON.parse(await readFile(f.file, "utf8"));
-  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.schemaVersion, 5);
   assert.equal(migrated.users.length, source.users.length + 1);
   assert.ok(migrated.users.every((u: any) => u.organizationId === "org-photo"));
-  assert.deepEqual(migrated.attempts, source.attempts);
+  assert.deepEqual(
+    migrated.attempts.map(({ status, submittedAt, ...t }: any) => t),
+    source.attempts.map(({ status, submittedAt, ...t }: any) => t),
+  );
+  assert.ok(migrated.attempts.every((t: any) => t.status === "graded"));
   assert.equal(migrated.assignments[0].organizationSource, "migration");
   assert.equal(await readFile(f.store.organizations.file, "utf8"), master);
   const raw = await readFile(f.file, "utf8");
@@ -613,7 +620,7 @@ test("명시적 v1 이관·원본 백업·조직 보존·재실행 무변경", a
 async function fixture(t: TestContext, change?: (s: State) => void) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "eks-api-")),
     file = path.join(dir, "runtime", "state.json"),
-    seed = seedState();
+    seed = seedState(true);
   seed.users.push(
     {
       id: "admin-2",
@@ -699,6 +706,112 @@ async function fixture(t: TestContext, change?: (s: State) => void) {
   };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+// Build real pre-workflow JSON; changing only schemaVersion would not exercise migration.
+function legacyFields(s: any) {
+  for (const c of s.courses) {
+    c.mode = c.assessmentKinds.length === 2 ? "both" : c.assessmentKinds[0];
+    delete c.assessmentKinds;
+    delete c.learningItems;
+    delete c.subjectiveQuestions;
+    delete c.subjectivePassScore;
+  }
+  for (const q of s.qualifications) {
+    delete q.englishName;
+    delete q.description;
+    delete q.validity;
+  }
+  for (const a of s.assignments) delete a.createdBy;
+  for (const t of s.attempts) {
+    if (t.status === "graded") t.status = "submitted";
+    delete t.submittedAt;
+  }
+  for (const c of [...s.completions, ...s.certifications]) {
+    delete c.snapshot;
+    delete c.validity;
+    delete c.expiresOn;
+  }
+  delete s.plans;
+  delete s.planningRequests;
+  delete s.learningRecords;
+  delete s.notifications;
+}
+async function planAssignment(
+  f: Fixture,
+  manager: string,
+  input: { qualificationId: string; learnerId: string; ftId: string | null },
+) {
+  const q = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === input.qualificationId)!;
+  const request = await f.call(
+    manager,
+    scoped("/planning-requests", q.lv1OrganizationId),
+    {
+      learnerIds: [input.learnerId],
+      ftId: input.ftId,
+      dueOn: "2026-10-31",
+      message: "검증용 계획 요청",
+    },
+  );
+  const p = await f.call(input.learnerId, "/plans", {
+    requestId: request.ids[0],
+    qualificationId: q.id,
+  });
+  const plan = f.store.snapshot().plans.find((plan) => plan.id === p.id)!;
+  await f.call(
+    input.learnerId,
+    `/plans/${p.id}`,
+    {
+      revision: plan.revision,
+      targetOn: "2026-11-30",
+      schedules: q.courseIds.map((courseId) => ({
+        courseId,
+        learningStart: "2026-10-01",
+        learningEnd: "2026-10-31",
+        assessmentOn: "2026-11-15",
+        goal: "독립 수행 연습",
+      })),
+    },
+    200,
+    randomUUID(),
+    "PUT",
+  );
+  const completed = await f.call(input.learnerId, `/plans/${p.id}/complete`, {
+    revision: plan.revision + 1,
+  });
+  const a = f.store
+    .snapshot()
+    .assignments.find((a) => a.id === completed.assignmentId)!;
+  if (input.ftId && a.ftId !== input.ftId)
+    await f.call(
+      manager,
+      scoped(`/assignments/${a.id}/ft`, q.lv1OrganizationId),
+      { revision: a.revision, ftId: input.ftId, reason: "담당자 지정" },
+    );
+  for (const e of f.store
+    .snapshot()
+    .enrollments.filter((e) => e.assignmentId === a.id)) {
+    const course = f.store.snapshot().courses.find((c) => c.id === e.courseId)!;
+    for (const item of course.learningItems.filter((i) => i.required))
+      await f.call(
+        input.learnerId,
+        `/enrollments/${e.id}/learning`,
+        {
+          itemId: item.id,
+          performedOn: "2026-10-01",
+          content: "검증용 학습 완료",
+          evidenceUrl: "",
+          revision: 0,
+        },
+        200,
+        randomUUID(),
+        "PUT",
+      );
+  }
+  return { id: a.id };
+}
+
 const scoped = (url: string, root = "org-etch") =>
   `${url}?lv1OrganizationId=${root}`;
 async function lifecycle(
@@ -751,15 +864,17 @@ test("운영자 다른 Lv1의 기준·배정·FT·공지·비교 관리와 실�
   const q = await call("/qualifications", {});
   await call(`/qualifications/${q.id}/publish`, {
     title: "운영자 Etch 자격",
+    description: "Etch 직무 검증",
+    validity: { type: "unlimited", months: null, reminderDays: [] },
     courseIds: [course.id],
     revision: 1,
   });
   await call(
     "/assignments",
     { qualificationId: q.id, learnerId: learner, ftId: "ft-1" },
-    422,
+    409,
   );
-  const a = await call("/assignments", {
+  const a = await planAssignment(f, "operator-1", {
     qualificationId: q.id,
     learnerId: learner,
     ftId: ft,
@@ -970,7 +1085,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
       )
         await finish(f, e.id, kind);
   const preserved = f.store.snapshot();
-  const a = await f.call("admin-1", "/assignments", {
+  const a = await planAssignment(f, "admin-1", {
     qualificationId: "demo-qualification",
     learnerId: "learner-2",
     ftId: "ft-1",
@@ -995,7 +1110,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     "admin-1",
     "/assignments",
     { qualificationId: "demo-qualification", learnerId: "dual", ftId: "ft-1" },
-    422,
+    409,
   );
   const nextQ = await f.call(
     "admin-1",
@@ -1017,7 +1132,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     ...q,
     courseIds: q.courseIds.map((id) => (id === "demo-course-1" ? v2.id : id)),
   });
-  await f.call("admin-1", "/assignments", {
+  await planAssignment(f, "admin-1", {
     qualificationId: q.id,
     learnerId: "dual",
     ftId: "ft-1",
@@ -1055,9 +1170,9 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     f.store.snapshot().courses.find((c) => c.id === "demo-course-1")!.retiredAt,
     undefined,
   );
-  await f.call("admin-1", "/assignments", {
+  await planAssignment(f, "admin-1", {
     qualificationId: "demo-qualification",
-    learnerId: "dual",
+    learnerId: await createUser(f, "재개 후 대상자", ["learner"]),
     ftId: "ft-1",
   });
   await lifecycle(f, "demo-course-1", "retirement");
@@ -1183,11 +1298,12 @@ test("새 Lv1은 마지막 순서의 사용 조직으로 생성되고 재시도�
   assert.equal(view.assignments.length, 0);
 });
 
-test("v2→v3 명시적 이관·업무와 조직 원본 보존·반복 무변경", async (t) => {
+test("v2→v4 명시적 이관·업무와 조직 원본 보존·반복 무변경", async (t) => {
   const f = await fixture(t);
   await finish(f, eid, "practical");
   const original = f.store.snapshot(),
     legacy = JSON.parse(JSON.stringify(original));
+  legacyFields(legacy);
   legacy.schemaVersion = 2;
   for (const c of legacy.courses) delete c.operationalStatus;
   const orgBefore = await readFile(f.store.organizations.file, "utf8");
@@ -1195,7 +1311,28 @@ test("v2→v3 명시적 이관·업무와 조직 원본 보존·반복 무변경
   await writeFile(f.file, JSON.stringify(legacy));
   await new JsonStore(f.file).migrate(migrateState);
   const after = JSON.parse(await readFile(f.file, "utf8"));
-  assert.deepEqual(after, { ...original, revision: original.revision + 1 });
+  assert.equal(after.schemaVersion, 5);
+  assert.equal(after.revision, original.revision + 1);
+  for (const key of [
+    "users",
+    "enrollments",
+    "attempts",
+    "notices",
+    "comparisons",
+    "audits",
+    "requests",
+  ])
+    assert.deepEqual(after[key], (original as any)[key]);
+  assert.deepEqual(
+    after.completions.map(({ snapshot, ...c }: any) => c),
+    original.completions.map(({ snapshot, ...c }) => c),
+  );
+  assert.ok(
+    after.completions.every((c: any) => c.snapshot.source === "migration"),
+  );
+  assert.ok(
+    after.qualifications.every((q: any) => q.validity.type === "unknown"),
+  );
   const bytes = await readFile(f.file, "utf8");
   await new JsonStore(f.file).migrate(migrateState);
   assert.equal(await readFile(f.file, "utf8"), bytes);
@@ -1417,7 +1554,7 @@ test("세션·서버 권한·정답 보호·담당 관계", async (t) => {
     "admin-1",
     "/assignments",
     { qualificationId: "demo-qualification", learnerId: "dual", ftId: "dual" },
-    422,
+    409,
   );
   const response = await f.app.inject({
     method: "POST",
@@ -1534,7 +1671,7 @@ test("객관식 전용·실기 전용과 비필수 실기 항목", async (t) => 
         ...structuredClone(s.courses[0]!),
         id: `only-${mode}`,
         entityId: `only-${mode}`,
-        mode,
+        assessmentKinds: [mode],
       };
       if (mode === "practical")
         c.practicalItems.push({
@@ -1545,6 +1682,9 @@ test("객관식 전용·실기 전용과 비필수 실기 항목", async (t) => 
         });
       s.courses.push(c);
       s.qualifications.push({
+        englishName: "",
+        description: "검증용 직무 수행 기준",
+        validity: { type: "unlimited", months: null, reminderDays: [] },
         lv1OrganizationId: "org-photo",
         id: `qual-${mode}`,
         entityId: `qual-${mode}`,
@@ -1557,7 +1697,7 @@ test("객관식 전용·실기 전용과 비필수 실기 항목", async (t) => 
     }
   });
   for (const kind of ["objective", "practical"] as const) {
-    const a = await f.call("admin-1", "/assignments", {
+    const a = await planAssignment(f, "admin-1", {
       qualificationId: `qual-${kind}`,
       learnerId: "learner-2",
       ftId: kind === "practical" ? "ft-1" : null,
@@ -1663,7 +1803,7 @@ test("저장 충돌·파일 저장 실패·동일 요청 복구", async (t) => {
   assert.equal(
     f.store
       .snapshot()
-      .attempts.filter((t) => t.id === a.id && t.status === "submitted").length,
+      .attempts.filter((t) => t.id === a.id && t.status === "graded").length,
     1,
   );
 });
@@ -1941,13 +2081,16 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
         ...structuredClone(s.courses[0]!),
         id: `boundary-${score}`,
         entityId: `boundary-${score}`,
-        mode: "objective",
+        assessmentKinds: ["objective"],
         passScore: score,
       };
       c.questions[0]!.points = 2;
       c.questions[1]!.points = 1;
       s.courses.push(c);
       s.qualifications.push({
+        englishName: "",
+        description: "검증용 직무 수행 기준",
+        validity: { type: "unlimited", months: null, reminderDays: [] },
         lv1OrganizationId: "org-photo",
         id: `q-${score}`,
         entityId: `q-${score}`,
@@ -1960,7 +2103,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
     }
   });
   for (const score of [66, 67]) {
-    const a = await f.call("admin-1", "/assignments", {
+    const a = await planAssignment(f, "admin-1", {
       qualificationId: `q-${score}`,
       learnerId: "learner-2",
       ftId: null,
@@ -2014,6 +2157,9 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
   assert.deepEqual(preview.counts, {
     objectiveAttempts: 2,
     practicalAttempts: 3,
+    subjectiveAttempts: 0,
+    learningRecords: 0,
+    notifications: 6,
     completions: 2,
     certifications: 1,
     comparisons: 1,

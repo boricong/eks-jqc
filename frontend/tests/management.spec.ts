@@ -1,3 +1,4 @@
+import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { test, expect, actor } from './fixtures';
@@ -67,7 +68,7 @@ test('새 Lv1 생성 후 운영자 기준·배정, 종료 후 기존 학습자·
   await actor(page, 'operator-1');
   await manage(page);
   await expect(page.getByLabel('관리할 Lv1 조직')).toHaveValue('');
-  await expect(page.getByRole('button', { name: '자격 추가' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '새 자격 만들기' })).toHaveCount(0);
   await page.getByRole('link', { name: '시스템 운영', exact: true }).click();
   await page.getByLabel('조직 검색').fill('검색 중');
   await page.getByRole('button', { name: 'Lv1 조직 추가', exact: true }).click();
@@ -98,7 +99,7 @@ test('새 Lv1 생성 후 운영자 기준·배정, 종료 후 기존 학습자·
   await page.getByRole('link', { name: '과정 관리', exact: true }).click();
   await page.getByRole('button', { name: '과정 추가', exact: true }).click();
   await page.getByLabel('과정명', { exact: true }).fill('신규 조직 실기');
-  await page.getByLabel('필수 평가').selectOption('practical');
+  await practicalOnly(page);
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   await page.getByLabel('항목명', { exact: true }).fill('독립 수행');
   await page.getByLabel('판정 기준', { exact: true }).fill('가상 조건에서 수행');
@@ -106,15 +107,19 @@ test('새 Lv1 생성 후 운영자 기준·배정, 종료 후 기존 학습자·
   await expect(page.getByRole('button', { name: '운영 종료', exact: true })).toBeVisible();
   const course = backend.store.snapshot().courses.find((c) => c.title === '신규 조직 실기')!;
   await page.getByRole('link', { name: '자격 관리', exact: true }).click();
-  await page.getByRole('button', { name: '자격 추가', exact: true }).click();
+  await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
   await page.getByLabel('자격명', { exact: true }).fill('신규 조직 자격');
+  await qualificationPolicy(page);
   await page.getByRole('checkbox', { name: /신규 조직 실기/ }).check();
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '새 버전', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '자격 배정', exact: true }).click();
-  await page.getByRole('button', { name: '자격 배정', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '배정', exact: true }).click();
-  await expect(page.locator('tbody')).toContainText('신규 학습자');
+  const learnerId = backend.store.snapshot().users.find((u) => u.name === '신규 학습자')!.id;
+  const ftId = backend.store.snapshot().users.find((u) => u.name === '신규 FT')!.id;
+  await requestPlan(page, '신규 학습자', ftId);
+  await actor(page, learnerId);
+  await completePlan(page, '신규 조직 자격');
+  await actor(page, 'operator-1');
+  await manage(page);
   const assignment = backend.store
     .snapshot()
     .assignments.find((a) => a.lv1OrganizationId === root)!;
@@ -165,7 +170,9 @@ test('새 Lv1 생성 후 운영자 기준·배정, 종료 후 기존 학습자·
     certificate,
   );
   await page.goto(`/certifications/${assignment.id}?lv1OrganizationId=${root}`);
-  await expect(page.getByRole('heading', { name: '검증용 인증', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '자격 인증서 · 검증용', exact: true }),
+  ).toBeVisible();
   await expect(page.locator('.evidence-course')).toContainText('운영 종료');
   await page.screenshot({ path: test.info().outputPath('retired-certification.png') });
   const master = await readFile(backend.store.organizations.file, 'utf8');

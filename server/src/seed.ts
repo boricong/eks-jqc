@@ -3,16 +3,20 @@ import {
   StateSchema,
   type State,
   type AssessmentAttempt,
+  unknownValidity,
 } from "@eks/contracts";
 import { validateState } from "./integrity.ts";
 import { PHOTO_ID, seedOrganizations, organization } from "./organizations.ts";
 
-export function seedState(): State {
+// Production initialization starts with users and organizations. The older
+// fictional catalog is stored only in an isolated regression-test fixture.
+export function seedState(testFixture = false): State {
   const source = JSON.parse(
-    readFileSync(new URL("./seed-source.json", import.meta.url), "utf8"),
+    readFileSync(new URL(testFixture ? "../tests/fixtures/seed-source.json" : "./seed-source.json", import.meta.url), "utf8"),
   );
   const state: State = {
-    schemaVersion: 3,
+    schemaVersion: 5,
+    catalogBatches: [],
     revision: 0,
     users: source.users.map((u: any) => ({
       id: u.id,
@@ -21,8 +25,23 @@ export function seedState(): State {
       organizationId: PHOTO_ID,
       revision: 1,
     })),
-    courses: source.courses.map((c: any) => ({
+    courses: (testFixture ? source.courses : []).map((c: any) => ({
       ...c,
+      assessmentKinds:
+        c.mode === "both" ? ["objective", "practical"] : [c.mode],
+      learningItems:
+        c.status === "published"
+          ? [
+              {
+                id: `${c.id}-learning`,
+                type: "team",
+                title: "가상 학습자료 확인과 독립 수행 연습",
+                required: true,
+              },
+            ]
+          : [],
+      subjectiveQuestions: [],
+      subjectivePassScore: null,
       operationalStatus: "active",
       lv1OrganizationId: PHOTO_ID,
       entityId: c.id,
@@ -36,8 +55,17 @@ export function seedState(): State {
         ? { publishedAt: "2026-10-15T00:00:00.000Z" }
         : {}),
     })),
-    qualifications: source.qualifications.map((q: any) => ({
+    qualifications: (testFixture ? source.qualifications : []).map((q: any) => ({
       ...q,
+      englishName: "",
+      description:
+        q.status === "published"
+          ? "실제 직무 기준이 아닌 가상 평가 흐름 체험입니다."
+          : "",
+      validity:
+        q.status === "published"
+          ? { type: "unlimited", months: null, reminderDays: [] }
+          : unknownValidity(),
       lv1OrganizationId: PHOTO_ID,
       entityId: q.id,
       revision: 1,
@@ -50,14 +78,19 @@ export function seedState(): State {
     attempts: [],
     completions: [],
     certifications: [],
-    notices: source.notices.map((n: any) => ({
+    notices: source.notices.filter((n: any) => testFixture || n.id !== "notice-3").map((n: any) => ({
       ...n,
+      ...(n.id === "notice-2" && !testFixture ? { body: "과정의 객관식·주관식·실기 평가를 진행해 주세요. 주관식 채점과 실기 평가는 지정된 FT가 담당합니다." } : {}),
       revision: 1,
       lv1OrganizationId: PHOTO_ID,
     })),
     comparisons: [],
     audits: [],
     requests: [],
+    planningRequests: [],
+    plans: [],
+    learningRecords: [],
+    notifications: [],
   };
   state.users.push({
     id: "operator-1",
@@ -66,7 +99,7 @@ export function seedState(): State {
     organizationId: PHOTO_ID,
     revision: 1,
   });
-  for (const a of source.assignments) {
+  for (const a of testFixture ? source.assignments : []) {
     state.assignments.push({
       id: a.id,
       qualificationId: a.qualificationId,
@@ -89,7 +122,8 @@ export function seedState(): State {
           courseId: e.courseId,
           learnerId: a.learnerId,
           revision: 1,
-          status: "submitted",
+          status: "graded",
+          submittedAt: h.date,
           createdAt: h.date,
           answers: h.answers || {},
           verdicts: h.verdicts || {},
@@ -110,7 +144,7 @@ export function seedState(): State {
       }
     }
   }
-  state.audits.push({
+  if (testFixture) state.audits.push({
     id: "seed-event",
     lv1OrganizationId: PHOTO_ID,
     actorId: "admin-1",

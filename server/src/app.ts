@@ -21,6 +21,8 @@ import {
 import { JsonStore, DomainError, demand } from "./storage.ts";
 import { isManagementAction, managementScope } from "./management.ts";
 import { courseUsage } from "./course-lifecycle.ts";
+import { qualificationTemplates } from "./workflow.ts";
+import { registerCatalogRoutes } from "./catalog-routes.ts";
 import {
   authorize,
   execute,
@@ -35,6 +37,7 @@ export async function buildApp(
     logger?: boolean;
     origins?: string[];
     serveFrontend?: boolean;
+    clock?: () => string;
   } = {},
 ) {
   const app = Fastify({
@@ -42,6 +45,15 @@ export async function buildApp(
     bodyLimit: 2 * 1024 * 1024,
   });
   await app.register(cookie);
+  const clock = options.clock || (() => new Date().toISOString());
+  const refreshNotifications = () => store.refreshNotifications(clock());
+  await refreshNotifications();
+  const notificationTimer = setInterval(() => {
+    void refreshNotifications().catch((err) =>
+      app.log.error({ err }, "notification reconciliation failed"),
+    );
+  }, 60000);
+  notificationTimer.unref();
   const sessions = new Map<string, { actorId: string; expires: number }>();
   const origins = options.origins || [
     "http://127.0.0.1:5186",
@@ -200,6 +212,9 @@ export async function buildApp(
     "notices",
     "comparisons",
     "audits",
+    "plans",
+    "planningRequests",
+    "notifications",
   ] as const) {
     app.get(
       `/api/${name}`,
@@ -235,6 +250,41 @@ export async function buildApp(
     demand(t, 404, "평가를 찾을 수 없습니다.");
     return attemptView(s, u, t);
   });
+  app.get("/api/qualification-templates", async (request) => {
+    const scope = managementScope(
+      actor(request),
+      store.organizations.snapshot(),
+      (request.query as any).lv1OrganizationId,
+    );
+    return qualificationTemplates.map((t) => ({
+      ...t,
+      imported: store
+        .snapshot()
+        .qualifications.some(
+          (q) => q.lv1OrganizationId === scope && q.templateId === t.id,
+        ),
+    }));
+  });
+  app.get("/api/completions/:id", async (request) => {
+    const view = workspace(
+      store.snapshot(),
+      actor(request),
+      store.organizations.snapshot(),
+      (request.query as any).lv1OrganizationId,
+    );
+    const assignment = view.assignments.find((a) =>
+      a.enrollments.some(
+        (e) => e.completion?.id === (request.params as any).id,
+      ),
+    );
+    demand(assignment, 404, "수료증을 찾을 수 없습니다.");
+    return {
+      assignment,
+      completion: assignment.enrollments.find(
+        (e) => e.completion?.id === (request.params as any).id,
+      )!.completion,
+    };
+  });
   app.get("/api/assignments/:id/results", async (request) => {
     const view = workspace(
         store.snapshot(),
@@ -268,6 +318,7 @@ export async function buildApp(
       completions: a.enrollments.map((e) => e.completion),
     };
   });
+  registerCatalogRoutes(app, store, actor);
   const mutation = (
     method: "POST" | "PUT" | "DELETE",
     url: string,
@@ -472,6 +523,30 @@ export async function buildApp(
   mutation("POST", "/api/enrollments/:id/attempts", "attempt.start");
   mutation("PUT", "/api/attempts/:id/draft", "attempt.save");
   mutation("POST", "/api/attempts/:id/submit", "attempt.submit");
+  mutation("PUT", "/api/attempts/:id/grading", "attempt.grade.save");
+  mutation(
+    "POST",
+    "/api/attempts/:id/grading/finalize",
+    "attempt.grade.finalize",
+  );
+  mutation(
+    "POST",
+    "/api/qualification-templates/import",
+    "template.import",
+    () => "",
+  );
+  mutation("POST", "/api/planning-requests", "planning.request", () => "");
+  mutation("POST", "/api/plans", "plan.create", () => "");
+  mutation("PUT", "/api/plans/:id", "plan.save");
+  mutation(
+    "POST",
+    "/api/plans/:id/schedule-defaults",
+    "plan.schedule-defaults",
+  );
+  mutation("DELETE", "/api/plans/:id", "plan.delete");
+  mutation("POST", "/api/plans/:id/complete", "plan.complete");
+  mutation("PUT", "/api/enrollments/:id/learning", "learning.save");
+  mutation("POST", "/api/notifications/:id/read", "notification.read");
   mutation("POST", "/api/notices", "notice.save", () => "");
   mutation("POST", "/api/testing/progress/reset", "progress.reset", () => "");
   mutation("POST", "/api/enrollments/:id/comparisons", "comparison.create");
@@ -490,6 +565,7 @@ export async function buildApp(
     }
   }
   app.addHook("onClose", async () => {
+    clearInterval(notificationTimer);
     sessions.clear();
     await store.close();
   });

@@ -8,6 +8,10 @@ import EvaluationsView from './views/EvaluationsView.vue';
 import CertificateView from './views/CertificateView.vue';
 import AdminView from './views/AdminView.vue';
 import SystemView from './views/SystemView.vue';
+import PlansView from './views/PlansView.vue';
+import SubjectiveView from './views/SubjectiveView.vue';
+import CompletionView from './views/CompletionView.vue';
+import NotificationsView from './views/NotificationsView.vue';
 import type { Role } from '@eks/contracts';
 
 export const router = createRouter({
@@ -18,6 +22,21 @@ export const router = createRouter({
   },
   routes: [
     { path: '/', name: 'home', component: HomeView },
+    { path: '/plans/:id?', name: 'plans', component: PlansView, meta: { role: 'learner' } },
+    { path: '/notifications', name: 'notifications', component: NotificationsView },
+    { path: '/completions/:id', name: 'completion', component: CompletionView },
+    {
+      path: '/qualifications/:id/courses/:courseId/subjective',
+      name: 'subjective',
+      component: SubjectiveView,
+      meta: { role: 'learner' },
+    },
+    {
+      path: '/evaluations/:id/:courseId/subjective',
+      name: 'subjective-evaluation',
+      component: SubjectiveView,
+      meta: { role: 'ft' },
+    },
     {
       path: '/qualifications',
       name: 'qualifications',
@@ -45,6 +64,7 @@ export const router = createRouter({
       meta: { role: 'ft' },
     },
     { path: '/admin', redirect: '/admin/qualifications' },
+    { path: '/admin/catalog', name:'catalog', component:()=>import('./views/CatalogView.vue'),meta:{management:true} },
     {
       path: '/admin/:section(qualifications|courses|assignments|results|comparisons|notices)/:id?',
       name: 'admin',
@@ -72,7 +92,9 @@ router.beforeEach(async (to) => {
     return '/';
   const managed =
     !!to.meta.management ||
-    (to.name === 'certificate' && store.canEnterManagement && !!to.query.lv1OrganizationId);
+    (['certificate', 'completion'].includes(String(to.name)) &&
+      store.canEnterManagement &&
+      !!to.query.lv1OrganizationId);
   if (
     managed &&
     store.hasRole('system_operator') &&
@@ -91,7 +113,9 @@ router.beforeResolve(async (to) => {
   const store = useDemo();
   const managed =
     !!to.meta.management ||
-    (to.name === 'certificate' && store.canEnterManagement && !!to.query.lv1OrganizationId);
+    (['certificate', 'completion'].includes(String(to.name)) &&
+      store.canEnterManagement &&
+      !!to.query.lv1OrganizationId);
   const lv1 = managed
     ? typeof to.query.lv1OrganizationId === 'string'
       ? to.query.lv1OrganizationId

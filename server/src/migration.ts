@@ -1,4 +1,8 @@
-import type { OrganizationDocument, State } from "@eks/contracts";
+import {
+  unknownValidity,
+  type OrganizationDocument,
+  type State,
+} from "@eks/contracts";
 import { PHOTO_ID, organization } from "./organizations.ts";
 import { validateState } from "./integrity.ts";
 import { demand } from "./errors.ts";
@@ -8,9 +12,15 @@ export function migrateState(
   organizations: OrganizationDocument,
 ): State {
   const source = structuredClone(input) as any;
-  if (source?.schemaVersion === 3) return validateState(source, organizations);
+  if (source?.schemaVersion === 5) return validateState(source, organizations);
+  if (source?.schemaVersion === 4) {
+    source.schemaVersion = 5;
+    source.catalogBatches = [];
+    source.revision++;
+    return validateState(source, organizations);
+  }
   demand(
-    [1, 2].includes(source?.schemaVersion),
+    [1, 2, 3].includes(source?.schemaVersion),
     422,
     "지원하지 않는 데이터 버전입니다.",
   );
@@ -56,13 +66,60 @@ export function migrateState(
       if (!reset) request.lv1OrganizationId = PHOTO_ID;
     }
   }
-  source.schemaVersion = 3;
-  source.revision++;
+  if (source.schemaVersion < 3)
+    for (const course of source.courses) {
+      course.operationalStatus = "active";
+      delete course.retiredAt;
+      delete course.retiredBy;
+      delete course.retirementReason;
+    }
   for (const course of source.courses) {
-    course.operationalStatus = "active";
-    delete course.retiredAt;
-    delete course.retiredBy;
-    delete course.retirementReason;
+    course.assessmentKinds =
+      course.mode === "both" ? ["objective", "practical"] : [course.mode];
+    delete course.mode;
+    course.learningItems = [];
+    course.subjectiveQuestions = [];
+    course.subjectivePassScore = null;
   }
+  for (const q of source.qualifications) {
+    q.englishName = "";
+    q.description = "";
+    q.validity = unknownValidity();
+  }
+  for (const t of source.attempts)
+    if (t.status === "submitted") {
+      t.status = "graded";
+      t.submittedAt = t.date;
+    }
+  for (const a of source.assignments) a.createdBy = a.ownerAdminId;
+  for (const award of [...source.completions, ...source.certifications]) {
+    const a = source.assignments.find(
+      (a: any) =>
+        a.id ===
+        (award.assignmentId ||
+          source.enrollments.find((e: any) => e.id === award.enrollmentId)
+            ?.assignmentId),
+    );
+    const catalog = award.courseId
+      ? source.courses.find((c: any) => c.id === award.courseId)
+      : source.qualifications.find((q: any) => q.id === award.qualificationId);
+    demand(a && catalog, 422, "이관할 인증 근거를 확인해 주세요.");
+    award.snapshot = {
+      learnerName: source.users.find((u: any) => u.id === award.learnerId)
+        ?.name,
+      organizationPath: a.organizationPath,
+      title: catalog.title,
+      version: catalog.version,
+      source: "migration",
+    };
+    if (award.qualificationId) award.validity = unknownValidity();
+  }
+  source.planningRequests = [];
+  source.plans = [];
+  source.learningRecords = [];
+  source.notifications = [];
+  source.schemaVersion = 5;
+  source.catalogBatches = [];
+  source.revision++;
   return validateState(source, organizations);
 }

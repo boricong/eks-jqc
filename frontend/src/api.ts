@@ -61,3 +61,9 @@ export async function mutate<T = { id: string; revision: number }>(
     throw error;
   }
 }
+export async function downloadWorkbook(path: string, body?: unknown) {
+  const response = await fetch(`/api${path}`, {method:body?'POST':'GET',credentials:'same-origin',headers:{'X-Session-Tab':sessionTab,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  if(!response.ok) {const error=await response.json();throw new ApiError(response.status,error.message);}
+  const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');
+  link.href=url;link.download='eks-catalog.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}

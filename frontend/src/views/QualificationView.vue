@@ -5,6 +5,9 @@ import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
+import LearnerNav from '../components/LearnerNav.vue';
+import LearningPanel from '../components/LearningPanel.vue';
+import { kindLabels } from '@eks/contracts';
 import type { Kind } from '../types';
 const store = useDemo(),
   route = useRoute(),
@@ -34,15 +37,17 @@ const recommended = computed(
       .requiredKinds(course.value)
       .find((k) => !['passed', 'waiting'].includes(selected.value![k])),
 );
-const labels = { objective: '객관식', practical: '실기' };
+const labels = kindLabels;
 function action(kind: Kind) {
   const state = selected.value![kind];
-  return kind === 'objective'
+  return kind !== 'practical'
     ? state === 'draft'
-      ? '이어서 응시'
-      : state === 'failed'
-        ? '다시 응시'
-        : '응시하기'
+      ? '답안 이어 쓰기'
+      : state === 'waiting'
+        ? '제출 답안 확인'
+        : state === 'failed'
+          ? '다시 응시'
+          : '응시하기'
     : state === 'waiting'
       ? '요청 확인'
       : state === 'failed'
@@ -55,6 +60,7 @@ function assessmentPath(kind: Kind) {
 </script>
 <template>
   <div v-if="assignment && selected && course" class="container page process-page">
+    <LearnerNav />
     <RouterLink to="/qualifications" class="back-link"
       ><AppIcon name="back" :size="16" />자격 취득</RouterLink
     >
@@ -78,6 +84,11 @@ function assessmentPath(kind: Kind) {
     </div>
     <p v-if="assignment.excludedReason" class="error-message">
       검증 제외 · {{ assignment.excludedReason }}
+    </p>
+    <p v-if="assignment.planId" class="muted">
+      <RouterLink :to="`/plans/${assignment.planId}`" class="text-link"
+        >인증 계획 · 일정·목표 확인</RouterLink
+      >
     </p>
     <div class="workspace-grid">
       <aside class="course-sidebar">
@@ -140,6 +151,29 @@ function assessmentPath(kind: Kind) {
           }}</span
           ><AppIcon name="diagonal" :size="18" />
         </button>
+        <LearningPanel
+          v-if="assignment.planId"
+          :key="selected.id"
+          :course="course"
+          :enrollment="selected"
+          :disabled="!!assignment.excludedReason"
+        />
+        <p v-if="!selected.learningComplete" class="notice-body">
+          필수 학습 완료 기록을 남기면 이 과정의 평가를 진행할 수 있습니다.
+        </p>
+        <p
+          v-else-if="!assignment.ftId && course.assessmentKinds.some((k) => k !== 'objective')"
+          class="notice-body"
+        >
+          FT 배정 대기 · 조직 관리자가 FT를 지정하면 주관식 제출과 실기 요청이 가능합니다.
+          학습·객관식·주관식 답안 작성은 계속할 수 있습니다.
+        </p>
+        <RouterLink
+          v-if="selected.completion"
+          class="button secondary"
+          :to="`/completions/${selected.completion.id}`"
+          >과정 수료증 보기</RouterLink
+        >
         <div class="assessment-grid">
           <section
             v-for="kind in store.requiredKinds(course)"
@@ -157,7 +191,11 @@ function assessmentPath(kind: Kind) {
                     ? kind === 'objective'
                       ? '미응시'
                       : '요청 전'
-                    : undefined
+                    : selected[kind] === 'waiting'
+                      ? kind === 'subjective'
+                        ? 'FT 채점 대기'
+                        : 'FT 평가 대기'
+                      : undefined
                 "
               />
             </div>
@@ -166,13 +204,18 @@ function assessmentPath(kind: Kind) {
               {{
                 kind === 'objective'
                   ? `${course.questions.length}문항 · ${course.passScore}% 이상 통과`
-                  : `${course.practicalItems.filter((i) => i.mandatory).length}개 필수 항목 · FT ${store.username(assignment.ftId)}`
+                  : kind === 'subjective'
+                    ? `${course.subjectiveQuestions.length}문항 · ${course.subjectivePassScore}% 이상 통과 · FT ${store.username(assignment.ftId)}`
+                    : `${course.practicalItems.filter((i) => i.mandatory).length}개 필수 항목 · FT ${store.username(assignment.ftId)}`
               }}
             </p>
             <div class="assessment-action">
               <span v-if="assignment.excludedReason" class="muted">검증 제외</span
               ><span v-else-if="selected[kind] === 'passed'" class="passed-caption"
                 ><AppIcon name="check" :size="16" />통과 유지</span
+              ><span v-else-if="!selected.learningComplete" class="muted">필수 학습 기록 대기</span
+              ><span v-else-if="kind === 'practical' && !assignment.ftId" class="muted"
+                >FT 배정 대기</span
               ><RouterLink
                 v-else
                 :to="assessmentPath(kind)"
@@ -196,6 +239,7 @@ function assessmentPath(kind: Kind) {
             ><StatusBadge :status="h.result" /><time>{{
               new Date(h.date).toLocaleDateString('ko-KR')
             }}</time>
+            <span v-if="h.feedback" class="muted">{{ h.feedback }}</span>
           </div>
         </details>
       </div>

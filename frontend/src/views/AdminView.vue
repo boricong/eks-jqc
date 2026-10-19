@@ -8,7 +8,23 @@ import AppDialog from '../components/AppDialog.vue';
 import ManagementContext from '../components/ManagementContext.vue';
 import CourseLifecycle from '../components/CourseLifecycle.vue';
 import ComparisonPanel from '../components/ComparisonPanel.vue';
-import type { Assignment, Course, Notice, Qualification, AuditEvent, Verdict } from '../types';
+import QualificationFields from '../components/QualificationFields.vue';
+import CourseLearningEditor from '../components/CourseLearningEditor.vue';
+import TemplateImport from '../components/TemplateImport.vue';
+import ListControls from '../components/ListControls.vue';
+import { useListView } from '../composables/useListView';
+import PlanningPanel from '../components/PlanningPanel.vue';
+import ValidityBadge from '../components/ValidityBadge.vue';
+import { kindLabels, certificationStatus, kstDate } from '@eks/contracts';
+import type {
+  Assignment,
+  Course,
+  Notice,
+  Qualification,
+  AuditEvent,
+  Verdict,
+  Draft,
+} from '../types';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
@@ -29,28 +45,25 @@ const organizationData = computed(() => {
 const sections = [
   { id: 'qualifications', name: '자격 관리', icon: 'award' },
   { id: 'courses', name: '과정 관리', icon: 'book' },
-  { id: 'assignments', name: '자격 배정', icon: 'users' },
+  { id: 'assignments', name: '대상자·계획', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },
   { id: 'comparisons', name: '기준 검증', icon: 'check' },
   { id: 'notices', name: '공지 관리', icon: 'notice' },
 ];
 const section = computed(() => String(route.params.section));
+const filterKey=()=>`eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
 const title = computed(() => sections.find((s) => s.id === section.value)!.name);
 const busy = ref(false);
 const query = ref(''),
+  courseSearch = ref(''),
   filter = ref('all'),
   errors = ref<string[]>([]),
   editorTab = ref('objective');
+const learningEditor = ref<{ focusInvalid: () => boolean } | null>(null);
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
 const readOnly = computed(() => editor.value?.status === 'published');
-const assignmentOpen = ref(false),
-  assignmentForm = ref({
-    qualificationId: 'demo-qualification',
-    learnerId: 'learner-2',
-    ftId: 'ft-1',
-  });
 const selectedAssignment = ref<Assignment | null>(null),
   assignmentAction = ref<'exclude' | 'ft'>('exclude'),
   reason = ref(''),
@@ -62,14 +75,14 @@ function plain<T>(item: T): T {
 watch(
   () => route.fullPath,
   () => {
-    query.value = '';
-    filter.value = section.value === 'courses' ? 'active' : 'all';
-    assignmentOpen.value = false;
+    let remembered:{query?:string;filter?:string}={};try{remembered=JSON.parse(localStorage.getItem(filterKey())||'{}');}catch{}
+    query.value = remembered.query||'';
+    courseSearch.value = '';
+    filter.value = remembered.filter||(section.value === 'courses' ? 'active' : 'all');
     selectedAssignment.value = null;
     noticeDraft.value = null;
     reason.value = '';
     ftId.value = '';
-    assignmentForm.value = { qualificationId: '', learnerId: '', ftId: '' };
     errors.value = [];
     courseDraft.value = null;
     qualificationDraft.value = null;
@@ -77,7 +90,7 @@ watch(
       const c = organizationData.value.courses.find((c) => c.id === route.params.id);
       if (c) {
         courseDraft.value = plain(c);
-        editorTab.value = c.mode === 'practical' ? 'practical' : 'objective';
+        editorTab.value = c.assessmentKinds[0] || 'objective';
       }
     }
     if (route.params.id && section.value === 'qualifications') {
@@ -106,6 +119,14 @@ const courses = computed(() =>
           c.operationalStatus === 'active')),
   ),
 );
+const selectableCourses = computed(() => {
+  const selected = new Set(qualificationDraft.value?.courseIds || []);
+  const term = courseSearch.value.trim().toLocaleLowerCase();
+  return organizationData.value.courses
+    .filter((c) => selected.has(c.id) || !term || `${c.title} v${c.version}`.toLocaleLowerCase().includes(term))
+    .slice()
+    .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)) || a.title.localeCompare(b.title, 'ko'));
+});
 const assignments = computed(() =>
   organizationData.value.assignments.filter(
     (a) =>
@@ -113,10 +134,19 @@ const assignments = computed(() =>
       (filter.value === 'all' ||
         (filter.value === 'excluded' && !!a.excludedReason) ||
         (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
-        (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt)),
+        (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt) ||
+        (!a.excludedReason &&
+          a.certification &&
+          (filter.value === 'valid'
+            ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
+            : filter.value === certificationStatus(a.certification)))),
   ),
 );
 const notices = computed(() => organizationData.value.notices.filter((n) => matches(n.title)));
+const listItems=computed<Array<Qualification|Course|Assignment|Notice>>(()=>section.value==='qualifications'?qualifications.value:section.value==='courses'?courses.value:section.value==='notices'?notices.value:assignments.value);
+const list=useListView(listItems,'admin',item=>'title'in item?item.title:store.username(item.learnerId));
+watch([query,filter],()=>{list.page=1;localStorage.setItem(filterKey(),JSON.stringify({query:query.value,filter:filter.value}));});
+const pageQualifications=computed(()=>list.rows as Qualification[]),pageCourses=computed(()=>list.rows as Course[]),pageAssignments=computed(()=>list.rows as Assignment[]),pageNotices=computed(()=>list.rows as Notice[]);
 async function createCatalog() {
   if (busy.value) return;
   busy.value = true;
@@ -137,6 +167,7 @@ async function saveCatalog(publish = false) {
       : store.qualificationErrors(qualificationDraft.value!)
     : [];
   if (errors.value.length) {
+    if (courseDraft.value) learningEditor.value?.focusInvalid();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
@@ -175,6 +206,7 @@ async function cloneVersion() {
     busy.value = false;
   }
 }
+const cryptoId = () => crypto.randomUUID();
 function addQuestion() {
   courseDraft.value!.questions.push({
     id: crypto.randomUUID(),
@@ -192,53 +224,6 @@ function addPractical() {
     criterion: '',
     mandatory: true,
   });
-}
-function openAssignmentDialog() {
-  const data = organizationData.value;
-  const learners = data.users.filter((u) => u.roles.includes('learner') && u.organizationActive);
-  const qualifications = data.qualifications.filter(
-    (q) => q.status === 'published' && !store.retiredCourses(q).length,
-  );
-  if (!qualifications.some((q) => q.id === assignmentForm.value.qualificationId))
-    assignmentForm.value.qualificationId = qualifications[0]?.id || '';
-  if (!learners.some((u) => u.id === assignmentForm.value.learnerId))
-    assignmentForm.value.learnerId =
-      learners.find(
-        (u) =>
-          !data.assignments.some(
-            (a) =>
-              a.learnerId === u.id &&
-              a.qualificationId === assignmentForm.value.qualificationId &&
-              !a.excludedReason,
-          ),
-      )?.id ||
-      learners[0]?.id ||
-      '';
-  const fts = data.users.filter(
-    (u) =>
-      u.roles.includes('ft') && u.organizationActive && u.id !== assignmentForm.value.learnerId,
-  );
-  if (!fts.some((u) => u.id === assignmentForm.value.ftId))
-    assignmentForm.value.ftId = fts[0]?.id || '';
-  assignmentOpen.value = true;
-  errors.value = [];
-}
-async function addAssignment() {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    await store.addAssignment(
-      assignmentForm.value.qualificationId,
-      assignmentForm.value.learnerId,
-      assignmentForm.value.ftId,
-    );
-    assignmentOpen.value = false;
-    errors.value = [];
-  } catch (error) {
-    errors.value = [(error as Error).message];
-  } finally {
-    busy.value = false;
-  }
 }
 function openAssignment(a: Assignment, action: 'exclude' | 'ft') {
   selectedAssignment.value = a;
@@ -292,18 +277,18 @@ async function saveNotice() {
     busy.value = false;
   }
 }
-const needsFT = computed(() =>
-  store
-    .qualification(assignmentForm.value.qualificationId)
-    ?.courseIds.some((id) => store.requiredKinds(store.course(id)).includes('practical')),
-);
-const labels = { objective: '객관식', practical: '실기', both: '객관식 · 실기' };
+const labels = kindLabels;
 const auditLabels: Record<string, string> = {
   'assignment.create': '자격 배정',
   'assignment.ft': 'FT 변경',
   'assignment.exclude': '검증 제외',
   'attempt.start': '평가 시작',
   'attempt.submit': '평가 확정',
+  'attempt.grade.save': '주관식 채점 저장',
+  'attempt.grade.finalize': '주관식 채점 확정',
+  'plan.complete': '개인 계획 완료 · 결재 생략',
+  'plan.save': '개인 계획 수정',
+  'learning.save': '학습 완료 기록',
   seed: '초기 데이터',
   'comparison.create': '비교 초안',
   'comparison.save': '비교 저장',
@@ -315,6 +300,8 @@ function archivedDrafts(ev: AuditEvent) {
     attemptId: string;
     evaluatorId?: string;
     verdicts: Record<string, Verdict>;
+    grades?: Draft['grades'];
+    feedback?: string;
   }[];
 }
 function itemTitle(id: string) {
@@ -336,7 +323,7 @@ function canLeave() {
     return false;
   }
   if (
-    (noticeDraft.value || assignmentOpen.value || selectedAssignment.value) &&
+    (noticeDraft.value || selectedAssignment.value) &&
     !window.confirm(
       '작성 중인 입력이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
     )
@@ -356,12 +343,13 @@ onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 </script>
 <template>
-  <div class="container page admin-shell">
+  <div class="container page admin-shell" :data-density="list.density">
     <ManagementContext />
     <aside class="admin-sidebar">
       <p class="organization-context">{{ store.managementOrganization?.name }}</p>
       <h2 class="small-heading">관리</h2>
       <nav aria-label="관리 메뉴">
+        <RouterLink :to="store.managementLink('/admin/catalog')"><AppIcon name="file" :size="18"/>기준 일괄 관리</RouterLink>
         <RouterLink
           v-for="s in sections"
           :key="s.id"
@@ -377,7 +365,7 @@ onBeforeRouteUpdate(canLeave);
     </div>
     <div v-else class="admin-content">
       <div
-        v-if="errors.length && !editor && !assignmentOpen && !selectedAssignment && !noticeDraft"
+        v-if="errors.length && !editor && !selectedAssignment && !noticeDraft"
         class="error-message"
         role="alert"
       >
@@ -447,10 +435,15 @@ onBeforeRouteUpdate(canLeave);
             ><span>{{ courseDraft ? '과정명' : '자격명' }}</span
             ><input v-model="editor.title" :disabled="readOnly"
           /></label>
-          <template v-if="qualificationDraft"
-            ><fieldset class="course-selection">
+          <template v-if="qualificationDraft">
+            <QualificationFields :qualification="qualificationDraft" :disabled="readOnly" />
+            <fieldset class="course-selection">
               <legend>필수 과정</legend>
-              <label v-for="c in organizationData.courses" :key="c.id" class="choice"
+              <label class="field course-selection-search"><span>과정 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
+                <input v-model="courseSearch" type="search" placeholder="과정명 또는 버전 검색" aria-label="필수 과정 검색" />
+              </label>
+              <div class="course-selection-list">
+              <label v-for="c in selectableCourses" :key="c.id" class="choice"
                 ><input
                   v-model="qualificationDraft.courseIds"
                   type="checkbox"
@@ -465,22 +458,27 @@ onBeforeRouteUpdate(canLeave);
                         ? 'catalogDraft'
                         : 'published'
                   "
-              /></label></fieldset
+              /></label>
+              <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
+              </div></fieldset
           ></template>
           <template v-if="courseDraft"
             ><div class="form-grid">
-              <label class="field"
-                ><span>필수 평가</span
-                ><select
-                  v-model="courseDraft.mode"
-                  :disabled="readOnly"
-                  @change="editorTab = courseDraft.mode === 'practical' ? 'practical' : 'objective'"
+              <fieldset class="assessment-kind-group">
+                <legend>필수 평가</legend>
+                <div class="assessment-kind-options">
+                <label v-for="(label, kind) in labels" :key="kind" class="checkbox-label"
+                  ><input
+                    v-model="courseDraft.assessmentKinds"
+                    type="checkbox"
+                    :value="kind"
+                    :disabled="readOnly"
+                    @change="editorTab = courseDraft.assessmentKinds[0] || 'objective'"
+                  />{{ label }}</label
                 >
-                  <option value="both">객관식 · 실기</option>
-                  <option value="objective">객관식</option>
-                  <option value="practical">실기</option>
-                </select></label
-              ><label v-if="courseDraft.mode !== 'practical'" class="field"
+                </div>
+              </fieldset>
+              <label v-if="courseDraft.assessmentKinds.includes('objective')" class="field"
                 ><span>객관식 합격 기준 (%)</span
                 ><input
                   v-model.number="courseDraft.passScore"
@@ -503,18 +501,27 @@ onBeforeRouteUpdate(canLeave);
                 placeholder="https://" /></label
           ></template>
         </div>
+        <CourseLearningEditor v-if="courseDraft" ref="learningEditor" :course="courseDraft" :disabled="readOnly" />
         <template v-if="courseDraft"
           ><div v-if="section !== 'comparisons'" class="list-toolbar">
             <div class="tabs">
               <button
-                v-if="courseDraft.mode !== 'practical'"
+                v-if="courseDraft.assessmentKinds.includes('subjective')"
+                :class="{ active: editorTab === 'subjective' }"
+                :aria-pressed="editorTab === 'subjective'"
+                @click="editorTab = 'subjective'"
+              >
+                주관식 <span>{{ courseDraft.subjectiveQuestions.length }}</span>
+              </button>
+              <button
+                v-if="courseDraft.assessmentKinds.includes('objective')"
                 :class="{ active: editorTab === 'objective' }"
                 :aria-pressed="editorTab === 'objective'"
                 @click="editorTab = 'objective'"
               >
                 객관식 <span>{{ courseDraft.questions.length }}</span></button
               ><button
-                v-if="courseDraft.mode !== 'objective'"
+                v-if="courseDraft.assessmentKinds.includes('practical')"
                 :class="{ active: editorTab === 'practical' }"
                 :aria-pressed="editorTab === 'practical'"
                 @click="editorTab = 'practical'"
@@ -525,7 +532,19 @@ onBeforeRouteUpdate(canLeave);
             <button
               v-if="!readOnly"
               class="button secondary"
-              @click="editorTab === 'objective' ? addQuestion() : addPractical()"
+              @click="
+                editorTab === 'objective'
+                  ? addQuestion()
+                  : editorTab === 'subjective'
+                    ? courseDraft.subjectiveQuestions.push({
+                        id: cryptoId(),
+                        prompt: '',
+                        points: 1,
+                        rubric: '',
+                        modelAnswer: '',
+                      })
+                    : addPractical()
+              "
             >
               <AppIcon name="plus" :size="18" />{{
                 editorTab === 'objective' ? '문항 추가' : '항목 추가'
@@ -607,6 +626,52 @@ onBeforeRouteUpdate(canLeave);
               등록된 문항이 없습니다.
             </div></template
           >
+          <template v-else-if="editorTab === 'subjective'">
+            <section class="panel editor-panel">
+              <label class="field"
+                ><span>주관식 합격 기준 (%)</span
+                ><input
+                  v-model.number="courseDraft.subjectivePassScore"
+                  :disabled="readOnly"
+                  type="number"
+                  min="1"
+                  max="100"
+                  placeholder="미정"
+              /></label>
+            </section>
+            <section
+              v-for="(q, index) in courseDraft.subjectiveQuestions"
+              :key="q.id"
+              class="panel editor-panel"
+            >
+              <h2>주관식 {{ index + 1 }}</h2>
+              <label class="field"
+                ><span>문항</span><textarea v-model="q.prompt" :disabled="readOnly" rows="2" />
+              </label>
+              <label class="field"
+                ><span>배점</span
+                ><input v-model.number="q.points" :disabled="readOnly" type="number" min="1"
+              /></label>
+              <label class="field"
+                ><span>채점 기준 · 관리자·지정 FT만 조회</span
+                ><textarea v-model="q.rubric" :disabled="readOnly" rows="3" />
+              </label>
+              <label class="field"
+                ><span>모범답안 · 선택</span
+                ><textarea v-model="q.modelAnswer" :disabled="readOnly" rows="3" />
+              </label>
+              <button
+                v-if="!readOnly"
+                class="text-link"
+                @click="courseDraft.subjectiveQuestions.splice(index, 1)"
+              >
+                문항 삭제
+              </button>
+            </section>
+            <p v-if="!courseDraft.subjectiveQuestions.length" class="panel empty-state">
+              등록된 문항이 없습니다.
+            </p>
+          </template>
           <template v-else
             ><div class="panel editor-panel">
               <label class="field"
@@ -660,6 +725,7 @@ onBeforeRouteUpdate(canLeave);
       <template v-else>
         <div class="page-heading">
           <h1>{{ title }}</h1>
+          <TemplateImport v-if="section === 'qualifications'" />
           <button
             v-if="section === 'qualifications' || section === 'courses'"
             class="button primary"
@@ -667,15 +733,8 @@ onBeforeRouteUpdate(canLeave);
             @click="createCatalog"
           >
             <AppIcon name="plus" :size="18" />{{
-              section === 'courses' ? '과정 추가' : '자격 추가'
+              section === 'courses' ? '과정 추가' : '새 자격 만들기'
             }}</button
-          ><button
-            v-else-if="section === 'assignments'"
-            class="button primary"
-            :disabled="busy"
-            @click="openAssignmentDialog"
-          >
-            <AppIcon name="plus" :size="18" />자격 배정</button
           ><button
             v-else-if="section === 'notices'"
             class="button primary"
@@ -709,12 +768,18 @@ onBeforeRouteUpdate(canLeave);
                 <option value="published">사용 중</option></template
               ><template v-else
                 ><option value="active">진행 중</option>
-                <option value="certified">인증 완료</option>
+                <option value="certified">인증 취득 전체</option>
+                <option value="valid">현재 유효</option>
+                <option value="expiring">만료 예정</option>
+                <option value="expired">만료</option>
+                <option value="unknown">유효기간 미설정</option>
                 <option value="excluded">검증 제외</option></template
               >
             </select>
           </div>
         </div>
+        <ListControls v-if="section!=='comparisons'" :count="list.count" :pages="list.pages" v-model:page="list.page" v-model:size="list.size" v-model:density="list.density" v-model:sort="list.sort"/>
+        <PlanningPanel v-if="section === 'assignments'" :key="store.managementLv1" />
         <div v-if="section === 'qualifications'" class="table-panel">
           <table>
             <thead>
@@ -727,18 +792,30 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="q in qualifications" :key="q.id">
+              <tr v-for="q in pageQualifications" :key="q.id">
                 <td>
                   <RouterLink
                     :to="store.managementLink(`/admin/qualifications/${q.id}`)"
                     class="table-title"
                     >{{ q.title || '이름 없음' }}</RouterLink
                   >
+                  <span v-if="q.description.includes('프로세스 검증용')" class="test-data-tag">시험 데이터</span>
                 </td>
                 <td>v{{ q.version }}</td>
                 <td>{{ q.courseIds.length }}과정</td>
                 <td>
                   <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : 'published'" />
+                  <details v-if="store.qualificationErrors(q).length" class="readiness">
+                    <summary>설정 필요 {{ store.qualificationErrors(q).length }}건</summary>
+                    <ul>
+                      <li v-for="error in store.qualificationErrors(q)" :key="error">
+                        {{ error }}
+                      </li>
+                    </ul>
+                    <RouterLink :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+                      >기준 확인</RouterLink
+                    >
+                  </details>
                   <p v-if="store.retiredCourses(q).length" class="muted">
                     신규 배정 불가 ·
                     {{
@@ -775,7 +852,7 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in courses" :key="c.id">
+              <tr v-for="c in pageCourses" :key="c.id">
                 <td>
                   <RouterLink
                     :to="store.managementLink(`/admin/courses/${c.id}`)"
@@ -784,7 +861,7 @@ onBeforeRouteUpdate(canLeave);
                   >
                 </td>
                 <td>v{{ c.version }}</td>
-                <td class="muted">{{ labels[c.mode] }}</td>
+                <td class="muted">{{ c.assessmentKinds.map((k) => labels[k]).join(' · ') }}</td>
                 <td>
                   <StatusBadge
                     :status="
@@ -822,7 +899,7 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="a in assignments" :key="a.id">
+              <tr v-for="a in pageAssignments" :key="a.id">
                 <td>{{ store.username(a.learnerId) }}</td>
                 <td>
                   {{ store.qualification(a.qualificationId).title
@@ -868,9 +945,22 @@ onBeforeRouteUpdate(canLeave);
               ><StatusBadge
                 :status="a.excludedReason ? 'excluded' : a.certifiedAt ? 'certified' : 'draft'"
                 :label="!a.certifiedAt && !a.excludedReason ? '진행 중' : undefined"
-              /><AppIcon name="down" :size="18" />
+              /><ValidityBadge v-if="a.certification" :certification="a.certification" /><AppIcon
+                name="down"
+                :size="18"
+              />
             </summary>
             <div class="result-detail-body">
+              <p v-if="a.certification" class="muted">
+                취득일 {{ kstDate(a.certification.date) }} ·
+                {{
+                  a.certification.expiresOn
+                    ? `만료일 ${a.certification.expiresOn}`
+                    : a.certification.validity?.type === 'unlimited'
+                      ? '무기한'
+                      : '유효기간 미설정 · 기존 기록'
+                }}
+              </p>
               <p v-if="a.excludedReason" class="error-message">
                 검증 제외 · {{ a.excludedReason }}
               </p>
@@ -912,6 +1002,19 @@ onBeforeRouteUpdate(canLeave);
                       >
                     </div>
                   </div>
+                  <div v-else-if="h.kind === 'subjective'" class="attempt-items">
+                    <p class="small-label">
+                      평가자 {{ store.username(h.evaluatorId) }} · 득점 {{ h.earned }} /
+                      {{ h.total }} · 합격 기준 {{ store.course(e.courseId).subjectivePassScore }}%
+                    </p>
+                    <div v-for="q in store.course(e.courseId).subjectiveQuestions" :key="q.id">
+                      <h3>{{ q.prompt }}</h3>
+                      <p class="preserve-lines">답안: {{ h.subjectiveAnswers?.[q.id] }}</p>
+                      <p>{{ h.grades?.[q.id]?.points }} / {{ q.points }}점</p>
+                      <p class="preserve-lines">채점 근거: {{ h.grades?.[q.id]?.reason }}</p>
+                    </div>
+                    <p class="preserve-lines">공개 피드백: {{ h.feedback || '없음' }}</p>
+                  </div>
                   <div v-else class="attempt-items">
                     <p class="small-label">
                       평가자 {{ store.username(h.evaluatorId) }} ·
@@ -932,6 +1035,12 @@ onBeforeRouteUpdate(canLeave);
                   수료 {{ e.completion.id }} ·
                   {{ new Date(e.completion.date).toLocaleString('ko-KR') }}
                 </p>
+                <RouterLink
+                  v-if="e.completion"
+                  class="text-link"
+                  :to="store.managementLink(`/completions/${e.completion.id}`)"
+                  >과정 수료증 보기</RouterLink
+                >
                 <p v-if="!e.history.length" class="muted">평가 이력이 없습니다.</p>
               </section>
               <details class="attempt-detail">
@@ -970,7 +1079,24 @@ onBeforeRouteUpdate(canLeave);
                         </p>
                         <p class="muted">{{ value.evidence || '근거 미입력' }}</p>
                       </div>
-                      <p v-if="!Object.keys(archived.verdicts).length" class="muted">
+                      <div
+                        v-for="(grade, questionId) in archived.grades"
+                        :key="questionId"
+                        class="audit-row"
+                      >
+                        <p>주관식 문항 {{ questionId }} · {{ grade.points }}점</p>
+                        <p class="preserve-lines">{{ grade.reason || '근거 미입력' }}</p>
+                      </div>
+                      <p v-if="archived.feedback" class="preserve-lines">
+                        공개 피드백 초안: {{ archived.feedback }}
+                      </p>
+                      <p
+                        v-if="
+                          !Object.keys(archived.verdicts).length &&
+                          !Object.keys(archived.grades || {}).length
+                        "
+                        class="muted"
+                      >
                         작성한 판정이 없습니다.
                       </p>
                     </section>
@@ -999,7 +1125,7 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="n in notices" :key="n.id">
+              <tr v-for="n in pageNotices" :key="n.id">
                 <td>
                   <button class="table-title text-link" @click="editNotice(n)">
                     {{ n.title }}
@@ -1027,79 +1153,6 @@ onBeforeRouteUpdate(canLeave);
           <p v-if="!notices.length" class="empty-state">등록된 공지가 없습니다.</p>
         </div>
       </template>
-      <AppDialog v-model:open="assignmentOpen" title="자격 배정"
-        ><div v-if="errors.length" class="error-message" role="alert">{{ errors[0] }}</div>
-        <label class="field"
-          ><span>대상자</span
-          ><select v-model="assignmentForm.learnerId">
-            <option
-              v-for="u in organizationData.users.filter(
-                (u) => u.roles.includes('learner') && u.organizationActive,
-              )"
-              :key="u.id"
-              :value="u.id"
-            >
-              {{ u.name }} ·
-              {{
-                u.organizationPath
-                  .slice(1)
-                  .map((o) => o.name)
-                  .join(' › ') || 'Lv1 직속'
-              }}
-            </option>
-          </select></label
-        ><label class="field"
-          ><span>자격</span
-          ><select v-model="assignmentForm.qualificationId">
-            <option
-              v-for="q in organizationData.qualifications.filter((q) => q.status === 'published')"
-              :key="q.id"
-              :value="q.id"
-              :disabled="!!store.retiredCourses(q).length"
-            >
-              {{ q.title }} · v{{ q.version
-              }}{{ store.retiredCourses(q).length ? ' · 신규 배정 불가 (운영 종료 과정)' : '' }}
-            </option>
-          </select></label
-        ><label class="field"
-          ><span>담당 FT</span
-          ><select v-model="assignmentForm.ftId" :disabled="!needsFT">
-            <option value="">미지정</option>
-            <option
-              v-for="u in organizationData.users.filter(
-                (u) =>
-                  u.roles.includes('ft') &&
-                  u.organizationActive &&
-                  u.id !== (selectedAssignment?.learnerId || assignmentForm.learnerId),
-              )"
-              :key="u.id"
-              :value="u.id"
-            >
-              {{ u.name }} ·
-              {{
-                u.organizationPath
-                  .slice(1)
-                  .map((o) => o.name)
-                  .join(' › ') || 'Lv1 직속'
-              }}
-            </option>
-          </select></label
-        ><template #footer
-          ><button class="button secondary" @click="assignmentOpen = false">취소</button
-          ><button
-            class="button primary"
-            :disabled="
-              busy ||
-              !assignmentForm.qualificationId ||
-              !assignmentForm.learnerId ||
-              !store.managementOrganization?.effectiveActive
-            "
-            @click="addAssignment"
-          >
-            배정
-          </button></template
-        ></AppDialog
-      >
       <AppDialog
         :open="!!selectedAssignment"
         :title="assignmentAction === 'ft' ? 'FT 변경' : '검증 제외'"
@@ -1111,9 +1164,14 @@ onBeforeRouteUpdate(canLeave);
         <div v-if="errors.length" class="error-message" role="alert">{{ errors[0] }}</div>
         <label v-if="assignmentAction === 'ft'" class="field"
           ><span>담당 FT</span
-          ><select v-model="ftId">
+          ><select aria-label="담당 FT" v-model="ftId" :disabled="busy">
             <option
-              v-for="u in organizationData.users.filter((u) => u.roles.includes('ft'))"
+              v-for="u in organizationData.users.filter(
+                (u) =>
+                  u.roles.includes('ft') &&
+                  u.organizationActive &&
+                  u.id !== selectedAssignment?.learnerId,
+              )"
               :key="u.id"
               :value="u.id"
             >

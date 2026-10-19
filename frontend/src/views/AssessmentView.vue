@@ -7,6 +7,7 @@ import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
 import type { Verdict } from '../types';
+import { kindLabels } from '@eks/contracts';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
@@ -78,7 +79,11 @@ const ftResultMessage = computed(() => {
   if (result.value !== 'passed')
     return `${learnerName.value} 님의 실기 평가 결과는 미통과입니다. 학습자가 다시 요청하면 재평가할 수 있습니다.`;
   if (store.complete(e.value)) return `${learnerName.value} 님이 이 과정을 수료했습니다.`;
-  return `${learnerName.value} 님이 실기 평가를 통과했습니다. 과정 수료에는 객관식 평가 통과가 필요합니다.`;
+  const remaining = c
+    .value!.assessmentKinds.filter((kind) => e.value![kind] !== 'passed')
+    .map((kind) => kindLabels[kind])
+    .join(' · ');
+  return `${learnerName.value} 님이 실기 평가를 통과했습니다. 과정 수료에는 ${remaining} 평가 통과가 필요합니다.`;
 });
 const returnPath = computed(() =>
   isFT.value ? '/evaluations' : `/qualifications/${a.value?.id}?course=${c.value?.id}`,
@@ -124,7 +129,7 @@ async function prepare() {
       load(null);
       return;
     }
-    if (isObjective.value && e.value.objective !== 'passed')
+    if (isObjective.value && e.value.objective !== 'passed' && e.value.learningComplete)
       load(await store.startAttempt(a.value.id, c.value.id, 'objective'));
     else if (isFT.value && e.value.practical === 'waiting')
       load(e.value.activeAttempts.practical || null);
@@ -278,6 +283,10 @@ onBeforeRouteUpdate(canLeave);
         /></RouterLink>
       </div>
     </div>
+    <div v-else-if="!isFT && !e.learningComplete" class="panel empty-state">
+      <h2>필수 학습 완료 기록이 필요합니다.</h2>
+      <RouterLink :to="returnPath" class="button primary">학습 기록으로</RouterLink>
+    </div>
     <div v-else-if="isFT && !attempt && !busy" class="panel empty-state">
       <h2>학습자의 실기 평가 요청을 기다리고 있습니다.</h2>
       <RouterLink to="/evaluations" class="button secondary">평가 목록</RouterLink>
@@ -293,7 +302,13 @@ onBeforeRouteUpdate(canLeave);
           <AppIcon name="alert" :size="18" />{{ error }}
         </div>
         <template v-if="isObjective && stage === 'edit'"
-          ><fieldset v-for="(q, index) in c.questions" :id="q.id" :key="q.id" class="question-card">
+          ><fieldset
+            v-for="(q, index) in c.questions"
+            :id="q.id"
+            :key="q.id"
+            class="question-card"
+            :disabled="busy || !attempt || conflict"
+          >
             <legend class="sr-only">{{ index + 1 }}. {{ q.prompt }}</legend>
             <div class="question-title">
               <span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span>
@@ -423,6 +438,9 @@ onBeforeRouteUpdate(canLeave);
             >
           </div></template
         >
+        <p v-if="!isFT && !isObjective && !a.ftId" class="error-message">
+          FT 배정 대기 · 조직 관리자가 FT를 지정하면 실기 평가를 요청할 수 있습니다.
+        </p>
         <div class="actionbar">
           <span v-if="attempt" class="save-status" role="status">{{
             { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[
@@ -459,7 +477,7 @@ onBeforeRouteUpdate(canLeave);
             ><button
               v-else-if="e.practical !== 'passed'"
               class="button primary"
-              :disabled="busy"
+              :disabled="busy || !a.ftId || !e.learningComplete"
               @click="requestPractical"
             >
               {{ e.practical === 'failed' ? '다시 요청' : '평가 요청'

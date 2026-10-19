@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ValidityBadge from './ValidityBadge.vue';
+import { kindLabels, kstDate } from '@eks/contracts';
 import { computed, ref } from 'vue';
 import { useDemo } from '../stores/demo';
 import { comparisonLabels } from '@eks/contracts';
@@ -34,6 +36,8 @@ const audits = computed(() =>
     .slice()
     .reverse(),
 );
+const assessmentNames = (kinds: (keyof typeof kindLabels)[]) =>
+  kinds.map((kind) => kindLabels[kind]).join(' · ');
 const rootName = (id: string) => store.data.organizations.find((o) => o.id === id)?.name ?? id;
 const stateLabels: Record<string, string> = {
   ready: '미시작',
@@ -65,6 +69,14 @@ const actionLabels: Record<string, string> = {
   'progress.reset': '테스트 진행 내역 초기화',
   'user.create': '사용자 등록',
   'user.update': '사용자 소속·역할 수정',
+  'template.import': '기본 자격 가져오기',
+  'planning.request': '계획 수립 요청',
+  'plan.create': '개인 계획 시작',
+  'plan.save': '개인 계획 저장',
+  'plan.complete': '개인 계획 완료',
+  'learning.save': '학습 완료 기록',
+  'attempt.grade.save': '주관식 채점 저장',
+  'attempt.grade.finalize': '주관식 채점 확정',
 };
 </script>
 <template>
@@ -113,6 +125,10 @@ const actionLabels: Record<string, string> = {
         {{ a.organizationSource === 'migration' ? '이관 시 소속' : '배정 당시 소속' }}:
         {{ a.organizationPath.map((p) => p.name).join(' › ') }}
       </p>
+      <p v-if="a.certification">
+        <ValidityBadge :certification="a.certification" /> · 취득 {{ kstDate(a.certification.date)
+        }}<span v-if="a.certification.expiresOn"> · 만료 {{ a.certification.expiresOn }}</span>
+      </p>
       <p v-if="a.excludedReason">제외 사유: {{ a.excludedReason }}</p>
       <RouterLink v-if="a.certification" :to="`/certifications/${a.id}`" class="text-link"
         >검증용 인증 보기</RouterLink
@@ -121,16 +137,23 @@ const actionLabels: Record<string, string> = {
         <h3>{{ store.course(e.courseId).title }}</h3>
         <p>
           <span v-for="kind in store.requiredKinds(store.course(e.courseId))" :key="kind"
-            >{{ kind === 'objective' ? '객관식' : '실기' }}: {{ stateLabels[e[kind]] }} · </span
+            >{{ kindLabels[kind] }}: {{ stateLabels[e[kind]] }} · </span
           >{{ e.completion ? '수료' : '진행 중' }}
         </p>
+        <p v-if="a.planId">학습 기록: {{ e.learningComplete ? '필수 항목 완료' : '미완료' }}</p>
+        <p v-for="record in e.learningRecords" :key="record.id">
+          {{ record.performedOn }} · {{ record.content }} · 학습자 기록
+        </p>
+        <RouterLink v-if="e.completion" :to="`/completions/${e.completion.id}`" class="text-link"
+          >과정 수료증 보기</RouterLink
+        >
         <details
           v-for="t in [...e.history, ...Object.values(e.activeAttempts)]"
           :key="t!.id"
           class="attempt-readonly"
         >
           <summary>
-            {{ t!.kind === 'objective' ? '객관식' : '실기' }} {{ t!.round }}회 ·
+            {{ kindLabels[t!.kind] }} {{ t!.round }}회 ·
             {{ t!.result === 'passed' ? '통과' : t!.result === 'failed' ? '미통과' : '작성 중' }}
           </summary>
           <p v-if="t!.evaluatorId">평가자: {{ store.username(t!.evaluatorId) }}</p>
@@ -140,6 +163,16 @@ const actionLabels: Record<string, string> = {
                 t!.verdicts?.[item.id]?.evidence || '근거 미작성'
               }}
             </p></template
+          >
+          <template v-else-if="t!.kind === 'subjective'"
+            ><div v-for="q in store.course(e.courseId).subjectiveQuestions" :key="q.id">
+              <h3>{{ q.prompt }}</h3>
+              <p class="preserve-lines">{{ t!.subjectiveAnswers?.[q.id] || '미응답' }}</p>
+              <p>
+                {{ t!.grades?.[q.id]?.points }} / {{ q.points }}점 · {{ t!.grades?.[q.id]?.reason }}
+              </p>
+            </div>
+            <p class="preserve-lines">{{ t!.feedback }}</p></template
           >
           <template v-else
             ><p v-for="q in store.course(e.courseId).questions" :key="q.id">
@@ -167,7 +200,18 @@ const actionLabels: Record<string, string> = {
         {{ q.title || '이름 없는 초안' }} · v{{ q.version }}
         <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : q.status" />
       </summary>
-      <p class="muted">{{ rootName(q.lv1OrganizationId) }}</p>
+      <p class="muted">{{ rootName(q.lv1OrganizationId) }} · {{ q.englishName }}</p>
+      <p>{{ q.description || '설명 미정' }}</p>
+      <p>
+        인증기간:
+        {{
+          q.validity.type === 'months'
+            ? `${q.validity.months}개월 · 만료 ${q.validity.reminderDays.join('·')}일 전 알림`
+            : q.validity.type === 'unlimited'
+              ? '무기한'
+              : '미정'
+        }}
+      </p>
       <ul>
         <li v-for="id in q.courseIds" :key="id">{{ store.course(id).title }}</li>
       </ul>
@@ -200,6 +244,20 @@ const actionLabels: Record<string, string> = {
         >학습 자료</a
       >
       <p>{{ c.instruction }}</p>
+      <p>필수 평가: {{ assessmentNames(c.assessmentKinds) }}</p>
+      <p v-for="item in c.learningItems" :key="item.id">
+        {{ item.title }} ·
+        {{ item.type === 'mtc' ? 'MTC교육' : item.type === 'team' ? '팀 특화 교육' : '현업 OJT' }} ·
+        {{ item.required ? '필수 학습' : '선택 학습' }}
+      </p>
+      <p v-if="c.assessmentKinds.includes('subjective')">
+        주관식 합격 기준 {{ c.subjectivePassScore }}%
+      </p>
+      <article v-for="q in c.subjectiveQuestions" :key="q.id">
+        <h3>{{ q.prompt }} · {{ q.points }}점</h3>
+        <p class="preserve-lines">채점 기준: {{ q.rubric }}</p>
+        <p v-if="q.modelAnswer" class="preserve-lines">모범답안: {{ q.modelAnswer }}</p>
+      </article>
       <p v-if="c.passScore">객관식 합격 기준 {{ c.passScore }}%</p>
       <article v-for="q in c.questions" :key="q.id">
         <h3>{{ q.prompt }}</h3>

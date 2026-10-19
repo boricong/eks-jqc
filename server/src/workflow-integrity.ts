@@ -1,0 +1,176 @@
+import { planErrors, expirationDate, type State } from "@eks/contracts";
+function check(value: unknown, label: string): asserts value {
+  if (!value) throw new Error(`저장 데이터 무결성 오류: ${label}`);
+}
+export function validateWorkflow(s: State) {
+  const user = (id: string) => s.users.some((u) => u.id === id);
+  for (const r of s.planningRequests)
+    check(
+      user(r.learnerId) &&
+        user(r.requestedBy) &&
+        (!r.ftId || (user(r.ftId) && r.ftId !== r.learnerId)),
+      "계획 요청 사용자",
+    );
+  for (const p of s.plans) {
+    check(Boolean(p.deletedAt) === Boolean(p.deletedBy), "계획 삭제 정보");
+    if (p.deletedAt)
+      check(
+        p.status === "draft" &&
+          p.deletedBy === p.learnerId &&
+          user(p.deletedBy) &&
+          !s.assignments.some((a) => a.planId === p.id),
+        "삭제 계획 상태",
+      );
+    const r = s.planningRequests.find((r) => r.id === p.requestId),
+      q = s.qualifications.find((q) => q.id === p.qualificationId);
+    check(
+      r &&
+        q &&
+        r.learnerId === p.learnerId &&
+        r.lv1OrganizationId === p.lv1OrganizationId &&
+        q.lv1OrganizationId === p.lv1OrganizationId &&
+        q.status === "published",
+      "계획 요청·자격 연결",
+    );
+    check(
+      p.schedules.length === q.courseIds.length &&
+        new Set(p.schedules.map((x) => x.courseId)).size ===
+          q.courseIds.length &&
+        p.schedules.every((x) => q.courseIds.includes(x.courseId)),
+      "계획 필수 과정",
+    );
+    if (p.status === "completed") {
+      const a = s.assignments.find((a) => a.id === p.assignmentId);
+      check(
+        a &&
+          a.planId === p.id &&
+          a.learnerId === p.learnerId &&
+          a.qualificationId === p.qualificationId &&
+          a.ownerAdminId === r.requestedBy &&
+          a.createdBy === p.learnerId &&
+          p.completedAt &&
+          p.approval === "skipped_by_policy" &&
+          !planErrors(p).length,
+        "완료 계획과 배정",
+      );
+    } else
+      check(!p.assignmentId && !p.completedAt && !p.approval, "계획 초안 상태");
+  }
+  for (const a of s.assignments) {
+    if (a.planId)
+      check(
+        s.plans.some(
+          (p) =>
+            p.id === a.planId &&
+            p.assignmentId === a.id &&
+            p.status === "completed",
+        ),
+        "배정 계획 참조",
+      );
+    if (a.createdBy) check(user(a.createdBy), "배정 생성자");
+    check(!a.ftId || (user(a.ftId) && a.ftId !== a.learnerId), "배정 FT 참조");
+  }
+  check(
+    new Set(s.learningRecords.map((r) => `${r.enrollmentId}:${r.itemId}`))
+      .size === s.learningRecords.length,
+    "학습 완료 기록 중복",
+  );
+  for (const r of s.learningRecords) {
+    const e = s.enrollments.find((e) => e.id === r.enrollmentId),
+      a = s.assignments.find((a) => a.id === e?.assignmentId),
+      c = s.courses.find((c) => c.id === e?.courseId);
+    check(
+      e &&
+        a?.planId &&
+        a.learnerId === r.learnerId &&
+        c?.learningItems.some((i) => i.id === r.itemId),
+      "학습 완료 참조",
+    );
+  }
+  for (const t of s.attempts) {
+    const e = s.enrollments.find((e) => e.id === t.enrollmentId)!,
+      a = s.assignments.find((a) => a.id === e.assignmentId)!,
+      c = s.courses.find((c) => c.id === e.courseId)!;
+    if (a.planId)
+      check(
+        c.learningItems
+          .filter((i) => i.required)
+          .every((i) =>
+            s.learningRecords.some(
+              (r) => r.enrollmentId === e.id && r.itemId === i.id,
+            ),
+          ),
+        "평가 선행 학습",
+      );
+    check(
+      Object.keys(t.subjectiveAnswers || {}).every(
+        (id) =>
+          t.kind === "subjective" &&
+          c.subjectiveQuestions.some((q) => q.id === id),
+      ),
+      "주관식 답안 항목",
+    );
+    check(
+      Object.entries(t.grades || {}).every(
+        ([id, grade]) =>
+          t.kind === "subjective" &&
+          c.subjectiveQuestions.some(
+            (q) => q.id === id && grade.points <= q.points,
+          ),
+      ),
+      "주관식 채점 항목",
+    );
+    if (t.kind === "subjective" && t.status === "in_progress")
+      check(
+        !Object.keys(t.grades || {}).length && !t.submittedAt && !t.feedback,
+        "제출 전 채점 금지",
+      );
+  }
+  for (const c of s.certifications) {
+    if (c.validity)
+      check(
+        c.expiresOn === expirationDate(c.date, c.validity),
+        "인증 만료일 계산",
+      );
+    const a = s.assignments.find((a) => a.id === c.assignmentId)!;
+    if (c.snapshot)
+      check(
+        c.snapshot.organizationPath[0]?.id === a.lv1OrganizationId,
+        "인증 당시 조직",
+      );
+  }
+  for (const c of s.completions)
+    if (c.snapshot) {
+      const e = s.enrollments.find((e) => e.id === c.enrollmentId)!;
+      check(
+        c.snapshot.organizationPath[0]?.id ===
+          s.assignments.find((a) => a.id === e.assignmentId)!.lv1OrganizationId,
+        "수료 당시 조직",
+      );
+    }
+  check(
+    new Set(s.notifications.map((n) => `${n.recipientId}:${n.key}`)).size ===
+      s.notifications.length,
+    "알림 중복",
+  );
+  for (const n of s.notifications) {
+    check(user(n.recipientId), "알림 수신자");
+    if (n.assignmentId)
+      check(
+        s.assignments.some(
+          (a) =>
+            a.id === n.assignmentId &&
+            a.lv1OrganizationId === n.lv1OrganizationId,
+        ),
+        "알림 배정 참조",
+      );
+    if (n.certificationId)
+      check(
+        s.certifications.some(
+          (c) =>
+            c.id === n.certificationId && c.assignmentId === n.assignmentId,
+        ),
+        "알림 인증 참조",
+      );
+  }
+}

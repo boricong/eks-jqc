@@ -11,7 +11,7 @@ export const test = base.extend<{ backend: { store: JsonStore; restart: () => Pr
     async ({}, use) => {
       const dir = await mkdtemp(path.join(os.tmpdir(), 'eks-browser-')),
         file = path.join(dir, 'runtime', 'state.json'),
-        seed = seedState();
+        seed = seedState(true);
       await new JsonStore(file).initialize(seed);
       let store = await new JsonStore(file).load(),
         app = await buildApp(store, { origins: ['http://127.0.0.1:5286'] });

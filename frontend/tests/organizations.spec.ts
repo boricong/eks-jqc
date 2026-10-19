@@ -1,3 +1,4 @@
+import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { test, expect, actor } from './fixtures';
@@ -119,25 +120,22 @@ test('새 Lv1 관리자·학습자·FT 생성부터 기준 등록·배정·평�
   await page.getByRole('link', { name: '과정 관리', exact: true }).click();
   await page.getByRole('button', { name: '과정 추가', exact: true }).click();
   await page.getByLabel('과정명', { exact: true }).fill('Etch 화면 평가 과정');
-  await page.getByLabel('필수 평가').selectOption('practical');
+  await practicalOnly(page);
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   await page.getByLabel('항목명', { exact: true }).fill('시험 항목');
   await page.getByLabel('판정 기준', { exact: true }).fill('가상 작업을 독립적으로 수행한다.');
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '새 버전', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '자격 관리', exact: true }).click();
-  await page.getByRole('button', { name: '자격 추가', exact: true }).click();
+  await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
   await page.getByLabel('자격명', { exact: true }).fill('Etch 화면 검증 자격');
+  await qualificationPolicy(page);
   await page.getByRole('checkbox', { name: /Etch 화면 평가 과정/ }).check();
   await page.getByRole('button', { name: '사용 등록', exact: true }).click();
   await expect(page.getByRole('button', { name: '새 버전', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '자격 배정', exact: true }).click();
-  await page.getByRole('button', { name: '자격 배정', exact: true }).click();
-  await expect(page.getByRole('dialog').getByLabel('대상자')).toHaveValue(id('Etch 학습자'));
-  await page.getByRole('dialog').getByRole('button', { name: '배정', exact: true }).click();
-  await expect(page.locator('tbody')).toContainText('Etch 학습자');
+  await requestPlan(page, 'Etch 학습자', id('Etch 평가자'));
   await actor(page, id('Etch 학습자'));
-  await page.getByRole('link', { name: '이어서 진행', exact: true }).click();
+  await completePlan(page, 'Etch 화면 검증 자격');
   await page.getByRole('link', { name: '평가 요청', exact: true }).click();
   await page.getByRole('button', { name: '평가 요청', exact: true }).click();
   await actor(page, id('Etch 평가자'));
@@ -163,6 +161,8 @@ test('새 Lv1 관리자·학습자·FT 생성부터 기준 등록·배정·평�
   await expect(page.getByRole('button', { name: '평가 확정', exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('system-overview-1920x900.png') });
   await page.getByRole('link', { name: '검증용 인증 보기', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '검증용 인증', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '자격 인증서 · 검증용', exact: true }),
+  ).toBeVisible();
   await expect(page.locator('main')).toContainText('Foundry Etch기술팀');
 });

@@ -37,7 +37,7 @@ test('김민서 요청 후 여러 탭에서 계정을 바꿔도 박준호가 평
   const submitted = backend.store
     .snapshot()
     .attempts.find((a) => a.kind === 'practical' && a.round === 2);
-  expect(submitted).toMatchObject({ evaluatorId: 'ft-1', status: 'submitted', result: 'passed' });
+  expect(submitted).toMatchObject({ evaluatorId: 'ft-1', status: 'graded', result: 'passed' });
   await page.reload();
   await expect(page.getByRole('heading', { name: '정하린 님', exact: true })).toBeVisible();
   await ftPage.screenshot({ path: test.info().outputPath('multi-tab-ft-confirmed.png') });
@@ -87,8 +87,7 @@ for (const failure of ['response', 'refresh'] as const) {
       backend.store
         .snapshot()
         .attempts.filter(
-          (t) =>
-            t.courseId === 'demo-course-2' && t.kind === 'objective' && t.status === 'submitted',
+          (t) => t.courseId === 'demo-course-2' && t.kind === 'objective' && t.status === 'graded',
         ),
     ).toHaveLength(1);
     if (failure === 'refresh') await page.unroute('**/api/workspace');
@@ -129,7 +128,7 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '이어서 진행' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '이어서 응시', exact: true }).click();
+  await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
   await expect(page.getByLabel('대상 이름과 확인한 값', { exact: true })).toBeChecked();
   await expect(page.getByLabel('항목의 누락 여부', { exact: true })).toBeChecked();
 });
@@ -175,7 +174,7 @@ test('FT 변경 후 이전 초안 보존과 새 FT 빈 입력', async ({ page, b
   await expect(page.locator('.save-status')).toHaveText('저장됨');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
-  await page.getByRole('link', { name: '자격 배정', exact: true }).click();
+  await page.getByRole('link', { name: '대상자·계획', exact: true }).click();
   await page.locator('tbody tr summary').click();
   await page.getByRole('button', { name: 'FT 변경' }).click();
   await page.getByRole('dialog').getByLabel('담당 FT').selectOption('ft-2');
@@ -242,6 +241,7 @@ test('개발 서버에서 서버 초기 데이터와 런타임 파일 노출 차
     .replace(/\/frontend$/, '');
   for (const file of [
     `${root}/server/src/seed-source.json`,
+    `${root}/server/tests/fixtures/seed-source.json`,
     `${root}/server/src/organization-seed.json`,
     backend.store.file,
     backend.store.organizations.file,

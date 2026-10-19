@@ -8,7 +8,7 @@ async function change(event: Event) {
   const select = event.target as HTMLSelectElement;
   const target = select.value;
   await router.push({
-    path: `/admin/${String(route.params.section || 'qualifications')}`,
+    path: route.name==='catalog' ? '/admin/catalog' : `/admin/${String(route.params.section || 'qualifications')}`,
     query: { lv1OrganizationId: target },
   });
   select.value = store.managementLv1;
