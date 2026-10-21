@@ -99,7 +99,7 @@ test('평가 10,000행 표는 가상 렌더링하고 편집에 응답한다', as
     required: true,
   }));
   sheet.tables.practical = [];
-  sheet.tables.subjective = [];
+  sheet.tables.materials = [];
   sheet.tables.objective = sheet.tables.courses.flatMap((c) =>
     Array.from({ length: 500 }, (_, i) => ({
       ...q,
@@ -118,9 +118,9 @@ test('평가 10,000행 표는 가상 렌더링하고 편집에 응답한다', as
     buffer,
   });
   await page.getByRole('button', { name: '전체 과정 표 보기', exact: true }).click();
-  await expect(page.getByRole('tab', { name: '객관식 10000', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '지식 평가 10000', exact: true })).toBeVisible();
   const at = Date.now();
-  await page.getByRole('tab', { name: '객관식 10000', exact: true }).click();
+  await page.getByRole('tab', { name: '지식 평가 10000', exact: true }).click();
   await expect(page.locator('.tabulator-row').first()).toBeVisible();
   expect(Date.now() - at).toBeLessThan(5000);
   expect(await page.locator('.tabulator-row').count()).toBeLessThan(150);
@@ -199,9 +199,9 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await grid.locator('.tabulator-row').first().locator('input[type=checkbox]').check();
   await page.getByRole('button', { name: '선택 항목 제외', exact: true }).click();
   await page.getByRole('button', { name: '함께 제외', exact: true }).click();
-  await expect(page.getByRole('tab', { name: '객관식 2', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '지식 평가 2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
-  await expect(page.getByRole('tab', { name: '객관식 4', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '지식 평가 4', exact: true })).toBeVisible();
   page.once('dialog', (d) => d.dismiss());
   await page.getByRole('link', { name: '개별 기준 관리', exact: true }).click();
   await expect(page).toHaveURL(/admin\/catalog/);
@@ -211,7 +211,7 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
     await expect(page.getByRole('button', { name: '초안 저장', exact: true })).toBeVisible();
     if (width === 1920) await page.screenshot({ path: test.info().outputPath('catalog-grid.png') });
   }
-  await page.getByRole('tab', { name: /객관식/ }).click();
+  await page.getByRole('tab', { name: /지식 평가/ }).click();
   await expect(page.locator('[tabulator-field=prompt]').first()).toBeVisible();
   await page.setViewportSize({ width: 1920, height: 900 });
   const correct = page.locator('.tabulator-row').first().locator('[tabulator-field=correct]');

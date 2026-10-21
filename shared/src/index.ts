@@ -1,13 +1,11 @@
 import { z } from "zod";
-import { CatalogBatchSchema } from './catalog.ts';
-export * from './catalog.ts';
+import { CatalogBatchSchema } from "./catalog.ts";
+export * from "./catalog.ts";
 import {
   ValiditySchema,
   unknownValidity,
   validityErrors,
   LearningItemSchema,
-  SubjectiveQuestionSchema,
-  GradeSchema,
   AwardSnapshotSchema,
   PlanningRequestSchema,
   PersonalPlanSchema,
@@ -27,23 +25,27 @@ import {
 } from "./organizations.ts";
 export * from "./organizations.ts";
 
-export const RoleSchema = z.enum(["learner", "ft", "admin", "system_operator"]);
+export const BaseRoleSchema = z.enum(["learner", "admin", "system_operator"]);
+export const RoleSchema = z.enum([
+  "learner",
+  "admin",
+  "system_operator",
+  "organization_admin",
+]);
 export type Role = z.infer<typeof RoleSchema>;
 export const roleLabels: Record<Role, string> = {
   learner: "학습자",
-  ft: "FT",
-  admin: "조직 관리자",
+  admin: "팀 조직 관리자",
+  organization_admin: "세부 조직 관리자",
   system_operator: "시스템 운영자",
 };
-export const KindSchema = z.enum(["objective", "subjective", "practical"]);
+export const KindSchema = z.enum(["objective", "practical"]);
 export type Kind = z.infer<typeof KindSchema>;
 export const kindLabels: Record<Kind, string> = {
-  objective: "객관식",
-  subjective: "주관식",
-  practical: "실기",
+  objective: "객관식 · 지식 평가",
+  practical: "실기 · 상황 대응 평가",
 };
-export type AssessmentState =
-  "ready" | "draft" | "waiting" | "passed" | "failed";
+export type AssessmentState = "ready" | "draft" | "passed" | "failed";
 const id = z
   .string()
   .min(1)
@@ -65,9 +67,22 @@ const url = z.union([
 export const UserSchema = z.object({
   id,
   name: z.string().min(1).max(100),
-  roles: z.array(RoleSchema).min(1),
+  roles: z
+    .array(RoleSchema)
+    .min(1)
+    .refine(
+      (roles) => !roles.includes("organization_admin"),
+      "세부 조직 관리자는 조직별 지정으로 관리합니다.",
+    ),
   organizationId: id,
   revision: z.number().int().positive(),
+  organizationAdministration: z
+    .object({
+      organizationId: id,
+      grantedBy: id,
+      grantedAt: z.iso.datetime(),
+    })
+    .optional(),
 });
 export type User = z.infer<typeof UserSchema>;
 export interface UserView extends User {
@@ -82,17 +97,28 @@ export const QuestionSchema = z.object({
   choices: z.array(z.string().max(2000)).max(50),
   correct: z.number().int().nonnegative().nullable().optional(),
   points: z.number().int().min(1).max(1000000),
-  category: z.enum(["written", "case"]),
 });
 export type Question = z.infer<typeof QuestionSchema>;
-export const PracticalItemSchema = z.object({
+export const PracticalQuestionSchema = QuestionSchema.extend({
+  scenario: text,
+});
+export type PracticalQuestion = z.infer<typeof PracticalQuestionSchema>;
+export const materialTypeLabels = {
+  text: "직접 작성",
+  edm: "EDM Link",
+  confluence: "Confluence",
+  url: "일반 URL",
+};
+export const MaterialSchema = z.object({
   id,
   catalogCode: z.string().max(160).optional(),
-  title: text,
-  criterion: text,
-  mandatory: z.boolean(),
+  type: z.enum(["text", "edm", "confluence", "url"]),
+  title: z.string().max(300),
+  content: text,
+  url,
+  description: text,
 });
-export type PracticalItem = z.infer<typeof PracticalItemSchema>;
+export type LearningMaterial = z.infer<typeof MaterialSchema>;
 const revision = {
   id,
   catalogCode: z.string().max(160).optional(),
@@ -111,22 +137,13 @@ export const CourseSchema = z.object({
   retiredAt: z.iso.datetime().optional(),
   retiredBy: id.optional(),
   retirementReason: z.string().trim().min(1).max(2000).optional(),
-  assessmentKinds: z.array(KindSchema).max(3),
+  assessmentKinds: z.array(KindSchema).max(2),
   learningItems: z.array(LearningItemSchema).max(100).default([]),
-  subjectiveQuestions: z.array(SubjectiveQuestionSchema).max(500).default([]),
-  subjectivePassScore: z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .nullable()
-    .default(null),
+  practicalPassScore: z.number().int().min(1).max(100).nullable(),
   passScore: z.number().int().min(1).max(100).nullable(),
-  material: text,
-  materialUrl: url,
-  instruction: text,
+  materials: z.array(MaterialSchema).max(100),
   questions: z.array(QuestionSchema).max(500),
-  practicalItems: z.array(PracticalItemSchema).max(500),
+  practicalQuestions: z.array(PracticalQuestionSchema).max(500),
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
@@ -138,17 +155,8 @@ export const QualificationSchema = z.object({
   templateId: id.optional(),
 });
 export type Qualification = z.infer<typeof QualificationSchema>;
-export const VerdictSchema = z.object({
-  value: z.enum(["pass", "fail", ""]),
-  evidence: text,
-});
-export type Verdict = z.infer<typeof VerdictSchema>;
 export const DraftSchema = z.object({
   answers: z.record(id, z.number().int().nonnegative()),
-  verdicts: z.record(id, VerdictSchema),
-  subjectiveAnswers: z.record(id, text).optional(),
-  grades: z.record(id, GradeSchema).optional(),
-  feedback: text.optional(),
 });
 export type Draft = z.infer<typeof DraftSchema>;
 export const AttemptSchema = z.object({
@@ -158,18 +166,13 @@ export const AttemptSchema = z.object({
   learnerId: id,
   kind: KindSchema,
   round: z.number().int().positive(),
-  status: z.enum(["in_progress", "submitted", "graded"]),
+  status: z.enum(["in_progress", "graded"]),
   revision: z.number().int().positive(),
   createdAt: z.iso.datetime(),
   date: z.iso.datetime().optional(),
   submittedAt: z.iso.datetime().optional(),
-  evaluatorId: id.optional(),
   result: z.enum(["passed", "failed"]).optional(),
   answers: DraftSchema.shape.answers,
-  verdicts: DraftSchema.shape.verdicts,
-  subjectiveAnswers: DraftSchema.shape.subjectiveAnswers,
-  grades: DraftSchema.shape.grades,
-  feedback: DraftSchema.shape.feedback,
   earned: z.number().nonnegative().optional(),
   total: z.number().positive().optional(),
   itemResults: z
@@ -196,7 +199,6 @@ export const AssignmentSchema = z.object({
   organizationSource: z.enum(["assigned", "migration"]),
   qualificationId: id,
   learnerId: id,
-  ftId: id.nullable(),
   ownerAdminId: id,
   assignedAt: z.iso.datetime(),
   planId: id.optional(),
@@ -228,15 +230,21 @@ export const CertificationSchema = z.object({
   evidence: z.array(z.object({ enrollmentId: id, completionId: id })).min(1),
 });
 export type Certification = z.infer<typeof CertificationSchema>;
-export const NoticeSchema = z.object({
+const NoticeFields = z.object({
   id,
-  lv1OrganizationId: id,
   title: z.string().min(1).max(300),
   body: text.min(1),
   date: z.iso.date(),
   published: z.boolean(),
   revision: z.number().int().positive(),
 });
+export const NoticeSchema = z.discriminatedUnion("scope", [
+  NoticeFields.extend({ scope: z.literal("team"), lv1OrganizationId: id }),
+  NoticeFields.extend({
+    scope: z.literal("system"),
+    lv1OrganizationId: z.undefined().optional(),
+  }),
+]);
 export type Notice = z.infer<typeof NoticeSchema>;
 export const AuditSchema = z.object({
   id,
@@ -258,7 +266,7 @@ export const ComparisonSchema = z.object({
   ownerAdminId: id,
   revision: z.number().int().positive(),
   status: z.enum(["draft", "final"]),
-  attemptIds: z.array(id).max(3),
+  attemptIds: z.array(id).max(2),
   observedAt: z.union([z.literal(""), z.iso.date()]),
   observer: z.string().max(200),
   task: text,
@@ -290,7 +298,7 @@ export const comparisonLabels = {
   pending: "비교 보류",
 };
 export const StateSchema = z.object({
-  schemaVersion: z.literal(5),
+  schemaVersion: z.literal(8),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
   courses: z.array(CourseSchema),
@@ -317,7 +325,6 @@ export interface ProgressSummary {
   counts: {
     objectiveAttempts: number;
     practicalAttempts: number;
-    subjectiveAttempts: number;
     learningRecords: number;
     notifications: number;
     completions: number;
@@ -333,7 +340,6 @@ export interface Attempt extends Partial<Draft> {
   round: number;
   result: "passed" | "failed";
   date: string;
-  evaluatorId?: string;
   earned?: number;
   total?: number;
   itemResults?: AssessmentAttempt["itemResults"];
@@ -343,11 +349,7 @@ export interface Enrollment {
   courseId: string;
   objective: AssessmentState;
   practical: AssessmentState;
-  subjective: AssessmentState;
-  learningComplete: boolean;
-  learningRecords: LearningRecord[];
   answers: Draft["answers"];
-  verdicts: Draft["verdicts"];
   history: Attempt[];
   activeAttempts: Partial<Record<Kind, AssessmentAttempt>>;
   completion?: Completion;
@@ -358,14 +360,31 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
+  requiredQualifications:
+    import("./organizations.ts").RequiredQualificationsView | null;
+  requestProgress: import("./organizations.ts").RequestProgress[];
+  planningReadiness: {
+    learnerId: string;
+    canRequest: boolean;
+    reason: string;
+    count: number;
+  }[];
+  planEligibility: { planId: string; reasons: string[] }[];
   actor: UserView;
-  management: { lv1OrganizationId: string | null; canManage: boolean };
+  serverDate: string;
+  management: {
+    lv1OrganizationId: string | null;
+    canManage: boolean;
+    canManagePolicies: boolean;
+    editableOrganizationIds: string[];
+  };
   organizations: OrganizationEntry[];
   users: UserView[];
   courses: Course[];
   qualifications: Qualification[];
   assignments: Assignment[];
   notices: Notice[];
+  homeNotices: Notice[];
   comparisons: Comparison[];
   audits: AuditEvent[];
   planningRequests: PlanningRequest[];
@@ -409,55 +428,38 @@ export function courseErrors(course: Course): string[] {
     course.learningItems.some((i) => !i.title.trim())
   )
     errors.push("학습 항목의 이름·식별자를 확인해 주세요.");
-  if (requiredKinds(course).includes("subjective")) {
-    if (!course.subjectivePassScore)
-      errors.push("주관식 합격 기준을 입력해 주세요.");
-    if (
-      !course.subjectiveQuestions.length ||
-      course.subjectiveQuestions.some(
-        (q) => !q.prompt.trim() || !q.rubric?.trim(),
-      )
-    )
-      errors.push("주관식 문항과 채점 기준을 입력해 주세요.");
-  }
-  if (
-    new Set(
-      [
-        ...course.questions,
-        ...course.practicalItems,
-        ...course.subjectiveQuestions,
-      ].map((i) => i.id),
-    ).size !==
-    course.questions.length +
-      course.practicalItems.length +
-      course.subjectiveQuestions.length
-  )
+  const all = [...course.questions, ...course.practicalQuestions];
+  if (new Set(all.map((q) => q.id)).size !== all.length)
     errors.push("항목 식별자가 중복되었습니다.");
-  if (requiredKinds(course).includes("objective")) {
-    if (!course.passScore || course.passScore < 1 || course.passScore > 100)
-      errors.push("객관식 합격 기준을 1~100으로 입력해 주세요.");
-    if (!course.questions.length) errors.push("객관식 문항을 추가해 주세요.");
-    course.questions.forEach((q, i) => {
+  if (
+    new Set(course.materials.map((m) => m.id)).size !== course.materials.length
+  )
+    errors.push("자료 식별자가 중복되었습니다.");
+  course.materials.forEach((m, i) => {
+    if (!m.title.trim() || (m.type === "text" ? !m.content.trim() : !m.url))
+      errors.push(`${i + 1}번째 학습자료의 이름과 내용을 확인해 주세요.`);
+  });
+  for (const kind of requiredKinds(course)) {
+    const score = assessmentPassScore(course, kind),
+      questions = assessmentQuestions(course, kind);
+    if (!score || score < 1 || score > 100)
+      errors.push(`${kindLabels[kind]} 합격 기준을 1~100으로 입력해 주세요.`);
+    if (!questions.length)
+      errors.push(`${kindLabels[kind]} 문항을 추가해 주세요.`);
+    questions.forEach((q, i) => {
       if (
         !q.prompt.trim() ||
         q.choices.length < 2 ||
         q.choices.some((v) => !v.trim()) ||
         q.correct == null ||
         !q.choices[q.correct] ||
-        q.points <= 0
+        q.points <= 0 ||
+        (kind === "practical" && !(q as PracticalQuestion).scenario.trim())
       )
         errors.push(
-          `객관식 ${i + 1}번의 문항·선택지·정답·배점을 확인해 주세요.`,
+          `${kindLabels[kind]} ${i + 1}번의 상황·문항·선택지·정답·배점을 확인해 주세요.`,
         );
     });
-  }
-  if (requiredKinds(course).includes("practical")) {
-    if (!course.practicalItems.some((i) => i.mandatory))
-      errors.push("필수 실기 항목을 추가해 주세요.");
-    if (
-      course.practicalItems.some((i) => !i.title.trim() || !i.criterion.trim())
-    )
-      errors.push("실기 항목과 판정 기준을 입력해 주세요.");
   }
   return errors;
 }
@@ -515,4 +517,14 @@ export function qualificationUseErrors(
         `운영 종료된 과정 ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
     ),
   ];
+}
+
+export function assessmentQuestions(
+  course: Course,
+  kind: Kind,
+): (Question | PracticalQuestion)[] {
+  return kind === "objective" ? course.questions : course.practicalQuestions;
+}
+export function assessmentPassScore(course: Course, kind: Kind) {
+  return kind === "objective" ? course.passScore : course.practicalPassScore;
 }

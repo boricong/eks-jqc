@@ -1029,39 +1029,6 @@ a {
   color: var(--ink-secondary);
   font-size: 14px;
 }
-.verdict-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.ft-item .field {
-  margin-bottom: 0;
-}
-@media (min-width: 1200px) {
-  .ft-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px;
-    column-gap: 24px;
-  }
-  .ft-item .question-title {
-    grid-column: 1;
-    margin-bottom: 10px;
-  }
-  .ft-item .criterion {
-    grid-column: 1;
-    margin: 0 0 20px 32px;
-  }
-  .ft-item .verdict-options {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: start;
-    margin-bottom: 0;
-  }
-  .ft-item .field {
-    grid-column: 1 / -1;
-  }
-}
 .field {
   display: flex;
   flex-direction: column;
@@ -1546,7 +1513,8 @@ a {
   padding: 8px 32px 32px;
 }
 .dialog-body > p:not(:last-child) {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+  line-height: 1.6;
 }
 .dialog-body .field {
   margin-top: 20px;
@@ -2782,8 +2750,7 @@ a {
   margin-bottom: 8px;
 }
 .plan-context p,
-.validity-panel p,
-.subjective-question p {
+.validity-panel p {
   margin: 12px 0;
   line-height: 1.7;
 }
@@ -2845,10 +2812,6 @@ a {
   margin-top: 6px;
   font-size: 13px;
 }
-.subjective-question {
-  margin: 20px 0;
-}
-.subjective-question details,
 .learning-panel + p {
   margin-bottom: 20px;
 }
@@ -2891,9 +2854,6 @@ a {
 .planning-panel .table-wrap,
 .table-panel {
   overflow-x: auto;
-}
-.subjective-question textarea {
-  min-height: 130px;
 }
 .learning-panel .field {
   min-width: 0;
@@ -3399,6 +3359,44 @@ textarea {
   color: var(--link);
   font-weight: 600;
   background: var(--tint);
+}
+.management-content,
+.admin-section {
+  min-width: 0;
+}
+.management-menu-toggle {
+  display: none;
+}
+.management-layout > .admin-sidebar {
+  grid-column: 1;
+}
+.management-layout > .management-content {
+  grid-column: 2;
+}
+.management-layout .catalog-page {
+  min-width: 0;
+}
+.management-layout .admin-section.individual-editor {
+  width: 100%;
+  max-width: none;
+}
+.management-content .page-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+.management-content .page-heading > div {
+  min-width: 0;
+}
+.management-content .page-heading p {
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.home-card > p + p,
+.record-detail > p + p {
+  margin-top: 12px;
+}
+.record-detail > :is(h2, h3) + p {
+  margin-top: 8px;
 }
 .admin-content .page-heading {
   margin-bottom: 16px;
@@ -4388,6 +4386,35 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
   }
   input:not([type='checkbox']):not([type='radio']),
   select {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .management-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .management-layout > .management-content,
+  .management-layout > .admin-sidebar {
+    grid-column: 1;
+  }
+  .management-layout .admin-sidebar {
+    padding: 0;
+    border: 0;
+    width: 100%;
+  }
+  .management-layout .admin-sidebar nav {
+    display: none;
+  }
+  .management-layout .admin-sidebar nav.is-open {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    overflow: visible;
+  }
+  .management-layout .management-menu-toggle {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
     min-height: 44px;
   }
 }

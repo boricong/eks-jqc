@@ -5,12 +5,7 @@ function check(value: unknown, label: string): asserts value {
 export function validateWorkflow(s: State) {
   const user = (id: string) => s.users.some((u) => u.id === id);
   for (const r of s.planningRequests)
-    check(
-      user(r.learnerId) &&
-        user(r.requestedBy) &&
-        (!r.ftId || (user(r.ftId) && r.ftId !== r.learnerId)),
-      "계획 요청 사용자",
-    );
+    check(user(r.learnerId) && user(r.requestedBy), "계획 요청 사용자");
   for (const p of s.plans) {
     check(Boolean(p.deletedAt) === Boolean(p.deletedBy), "계획 삭제 정보");
     if (p.deletedAt)
@@ -68,7 +63,6 @@ export function validateWorkflow(s: State) {
         "배정 계획 참조",
       );
     if (a.createdBy) check(user(a.createdBy), "배정 생성자");
-    check(!a.ftId || (user(a.ftId) && a.ftId !== a.learnerId), "배정 FT 참조");
   }
   check(
     new Set(s.learningRecords.map((r) => `${r.enrollmentId}:${r.itemId}`))
@@ -86,45 +80,6 @@ export function validateWorkflow(s: State) {
         c?.learningItems.some((i) => i.id === r.itemId),
       "학습 완료 참조",
     );
-  }
-  for (const t of s.attempts) {
-    const e = s.enrollments.find((e) => e.id === t.enrollmentId)!,
-      a = s.assignments.find((a) => a.id === e.assignmentId)!,
-      c = s.courses.find((c) => c.id === e.courseId)!;
-    if (a.planId)
-      check(
-        c.learningItems
-          .filter((i) => i.required)
-          .every((i) =>
-            s.learningRecords.some(
-              (r) => r.enrollmentId === e.id && r.itemId === i.id,
-            ),
-          ),
-        "평가 선행 학습",
-      );
-    check(
-      Object.keys(t.subjectiveAnswers || {}).every(
-        (id) =>
-          t.kind === "subjective" &&
-          c.subjectiveQuestions.some((q) => q.id === id),
-      ),
-      "주관식 답안 항목",
-    );
-    check(
-      Object.entries(t.grades || {}).every(
-        ([id, grade]) =>
-          t.kind === "subjective" &&
-          c.subjectiveQuestions.some(
-            (q) => q.id === id && grade.points <= q.points,
-          ),
-      ),
-      "주관식 채점 항목",
-    );
-    if (t.kind === "subjective" && t.status === "in_progress")
-      check(
-        !Object.keys(t.grades || {}).length && !t.submittedAt && !t.feedback,
-        "제출 전 채점 금지",
-      );
   }
   for (const c of s.certifications) {
     if (c.validity)

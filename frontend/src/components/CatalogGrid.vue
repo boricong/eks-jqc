@@ -30,9 +30,7 @@ let grid: Tabulator | undefined,
   alive = true;
 const maps: Record<string, Record<string, string>> = {
   type: { mtc: 'MTC교육', team: '팀 특화 교육', ojt: '현업 OJT' },
-  category: { written: '필기', case: 'Case' },
   required: { true: '필수', false: '선택' },
-  mandatory: { true: '필수', false: '선택' },
 };
 const textNode = (value: unknown) => {
   const el = document.createElement('span');
@@ -65,7 +63,12 @@ onMounted(async () => {
       !['code', 'sourceId', 'sourceRevision'].includes(k) &&
       !(k === 'courseCode' && !props.allCourses),
   )) {
-    const values = field === 'courseCode' ? courseOptions : maps[field];
+    const values =
+      field === 'courseCode'
+        ? courseOptions
+        : field === 'type' && props.table === 'materials'
+          ? { text: '직접 작성', edm: 'EDM Link', confluence: 'Confluence', url: '일반 URL' }
+          : maps[field];
     columns.push({
       field,
       title: field === 'courseCode' ? '과정' : label,
@@ -83,9 +86,7 @@ onMounted(async () => {
       tooltip: true,
       visible:
         props.allCourses ||
-        (!['material', 'materialUrl', 'instruction', 'rubric', 'modelAnswer', 'criterion'].includes(
-          field,
-        ) &&
+        (!['scenario', 'content', 'url', 'description'].includes(field) &&
           !field.startsWith('choice')),
       editor:
         field === 'kinds'
@@ -93,13 +94,13 @@ onMounted(async () => {
           : values
             ? 'list'
             : field === 'order' ||
-                ['points', 'correct', 'passScore', 'subjectivePassScore'].includes(field)
+                ['points', 'correct', 'passScore', 'practicalPassScore'].includes(field)
               ? 'number'
               : 'input',
       editorParams:
         field === 'kinds'
           ? {
-              values: { objective: '객관식', subjective: '주관식', practical: '실기' },
+              values: { objective: '지식 평가', practical: '상황 대응 평가' },
               multiselect: true,
             }
           : values
@@ -111,19 +112,13 @@ onMounted(async () => {
           field === 'kinds'
             ? String(cell.getValue() || '')
                 .split(',')
-                .map(
-                  (k) => ({ objective: '객관식', subjective: '주관식', practical: '실기' })[k] || k,
-                )
+                .map((k) => ({ objective: '지식 평가', practical: '상황 대응 평가' })[k] || k)
                 .join(' · ')
             : (values?.[String(cell.getValue())] ?? cell.getValue()),
         ),
       cellDblClick: (_e, cell) => {
         if (props.disabled) return;
-        if (
-          ['prompt', 'material', 'instruction', 'criterion', 'rubric', 'modelAnswer'].includes(
-            field,
-          )
-        )
+        if (['prompt', 'scenario', 'content', 'description'].includes(field))
           emit('detail', rowKey(cell.getRow().getData()));
       },
     });
@@ -250,6 +245,21 @@ function keydown(e: KeyboardEvent) {
     else emit('undo');
   }
 }
+function focusTableWithoutScrolling(event: MouseEvent) {
+  const target = event.target;
+  if (
+    event.button !== 0 ||
+    !(target instanceof HTMLElement) ||
+    !target.closest('.tabulator-cell') ||
+    target.closest('input, textarea, select, button, a')
+  )
+    return;
+  // Range selection focuses the table holder. Focus it without browser page
+  // scrolling first so the second click still lands on the same visible cell.
+  // Keep native mousedown from focusing the cell in between range operations.
+  event.preventDefault();
+  host.value?.querySelector<HTMLElement>('.tabulator-tableholder')?.focus({ preventScroll: true });
+}
 onBeforeUnmount(() => {
   alive = false;
   grid?.destroy();
@@ -278,5 +288,11 @@ onBeforeUnmount(() => {
       다시 실행</button
     ><span class="muted">셀 두 번 클릭 · 범위 복사·붙여넣기</span>
   </div>
-  <div ref="host" class="catalog-grid" aria-label="기준 셀 편집 표" @keydown.capture="keydown" />
+  <div
+    ref="host"
+    class="catalog-grid"
+    aria-label="기준 셀 편집 표"
+    @keydown.capture="keydown"
+    @mousedown.capture="focusTableWithoutScrolling"
+  />
 </template>

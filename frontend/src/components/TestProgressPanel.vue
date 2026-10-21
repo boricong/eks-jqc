@@ -26,10 +26,9 @@ const error = ref(''),
   resetError = ref(''),
   confirmation = ref('');
 const labels: Record<keyof ProgressSummary['counts'], string> = {
-  objectiveAttempts: '객관식 응시',
-  practicalAttempts: '실기 요청·평가',
-  subjectiveAttempts: '주관식 답안·채점',
-  learningRecords: '학습 완료 기록',
+  objectiveAttempts: '지식 평가 응시',
+  practicalAttempts: '상황 대응 평가 응시',
+  learningRecords: '과거 학습 완료 기록',
   notifications: '진행 관련 알림',
   completions: '과정 수료',
   certifications: '검증용 인증',
@@ -117,7 +116,7 @@ watch(target, () => {
     >
     <p class="muted">
       조직정보·변경 이력, 사용자 소속·역할, 자격·과정 기준과 운영 상태, 개인 계획·일정·목표, 계획
-      요청·알림, 배정·담당 FT·제외 설정, 공지는 유지됩니다.
+      요청·알림, 배정·담당 기준·제외 설정, 공지는 유지됩니다.
     </p>
     <div v-if="error" class="error-message" role="alert">{{ error }}</div>
     <dl v-if="summary" class="reset-counts">
@@ -127,8 +126,7 @@ watch(target, () => {
       </div>
     </dl>
     <p class="muted">
-      작성 중인 답안·판정과 근거, 확정 결과, 관련 변경 이력도 초기화됩니다. 초기화 전 기록은
-      백업합니다.
+      작성 중인 답안과 근거, 확정 결과, 관련 변경 이력도 초기화됩니다. 초기화 전 기록은 백업합니다.
     </p>
     <div class="actions">
       <button

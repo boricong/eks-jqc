@@ -1,5 +1,11 @@
 .catalog-page {
-  padding-bottom: 40px;
+  padding-bottom: 24px;
+}
+.catalog-page.has-catalog-draft {
+  padding-bottom: 220px;
+}
+.catalog-page :is(input, textarea, select, button) {
+  scroll-margin-bottom: 220px;
 }
 .catalog-field-error {
   display: block;
@@ -306,7 +312,10 @@
   width: 100%;
 }
 .catalog-save-bar {
-  position: sticky;
+  position: fixed;
+  right: max(16px, calc((100vw - 1760px) / 2));
+  left: auto;
+  width: min(1556px, calc(100% - 252px));
   bottom: 10px;
   z-index: 6;
   box-shadow: 0 4px 20px var(--shadow);
@@ -451,5 +460,14 @@
   }
   .catalog-page .bulk-tabs button {
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 1024px) {
+  .management-layout .catalog-save-bar {
+    right: 16px;
+    left: 16px;
+    width: auto;
+    transform: none;
   }
 }

@@ -40,10 +40,18 @@ const systemTitles = [
   "관리 이전 과정명",
 ];
 const translations: Record<string, Record<string, string>> = {
-  type: { mtc: "MTC교육", team: "팀 특화 교육", ojt: "현업 OJT" },
-  category: { written: "필기", case: "Case" },
+  type: {
+    mtc: "MTC교육",
+    team: "팀 특화 교육",
+    ojt: "현업 OJT",
+    text: "직접 작성",
+    edm: "EDM Link",
+    confluence: "Confluence",
+    url: "일반 URL",
+  },
+
   required: { true: "필수", false: "선택" },
-  mandatory: { true: "필수", false: "선택" },
+
   mode: { new: "새 자격", revise: "기존 자격 수정" },
   validityType: { unknown: "미정", months: "기간제", unlimited: "무기한" },
 };
@@ -62,22 +70,21 @@ function visibleColumns(
       k === "kinds"
         ? ([
             ["useObjective", "객관식 사용"],
-            ["useSubjective", "주관식 사용"],
             ["usePractical", "실기 사용"],
           ] as [string, string][])
         : ([[k, label]] as [string, string][]),
     );
 }
-export async function writeCatalogV2(
+export async function writeCatalogV3(
   data: CatalogWorkbook,
   issues: CatalogIssue[] = [],
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v2";
+  book.subject = "eks-catalog-v3";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 사용자용 양식 v2"],
+    ["EKS 자격 기준 · 사용자용 양식 v3"],
     ["1. 자격 기본정보를 작성하고 과정 표에 과정명을 입력하세요."],
     [
       "2. 학습·평가 표의 과정 선택에서 연결할 과정명을 고르세요. 새 과정도 목록에 반영됩니다.",
@@ -153,7 +160,7 @@ export async function writeCatalogV2(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v2",
+      format: "eks-catalog-v3",
       lv1OrganizationId: data.lv1OrganizationId,
       reminderDays: q.reminderDays.join(", "),
     };
@@ -252,7 +259,7 @@ export async function writeCatalogV2(
             cell.dataValidation = {
               type: "list",
               formulae: [
-                `"${k.startsWith("use") ? "사용,미사용" : Object.values(translations[k]!).join(",")}"`,
+                `"${k.startsWith("use") ? "사용,미사용" : (k === "type" ? (table === "materials" ? ["직접 작성", "EDM Link", "Confluence", "일반 URL"] : ["MTC교육", "팀 특화 교육", "현업 OJT"]) : Object.values(translations[k]!)).join(",")}"`,
               ],
               allowBlank: true,
               showErrorMessage: true,
@@ -272,7 +279,7 @@ export async function writeCatalogV2(
               "points",
               "correct",
               "passScore",
-              "subjectivePassScore",
+              "practicalPassScore",
             ].includes(k)
           )
             cell.dataValidation = {
@@ -337,9 +344,9 @@ export async function writeCatalogV2(
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
-export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
+export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v1",
+    format: "eks-catalog-v3",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -352,9 +359,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
     if (!metas.length) {
       demand(
         !tables.some((t) =>
-          /^EKS_(courses|learning|objective|subjective|practical)_/.test(
-            t.name,
-          ),
+          /^EKS_(courses|materials|learning|objective|practical)_/.test(t.name),
         ),
         422,
         `${ws.name}: 자격 기본정보 표가 없습니다.`,
@@ -416,7 +421,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
       m[key] = value(r, mb.c + 1, "metadata", 0, key);
     }
     demand(
-      m.format === "eks-catalog-v2",
+      m.format === "eks-catalog-v3",
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
     );
@@ -449,7 +454,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
         courses: [],
         learning: [],
         objective: [],
-        subjective: [],
+        materials: [],
         practical: [],
       },
     };
@@ -529,7 +534,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
           record.code = `${table}-${seed}-${workbook.sheets.length + 1}-${ri}`;
         if (record.order === "") record.order = ri;
         if (table === "courses") {
-          const uses = ["Objective", "Subjective", "Practical"];
+          const uses = ["Objective", "Practical"];
           for (const k of uses)
             if (
               !["사용", "미사용", "", true, false].includes(
@@ -555,11 +560,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
           uses.forEach((k) => delete record[`use${k}`]);
           delete record.courseCode;
           delete record.originalCourseName;
-          for (const k of [
-            "passScore",
-            "subjectivePassScore",
-            "sourceRevision",
-          ])
+          for (const k of ["passScore", "practicalPassScore", "sourceRevision"])
             if (record[k] === "") record[k] = null;
           if (mode === "new") {
             record.sourceId = "";
@@ -571,7 +572,7 @@ export function readCatalogV2(book: ExcelJS.Workbook, buffer: Buffer) {
           if (table === "objective" && record.correct === "")
             record.correct = null;
         }
-        for (const k of ["required", "mandatory"])
+        for (const k of ["required"])
           if (record[k] === "true" || record[k] === "false")
             record[k] = record[k] === "true";
         q.tables[table].push(record);

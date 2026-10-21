@@ -55,7 +55,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v1",
+    format: "eks-catalog-v3",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const q = s.qualifications.find((q) => q.id === id);
@@ -68,7 +68,7 @@ export function exportCatalog(
         courses: [],
         learning: [],
         objective: [],
-        subjective: [],
+        materials: [],
         practical: [],
       };
       q.courseIds.forEach((id, ci) => {
@@ -80,10 +80,7 @@ export function exportCatalog(
           title: c.title,
           kinds: c.assessmentKinds.join(","),
           passScore: c.passScore,
-          subjectivePassScore: c.subjectivePassScore,
-          material: c.material,
-          materialUrl: c.materialUrl,
-          instruction: c.instruction,
+          practicalPassScore: c.practicalPassScore,
           sourceId: c.id,
           sourceRevision: c.revision,
         });
@@ -102,7 +99,6 @@ export function exportCatalog(
             courseCode: code,
             code: codeOf(i),
             order: n + 1,
-            category: i.category,
             prompt: i.prompt,
             ...Object.fromEntries(
               i.choices.map((v, j) => [`choice${j + 1}`, v]),
@@ -111,25 +107,30 @@ export function exportCatalog(
             points: i.points,
           }),
         );
-        c.subjectiveQuestions.forEach((i, n) =>
-          tables.subjective.push({
+        c.materials.forEach((m, n) =>
+          tables.materials.push({
             courseCode: code,
-            code: codeOf(i),
+            code: codeOf(m),
             order: n + 1,
-            prompt: i.prompt,
-            points: i.points,
-            rubric: i.rubric || "",
-            modelAnswer: i.modelAnswer || "",
+            type: m.type,
+            title: m.title,
+            content: m.content,
+            url: m.url,
+            description: m.description,
           }),
         );
-        c.practicalItems.forEach((i, n) =>
+        c.practicalQuestions.forEach((q, n) =>
           tables.practical.push({
             courseCode: code,
-            code: codeOf(i),
+            code: codeOf(q),
             order: n + 1,
-            title: i.title,
-            criterion: i.criterion,
-            mandatory: i.mandatory,
+            scenario: q.scenario,
+            prompt: q.prompt,
+            ...Object.fromEntries(
+              q.choices.map((v, j) => [`choice${j + 1}`, v]),
+            ),
+            correct: q.correct == null ? null : q.correct + 1,
+            points: q.points,
           }),
         );
       });
@@ -154,7 +155,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v1",
+    format: "eks-catalog-v3",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -171,7 +172,7 @@ export function emptyCatalog(scope: string): CatalogWorkbook {
           courses: [],
           learning: [],
           objective: [],
-          subjective: [],
+          materials: [],
           practical: [],
         },
       },
@@ -183,27 +184,22 @@ function courseContent(c: Course) {
     title: c.title,
     assessmentKinds: [...c.assessmentKinds].sort(),
     passScore: c.passScore,
-    subjectivePassScore: c.subjectivePassScore,
-    material: c.material,
-    materialUrl: c.materialUrl,
-    instruction: c.instruction,
+    practicalPassScore: c.practicalPassScore,
     ...Object.fromEntries(
-      [
-        "learningItems",
-        "questions",
-        "subjectiveQuestions",
-        "practicalItems",
-      ].map((k) => [
-        k,
-        (c[k as "questions"] as any[]).map(({ id, catalogCode, ...item }) => ({
-          ...item,
-          ...(k === "subjectiveQuestions"
-            ? { rubric: item.rubric || "", modelAnswer: item.modelAnswer || "" }
-            : {}),
-          ...(k === "questions" ? { correct: item.correct ?? null } : {}),
-          catalogCode: catalogCode || id,
-        })),
-      ]),
+      ["learningItems", "questions", "materials", "practicalQuestions"].map(
+        (k) => [
+          k,
+          (c[k as "questions"] as any[]).map(
+            ({ id, catalogCode, ...item }) => ({
+              ...item,
+              ...(["questions", "practicalQuestions"].includes(k)
+                ? { correct: item.correct ?? null }
+                : {}),
+              catalogCode: catalogCode || id,
+            }),
+          ),
+        ],
+      ),
     ),
   };
 }
@@ -220,7 +216,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       incoming.sheets.reduce(
         (n, q) =>
           n +
-          (["objective", "subjective", "practical"] as const).reduce(
+          (["objective", "practical"] as const).reduce(
             (sum, t) =>
               sum + (Array.isArray(q?.tables?.[t]) ? q.tables[t].length : 0),
             0,
@@ -235,7 +231,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
   if (!parsedWorkbook.success) {
     const raw = input as CatalogWorkbook;
     if (
-      raw?.format === "eks-catalog-v1" &&
+      raw?.format === "eks-catalog-v3" &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
       raw.sheets.length > 0 &&
@@ -281,11 +277,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
   );
   demand(
     workbook.sheets.reduce(
-      (n, q) =>
-        n +
-        q.tables.objective.length +
-        q.tables.subjective.length +
-        q.tables.practical.length,
+      (n, q) => n + q.tables.objective.length + q.tables.practical.length,
       0,
     ) <= 10000,
     422,
@@ -318,6 +310,33 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         message,
         severity,
       });
+    if (sheet.legacyUnsupported)
+      issue(
+        "metadata",
+        0,
+        "title",
+        "구형 주관식·관찰식 실기가 포함되어 있습니다. 원본을 보관하고 새 양식 v3에서 작성해 주세요.",
+      );
+    for (const table of catalogTables)
+      for (const [ri, row] of sheet.tables[table].entries())
+        for (const field of [
+          "category",
+          "subjectivePassScore",
+          "material",
+          "materialUrl",
+          "instruction",
+          "mandatory",
+          "criterion",
+          "rubric",
+          "modelAnswer",
+        ])
+          if (field in row)
+            issue(
+              table,
+              ri + 1,
+              field,
+              "폐지된 입력 필드입니다. 새 양식 v3을 사용해 주세요.",
+            );
     if (!sheet.code.trim() || qCodes.has(sheet.code))
       issue(
         "metadata",
@@ -343,20 +362,6 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             0,
             "sourceRevision",
             "원본이 변경되었습니다. 다시 내보내 주세요.",
-          );
-        if (
-          s.qualifications.some(
-            (q) =>
-              q.entityId === original!.entityId &&
-              q.status === "draft" &&
-              q.id !== original!.id,
-          )
-        )
-          issue(
-            "metadata",
-            0,
-            "sourceId",
-            "다른 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
           );
       }
       if (qSources.has(sheet.sourceId || ""))
@@ -426,11 +431,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             "order",
             "순서는 1 이상의 정수로 입력해 주세요.",
           );
-        for (const key of table === "learning"
-          ? ["required"]
-          : table === "practical"
-            ? ["mandatory"]
-            : [])
+        for (const key of table === "learning" ? ["required"] : [])
           if (
             ![true, false, "true", "false", "Y", "N", "예", "아니오"].includes(
               r[key] as any,
@@ -449,10 +450,10 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
           );
         for (const field of table === "objective"
           ? ["prompt"]
-          : table === "subjective"
-            ? ["prompt", "rubric"]
-            : table === "practical"
-              ? ["title", "criterion"]
+          : table === "practical"
+            ? ["scenario", "prompt"]
+            : table === "materials"
+              ? ["title", r.type === "text" ? "content" : "url"]
               : ["title"])
           if (!str(r[field]).trim())
             issue(
@@ -463,17 +464,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               "readiness",
             );
         if (
-          table === "objective" &&
-          !["written", "case"].includes(str(r.category))
-        )
-          issue(
-            table,
-            ri + 1,
-            "category",
-            "문항 종류는 필기 또는 Case를 선택해 주세요.",
-          );
-        if (
-          ["objective", "subjective"].includes(table) &&
+          ["objective", "practical"].includes(table) &&
           (!Number.isInteger(num(r.points)) ||
             Number(r.points) < 1 ||
             Number(r.points) > 1000000)
@@ -484,7 +475,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             "points",
             "배점은 1~1,000,000 정수로 입력해 주세요.",
           );
-        if (table === "objective") {
+        if (table === "objective" || table === "practical") {
           const choices = Object.keys(r).filter(
             (k) => /^choice\d+$/.test(k) && str(r[k]) !== "",
           );
@@ -559,21 +550,12 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
           "sourceId",
           "원본 자격에 연결된 같은 조직의 과정만 개정할 수 있습니다.",
         );
-      if (
-        source &&
-        (source.revision !== Number(r.sourceRevision) ||
-          s.courses.some(
-            (c) =>
-              c.entityId === source.entityId &&
-              c.id !== source.id &&
-              c.status === "draft",
-          ))
-      )
+      if (source && source.revision !== Number(r.sourceRevision))
         issue(
           "courses",
           ri,
           "sourceRevision",
-          "과정 원본 변경 또는 다른 개정안이 있습니다. 다시 내보내 주세요.",
+          "과정 원본이 변경되었습니다. 다시 내보내 주세요.",
         );
       const shared =
         source &&
@@ -583,7 +565,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             q.courseIds.includes(source.id),
         );
       const identity = (
-        table: "learning" | "objective" | "subjective" | "practical",
+        table: "learning" | "objective" | "materials" | "practical",
         row: CatalogRow,
       ) => {
         const collection =
@@ -592,8 +574,8 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               {
                 learning: "learningItems",
                 objective: "questions",
-                subjective: "subjectiveQuestions",
-                practical: "practicalItems",
+                materials: "materials",
+                practical: "practicalQuestions",
               } as const
             )[table]
           ];
@@ -610,16 +592,14 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         .map((k) => k.trim())
         .filter(Boolean);
       if (
-        kinds.some(
-          (k) => !["objective", "subjective", "practical"].includes(k),
-        ) ||
+        kinds.some((k) => !["objective", "practical"].includes(k)) ||
         new Set(kinds).size !== kinds.length
       )
         issue(
           "courses",
           ri,
           "kinds",
-          "필수 평가 유형에서 객관식·주관식·실기를 선택해 주세요.",
+          "필수 평가 유형에서 지식 평가·상황 대응 평가를 선택해 주세요.",
         );
       const raw = {
         ...(source || {}),
@@ -634,10 +614,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         title: str(r.title),
         assessmentKinds: kinds,
         passScore: num(r.passScore),
-        subjectivePassScore: num(r.subjectivePassScore),
-        material: str(r.material),
-        materialUrl: str(r.materialUrl),
-        instruction: str(r.instruction),
+        practicalPassScore: num(r.practicalPassScore),
         learningItems: rows("learning").map((i) => ({
           ...identity("learning", i),
           title: str(i.title),
@@ -656,22 +633,31 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             choices,
             correct: num(i.correct) == null ? null : Number(i.correct) - 1,
             points: num(i.points, 1),
-            category: i.category,
           };
         }),
-        subjectiveQuestions: rows("subjective").map((i) => ({
-          ...identity("subjective", i),
-          prompt: str(i.prompt),
-          points: num(i.points, 1),
-          rubric: str(i.rubric),
-          modelAnswer: str(i.modelAnswer),
-        })),
-        practicalItems: rows("practical").map((i) => ({
-          ...identity("practical", i),
+        materials: rows("materials").map((i) => ({
+          ...identity("materials", i),
+          type: i.type,
           title: str(i.title),
-          criterion: str(i.criterion),
-          mandatory: bool(i.mandatory),
+          content: str(i.content),
+          url: str(i.url),
+          description: str(i.description),
         })),
+        practicalQuestions: rows("practical").map((i) => {
+          const choices = Object.keys(i)
+            .filter((k) => /^choice\d+$/.test(k))
+            .sort((a, b) => Number(a.slice(6)) - Number(b.slice(6)))
+            .map((k) => str(i[k]));
+          while (choices.length && !choices.at(-1)) choices.pop();
+          return {
+            ...identity("practical", i),
+            scenario: str(i.scenario),
+            prompt: str(i.prompt),
+            choices,
+            correct: num(i.correct) == null ? null : Number(i.correct) - 1,
+            points: num(i.points, 1),
+          };
+        }),
       };
       const parsed = CourseSchema.safeParse(raw);
       if (!parsed.success) {
@@ -689,6 +675,21 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         unchanged++;
         if (c.status === "draft") courses.push(c);
       } else {
+        if (
+          source &&
+          s.courses.some(
+            (c) =>
+              c.entityId === source.entityId &&
+              c.id !== source.id &&
+              c.status === "draft",
+          )
+        )
+          issue(
+            "courses",
+            ri,
+            "sourceRevision",
+            "다른 과정 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
+          );
         if (source) changed++;
         else added++;
         if (source?.status === "published" || shared) {
@@ -720,8 +721,8 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         issue(
           "courses",
           ri,
-          m.includes("주관식")
-            ? "subjectivePassScore"
+          m.includes("상황")
+            ? "practicalPassScore"
             : m.includes("객관식")
               ? "passScore"
               : "title",
@@ -767,6 +768,21 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       q = original!;
       if (q.status === "draft") qualifications.push(q);
     } else {
+      if (
+        original &&
+        s.qualifications.some(
+          (q) =>
+            q.entityId === original.entityId &&
+            q.status === "draft" &&
+            q.id !== original.id,
+        )
+      )
+        issue(
+          "metadata",
+          0,
+          "sourceId",
+          "다른 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
+        );
       if (original?.status === "published") {
         q = {
           ...q,

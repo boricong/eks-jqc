@@ -3,6 +3,7 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
+import ProcessGuide from './components/ProcessGuide.vue';
 import { roleLabels, type Role } from '@eks/contracts';
 const store = useDemo(),
   route = useRoute(),
@@ -22,7 +23,8 @@ watch(
     const required = route.meta.role as Role | undefined;
     if (
       store.signedIn &&
-      ((required && !store.hasRole(required)) || (route.meta.management && !store.managementAccess))
+      ((required && !store.hasRole(required)) ||
+        (route.meta.management && !store.managementAccess && route.params.section !== 'policies'))
     )
       void router.replace('/');
   },
@@ -58,7 +60,9 @@ function revealFocusedInput(event: FocusEvent) {
     !element.matches('input, textarea, select, [role="tab"]')
   )
     return;
-  if (element.closest('dialog[open]')) return;
+  // Dialogs and the virtual table manage their own scroll/focus. Moving the
+  // page while a table editor opens can retarget the second click to another row.
+  if (element.closest('dialog[open], .tabulator')) return;
   const bounds = element.getBoundingClientRect();
   const covered = [...document.querySelectorAll<HTMLElement>('.actionbar, .catalog-save-bar')].some(
     (bar) => {
@@ -115,15 +119,8 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
             >자격 취득</RouterLink
           >
           <RouterLink
-            v-if="store.hasRole('ft')"
-            to="/evaluations"
-            :class="{ active: route.path.startsWith('/evaluations') }"
-            @click="menuOpen = false"
-            >FT 평가</RouterLink
-          >
-          <RouterLink
             v-if="store.canEnterManagement"
-            to="/admin/qualifications"
+            to="/admin"
             :class="{ active: route.path.startsWith('/admin') }"
             @click="menuOpen = false"
             >인증 업무 관리</RouterLink
@@ -189,6 +186,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
           다시 연결
         </button>
       </div>
+      <ProcessGuide />
     </main>
     <footer class="site-footer">
       <div class="footer-inner"><span>EKS · 직무자격인증</span><span>검증용</span></div>

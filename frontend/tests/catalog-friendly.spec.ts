@@ -124,7 +124,7 @@ test('자격·과정 중심 편집: 코드 없이 문항 작성, 제외 취소�
   await page.getByRole('button', { name: '취소', exact: true }).click();
   await expect(page.locator('.catalog-course-tree')).toContainText('자료 확인 개정');
   await expect(page.locator('.catalog-course-tree')).toContainText('기록 작성');
-  await page.getByRole('tab', { name: /객관식/ }).click();
+  await page.getByRole('tab', { name: /지식 평가/ }).click();
   await expect(page.getByRole('button', { name: '선택 항목 제외', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -250,8 +250,8 @@ test('새 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await page.getByRole('button', { name: '과정 추가', exact: true }).click();
   await page.getByLabel('과정명', { exact: true }).fill('설비 구성 확인');
-  await page.getByLabel('객관식', { exact: true }).check();
-  await page.getByLabel('주관식', { exact: true }).check();
+  await page.getByLabel('객관식 · 지식 평가', { exact: true }).check();
+  await page.getByLabel('실기 · 상황 대응 평가', { exact: true }).check();
   for (const theme of ['single']) {
     await expect(page.getByLabel('화면 테마')).toHaveCount(0);
     for (const width of [1920, 1440, 768, 390]) {

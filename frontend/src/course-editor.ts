@@ -1,6 +1,6 @@
 import { courseUseErrors, type Course, type Kind } from '@eks/contracts';
 export interface CourseIssue {
-  kind: Kind | 'basic' | 'learning';
+  kind: Kind | 'basic' | 'learning' | 'materials';
   itemId?: string;
   field: string;
   message: string;
@@ -12,6 +12,14 @@ export function courseIssues(c: Course): CourseIssue[] {
     issues.push({ kind, field, message, itemId });
   if (!c.title.trim()) add('basic', 'title', '과정명을 입력해 주세요.');
   if (!c.assessmentKinds.length) add('basic', 'assessmentKinds', '필수 평가 유형을 선택해 주세요.');
+  c.materials.forEach((m, n) => {
+    if (!m.title.trim())
+      add('materials', 'title', `학습자료 ${n + 1}번의 자료명을 입력해 주세요.`, m.id);
+    if (m.type === 'text' && !m.content.trim())
+      add('materials', 'content', `학습자료 ${n + 1}번의 본문을 입력해 주세요.`, m.id);
+    if (m.type !== 'text' && !m.url)
+      add('materials', 'url', `학습자료 ${n + 1}번의 URL을 입력해 주세요.`, m.id);
+  });
   c.learningItems.forEach((i, n) => {
     if (!i.title.trim())
       add('learning', 'title', `학습 항목 ${n + 1}번의 이름을 입력해 주세요.`, i.id);
@@ -23,20 +31,15 @@ export function courseIssues(c: Course): CourseIssue[] {
       '필수 학습 항목을 하나 이상 설정해 주세요.',
       c.learningItems[0]?.id,
     );
-  for (const kind of ['objective', 'subjective', 'practical'] as Kind[]) {
+  for (const kind of ['objective', 'practical'] as Kind[]) {
     if (!c.assessmentKinds.includes(kind)) continue;
-    const label = { objective: '객관식', subjective: '주관식', practical: '실기' }[kind];
-    if (kind !== 'practical') {
-      const score = kind === 'objective' ? c.passScore : c.subjectivePassScore;
+    const label = { objective: '지식 평가', practical: '상황 대응 평가' }[kind];
+    {
+      const score = kind === 'objective' ? c.passScore : c.practicalPassScore;
       if (!Number.isInteger(score) || !score || score < 1 || score > 100)
         add(kind, 'passScore', `${label} 합격 기준을 1~100으로 입력해 주세요.`);
     }
-    const items =
-      kind === 'objective'
-        ? c.questions
-        : kind === 'subjective'
-          ? c.subjectiveQuestions
-          : c.practicalItems;
+    const items = kind === 'objective' ? c.questions : c.practicalQuestions;
     if (!items.length)
       add(kind, 'add', `${label} ${kind === 'practical' ? '항목' : '문항'}을 추가해 주세요.`);
     items.forEach((q, n) => {
@@ -56,16 +59,9 @@ export function courseIssues(c: Course): CourseIssue[] {
         if (q.correct == null || !q.choices[q.correct]?.trim())
           add(kind, 'correct', `${prefix} 정답을 선택해 주세요.`, q.id);
       }
-      if ('rubric' in q && !q.rubric?.trim())
-        add(kind, 'rubric', `${prefix} 채점 기준을 입력해 주세요.`, q.id);
-      if ('criterion' in q) {
-        if (!q.title.trim()) add(kind, 'title', `${prefix} 항목명을 입력해 주세요.`, q.id);
-        if (!q.criterion.trim())
-          add(kind, 'criterion', `${prefix} 관찰·판정 기준을 입력해 주세요.`, q.id);
-      }
+      if ('scenario' in q && !String(q.scenario).trim())
+        add(kind, 'scenario', `${prefix} 상황 설명을 입력해 주세요.`, q.id);
     });
-    if (kind === 'practical' && items.length && !c.practicalItems.some((i) => i.mandatory))
-      add(kind, 'mandatory', '필수 실기 항목을 지정해 주세요.', items[0]?.id);
   }
   // Non-field integrity failures (e.g. duplicate imported IDs) stay visible as a summary.
   for (const message of courseUseErrors(c).filter((m) => m.includes('식별자'))) {

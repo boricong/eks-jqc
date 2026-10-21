@@ -1,92 +1,95 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
-import { kstDate } from '@eks/contracts';
+import { kstDate, defaultPlanningDueOn, type Enrollment } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
 import AppDialog from './AppDialog.vue';
 const store = useDemo(),
   open = ref(false),
   busy = ref(false),
   error = ref(''),
-  filter = ref('all');
-const form = ref({ learnerIds: [] as string[], dueOn: '', message: '', ftId: '' });
-const ready = computed(() =>
-  store.data.qualifications.some(
-    (q) =>
-      q.lv1OrganizationId === store.managementLv1 &&
-      q.status === 'published' &&
-      !store.qualificationErrors(q).length,
-  ),
-);
+  filter = ref('all'),
+  dueEdited = ref(false);
+const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
+const readiness = (id: string) => store.data.planningReadiness.find((r) => r.learnerId === id);
 const learners = computed(() =>
   store.data.users.filter(
     (u) => u.lv1OrganizationId === store.managementLv1 && u.roles.includes('learner'),
   ),
 );
+const ready = computed(() => learners.value.some((u) => readiness(u.id)?.canRequest));
+function phase(e: Enrollment) {
+  return e.completion
+    ? '수료'
+    : [e.objective, e.practical].includes('passed')
+      ? '일부 통과'
+      : e.history.length || Object.keys(e.activeAttempts).length
+        ? '평가 중'
+        : '평가 전';
+}
 const rows = computed(() =>
   learners.value
     .map((user) => {
-      const request = store.data.planningRequests.filter((r) => r.learnerId === user.id).at(-1);
+      const requests = store.data.planningRequests
+        .filter((r) => r.learnerId === user.id)
+        .slice()
+        .reverse();
+      const summaries = store.data.requestProgress.filter((p) => p.learnerId === user.id);
       const plans = store.data.plans.filter((p) => p.learnerId === user.id);
       const assignments = store.data.assignments.filter(
-        (a) => a.learnerId === user.id && !a.excludedReason && !a.certifiedAt,
+        (a) => a.learnerId === user.id && !a.excludedReason,
       );
-      const requestedPlans = plans.filter((p) => p.requestId === request?.id);
-      const stage = !request
-        ? '미발송'
-        : !requestedPlans.length
-          ? '미착수'
-          : requestedPlans.some((p) => p.status === 'draft')
-            ? '작성 중'
-            : '계획 완료';
-      const ftMissing = assignments.some(
-        (a) =>
-          !a.ftId &&
-          a.enrollments.some((e) =>
-            store.requiredKinds(store.course(e.courseId)).some((k) => k !== 'objective'),
-          ),
-      );
-      const waiting = assignments.reduce(
-        (n, a) =>
-          n +
-          a.enrollments.filter((e) => e.subjective === 'waiting' || e.practical === 'waiting')
-            .length,
-        0,
-      );
+      const stage = summaries.find((p) => p.id === requests[0]?.id)?.stage || '미발송';
       const late =
-        (!!request && stage !== '계획 완료' && request.dueOn < kstDate()) ||
+        requests.some(
+          (r) =>
+            r.dueOn < kstDate() &&
+            !['계획 완료', '현재 대상 없음'].includes(
+              summaries.find((p) => p.id === r.id)?.stage || '',
+            ),
+        ) ||
         plans.some(
           (p) =>
             p.targetOn &&
             p.targetOn < kstDate() &&
-            (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId)),
+            (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId && !a.certifiedAt)),
         );
-      return { user, request, plans, assignments, stage, ftMissing, waiting, late };
+      return { user, requests, summaries, plans, assignments, stage, late };
     })
     .filter(
       (r) =>
         filter.value === 'all' ||
-        (filter.value === 'ft'
-          ? r.ftMissing
-          : filter.value === 'waiting'
-            ? r.waiting
-            : filter.value === 'late'
-              ? r.late
-              : filter.value === 'learning'
-                ? r.assignments.some((a) => a.enrollments.some((e) => !e.learningComplete))
-                : r.stage === filter.value),
+        filter.value === r.stage ||
+        (filter.value === 'late' && r.late) ||
+        r.assignments.some((a) => a.enrollments.some((e) => phase(e) === filter.value)),
     ),
 );
+function startRequest() {
+  form.value = {
+    learnerIds: [],
+    dueOn: defaultPlanningDueOn(store.data.serverDate + 'T00:00:00+09:00'),
+    message: '',
+  };
+  dueEdited.value = false;
+  error.value = '';
+  open.value = true;
+}
 async function send() {
+  if (!form.value.dueOn) {
+    error.value = '계획 작성 기한을 입력해 주세요.';
+    return;
+  }
   busy.value = true;
   error.value = '';
   try {
-    await store.command('/planning-requests', { ...form.value, ftId: form.value.ftId || null });
+    await store.command('/planning-requests', {
+      ...form.value,
+      ...(dueEdited.value ? {} : { dueOn: undefined }),
+    });
     open.value = false;
-    form.value = { learnerIds: [], dueOn: '', message: '', ftId: '' };
-    store.notify('대상자별 계획 요청과 개인 알림을 생성했습니다.');
-  } catch (err) {
-    error.value = (err as Error).message;
+    store.notify('대상자별 필수 자격 목록과 계획 요청을 저장했습니다.');
+  } catch (e) {
+    error.value = (e as Error).message;
   } finally {
     busy.value = false;
   }
@@ -96,7 +99,7 @@ function leave() {
     !busy.value &&
     (!open.value ||
       !form.value.learnerIds.length ||
-      window.confirm('작성한 계획 요청을 취소하고 이동할까요?'))
+      confirm('작성 중인 요청을 취소하고 이동할까요?'))
   );
 }
 onBeforeRouteLeave(leave);
@@ -106,37 +109,43 @@ onBeforeRouteUpdate(leave);
   <section class="panel planning-panel">
     <div class="section-heading">
       <h2>계획 요청 현황</h2>
-      <button class="button primary" :disabled="!ready || busy" @click="open = true">
+      <button class="button primary" :disabled="busy || !ready" @click="startRequest">
         계획 수립 요청
       </button>
     </div>
-    <p v-if="!ready" class="muted">
-      계획할 수 있는 자격이 없습니다.
-      <RouterLink :to="store.managementLink('/admin/qualifications')"
-        >자격 설명·기간·과정 기준을 준비해 주세요.</RouterLink
-      >
+    <p v-if="!ready" class="notice-body">
+      요청할 대상이 없습니다.
+      <RouterLink :to="store.managementLink('/admin/policies')">조직별 자격 설정</RouterLink>과 아래
+      대상자의 준비 상태를 확인해 주세요.
     </p>
     <label class="field compact-field"
-      ><span>계획·진행 필터</span
-      ><select aria-label="계획·진행 필터" v-model="filter">
+      >계획·진행 필터<select v-model="filter">
         <option value="all">전체 대상자</option>
-        <option v-for="state in ['미발송', '미착수', '작성 중', '계획 완료']" :key="state">
+        <option
+          v-for="state in [
+            '미발송',
+            '미착수',
+            '작성 중',
+            '계획 완료',
+            '평가 전',
+            '평가 중',
+            '일부 통과',
+            '수료',
+          ]"
+          :key="state"
+        >
           {{ state }}
         </option>
-        <option value="learning">학습 진행</option>
-        <option value="ft">FT 미배정</option>
-        <option value="waiting">평가 대기</option>
         <option value="late">목표일·기한 경과</option>
       </select></label
     >
     <div class="table-panel">
-      <table v-if="rows.length">
+      <table>
         <thead>
           <tr>
-            <th>대상자</th>
-            <th>계획 상태</th>
-            <th>작성 기한</th>
-            <th>자격별 계획</th>
+            <th>대상자·소속</th>
+            <th>요청 준비</th>
+            <th>요청별 계획 현황</th>
             <th>진행 상태</th>
           </tr>
         </thead>
@@ -146,15 +155,31 @@ onBeforeRouteUpdate(leave);
               {{ row.user.name
               }}<small class="table-subtext">{{ row.user.organizationPath.at(-1)?.name }}</small>
             </td>
-            <td>{{ row.stage }}</td>
-            <td>{{ row.request?.dueOn || '—' }}</td>
+            <td>{{ readiness(row.user.id)?.reason }}</td>
             <td>
-              <details v-if="row.plans.length">
+              <span>{{ row.stage }}</span>
+              <details v-for="r in row.requests" :key="r.id">
                 <summary>
-                  {{ row.plans.filter((p) => p.status === 'completed').length }} /
-                  {{ row.plans.length }} 계획 완료
+                  {{ r.dueOn }} 기한 · {{ row.summaries.find((s) => s.id === r.id)?.stage }}
                 </summary>
-                <div v-for="p in row.plans" :key="p.id" class="plan-summary">
+                <p v-for="s in row.summaries.filter((s) => s.id === r.id)" :key="s.id">
+                  대상 {{ s.total }}개 · 계획 확정 {{ s.planned }}개 · 유효 인증 {{ s.valid }}개 ·
+                  현재 기준 제외 {{ s.excluded }}개
+                </p>
+                <p>{{ r.message }}</p>
+                <p v-if="r.source === 'migration'" class="muted">
+                  이관 시 확보한 소속·계획 대상입니다. 당시 원본에 없는 요청 범위를 추정하지
+                  않았습니다.
+                </p>
+                <ul>
+                  <li v-for="target in r.targets" :key="target.entityId">
+                    {{ target.title }} · 요청 당시 v{{ target.version }}
+                  </li>
+                </ul>
+              </details>
+              <details v-if="row.plans.length">
+                <summary>개인 계획 {{ row.plans.length }}건</summary>
+                <div v-for="p in row.plans" :key="p.id">
                   <strong>{{ store.qualification(p.qualificationId).title }}</strong>
                   <p>목표 인증일 {{ p.targetOn || '미정' }}</p>
                   <p v-for="s in p.schedules" :key="s.courseId">
@@ -163,68 +188,61 @@ onBeforeRouteUpdate(leave);
                   </p>
                 </div>
               </details>
-              <span v-else>—</span>
             </td>
             <td>
-              <p v-if="row.ftMissing">FT 미배정 · 아래 배정에서 지정</p>
-              <p v-if="row.waiting">평가 대기 {{ row.waiting }}과정</p>
+              <p v-for="a in row.assignments" :key="a.id">
+                {{ store.qualification(a.qualificationId).title
+                }}<span
+                  v-for="state in ['평가 전', '평가 중', '일부 통과', '수료']"
+                  :key="state"
+                  class="table-subtext"
+                  >{{ state }}
+                  {{ a.enrollments.filter((e) => phase(e) === state).length }}과정</span
+                >
+              </p>
               <p v-if="row.late">목표일·기한 경과</p>
-              <span v-if="!row.ftMissing && !row.waiting && !row.late">{{
-                row.assignments.length ? '학습·평가 진행' : '—'
-              }}</span>
             </td>
           </tr>
         </tbody>
       </table>
-      <p v-else class="empty-state">해당 대상자가 없습니다.</p>
+      <p v-if="!rows.length" class="empty-state">해당 대상자가 없습니다.</p>
     </div>
   </section>
-  <AppDialog v-model:open="open" title="계획 수립 요청">
-    <p>{{ store.managementOrganization?.name }}</p>
+  <AppDialog v-model:open="open" title="계획 수립 요청"
+    ><p>{{ store.managementOrganization?.name }}</p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <fieldset class="template-list">
       <legend>대상 학습자</legend>
       <label v-for="u in learners" :key="u.id" class="choice"
         ><input
           v-model="form.learnerIds"
+          :aria-label="u.name"
           :value="u.id"
           type="checkbox"
-          :disabled="busy || !u.organizationActive"
-        />{{ u.name
-        }}<span v-if="store.data.planningRequests.some((r) => r.learnerId === u.id)" class="muted"
-          >이전 요청 있음</span
+          :disabled="busy || !readiness(u.id)?.canRequest"
+        /><span
+          >{{ u.name }} · {{ u.organizationPath.at(-1)?.name
+          }}<small
+            >{{ readiness(u.id)?.reason }} · {{ readiness(u.id)?.count || 0 }}자격</small
+          ></span
         ></label
       >
     </fieldset>
     <label class="field"
-      ><span>계획 작성 기한</span><input v-model="form.dueOn" type="date" :disabled="busy"
-    /></label>
-    <label class="field"
-      ><span>안내문</span
-      ><textarea v-model="form.message" rows="3" maxlength="2000" :disabled="busy" />
+      >계획 작성 기한<input
+        v-model="form.dueOn"
+        @input="dueEdited = true"
+        type="date"
+        :disabled="busy"
+      /><span v-if="dueEdited && !form.dueOn" class="field-error"
+        >계획 작성 기한을 입력해 주세요.</span
+      ></label
+    ><label class="field"
+      >안내문<textarea v-model="form.message" rows="3" maxlength="2000" :disabled="busy" />
     </label>
-    <label class="field"
-      ><span>담당 FT · 선택</span
-      ><select aria-label="담당 FT · 선택" v-model="form.ftId" :disabled="busy">
-        <option value="">계획 완료 후 배정</option>
-        <option
-          v-for="u in store.data.users.filter(
-            (u) =>
-              u.lv1OrganizationId === store.managementLv1 &&
-              u.roles.includes('ft') &&
-              u.organizationActive &&
-              !form.learnerIds.includes(u.id),
-          )"
-          :key="u.id"
-          :value="u.id"
-        >
-          {{ u.name }}
-        </option>
-      </select></label
-    >
     <p class="muted">
-      학습자가 취득할 자격을 직접 선택합니다. 다시 요청하면 새 기한과 안내를 별도 기록하며 기존
-      계획과 배정은 유지합니다. FT는 계획 완료 후에도 배정할 수 있습니다.
+      현재 소속의 미취득·미계획 필수 자격을 요청에 보관합니다. 이후 추가되는 자격은 별도로 요청하며
+      기존 계획과 기한은 바꾸지 않습니다.
     </p>
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button
@@ -235,6 +253,6 @@ onBeforeRouteUpdate(leave);
       >
         대상자에게 요청
       </button></template
-    >
-  </AppDialog>
+    ></AppDialog
+  >
 </template>

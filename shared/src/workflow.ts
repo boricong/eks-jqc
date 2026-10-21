@@ -7,7 +7,7 @@ const id = z
   .max(160)
   .refine((v) => !["__proto__", "constructor", "prototype"].includes(v));
 const dateOrEmpty = z.union([z.literal(""), z.iso.date()]);
-export const WORKFLOW_VERSION = "personal-certification-v1";
+export const WORKFLOW_VERSION = "personal-certification-v3";
 export const workflowSteps = [
   ["person", "신규 인력 확인"],
   ["organization", "운영 조직 지정"],
@@ -56,18 +56,6 @@ export const learningTypeLabels = {
   team: "팀 특화 교육",
   ojt: "현업 OJT",
 };
-export const SubjectiveQuestionSchema = z.object({
-  id,
-  catalogCode: z.string().max(160).optional(),
-  prompt: z.string().max(20000),
-  points: z.number().int().min(1).max(1000000),
-  rubric: z.string().max(20000).optional(),
-  modelAnswer: z.string().max(20000).optional(),
-});
-export const GradeSchema = z.object({
-  points: z.number().int().min(0),
-  reason: z.string().max(20000),
-});
 export const AwardSnapshotSchema = z.object({
   learnerName: z.string().min(1),
   organizationPath: OrganizationPathSchema,
@@ -80,11 +68,23 @@ export const PlanningRequestSchema = z.object({
   lv1OrganizationId: id,
   learnerId: id,
   requestedBy: id,
-  ftId: id.nullable(),
   dueOn: z.iso.date(),
   message: z.string().max(2000),
   createdAt: z.iso.datetime(),
   revision: z.number().int().positive(),
+  organizationId: id.optional(),
+  organizationPath: OrganizationPathSchema.optional(),
+  targets: z
+    .array(
+      z.object({
+        entityId: id,
+        qualificationId: id,
+        title: z.string(),
+        version: z.number().int().positive(),
+      }),
+    )
+    .optional(),
+  source: z.enum(["requested", "migration"]).optional(),
 });
 export type PlanningRequest = z.infer<typeof PlanningRequestSchema>;
 export const PlanScheduleSchema = z.object({
@@ -100,7 +100,9 @@ export const PersonalPlanSchema = z.object({
   learnerId: id,
   requestId: id,
   qualificationId: id,
-  workflowVersion: z.literal(WORKFLOW_VERSION),
+  workflowVersion: z.enum(["personal-certification-v2", WORKFLOW_VERSION]),
+  organizationId: id.optional(),
+  policyRevision: z.number().int().nonnegative().optional(),
   status: z.enum(["draft", "completed"]),
   revision: z.number().int().positive(),
   createdAt: z.iso.datetime(),
@@ -237,3 +239,9 @@ export const certificationStatusLabels = {
   expiring: "만료 예정",
   expired: "만료",
 };
+
+export function defaultPlanningDueOn(value: string | Date = new Date()) {
+  const date = new Date(`${kstDate(value)}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 28);
+  return date.toISOString().slice(0, 10);
+}

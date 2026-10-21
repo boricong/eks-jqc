@@ -11,10 +11,7 @@ const store = useDemo(),
 const a = computed(() => {
   const a = store.assignment(String(route.params.id));
   return a?.certifiedAt &&
-    (store.hasRole('system_operator') ||
-      store.hasRole('admin') ||
-      a.learnerId === store.actorId ||
-      a.ftId === store.actorId)
+    (store.hasRole('system_operator') || store.hasRole('admin') || a.learnerId === store.actorId)
     ? a
     : undefined;
 });
@@ -25,9 +22,7 @@ const back = computed(() =>
       ? '/system/overview'
       : store.hasRole('admin')
         ? '/admin/results'
-        : store.hasRole('ft')
-          ? '/evaluations'
-          : '/qualifications?filter=certified',
+        : '/qualifications?filter=certified',
 );
 </script>
 <template>
@@ -71,7 +66,13 @@ const back = computed(() =>
       }}
     </p>
     <p class="small-label">인증 {{ a.certification?.id }}</p>
-    <p v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')" class="test-data-disclaimer">프로세스 검증용 가상 기준으로 발급된 시험 인증입니다. 실제 사내 직무 자격으로 사용하지 않습니다.</p>
+    <p
+      v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')"
+      class="test-data-disclaimer"
+    >
+      프로세스 검증용 가상 기준으로 발급된 시험 인증입니다. 실제 사내 직무 자격으로 사용하지
+      않습니다.
+    </p>
     <section v-if="a.certification" class="panel editor-panel validity-panel">
       <div class="section-heading">
         <h2>현재 유효 여부</h2>
@@ -106,7 +107,18 @@ const back = computed(() =>
           :key="kind"
           class="history-row"
         >
-          <span>{{ kindLabels[kind] }}</span
+          <span
+            >{{ kindLabels[kind] }} · 자동 채점<br />{{
+              e.history.find(
+                (h) => h.id === e.completion?.evidence.find((ev) => ev.kind === kind)?.attemptId,
+              )?.earned
+            }}
+            /
+            {{
+              e.history.find(
+                (h) => h.id === e.completion?.evidence.find((ev) => ev.kind === kind)?.attemptId,
+              )?.total
+            }}점</span
           ><StatusBadge status="passed" /><span
             >{{
               e.history.find(
@@ -118,7 +130,7 @@ const back = computed(() =>
               e.history.find(
                 (h) => h.id === e.completion?.evidence.find((ev) => ev.kind === kind)?.attemptId,
               )!.date,
-            ).toLocaleDateString('ko-KR')
+            ).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
           }}</span>
         </div>
         <RouterLink

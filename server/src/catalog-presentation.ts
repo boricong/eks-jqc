@@ -30,13 +30,15 @@ const cell = (v: unknown): CatalogCell =>
         : (v as CatalogCell);
 const labels: Record<string, string> = {
   objective: "객관식",
-  subjective: "주관식",
+  materials: "학습자료",
   practical: "실기",
   mtc: "MTC교육",
   team: "팀 특화 교육",
   ojt: "현업 OJT",
-  written: "필기",
-  case: "Case",
+  text: "직접 작성",
+  edm: "EDM Link",
+  confluence: "Confluence",
+  url: "일반 URL",
   unknown: "미정",
   months: "기간제",
   unlimited: "무기한",

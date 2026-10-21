@@ -1,3 +1,4 @@
+import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -37,7 +38,7 @@ async function secondOrganization(f: Fixture) {
     ["learner"],
     "org-etch-equipment-1",
   );
-  const ft = await createUser(f, "Etch FT", ["ft"], "org-etch");
+  const ft = await createUser(f, "Etch FT", ["learner"], "org-etch");
   const course = await f.call("admin-2", "/courses", {});
   await f.call("admin-2", `/courses/${course.id}/publish`, {
     ...f.store.snapshot().courses[0],
@@ -181,7 +182,7 @@ test("조직 CRUD 권한·레벨·이동·중복 이름·충돌·재시도·재�
     "operator-1",
     "/system/organizations",
     { revision: 2, parentId: "org-photo-pyeongtaek-1", name: "Lv5" },
-    422,
+    200,
   );
   await edit("org-photo-pyeongtaek-1", { parentId: "org-photo-hwaseong" });
   await edit(added.id, { active: false });
@@ -243,7 +244,6 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
     {
       qualificationId: "demo-qualification",
       learnerId: "learner-2",
-      ftId: other.ft,
     },
     409,
   );
@@ -253,7 +253,6 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
     {
       qualificationId: other.qualification,
       learnerId: "learner-2",
-      ftId: "ft-1",
     },
     403,
   );
@@ -270,11 +269,7 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
     ["admin"],
     "org-photo-pyeongtaek-1",
   );
-  await f.call(admin, "/assignments/assignment-1/ft", {
-    revision: 1,
-    ftId: "ft-2",
-    reason: "같은 조직 공동 관리",
-  });
+  await f.call(admin, "/assignments/assignment-1/results");
   const comparison = await f.call(
     admin,
     `/enrollments/${encodeURIComponent(eid)}/comparisons`,
@@ -290,7 +285,7 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
   await f.call(
     "ft-1",
     `/attempts/${attempt.id}/draft`,
-    { revision: 1, answers: {}, verdicts: {} },
+    { revision: 1, answers: {} },
     403,
     randomUUID(),
     "PUT",
@@ -303,81 +298,6 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
   );
   await saved(f, attempt.id, true, other.ft);
   await submit(f, attempt.id, other.ft);
-});
-
-test("소속·역할 변경·사용 중지 상속·과거 기록 보존·마지막 운영자 보호", async (t) => {
-  const f = await fixture(t);
-  const update = (id: string, fields: object, status = 200) => {
-    const { name, roles, organizationId, revision } = f.store
-      .snapshot()
-      .users.find((u) => u.id === id)!;
-    return f.call(
-      "operator-1",
-      `/system/users/${id}`,
-      { name, roles, organizationId, revision, ...fields },
-      status,
-      randomUUID(),
-      "PATCH",
-    );
-  };
-  await update("learner-1", { organizationId: "org-etch" }, 422);
-  await update("learner-1", { roles: ["ft"] }, 409);
-  await update("ft-1", { roles: ["learner"] }, 409);
-  await update("operator-1", { roles: ["admin"] }, 409);
-  await update("learner-1", { organizationId: "org-photo-pyeongtaek-1" });
-  await f.call(
-    "operator-1",
-    "/system/organizations/org-photo-fmg",
-    { revision: 0, active: false },
-    200,
-    randomUUID(),
-    "PATCH",
-  );
-  const view = await f.call("learner-1", "/session");
-  assert.equal(view.actor.organizationActive, false);
-  await f.call(
-    "admin-1",
-    "/assignments",
-    {
-      qualificationId: "demo-qualification",
-      learnerId: "learner-1",
-      ftId: "ft-1",
-    },
-    409,
-  );
-  await finish(f, eid, "practical");
-  await finish(f, "assignment-1:demo-course-2", "objective");
-  await finish(f, "assignment-1:demo-course-2", "practical");
-  const evidence = structuredClone(f.store.snapshot().attempts);
-  await update("ft-1", { roles: ["learner"] });
-  assert.deepEqual(f.store.snapshot().attempts, evidence);
-  await f.restart();
-  assert.equal(
-    (await f.call("operator-1", "/assignments/assignment-1/certification"))
-      .certification.learnerId,
-    "learner-1",
-  );
-  assert.equal(
-    f.store.snapshot().assignments[0]!.organizationPath[0]!.id,
-    "org-photo",
-  );
-  const users = f.store.snapshot().users;
-  await f.call("operator-1", "/testing/progress/reset", {
-    revision: f.store.snapshot().revision,
-    confirmation: "초기화",
-    scope: { type: "all" },
-  });
-  assert.deepEqual(f.store.snapshot().users, users);
-  await f.restart();
-  await f.call(
-    "learner-1",
-    `/enrollments/${eid}/attempts`,
-    { kind: "practical" },
-    409,
-  );
-  await update("ft-1", { name: "박준호 (역할 변경)" });
-  await update("ft-1", { roles: ["ft"] });
-  await start(f, eid, "practical");
 });
 
 test("쓰기 대기열에서 최신 역할을 다시 검사", async (t) => {
@@ -552,71 +472,6 @@ test("조직 백업·실패 보존·일반 데이터 복구가 조직 파일을 
   );
 });
 
-test("명시적 v1 이관·원본 백업·조직 보존·재실행 무변경", async (t) => {
-  const f = await fixture(t);
-  const source: any = f.store.snapshot();
-  legacyFields(source);
-  source.schemaVersion = 1;
-  source.users = source.users.filter((u: any) => u.id !== "operator-1");
-  for (const user of source.users) {
-    delete user.organizationId;
-    delete user.revision;
-  }
-  for (const record of [
-    ...source.courses,
-    ...source.qualifications,
-    ...source.assignments,
-    ...source.notices,
-    ...source.audits,
-  ])
-    delete record.lv1OrganizationId;
-  for (const record of source.assignments) {
-    delete record.organizationPath;
-    delete record.organizationSource;
-  }
-  const master = await readFile(f.store.organizations.file, "utf8");
-  await f.stop();
-  await writeFile(f.file, JSON.stringify(source));
-  await new JsonStore(f.file).migrate(migrateState);
-  const migrated = JSON.parse(await readFile(f.file, "utf8"));
-  assert.equal(migrated.schemaVersion, 5);
-  assert.equal(migrated.users.length, source.users.length + 1);
-  assert.ok(migrated.users.every((u: any) => u.organizationId === "org-photo"));
-  assert.deepEqual(
-    migrated.attempts.map(({ status, submittedAt, ...t }: any) => t),
-    source.attempts.map(({ status, submittedAt, ...t }: any) => t),
-  );
-  assert.ok(migrated.attempts.every((t: any) => t.status === "graded"));
-  assert.equal(migrated.assignments[0].organizationSource, "migration");
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), master);
-  const raw = await readFile(f.file, "utf8");
-  await new JsonStore(f.file).migrate(migrateState);
-  assert.equal(await readFile(f.file, "utf8"), raw);
-  const backups = (await readdir(f.store.backupDir)).filter((name) =>
-    name.startsWith("before-migration-"),
-  );
-  assert.equal(backups.length, 1);
-  assert.deepEqual(
-    JSON.parse(
-      await readFile(path.join(f.store.backupDir, backups[0]!), "utf8"),
-    ),
-    source,
-  );
-  await rm(f.store.organizations.file);
-  await assert.rejects(new JsonStore(f.file).load(), /열 수 없습니다/);
-  await assert.rejects(readFile(f.store.organizations.file), /ENOENT/);
-  await assert.rejects(new JsonStore(f.file).migrate(migrateState), /ENOENT/);
-  // Explicit migration from v1 can perform the one-time master installation.
-  await writeFile(f.file, JSON.stringify(source));
-  await new JsonStore(f.file).migrate(migrateState);
-  assert.equal(
-    organizationEntries(
-      JSON.parse(await readFile(f.store.organizations.file, "utf8")),
-    ).length,
-    35,
-  );
-});
-
 async function fixture(t: TestContext, change?: (s: State) => void) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "eks-api-")),
     file = path.join(dir, "runtime", "state.json"),
@@ -632,7 +487,7 @@ async function fixture(t: TestContext, change?: (s: State) => void) {
     {
       id: "dual",
       name: "겸직 참여자",
-      roles: ["learner", "ft"],
+      roles: ["learner"],
       organizationId: "org-photo",
       revision: 1,
     },
@@ -744,12 +599,12 @@ async function planAssignment(
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === input.qualificationId)!;
+  await configureTestPolicies(f.store, q.lv1OrganizationId, undefined, [q.id]);
   const request = await f.call(
     manager,
     scoped("/planning-requests", q.lv1OrganizationId),
     {
       learnerIds: [input.learnerId],
-      ftId: input.ftId,
       dueOn: "2026-10-31",
       message: "검증용 계획 요청",
     },
@@ -783,32 +638,6 @@ async function planAssignment(
   const a = f.store
     .snapshot()
     .assignments.find((a) => a.id === completed.assignmentId)!;
-  if (input.ftId && a.ftId !== input.ftId)
-    await f.call(
-      manager,
-      scoped(`/assignments/${a.id}/ft`, q.lv1OrganizationId),
-      { revision: a.revision, ftId: input.ftId, reason: "담당자 지정" },
-    );
-  for (const e of f.store
-    .snapshot()
-    .enrollments.filter((e) => e.assignmentId === a.id)) {
-    const course = f.store.snapshot().courses.find((c) => c.id === e.courseId)!;
-    for (const item of course.learningItems.filter((i) => i.required))
-      await f.call(
-        input.learnerId,
-        `/enrollments/${e.id}/learning`,
-        {
-          itemId: item.id,
-          performedOn: "2026-10-01",
-          content: "검증용 학습 완료",
-          evidenceUrl: "",
-          revision: 0,
-        },
-        200,
-        randomUUID(),
-        "PUT",
-      );
-  }
   return { id: a.id };
 }
 
@@ -827,131 +656,6 @@ async function lifecycle(
     reason: "운영 기준 변경",
   });
 }
-
-test("운영자 다른 Lv1의 기준·배정·FT·공지·비교 관리와 실제 실행자 보존", async (t) => {
-  const f = await fixture(t);
-  const learner = await createUser(f, "Etch 학습자", ["learner"], "org-etch");
-  const ft = await createUser(f, "Etch FT", ["ft"], "org-etch");
-  const otherFt = await createUser(f, "Etch 대체 FT", ["ft"], "org-etch");
-  const call = (
-    url: string,
-    body?: unknown,
-    code = 200,
-    key = randomUUID(),
-    method?: "PUT",
-  ) => f.call("operator-1", scoped(url), body, code, key, method);
-  const view = await call("/workspace");
-  assert.equal(view.actor.organizationId, "org-photo");
-  assert.deepEqual(view.actor.roles, ["system_operator"]);
-  assert.deepEqual(view.management, {
-    lv1OrganizationId: "org-etch",
-    canManage: true,
-  });
-  assert.equal(
-    (await f.call("operator-1", "/workspace")).management.canManage,
-    false,
-  );
-  const key = randomUUID(),
-    course = await call("/courses", {}, 200, key);
-  await f.call("operator-1", scoped("/courses", "org-photo"), {}, 409, key);
-  await f.call("admin-1", scoped("/courses"), {}, 403);
-  await call("/courses/demo-course-1/versions", {}, 403);
-  await call(`/courses/${course.id}/publish`, {
-    ...f.store.snapshot().courses[0],
-    title: "운영자 Etch 과정",
-    revision: 1,
-  });
-  const q = await call("/qualifications", {});
-  await call(`/qualifications/${q.id}/publish`, {
-    title: "운영자 Etch 자격",
-    description: "Etch 직무 검증",
-    validity: { type: "unlimited", months: null, reminderDays: [] },
-    courseIds: [course.id],
-    revision: 1,
-  });
-  await call(
-    "/assignments",
-    { qualificationId: q.id, learnerId: learner, ftId: "ft-1" },
-    409,
-  );
-  const a = await planAssignment(f, "operator-1", {
-    qualificationId: q.id,
-    learnerId: learner,
-    ftId: ft,
-  });
-  await call(`/assignments/${a.id}/ft`, {
-    revision: 1,
-    ftId: otherFt,
-    reason: "FT 변경",
-  });
-  await call("/notices", {
-    title: "조직 공지",
-    body: "운영자가 작성",
-    published: true,
-  });
-  const e = f.store
-    .snapshot()
-    .enrollments.find((e) => e.assignmentId === a.id)!;
-  await finish(f, e.id, "objective", true, learner, otherFt);
-  const practical = await start(f, e.id, "practical", learner);
-  await call(`/attempts/${practical.id}/submit`, { revision: 1 }, 403);
-  await saved(f, practical.id, true, otherFt);
-  await submit(f, practical.id, otherFt);
-  const comparison = await call(`/enrollments/${e.id}/comparisons`, {});
-  const fields = {
-    ...f.store.snapshot().comparisons.find((c) => c.id === comparison.id),
-    attemptIds: f.store
-      .snapshot()
-      .attempts.filter((a) => a.enrollmentId === e.id)
-      .map((a) => a.id),
-    observedAt: "2026-10-16",
-    observer: "관찰자",
-    task: "작업",
-    criterion: "기준",
-    evidence: "별도 수행 근거",
-    evidenceUrl: "",
-    independence: "independent",
-    performance: "met",
-  };
-  await call(`/comparisons/${comparison.id}`, fields, 200, randomUUID(), "PUT");
-  await call(`/comparisons/${comparison.id}/finalize`, {
-    ...fields,
-    revision: 2,
-  });
-  const corrected = await call(`/comparisons/${comparison.id}/corrections`, {
-    reason: "관찰 내용 정정",
-  });
-  assert.equal(
-    f.store.snapshot().comparisons.find((c) => c.id === corrected.id)!
-      .ownerAdminId,
-    "operator-1",
-  );
-  await call(`/assignments/${a.id}/exclusion`, {
-    revision: 2,
-    reason: "시험 종료",
-  });
-  const state = f.store.snapshot();
-  assert.equal(
-    state.assignments.find((r) => r.id === a.id)!.ownerAdminId,
-    "operator-1",
-  );
-  assert.ok(
-    state.audits
-      .filter(
-        (a) => a.actorId === "operator-1" && !a.action.startsWith("user."),
-      )
-      .every((a) => a.lv1OrganizationId === "org-etch"),
-  );
-  assert.ok(
-    state.requests
-      .filter((r) => r.actorId === "operator-1" && r.action !== "user.change")
-      .every((r) => r.lv1OrganizationId === "org-etch"),
-  );
-  await f.restart();
-  assert.ok(
-    (await call("/workspace")).assignments.some((r: any) => r.id === a.id),
-  );
-});
 
 test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 재시도·최신 권한", async (t) => {
   const f = await fixture(t);
@@ -1096,7 +800,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     `/courses/${v2.id}/publish`,
     f.store.snapshot().courses.find((c) => c.id === v2.id),
   );
-  const orgBefore = await readFile(f.store.organizations.file, "utf8");
+  let orgBefore = await readFile(f.store.organizations.file, "utf8");
   await lifecycle(f, "demo-course-1", "retirement");
   assert.equal(
     f.store.snapshot().courses.find((c) => c.id === v2.id)!.operationalStatus,
@@ -1109,7 +813,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   await f.call(
     "admin-1",
     "/assignments",
-    { qualificationId: "demo-qualification", learnerId: "dual", ftId: "ft-1" },
+    { qualificationId: "demo-qualification", learnerId: "dual" },
     409,
   );
   const nextQ = await f.call(
@@ -1180,6 +884,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     audits = f.store
       .snapshot()
       .audits.filter((e) => e.action.startsWith("course."));
+  orgBefore = await readFile(f.store.organizations.file, "utf8");
   await f.call("operator-1", "/testing/progress/reset", {
     scope: { type: "all" },
     confirmation: "초기화",
@@ -1298,51 +1003,6 @@ test("새 Lv1은 마지막 순서의 사용 조직으로 생성되고 재시도�
   assert.equal(view.assignments.length, 0);
 });
 
-test("v2→v4 명시적 이관·업무와 조직 원본 보존·반복 무변경", async (t) => {
-  const f = await fixture(t);
-  await finish(f, eid, "practical");
-  const original = f.store.snapshot(),
-    legacy = JSON.parse(JSON.stringify(original));
-  legacyFields(legacy);
-  legacy.schemaVersion = 2;
-  for (const c of legacy.courses) delete c.operationalStatus;
-  const orgBefore = await readFile(f.store.organizations.file, "utf8");
-  await f.stop();
-  await writeFile(f.file, JSON.stringify(legacy));
-  await new JsonStore(f.file).migrate(migrateState);
-  const after = JSON.parse(await readFile(f.file, "utf8"));
-  assert.equal(after.schemaVersion, 5);
-  assert.equal(after.revision, original.revision + 1);
-  for (const key of [
-    "users",
-    "enrollments",
-    "attempts",
-    "notices",
-    "comparisons",
-    "audits",
-    "requests",
-  ])
-    assert.deepEqual(after[key], (original as any)[key]);
-  assert.deepEqual(
-    after.completions.map(({ snapshot, ...c }: any) => c),
-    original.completions.map(({ snapshot, ...c }) => c),
-  );
-  assert.ok(
-    after.completions.every((c: any) => c.snapshot.source === "migration"),
-  );
-  assert.ok(
-    after.qualifications.every((q: any) => q.validity.type === "unknown"),
-  );
-  const bytes = await readFile(f.file, "utf8");
-  await new JsonStore(f.file).migrate(migrateState);
-  assert.equal(await readFile(f.file, "utf8"), bytes);
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), orgBefore);
-  assert.ok(
-    (await readdir(f.store.backupDir)).some((file) =>
-      file.startsWith("before-migration-"),
-    ),
-  );
-});
 const eid = "assignment-1:demo-course-1";
 async function start(
   f: Fixture,
@@ -1359,31 +1019,17 @@ async function start(
 async function saved(f: Fixture, attemptId: string, pass = true, ft = "ft-1") {
   const t = f.store.snapshot().attempts.find((t) => t.id === attemptId)!,
     c = f.store.snapshot().courses.find((c) => c.id === t.courseId)!;
-  const answers =
-    t.kind === "objective"
-      ? Object.fromEntries(
-          c.questions.map((q, i) => [
-            q.id,
-            !pass && i === 0 ? (q.correct! + 1) % q.choices.length : q.correct,
-          ]),
-        )
-      : {};
-  const verdicts =
-    t.kind === "practical"
-      ? Object.fromEntries(
-          c.practicalItems.map((item, i) => [
-            item.id,
-            {
-              value: !pass && i === 0 ? "fail" : "pass",
-              evidence: "독립 수행을 관찰한 가상 근거",
-            },
-          ]),
-        )
-      : {};
+  const questions = t.kind === "objective" ? c.questions : c.practicalQuestions;
+  const answers = Object.fromEntries(
+    questions.map((q, i) => [
+      q.id,
+      !pass && i === 0 ? (q.correct! + 1) % q.choices.length : q.correct,
+    ]),
+  );
   return f.call(
-    t.kind === "objective" ? t.learnerId : ft,
+    t.learnerId,
     `/attempts/${t.id}/draft`,
-    { revision: t.revision, answers, verdicts },
+    { revision: t.revision, answers },
     200,
     randomUUID(),
     "PUT",
@@ -1391,13 +1037,9 @@ async function saved(f: Fixture, attemptId: string, pass = true, ft = "ft-1") {
 }
 async function submit(f: Fixture, attemptId: string, ft = "ft-1") {
   const t = f.store.snapshot().attempts.find((t) => t.id === attemptId)!;
-  return f.call(
-    t.kind === "objective" ? t.learnerId : ft,
-    `/attempts/${t.id}/submit`,
-    {
-      revision: t.revision,
-    },
-  );
+  return f.call(t.learnerId, `/attempts/${t.id}/submit`, {
+    revision: t.revision,
+  });
 }
 async function finish(
   f: Fixture,
@@ -1412,166 +1054,6 @@ async function finish(
   return submit(f, t.id, ft);
 }
 
-test("여러 탭의 계정 전환·로그아웃과 지정 FT 평가 세션 분리", async (t) => {
-  const f = await fixture(t);
-  const cookies = new Map<string, string>();
-  const learnerTab = randomUUID(),
-    ftTab = randomUUID(),
-    otherTab = randomUUID();
-  async function tabCall(
-    tab: string,
-    url: string,
-    body?: unknown,
-    method?: "POST" | "PUT" | "DELETE",
-  ) {
-    const response = await f.app.inject({
-      method: method || (body === undefined ? "GET" : "POST"),
-      url: `/api${url}`,
-      headers: {
-        cookie: [...cookies]
-          .map(([name, value]) => `${name}=${value}`)
-          .join("; "),
-        "x-session-tab": tab,
-        "idempotency-key": randomUUID(),
-      },
-      ...(body === undefined ? {} : { payload: body as any }),
-    });
-    for (const cookie of response.cookies) {
-      if (cookie.maxAge === 0) cookies.delete(cookie.name);
-      else cookies.set(cookie.name, cookie.value);
-    }
-    return response;
-  }
-  assert.equal(
-    (await tabCall(learnerTab, "/session", { actorId: "learner-1" }))
-      .statusCode,
-    200,
-  );
-  const started = await tabCall(
-    learnerTab,
-    `/enrollments/${encodeURIComponent(eid)}/attempts`,
-    { kind: "practical" },
-  );
-  assert.equal(started.statusCode, 200, started.body);
-  const attemptId = started.json().id;
-  assert.equal(
-    (await tabCall(ftTab, "/session", { actorId: "ft-1" })).statusCode,
-    200,
-  );
-  assert.equal(
-    (await tabCall(learnerTab, "/session")).json().actor.id,
-    "learner-1",
-  );
-  assert.equal(
-    (await tabCall(learnerTab, "/session", { actorId: "learner-2" }))
-      .statusCode,
-    200,
-  );
-  assert.equal((await tabCall(ftTab, "/session")).json().actor.id, "ft-1");
-  const course = f.store
-    .snapshot()
-    .courses.find((c) => c.id === "demo-course-1")!;
-  const draft = {
-    revision: 1,
-    answers: {},
-    verdicts: Object.fromEntries(
-      course.practicalItems.map((item) => [
-        item.id,
-        { value: "pass", evidence: "독립 수행 관찰" },
-      ]),
-    ),
-  };
-  assert.equal(
-    (await tabCall(learnerTab, `/attempts/${attemptId}/draft`, draft, "PUT"))
-      .statusCode,
-    403,
-  );
-  await tabCall(otherTab, "/session", { actorId: "ft-2" });
-  assert.equal(
-    (await tabCall(otherTab, `/attempts/${attemptId}/draft`, draft, "PUT"))
-      .statusCode,
-    403,
-  );
-  const saved = await tabCall(
-    ftTab,
-    `/attempts/${attemptId}/draft`,
-    draft,
-    "PUT",
-  );
-  assert.equal(saved.statusCode, 200, saved.body);
-  await tabCall(learnerTab, "/session", undefined, "DELETE");
-  assert.equal((await tabCall(learnerTab, "/session")).statusCode, 401);
-  assert.equal((await tabCall(ftTab, "/session")).json().actor.id, "ft-1");
-  const submitted = await tabCall(ftTab, `/attempts/${attemptId}/submit`, {
-    revision: saved.json().revision,
-  });
-  assert.equal(submitted.statusCode, 200, submitted.body);
-  assert.equal(
-    f.store.snapshot().attempts.find((a) => a.id === attemptId)!.evaluatorId,
-    "ft-1",
-  );
-  assert.equal((await tabCall("invalid tab", "/session")).statusCode, 422);
-});
-
-test("세션·서버 권한·정답 보호·담당 관계", async (t) => {
-  const f = await fixture(t);
-  assert.equal((await f.app.inject("/api/workspace")).statusCode, 401);
-  const learner = await f.call("learner-1", "/workspace");
-  assert.equal(learner.assignments.length, 1);
-  assert.equal(learner.courses.length, 2);
-  assert.ok(
-    learner.courses.every((c: any) =>
-      c.questions.every((q: any) => !Object.hasOwn(q, "correct")),
-    ),
-  );
-  assert.ok(
-    learner.assignments[0].enrollments.every((e: any) =>
-      e.history.every(
-        (h: any) => !("answers" in h) && !("verdicts" in h) && !("earned" in h),
-      ),
-    ),
-  );
-  assert.equal((await f.call("learner-2", "/workspace")).assignments.length, 0);
-  await f.call("learner-2", "/attempts/attempt-1", undefined, 403);
-  await f.call("admin-2", "/assignments/assignment-1/results", undefined, 404);
-  await f.call("learner-1", "/courses", {}, 403);
-  await f.call(
-    "learner-2",
-    `/enrollments/${encodeURIComponent(eid)}/attempts`,
-    { kind: "practical" },
-    403,
-  );
-  const s = await start(f, eid, "practical");
-  await f.call(
-    "ft-2",
-    `/attempts/${s.id}/draft`,
-    { revision: 1, answers: {}, verdicts: {} },
-    403,
-    randomUUID(),
-    "PUT",
-  );
-  await f.call(
-    "admin-1",
-    "/assignments",
-    { qualificationId: "demo-qualification", learnerId: "dual", ftId: "dual" },
-    409,
-  );
-  const response = await f.app.inject({
-    method: "POST",
-    url: "/api/session",
-    headers: { origin: "https://untrusted.example" },
-    payload: { actorId: "admin-1" },
-  });
-  assert.equal(response.statusCode, 403);
-  const login = await f.app.inject({
-    method: "POST",
-    url: "/api/session",
-    payload: { actorId: "learner-1" },
-  });
-  assert.match(String(login.headers["set-cookie"]), /HttpOnly/);
-  assert.match(String(login.headers["set-cookie"]), /SameSite=Strict/i);
-});
-
 test("응시 이어쓰기·새로고침·서버 재시작·미응답 차단", async (t) => {
   const f = await fixture(t),
     enrollmentId = "assignment-1:demo-course-2";
@@ -1581,7 +1063,7 @@ test("응시 이어쓰기·새로고침·서버 재시작·미응답 차단", as
   await f.call(
     "learner-1",
     `/attempts/${first.id}/draft`,
-    { revision: 1, answers: { "d2-q1": 0 }, verdicts: {} },
+    { revision: 1, answers: { "d2-q1": 0 } },
     200,
     randomUUID(),
     "PUT",
@@ -1610,7 +1092,7 @@ test("응시 이어쓰기·새로고침·서버 재시작·미응답 차단", as
   await f.call(
     "learner-1",
     `/attempts/${first.id}/draft`,
-    { revision: 2, answers: { "d2-q1": 99 }, verdicts: {} },
+    { revision: 2, answers: { "d2-q1": 99 } },
     422,
     randomUUID(),
     "PUT",
@@ -1664,70 +1146,6 @@ test("부분 통과 유지·실기 재응시·복수 합격 근거·자동 인�
   );
 });
 
-test("객관식 전용·실기 전용과 비필수 실기 항목", async (t) => {
-  const f = await fixture(t, (s) => {
-    for (const mode of ["objective", "practical"] as const) {
-      const c = {
-        ...structuredClone(s.courses[0]!),
-        id: `only-${mode}`,
-        entityId: `only-${mode}`,
-        assessmentKinds: [mode],
-      };
-      if (mode === "practical")
-        c.practicalItems.push({
-          id: "optional",
-          title: "관찰 항목",
-          criterion: "참고",
-          mandatory: false,
-        });
-      s.courses.push(c);
-      s.qualifications.push({
-        englishName: "",
-        description: "검증용 직무 수행 기준",
-        validity: { type: "unlimited", months: null, reminderDays: [] },
-        lv1OrganizationId: "org-photo",
-        id: `qual-${mode}`,
-        entityId: `qual-${mode}`,
-        version: 1,
-        revision: 1,
-        title: mode,
-        status: "published",
-        courseIds: [c.id],
-      });
-    }
-  });
-  for (const kind of ["objective", "practical"] as const) {
-    const a = await planAssignment(f, "admin-1", {
-      qualificationId: `qual-${kind}`,
-      learnerId: "learner-2",
-      ftId: kind === "practical" ? "ft-1" : null,
-    });
-    const e = f.store
-      .snapshot()
-      .enrollments.find((e) => e.assignmentId === a.id)!;
-    const attempt = await start(f, e.id, kind, "learner-2");
-    await saved(f, attempt.id);
-    if (kind === "practical") {
-      const current = f.store
-        .snapshot()
-        .attempts.find((t) => t.id === attempt.id)!;
-      current.verdicts.optional = { value: "fail", evidence: "필수 아님" };
-      await f.call(
-        "ft-1",
-        `/attempts/${attempt.id}/draft`,
-        { revision: current.revision, answers: {}, verdicts: current.verdicts },
-        200,
-        randomUUID(),
-        "PUT",
-      );
-    }
-    await submit(f, attempt.id);
-    assert.ok(
-      f.store.snapshot().certifications.some((c) => c.assignmentId === a.id),
-    );
-  }
-});
-
 test("중복 제출·동시 마지막 평가 확정·요청 식별자 충돌", async (t) => {
   const f = await fixture(t);
   await finish(f, eid, "practical");
@@ -1741,7 +1159,7 @@ test("중복 제출·동시 마지막 평가 확정·요청 식별자 충돌", a
   const results = await Promise.all([
     f.call("learner-1", `/attempts/${objective.id}/submit`, payload, 200, key),
     f.call("learner-1", `/attempts/${objective.id}/submit`, payload, 200, key),
-    f.call("ft-1", `/attempts/${practical.id}/submit`, { revision: 2 }),
+    f.call("learner-1", `/attempts/${practical.id}/submit`, { revision: 2 }),
   ]);
   assert.deepEqual(results[0], results[1]);
   const s = f.store.snapshot();
@@ -1774,7 +1192,7 @@ test("저장 충돌·파일 저장 실패·동일 요청 복구", async (t) => {
   await f.call(
     "learner-1",
     `/attempts/${a.id}/draft`,
-    { revision: 1, answers: { "d2-q1": 0 }, verdicts: {} },
+    { revision: 1, answers: { "d2-q1": 0 } },
     200,
     randomUUID(),
     "PUT",
@@ -1782,7 +1200,7 @@ test("저장 충돌·파일 저장 실패·동일 요청 복구", async (t) => {
   await f.call(
     "learner-1",
     `/attempts/${a.id}/draft`,
-    { revision: 1, answers: { "d2-q1": 1 }, verdicts: {} },
+    { revision: 1, answers: { "d2-q1": 1 } },
     409,
     randomUUID(),
     "PUT",
@@ -1808,44 +1226,6 @@ test("저장 충돌·파일 저장 실패·동일 요청 복구", async (t) => {
   );
 });
 
-test("FT 교체: 미확정 초안 보존·초기화·늦은 요청 차단", async (t) => {
-  const f = await fixture(t),
-    attempt = await start(f, eid, "practical");
-  await saved(f, attempt.id, false);
-  const old = f.store.snapshot().attempts.find((t) => t.id === attempt.id)!;
-  await f.call("admin-1", "/assignments/assignment-1/ft", {
-    revision: 1,
-    ftId: "ft-2",
-    reason: "담당자 변경",
-  });
-  const s = f.store.snapshot(),
-    current = s.attempts.find((t) => t.id === attempt.id)!;
-  assert.equal(current.round, 2);
-  assert.deepEqual(current.verdicts, {});
-  assert.equal(current.evaluatorId, "ft-2");
-  assert.equal(current.revision, old.revision + 1);
-  const event = s.audits.find((e) => e.action === "assignment.ft")!;
-  assert.equal(event.reason, "담당자 변경");
-  assert.deepEqual(
-    (event.details.archivedDrafts as any)[0].verdicts,
-    old.verdicts,
-  );
-  assert.equal(
-    s.attempts.find((t) => t.id === "attempt-2")!.evaluatorId,
-    "ft-1",
-  );
-  await f.call(
-    "ft-1",
-    `/attempts/${attempt.id}/submit`,
-    { revision: old.revision },
-    403,
-  );
-  await f.call("ft-1", `/attempts/${attempt.id}`, undefined, 403);
-  await saved(f, attempt.id, true, "ft-2");
-  await submit(f, attempt.id, "ft-2");
-  assert.equal(f.store.snapshot().completions.length, 1);
-});
-
 test("기준 버전 계보·사용 등록 검증·고정·공지 영속 저장", async (t) => {
   const f = await fixture(t);
   const recipe = f.store
@@ -1869,8 +1249,16 @@ test("기준 버전 계보·사용 등록 검증·고정·공지 영속 저장",
   const draft = s.courses.find((c) => c.id === v2.id)!;
   await f.call("admin-1", `/courses/${v2.id}/publish`, {
     ...draft,
-    questions: draft.questions.map((q) => ({ ...q, category: "case" })),
-    materialUrl: "https://example.com/manual",
+    materials: [
+      {
+        id: "url",
+        type: "url",
+        title: "매뉴얼",
+        url: "https://example.com/manual",
+        content: "",
+        description: "",
+      },
+    ],
   });
   assert.equal(f.store.snapshot().enrollments[0]!.courseId, original.id);
   await f.call("admin-1", "/notices", {
@@ -1895,7 +1283,12 @@ test("검증 제외 후 원본 보존과 모든 새 처리 차단", async (t) =>
     revision: 1,
     reason: "잘못된 배정",
   });
-  await f.call("ft-1", `/attempts/${attempt.id}/submit`, { revision: 2 }, 409);
+  await f.call(
+    "learner-1",
+    `/attempts/${attempt.id}/submit`,
+    { revision: 2 },
+    409,
+  );
   await f.call(
     "learner-1",
     `/enrollments/${encodeURIComponent(eid)}/attempts`,
@@ -2115,7 +1508,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
     await f.call(
       "learner-2",
       `/attempts/${t.id}/draft`,
-      { revision: 1, answers: { "d1-q1": 0, "d1-q2": 0 }, verdicts: {} },
+      { revision: 1, answers: { "d1-q1": 0, "d1-q2": 0 } },
       200,
       randomUUID(),
       "PUT",
@@ -2129,11 +1522,7 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
   const f = await fixture(t);
   const practical = await start(f, eid, "practical");
   await saved(f, practical.id);
-  await f.call("admin-1", "/assignments/assignment-1/ft", {
-    revision: 1,
-    ftId: "ft-2",
-    reason: "교대",
-  });
+
   await saved(f, practical.id, true, "ft-2");
   await submit(f, practical.id, "ft-2");
   await finish(f, "assignment-1:demo-course-2", "objective");
@@ -2152,14 +1541,13 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
   );
   const original = f.store.snapshot();
   assert.equal(original.certifications.length, 1);
-  assert.ok(original.audits.some((a) => a.details.archivedDrafts));
+  assert.ok(original.attempts.length > 0);
   const preview = await f.call("operator-1", "/testing/progress?scope=all");
   assert.deepEqual(preview.counts, {
     objectiveAttempts: 2,
     practicalAttempts: 3,
-    subjectiveAttempts: 0,
     learningRecords: 0,
-    notifications: 6,
+    notifications: 3,
     completions: 2,
     certifications: 1,
     comparisons: 1,

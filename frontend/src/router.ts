@@ -7,6 +7,7 @@ import AssessmentView from './views/AssessmentView.vue';
 import EvaluationsView from './views/EvaluationsView.vue';
 import CertificateView from './views/CertificateView.vue';
 import AdminView from './views/AdminView.vue';
+import AdminLayout from './components/AdminLayout.vue';
 import SystemView from './views/SystemView.vue';
 import PlansView from './views/PlansView.vue';
 import SubjectiveView from './views/SubjectiveView.vue';
@@ -35,7 +36,7 @@ export const router = createRouter({
       path: '/evaluations/:id/:courseId/subjective',
       name: 'subjective-evaluation',
       component: SubjectiveView,
-      meta: { role: 'ft' },
+      meta: {},
     },
     {
       path: '/qualifications',
@@ -56,24 +57,35 @@ export const router = createRouter({
       meta: { role: 'learner' },
     },
     { path: '/certifications/:id', name: 'certificate', component: CertificateView },
-    { path: '/evaluations', name: 'evaluations', component: EvaluationsView, meta: { role: 'ft' } },
+    { path: '/evaluations', name: 'evaluations', component: EvaluationsView, meta: {} },
     {
       path: '/evaluations/:id/:courseId',
       name: 'evaluation',
-      component: AssessmentView,
-      meta: { role: 'ft' },
+      component: EvaluationsView,
+      meta: {},
     },
-    { path: '/admin', redirect: '/admin/qualifications' },
-    { path: '/admin/catalog', name:'catalog', component:()=>import('./views/CatalogView.vue'),meta:{management:true} },
     {
-      path: '/admin/:section(qualifications|courses|assignments|results|comparisons|notices)/:id?',
-      name: 'admin',
-      component: AdminView,
+      path: '/admin',
+      component: AdminLayout,
       meta: { management: true },
+      children: [
+        {
+          path: 'catalog',
+          name: 'catalog',
+          component: () => import('./views/CatalogView.vue'),
+          meta: { management: true },
+        },
+        {
+          path: ':section(policies|qualifications|courses|assignments|results|comparisons|notices)/:id?',
+          name: 'admin',
+          component: AdminView,
+          meta: { management: true },
+        },
+      ],
     },
     { path: '/system', redirect: '/system/organizations' },
     {
-      path: '/system/:section(organizations|users|overview|testing)',
+      path: '/system/:section(organizations|users|overview|testing|notices)',
       component: SystemView,
       meta: { role: 'system_operator' },
     },
@@ -90,6 +102,16 @@ router.beforeEach(async (to) => {
     to.path !== '/'
   )
     return '/';
+  if (
+    to.meta.management &&
+    store.canEnterManagement &&
+    (to.path === '/admin' ||
+      !store.canManageSection(to.name === 'catalog' ? 'catalog' : String(to.params.section)))
+  )
+    return {
+      path: store.fullManagement ? '/admin/qualifications' : '/admin/policies',
+      query: to.query,
+    };
   const managed =
     !!to.meta.management ||
     (['certificate', 'completion'].includes(String(to.name)) &&
@@ -136,7 +158,8 @@ router.beforeResolve(async (to) => {
     try {
       await store.refresh();
       if (
-        (to.meta.management && !store.canEnterManagement) ||
+        (to.meta.management &&
+          !store.canManageSection(to.name === 'catalog' ? 'catalog' : String(to.params.section))) ||
         (to.meta.role && !store.hasRole(to.meta.role as Role))
       )
         return '/';

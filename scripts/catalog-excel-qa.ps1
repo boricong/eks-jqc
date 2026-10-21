@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $taskRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sourceFile = Join-Path $taskRoot 'data\runtime\catalog-qa.xlsx'
 $outputFile = Join-Path $taskRoot 'data\runtime\catalog-excel-resaved.xlsx'
@@ -10,7 +10,9 @@ try {
   $excel.DisplayAlerts = $false
   $book = $excel.Workbooks.Open($sourceFile, 0, $false)
   $originalSheetCount = $book.Worksheets.Count
-  $sheet = $book.Worksheets.Item(3)
+  # The first qualification has a preserved draft v2. Edit the second one so
+  # this workbook exercise does not deliberately trigger the revision guard.
+  $sheet = $book.Worksheets.Item(4)
   $tableCount = $sheet.ListObjects.Count
   if ($tableCount -ne 6) { throw "Expected 6 named tables, got $tableCount" }
   $metadata = $sheet.ListObjects | Where-Object { $_.Name -like 'EKS_metadata_*' } | Select-Object -First 1
@@ -21,6 +23,10 @@ try {
     throw "Metadata key missing: $key"
   }
   $learning = $sheet.ListObjects | Where-Object { $_.Name -like 'EKS_learning_*' } | Select-Object -First 1
+  $materials = $sheet.ListObjects | Where-Object { $_.Name -like 'EKS_materials_*' } | Select-Object -First 1
+  $practical = $sheet.ListObjects | Where-Object { $_.Name -like 'EKS_practical_*' } | Select-Object -First 1
+  $materialValidation = $materials.ListRows.Item(1).Range.Cells.Item(1,$materials.ListColumns.Item('자료 유형').Index).Validation.Formula1
+  $scenarioColumn = $practical.ListColumns.Item('상황 설명').Index
   $originalRows = $learning.ListRows.Count
   $validationType = $learning.ListRows.Item(1).Range.Cells.Item(1,$learning.ListColumns.Item('교육 종류').Index).Validation.Type
   $courseValidationType = $learning.ListRows.Item(1).Range.Cells.Item(1,$learning.ListColumns.Item('과정 선택').Index).Validation.Type
@@ -40,7 +46,7 @@ try {
   Set-CatalogMetadata $copy 'code' ''
   Set-CatalogMetadata $copy 'title' 'Excel 복제 신규 자격'
   $book.SaveAs($outputFile,51)
-  $report = @{excelVersion=$excel.Version; format='v2'; originalSheets=$originalSheetCount; savedSheets=$book.Worksheets.Count; namedTables=$tableCount; dropdownValidationType=$validationType; courseDropdownValidationType=$courseValidationType; learningRowsBefore=$originalRows; learningRowsAfter=$learning.ListRows.Count; openedNormally=$true; output=$outputFile}
+  $report = @{excelVersion=$excel.Version; format='v3'; originalSheets=$originalSheetCount; savedSheets=$book.Worksheets.Count; namedTables=$tableCount; dropdownValidationType=$validationType; courseDropdownValidationType=$courseValidationType; learningRowsBefore=$originalRows; learningRowsAfter=$learning.ListRows.Count; openedNormally=$true; output=$outputFile}
   $report | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRoot 'data\runtime\catalog-native-excel-com.json') -Encoding utf8
   $report | ConvertTo-Json
 } finally {

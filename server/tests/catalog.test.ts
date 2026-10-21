@@ -41,10 +41,32 @@ import {
   rowKey,
 } from "../../frontend/src/catalog-editor.ts";
 const org = seedOrganizations();
-test("사용자 양식 v2와 기존 v1은 동일한 기준으로 왕복하며 연결 이름 변경은 ID를 유지한다", async () => {
+test("다른 개정 초안이 있어도 무변경 왕복은 허용하고 실제 변경은 차단한다", () => {
+  const state = seedState(true),
+    q = state.qualifications.find((q) => q.id === "demo-qualification")!;
+  state.qualifications.push({
+    ...structuredClone(q),
+    id: "preserved-v2",
+    parentId: q.id,
+    version: 2,
+    status: "draft",
+    revision: 1,
+  });
+  const data = exportCatalog(state, "org-photo", [q.id]);
+  const unchanged = prepareCatalog(state, data, "org-photo");
+  assert.equal(unchanged.issues.length, 0);
+  assert.equal(unchanged.changes[0]!.kind, "unchanged");
+  data.sheets[0]!.title = "실제 변경";
+  assert.ok(
+    prepareCatalog(state, data, "org-photo").issues.some((i) =>
+      i.message.includes("다른 초안"),
+    ),
+  );
+});
+test("사용자 양식 v3은 동일한 기준으로 왕복하며 연결 이름 변경은 ID를 유지한다", async () => {
   const s = photo(),
     data = workbook(s);
-  for (const version of [1, 2] as const) {
+  for (const version of [3] as const) {
     const parsed = await readCatalogWorkbook(
       await writeCatalogWorkbook(data, [], version),
     );
@@ -182,7 +204,7 @@ function workbook(s: State) {
   );
 }
 
-test("Photo 15자격·75과정·675항목 XLSX 왕복은 값·순서·정답·기간 무변경, 5초 이내", async (t) => {
+test("Photo 15자격·75과정·450항목 XLSX 왕복은 값·순서·정답·기간 무변경, 5초 이내", async (t) => {
   const s = photo(),
     before = structuredClone(s),
     data = workbook(s),
@@ -204,13 +226,6 @@ test("Photo 15자격·75과정·675항목 XLSX 왕복은 값·순서·정답·�
   assert.equal(response.unchanged, true);
   assert.deepEqual(s, before);
   assert.ok(performance.now() - start < 5000);
-});
-test("선택적 모범답안·정답 값이 없는 기존 기준도 왕복 시 무변경이다", () => {
-  const s = photo();
-  for (const c of s.courses)
-    for (const q of c.subjectiveQuestions) delete q.modelAnswer;
-  const p = prepareCatalog(s, workbook(s), "org-photo");
-  assert.ok(p.changes.every((c) => c.kind === "unchanged"));
 });
 test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고 자격별 수정은 독립적", () => {
   const s = photo(),
@@ -495,24 +510,6 @@ test("백업 실패·동시 변경·게시 실패에서 부분 저장이 없고 
   assert.equal(await readFile(f.file, "utf8"), saved);
   assert.equal(await readFile(f.store.organizations.file, "utf8"), orgBefore);
 });
-test("스키마4→5 명시적 이관은 모든 기록을 보존하고 반복 실행은 무변경", async (t) => {
-  const f = await fixture(t);
-  await f.app.close();
-  const before: any = JSON.parse(await readFile(f.file, "utf8"));
-  before.schemaVersion = 4;
-  delete before.catalogBatches;
-  await writeFile(f.file, JSON.stringify(before));
-  await new JsonStore(f.file).migrate(migrateState);
-  const after = JSON.parse(await readFile(f.file, "utf8"));
-  assert.equal(after.schemaVersion, 5);
-  assert.deepEqual(after.catalogBatches, []);
-  const { schemaVersion, revision, catalogBatches, ...rest } = after;
-  const { schemaVersion: sv, revision: rv, ...original } = before;
-  assert.deepEqual(rest, original);
-  const raw = await readFile(f.file, "utf8");
-  await new JsonStore(f.file).migrate(migrateState);
-  assert.equal(await readFile(f.file, "utf8"), raw);
-});
 test("10,000 평가 행 상한·숫자/0 구분·메타정보 오류 위치", () => {
   const s = photo(),
     data = workbook(s);
@@ -538,7 +535,7 @@ test("10,000 평가 행 상한·숫자/0 구분·메타정보 오류 위치", ()
     title: "학습",
     required: true,
   }));
-  sheet.tables.subjective = [];
+  sheet.tables.materials = [];
   sheet.tables.practical = [];
   sheet.tables.objective = sheet.tables.courses.flatMap((c) =>
     Array.from({ length: 500 }, (_, i) => ({

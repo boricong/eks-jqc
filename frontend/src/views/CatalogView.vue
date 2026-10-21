@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useProcessContext } from '../composables/useProcessContext';
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import {
@@ -36,7 +37,6 @@ import {
   releaseRecovery,
   type CatalogRecovery,
 } from '../composables/catalogRecovery';
-import ManagementContext from '../components/ManagementContext.vue';
 import CatalogGrid from '../components/CatalogGrid.vue';
 import CatalogFields from '../components/CatalogFields.vue';
 import CatalogQualificationFields from '../components/CatalogQualificationFields.vue';
@@ -82,6 +82,7 @@ let workId: string = crypto.randomUUID(),
   owner = { actorId: '', lv1: '' },
   pending: CatalogRecovery['pending'];
 const sheet = computed(() => workbook.value?.sheets[sheetIndex.value]);
+useProcessContext(() => (workbook.value ? 'catalog-editing' : 'catalog-list'));
 const course = computed(() => sheet.value?.tables.courses.find((c) => c.code === courseCode.value));
 const rows = computed(() => sheet.value?.tables[table.value] || []);
 const visibleRows = computed(() =>
@@ -387,7 +388,23 @@ onBeforeUnmount(() => {
   clearTimeout(validationTimer);
   window.removeEventListener('beforeunload', beforeUnload);
 });
+function downloadRecovery(record: CatalogRecovery) {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' }),
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'eks-legacy-work.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 async function recover(record: CatalogRecovery) {
+  if (record.workbook.format !== 'eks-catalog-v3') {
+    error.value =
+      '구형 작성 내용입니다. 원본 보관 파일을 다운로드하고 새 양식 v3에서 기준을 작성해 주세요. 구형 내용은 삭제하지 않았습니다.';
+    return;
+  }
+
   await run(async (token) => {
     await store.refresh();
     if (token !== epoch || !store.managementReady) return;
@@ -501,7 +518,7 @@ function addSheet(copy = false) {
     delete s.sourceRevision;
     s.title = `${s.title || '자격'} 사본`;
     const old = clone(s.tables);
-    s.tables = { courses: [], learning: [], objective: [], subjective: [], practical: [] };
+    s.tables = { courses: [], learning: [], objective: [], materials: [], practical: [] };
     for (const c of old.courses) {
       const next = {
         ...c,
@@ -525,7 +542,7 @@ function addSheet(copy = false) {
     }
   }
   if (!workbook.value)
-    startWork({ format: 'eks-catalog-v1', lv1OrganizationId: store.managementLv1, sheets: [] });
+    startWork({ format: 'eks-catalog-v3', lv1OrganizationId: store.managementLv1, sheets: [] });
   if (workbook.value!.sheets.length >= 100) {
     error.value = '한 작업은 자격 100개까지 편집할 수 있습니다.';
     return;
@@ -781,7 +798,7 @@ async function backToList() {
 }
 </script>
 <template>
-  <div class="container page management-page catalog-page">
+  <div class="catalog-page" :class="{ 'has-catalog-draft': workbook && sheet }">
     <div class="page-heading">
       <div>
         <span class="eyebrow">인증 업무 관리</span>
@@ -792,7 +809,6 @@ async function backToList() {
         >개별 기준 관리</RouterLink
       >
     </div>
-    <ManagementContext />
     <template v-if="store.managementReady">
       <div class="panel catalog-top-actions">
         <button class="button primary" :disabled="busy" @click="addSheet()">새 자격 만들기</button
@@ -843,6 +859,14 @@ async function backToList() {
       <p v-if="busy" role="status">처리 중입니다. 입력을 유지하고 있습니다…</p>
       <section v-if="!workbook && recoveries.length" class="panel catalog-recovery">
         <h2>이어서 작성할 작업</h2>
+        <button
+          v-for="r in recoveries.filter((v) => v.workbook.format !== 'eks-catalog-v3')"
+          :key="r.id + '-download'"
+          class="button secondary"
+          @click="downloadRecovery(r)"
+        >
+          구형 작성 내용 보관 · {{ r.updatedAt }}
+        </button>
         <div v-for="r in recoveries" :key="r.id" class="simple-row">
           <span
             ><strong>{{
@@ -940,11 +964,7 @@ async function backToList() {
           {{ workbook.sheets.reduce((n, s) => n + s.tables.courses.length, 0) }}개 · 평가
           {{
             workbook.sheets.reduce(
-              (n, s) =>
-                n +
-                s.tables.objective.length +
-                s.tables.subjective.length +
-                s.tables.practical.length,
+              (n, s) => n + s.tables.objective.length + s.tables.practical.length,
               0,
             )
           }}개 <span>내용 확인 → 적용 대상 확인 → 초안 저장</span>
@@ -1195,9 +1215,17 @@ async function backToList() {
           </div>
           <button class="button ghost small" :disabled="busy" @click="downloadWork">
             작업 파일 다운로드</button
-          ><button class="button secondary" :disabled="busy" @click="review('save')">
+          ><button
+            class="button secondary"
+            :disabled="busy || validationPending"
+            @click="review('save')"
+          >
             초안 저장</button
-          ><button class="button primary" :disabled="busy" @click="review('publish')">
+          ><button
+            class="button primary"
+            :disabled="busy || validationPending"
+            @click="review('publish')"
+          >
             검토 후 사용 등록
           </button>
         </div>

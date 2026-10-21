@@ -8,7 +8,7 @@ import {
   readdir,
 } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { State, OrganizationDocument } from "@eks/contracts";
 import { seedOrganizations, validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
@@ -29,6 +29,14 @@ export class SerialQueue {
 }
 type Document = { revision: number; requests: State["requests"] };
 export class FileStore<T extends Document> {
+  async withMaintenanceLock<R>(operation: () => Promise<R>): Promise<R> {
+    await this.lock();
+    try {
+      return await operation();
+    } finally {
+      await this.release();
+    }
+  }
   protected state!: T;
   private token = randomUUID();
   protected closed = false;
@@ -75,7 +83,7 @@ export class FileStore<T extends Document> {
     } catch (e) {
       await this.release();
       throw new Error(
-        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 기존 v1/v2/v3 데이터는 data:migrate, 손상 파일은 백업 복구 절차를 확인하세요. ${String(e)}`,
+        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 업무7은 data:migrate-administration, 업무6·조직1은 data:migrate-policies의 보존 이관을 확인하세요. 손상 파일은 백업 쌍 복구가 필요합니다. ${String(e)}`,
       );
     }
     return this;
@@ -104,7 +112,11 @@ export class FileStore<T extends Document> {
     try {
       const handle = await open(temp, "wx", 0o600);
       try {
-        await handle.writeFile(JSON.stringify(state, null, 2) + "\n");
+        await handle.writeFile(
+          Buffer.isBuffer(state)
+            ? state
+            : JSON.stringify(state, null, 2) + "\n",
+        );
         await handle.sync();
       } finally {
         await handle.close();
@@ -134,7 +146,8 @@ export class FileStore<T extends Document> {
     update: (s: T) => R,
     options: {
       preserveBackup?: boolean;
-      backupPurpose?: "course-delete" | "photo-setup" | "catalog-import" | "catalog-publish";
+      backupPurpose?:
+        "course-delete" | "photo-setup" | "catalog-import" | "catalog-publish";
       action?: string;
       lv1OrganizationId?: string;
     } = {},
@@ -271,6 +284,112 @@ export class FileStore<T extends Document> {
 }
 
 export class JsonStore extends FileStore<State> {
+  async migratePolicies(
+    expected: { revision: number; stateHash: string; organizationHash: string },
+    transform: (
+      state: unknown,
+      org: unknown,
+    ) => { state: State; organizations: OrganizationDocument; report: unknown },
+    purpose = "policies",
+  ) {
+    return this.withMaintenanceLock(() =>
+      this.organizations.withMaintenanceLock(async () => {
+        const marker = `${this.file}.policy-migration.json`;
+        try {
+          await readFile(marker);
+          throw new Error(
+            "이전 이관이 완료되지 않았습니다. 표시 파일의 백업 쌍으로 복구해 주세요.",
+          );
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+        }
+        const stateBytes = await readFile(this.file),
+          orgBytes = await readFile(this.organizations.file);
+        const raw = JSON.parse(stateBytes.toString("utf8")),
+          org = JSON.parse(orgBytes.toString("utf8"));
+        const hash = (b: Buffer) =>
+          createHash("sha256").update(b).digest("hex");
+        demand(
+          raw.revision === expected.revision &&
+            hash(stateBytes) === expected.stateHash &&
+            hash(orgBytes) === expected.organizationHash,
+          409,
+          "미리보기 이후 데이터가 바뀌었습니다. 다시 확인해 주세요.",
+        );
+        const candidate = transform(raw, org);
+        validateState(
+          candidate.state,
+          validateOrganizations(candidate.organizations),
+        );
+        if (
+          JSON.stringify(raw) === JSON.stringify(candidate.state) &&
+          JSON.stringify(org) === JSON.stringify(candidate.organizations)
+        )
+          return candidate.report;
+        const suffix = randomUUID(),
+          stateBackup = path.join(
+            this.backupDir,
+            `before-${purpose}-${raw.revision}-${suffix}.json`,
+          ),
+          organizationBackup = path.join(
+            this.organizations.backupDir,
+            `before-${purpose}-${org.revision}-${suffix}.json`,
+          );
+        await mkdir(this.backupDir, { recursive: true });
+        await mkdir(this.organizations.backupDir, { recursive: true });
+        await this.writeAtomic(stateBackup, stateBytes);
+        await this.writeAtomic(organizationBackup, orgBytes);
+        await this.writeAtomic(marker, {
+          stateBackup,
+          organizationBackup,
+          expected,
+        });
+        try {
+          demand(
+            hash(await readFile(this.file)) === expected.stateHash &&
+              hash(await readFile(this.organizations.file)) ===
+                expected.organizationHash,
+            409,
+            "잠금 후 파일이 변경되었습니다.",
+          );
+          if (JSON.stringify(org) !== JSON.stringify(candidate.organizations))
+            await this.writeAtomic(
+              this.organizations.file,
+              candidate.organizations,
+            );
+          await this.beforeReplace?.();
+          await this.writeAtomic(this.file, candidate.state);
+        } catch (error) {
+          // Preserve the marker if either rollback fails; normal startup refuses mixed pairs.
+          await this.writeAtomic(this.organizations.file, orgBytes);
+          await this.writeAtomic(this.file, stateBytes);
+          await rm(marker);
+          throw error;
+        }
+        await rm(marker);
+        return {
+          ...(candidate.report as object),
+          stateBackup,
+          organizationBackup,
+        };
+      }),
+    );
+  }
+  // Explicit, user-approved reset exception. Normal writes/restore retain backups.
+  async transitionWithoutBackup(
+    expectedRevision: number,
+    expectedHash: string,
+    transform: (
+      raw: unknown,
+      organizations: OrganizationDocument,
+    ) => { state: State; report: unknown },
+  ) {
+    throw new DomainError(
+      410,
+      "무백업 전환의 일회성 예외가 종료되었습니다. 업무 6·조직 1은 data:migrate-policies로 백업 후 이관하세요.",
+      "FEATURE_REMOVED",
+    );
+  }
   async refreshNotifications(at = new Date().toISOString()) {
     return this.enqueue(async () => {
       demand(!this.closed, 503, "저장소가 닫혔습니다.");
@@ -320,6 +439,14 @@ export class JsonStore extends FileStore<State> {
     );
   }
   override async load() {
+    try {
+      await readFile(`${this.file}.policy-migration.json`);
+      throw new Error(
+        "조직 정책 이관이 중단되었습니다. 이관 표시 파일의 백업 쌍으로 복구해 주세요.",
+      );
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    }
     await this.organizations.load();
     try {
       await super.load();
@@ -382,31 +509,14 @@ export class JsonStore extends FileStore<State> {
     let orgLoaded = false;
     try {
       const raw = JSON.parse(await readFile(this.file, "utf8"));
-      if ([1, 2, 3, 4].includes(raw.schemaVersion)) {
-        await mkdir(this.backupDir, { recursive: true });
-        await this.writeAtomic(
-          path.join(
-            this.backupDir,
-            `before-migration-${Date.now()}-${randomUUID()}.json`,
-          ),
-          raw,
-        );
-      }
-      try {
-        await readFile(this.organizations.file);
-      } catch (error) {
-        if (
-          (error as NodeJS.ErrnoException).code !== "ENOENT" ||
-          raw.schemaVersion !== 1
-        )
-          throw error;
-        await this.organizations.initialize(seedOrganizations());
-      }
       await this.organizations.load();
       orgLoaded = true;
-      const next = transform(raw, this.organizations.snapshot());
-      if (raw.schemaVersion === 5) return;
-      await this.writeAtomic(this.file, this.validate(next));
+      demand(
+        raw.schemaVersion === 8,
+        422,
+        "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
+      );
+      transform(raw, this.organizations.snapshot());
     } finally {
       if (orgLoaded) await this.organizations.close();
       await this.release();

@@ -5,6 +5,7 @@ import 'pretendard/dist/web/variable/pretendardvariable.css';
 import './design-tokens.css';
 import './style.css';
 import './course-editor.css';
+import './policies.css';
 import App from './App.vue';
 import { router } from './router';
 

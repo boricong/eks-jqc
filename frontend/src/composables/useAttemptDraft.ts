@@ -4,7 +4,7 @@ import { mutate, ApiError } from '../api';
 
 export function useAttemptDraft(actorId: () => string) {
   const attempt = ref<AssessmentAttempt | null>(null),
-    draft = ref<Draft>({ answers: {}, verdicts: {} }),
+    draft = ref<Draft>({ answers: {} }),
     status = ref<'saved' | 'saving' | 'dirty' | 'error'>('saved'),
     error = ref(''),
     conflict = ref(false);
@@ -14,7 +14,6 @@ export function useAttemptDraft(actorId: () => string) {
   let pending: {
     revision: number;
     answers: Draft['answers'];
-    verdicts: Draft['verdicts'];
     key: string;
   } | null = null;
   const dirty = computed(() => !!attempt.value && JSON.stringify(draft.value) !== saved.value);
@@ -23,7 +22,6 @@ export function useAttemptDraft(actorId: () => string) {
     attempt.value = value ? JSON.parse(JSON.stringify(value)) : null;
     draft.value = {
       answers: JSON.parse(JSON.stringify(value?.answers || {})),
-      verdicts: JSON.parse(JSON.stringify(value?.verdicts || {})),
     };
     saved.value = JSON.stringify(draft.value);
     pending = null;
@@ -51,20 +49,21 @@ export function useAttemptDraft(actorId: () => string) {
         try {
           const result = await mutate<{ id: string; revision: number }>(
             `/attempts/${attempt.value.id}/draft`,
-            { revision: request.revision, answers: request.answers, verdicts: request.verdicts },
+            { revision: request.revision, answers: request.answers },
             'PUT',
             actorId(),
             request.key,
           );
           attempt.value.revision = result.revision;
-          saved.value = JSON.stringify({ answers: request.answers, verdicts: request.verdicts });
+          saved.value = JSON.stringify({ answers: request.answers });
           pending = null;
           error.value = '';
           status.value = 'saved';
         } catch (e) {
           error.value = (e as Error).message;
           status.value = 'error';
-          if (e instanceof ApiError && e.status === 409) conflict.value = true;
+          if (e instanceof ApiError && [403, 404, 409, 410].includes(e.status))
+            conflict.value = true;
           throw e;
         }
       }

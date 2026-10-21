@@ -2,7 +2,7 @@
 // Generated workbooks are disposable QA copies; this script never opens a store for writing.
 import { readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { migrateState } from "../server/src/migration.ts";
+import { transitionAssessments } from "../server/src/assessment-transition.ts";
 import { exportCatalog, prepareCatalog } from "../server/src/catalog.ts";
 import {
   writeCatalogWorkbook,
@@ -11,10 +11,11 @@ import {
 const organizations = JSON.parse(
   await readFile("data/master/organizations.json", "utf8"),
 );
-const state = migrateState(
+// Build a disposable schema6 candidate in memory; never replace development JSON.
+const state = transitionAssessments(
   JSON.parse(await readFile("data/runtime/state.json", "utf8")),
   organizations,
-);
+).state;
 const data = exportCatalog(
   state,
   "org-photo",

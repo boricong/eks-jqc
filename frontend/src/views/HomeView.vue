@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import HomeNotices from '../components/HomeNotices.vue';
+import { computed } from 'vue';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
-import AppDialog from '../components/AppDialog.vue';
-import type { Notice } from '../types';
 import PersonalTasks from '../components/PersonalTasks.vue';
+import RequiredQualifications from '../components/RequiredQualifications.vue';
 import { certificationStatus, kindLabels } from '@eks/contracts';
 const store = useDemo();
-const notice = ref<Notice | null>(null);
 const active = computed(() => store.myAssignments.filter((a) => !a.certifiedAt));
 const upcoming = computed(() =>
   store.data.plans
@@ -23,32 +22,18 @@ const attention = computed(() => [
     to: '/admin/qualifications',
   },
   {
-    label: 'FT 배정',
-    detail: '주관식·실기 진행을 위해 평가자를 지정하세요.',
-    count: store.data.assignments.filter((a) => !a.ftId && !a.certifiedAt && !a.excludedReason)
-      .length,
-    to: '/admin/assignments',
-  },
-  {
     label: '계획 기한',
     detail: '기한이 지난 계획 요청을 확인하세요.',
     count: store.data.planningRequests.filter(
       (r) =>
         r.dueOn < new Date().toISOString().slice(0, 10) &&
-        !store.data.plans.some((p) => p.requestId === r.id && p.status === 'completed'),
+        !['계획 완료', '현재 대상 없음'].includes(
+          store.data.requestProgress.find((p) => p.id === r.id)?.stage || '',
+        ),
     ).length,
     to: '/admin/assignments',
   },
 ]);
-const waiting = computed(() =>
-  store.ftAssignments.flatMap((a) =>
-    a.enrollments.flatMap((e) =>
-      (['subjective', 'practical'] as const)
-        .filter((kind) => e[kind] === 'waiting')
-        .map((kind) => ({ a, e, kind })),
-    ),
-  ),
-);
 const stats = computed(() =>
   store.actor.role === 'learner'
     ? [
@@ -75,72 +60,47 @@ const stats = computed(() =>
           to: '/qualifications?filter=certified',
         },
       ]
-    : store.actor.role === 'ft'
+    : store.actor.role === 'system_operator'
       ? [
-          { label: '평가 대기', value: waiting.value.length, icon: 'clock', to: '/evaluations' },
           {
-            label: '담당 과정',
-            value: store.ftAssignments.reduce((n, a) => n + a.enrollments.length, 0),
-            icon: 'book',
-            to: '/evaluations',
+            label: 'Lv1 조직',
+            value: store.data.organizations.filter((o) => o.level === 1).length,
+            icon: 'users',
+            to: '/system/organizations',
           },
           {
-            label: '확정한 평가',
-            value: store.ftAssignments.reduce(
-              (n, a) =>
-                n +
-                a.enrollments.flatMap((e) =>
-                  e.history.filter((h) => h.evaluatorId === store.actorId),
-                ).length,
-              0,
-            ),
-            icon: 'check',
-            to: '/evaluations?filter=done',
+            label: '등록 사용자',
+            value: store.data.users.length,
+            icon: 'users',
+            to: '/system/users',
+          },
+          {
+            label: '진행 중인 배정',
+            value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason).length,
+            icon: 'clipboard',
+            to: '/system/overview',
           },
         ]
-      : store.actor.role === 'system_operator'
-        ? [
-            {
-              label: 'Lv1 조직',
-              value: store.data.organizations.filter((o) => o.level === 1).length,
-              icon: 'users',
-              to: '/system/organizations',
-            },
-            {
-              label: '등록 사용자',
-              value: store.data.users.length,
-              icon: 'users',
-              to: '/system/users',
-            },
-            {
-              label: '진행 중인 배정',
-              value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason)
-                .length,
-              icon: 'clipboard',
-              to: '/system/overview',
-            },
-          ]
-        : [
-            {
-              label: '자격 초안',
-              value: store.data.qualifications.filter((q) => q.status === 'draft').length,
-              icon: 'file',
-              to: '/admin/qualifications',
-            },
-            {
-              label: '과정 초안',
-              value: store.data.courses.filter((c) => c.status === 'draft').length,
-              icon: 'book',
-              to: '/admin/courses',
-            },
-            {
-              label: '진행 중인 배정',
-              value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason)
-                .length,
-              icon: 'users',
-              to: '/admin/assignments',
-            },
-          ],
+      : [
+          {
+            label: '자격 초안',
+            value: store.data.qualifications.filter((q) => q.status === 'draft').length,
+            icon: 'file',
+            to: '/admin/qualifications',
+          },
+          {
+            label: '과정 초안',
+            value: store.data.courses.filter((c) => c.status === 'draft').length,
+            icon: 'book',
+            to: '/admin/courses',
+          },
+          {
+            label: '진행 중인 배정',
+            value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason).length,
+            icon: 'users',
+            to: '/admin/assignments',
+          },
+        ],
 );
 </script>
 <template>
@@ -148,11 +108,7 @@ const stats = computed(() =>
     <div class="page-heading home-heading">
       <div>
         <span class="eyebrow">{{
-          store.actor.role === 'learner'
-            ? 'MY CERTIFICATION'
-            : store.actor.role === 'ft'
-              ? 'EVALUATION WORKSPACE'
-              : 'OPERATIONS WORKSPACE'
+          store.actor.role === 'learner' ? 'MY CERTIFICATION' : 'OPERATIONS WORKSPACE'
         }}</span>
         <h1>{{ store.actor.name }} 님</h1>
         <p class="muted organization-path">
@@ -181,6 +137,7 @@ const stats = computed(() =>
     </section>
     <div class="home-columns">
       <div class="home-primary">
+        <RequiredQualifications v-if="store.hasRole('learner')" />
         <PersonalTasks />
         <section class="home-card">
           <div class="section-heading">
@@ -188,21 +145,13 @@ const stats = computed(() =>
               {{
                 store.actor.role === 'learner'
                   ? '진행 중인 자격'
-                  : store.actor.role === 'ft'
-                    ? '평가 요청'
-                    : store.actor.role === 'system_operator'
-                      ? '시스템 운영'
-                      : '기준 관리'
+                  : store.actor.role === 'system_operator'
+                    ? '시스템 운영'
+                    : '기준 관리'
               }}
             </h2>
             <RouterLink
-              :to="
-                store.actor.role === 'learner'
-                  ? '/qualifications'
-                  : store.actor.role === 'ft'
-                    ? '/evaluations'
-                    : '/admin/qualifications'
-              "
+              :to="store.actor.role === 'learner' ? '/qualifications' : '/admin/qualifications'"
               class="text-link"
               >전체 보기<AppIcon name="chevron" :size="16"
             /></RouterLink>
@@ -245,23 +194,6 @@ const stats = computed(() =>
             >
             <RouterLink to="/plans" class="button primary">내 계획 확인</RouterLink>
           </div>
-          <template v-else-if="store.actor.role === 'ft'"
-            ><RouterLink
-              v-for="item in waiting.slice(0, 3)"
-              :key="item.a.id + item.e.courseId + item.kind"
-              :to="`/evaluations/${item.a.id}/${item.e.courseId}${item.kind === 'subjective' ? '/subjective' : ''}`"
-              class="simple-row"
-              ><span
-                ><strong>{{ store.username(item.a.learnerId) }}</strong
-                ><small
-                  >{{ store.course(item.e.courseId).title }} · {{ kindLabels[item.kind] }}</small
-                ></span
-              ><AppIcon name="chevron"
-            /></RouterLink>
-            <div v-if="!waiting.length" class="empty-state">
-              <AppIcon name="check" :size="28" /><span>대기 중인 평가가 없습니다.</span>
-            </div></template
-          >
           <template v-else-if="store.actor.role === 'system_operator'"
             ><label class="field home-org-select"
               >관리할 Lv1 조직<select
@@ -310,6 +242,12 @@ const stats = computed(() =>
         </div>
       </div>
       <aside class="home-secondary">
+        <section v-if="store.hasRole('organization_admin')" class="home-card text-stack">
+          <h2>내 조직 자격 설정</h2>
+          <p class="muted">{{ store.actor.organizationPath.at(-1)?.name }} · 세부 조직 관리자</p>
+          <p>팀 후보 목록에서 실제 소속 조직의 필수 자격을 설정합니다.</p>
+          <RouterLink to="/admin/policies" class="button secondary">조직별 자격 설정</RouterLink>
+        </section>
         <section v-if="store.actor.role === 'learner'" class="home-card focus-card">
           <span class="eyebrow">YOUR NEXT MILESTONE</span>
           <h2>나의 인증 일정</h2>
@@ -330,50 +268,15 @@ const stats = computed(() =>
           >
         </section>
         <section v-else class="home-card focus-card">
-          <span class="eyebrow">{{
-            store.actor.role === 'ft' ? 'REVIEW WITH EVIDENCE' : 'CATALOG WORKSPACE'
-          }}</span>
-          <h2>{{ store.actor.role === 'ft' ? '근거로 판단하는 평가' : '기준을 한눈에 관리' }}</h2>
-          <p>
-            {{
-              store.actor.role === 'ft'
-                ? '학습자의 목표와 답안을 확인하고 지정된 평가를 확정하세요.'
-                : '자격·과정·문항을 Excel 또는 웹 표에서 함께 준비하세요.'
-            }}
-          </p>
-          <RouterLink
-            :to="
-              store.actor.role === 'ft' ? '/evaluations' : store.managementLink('/admin/catalog')
-            "
-            class="text-link"
-            >{{
-              store.actor.role === 'ft' ? '평가 대기 확인' : '기준 일괄 관리 열기'
-            }}
-            →</RouterLink
+          <span class="eyebrow">CATALOG WORKSPACE</span>
+          <h2>기준을 한눈에 관리</h2>
+          <p>자격·과정·문항을 Excel 또는 웹 표에서 함께 준비하세요.</p>
+          <RouterLink :to="store.managementLink('/admin/catalog')" class="text-link"
+            >기준 일괄 관리 열기 →</RouterLink
           >
         </section>
-        <section class="home-card notice-card">
-          <div class="section-heading">
-            <h2>공지사항</h2>
-            <AppIcon name="notice" :size="20" />
-          </div>
-          <button
-            v-for="n in store.notices.slice(0, 3)"
-            :key="n.id"
-            class="notice-row"
-            @click="notice = n"
-          >
-            <span
-              >{{ n.title }}<time>{{ n.date.replaceAll('-', '.') }}</time></span
-            ><AppIcon name="chevron" :size="16" />
-          </button>
-          <p v-if="!store.notices.length" class="empty-state">등록된 공지가 없습니다.</p>
-        </section>
+        <HomeNotices />
       </aside>
     </div>
-    <AppDialog :open="!!notice" :title="notice?.title || '공지사항'" @update:open="notice = null"
-      ><time class="muted">{{ notice?.date }}</time>
-      <p class="notice-body">{{ notice?.body }}</p></AppDialog
-    >
   </div>
 </template>

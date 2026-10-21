@@ -2,9 +2,9 @@ import { z } from "zod";
 
 export const catalogTables = [
   "courses",
+  "materials",
   "learning",
   "objective",
-  "subjective",
   "practical",
 ] as const;
 export type CatalogTable = (typeof catalogTables)[number];
@@ -24,6 +24,7 @@ const CatalogRowsSchema = z
   )
   .max(10000);
 export const CatalogSheetSchema = z.object({
+  legacyUnsupported: z.boolean().optional(),
   sheetName: z.string().max(100),
   mode: z.enum(["new", "revise"]),
   code: z.string().max(160),
@@ -35,17 +36,19 @@ export const CatalogSheetSchema = z.object({
   validityType: z.enum(["unknown", "months", "unlimited"]),
   months: z.number().int().min(1).max(1200).nullable(),
   reminderDays: z.array(z.number().int().min(1).max(36500)).max(20),
-  tables: z.object({
-    courses: CatalogRowsSchema,
-    learning: CatalogRowsSchema,
-    objective: CatalogRowsSchema,
-    subjective: CatalogRowsSchema,
-    practical: CatalogRowsSchema,
-  }),
+  tables: z
+    .object({
+      courses: CatalogRowsSchema,
+      learning: CatalogRowsSchema,
+      objective: CatalogRowsSchema,
+      materials: CatalogRowsSchema,
+      practical: CatalogRowsSchema,
+    })
+    .strict(),
 });
 export type CatalogSheet = z.infer<typeof CatalogSheetSchema>;
 export const CatalogWorkbookSchema = z.object({
-  format: z.literal("eks-catalog-v1"),
+  format: z.literal("eks-catalog-v3"),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),
 });
@@ -117,9 +120,9 @@ export type CatalogBatch = z.infer<typeof CatalogBatchSchema>;
 export const catalogLabels: Record<CatalogTable, string> = {
   courses: "과정",
   learning: "학습 항목",
-  objective: "객관식",
-  subjective: "주관식",
-  practical: "실기",
+  objective: "지식 평가",
+  materials: "학습자료",
+  practical: "상황 대응 평가",
 };
 export const catalogColumns: Record<CatalogTable, [string, string][]> = {
   courses: [
@@ -128,10 +131,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["title", "과정명"],
     ["kinds", "필수 평가 유형"],
     ["passScore", "객관식 합격 기준"],
-    ["subjectivePassScore", "주관식 합격 기준"],
-    ["material", "학습자료"],
-    ["materialUrl", "자료 URL"],
-    ["instruction", "실기 수행 조건"],
+    ["practicalPassScore", "상황 대응 합격 기준"],
     ["sourceId", "원본 ID"],
     ["sourceRevision", "원본 revision"],
   ],
@@ -147,7 +147,6 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["courseCode", "과정코드"],
     ["code", "문항코드"],
     ["order", "순서"],
-    ["category", "필기/Case"],
     ["prompt", "문항"],
     ["choice1", "선택지 1"],
     ["choice2", "선택지 2"],
@@ -156,27 +155,33 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["correct", "정답 번호"],
     ["points", "배점"],
   ],
-  subjective: [
+  materials: [
     ["courseCode", "과정코드"],
-    ["code", "문항코드"],
+    ["code", "자료코드"],
     ["order", "순서"],
-    ["prompt", "문항"],
-    ["points", "배점"],
-    ["rubric", "채점 기준"],
-    ["modelAnswer", "모범답안"],
+    ["type", "자료 유형"],
+    ["title", "자료명"],
+    ["content", "본문"],
+    ["url", "URL"],
+    ["description", "설명"],
   ],
   practical: [
     ["courseCode", "과정코드"],
-    ["code", "항목코드"],
+    ["code", "문항코드"],
     ["order", "순서"],
-    ["title", "평가 항목"],
-    ["criterion", "관찰·판정 기준"],
-    ["mandatory", "필수 여부"],
+    ["scenario", "상황 설명"],
+    ["prompt", "대응 질문"],
+    ["choice1", "선택지 1"],
+    ["choice2", "선택지 2"],
+    ["choice3", "선택지 3"],
+    ["choice4", "선택지 4"],
+    ["correct", "정답 번호"],
+    ["points", "배점"],
   ],
 };
 export function columnsFor(table: CatalogTable, rows: CatalogRow[]) {
   const columns = [...catalogColumns[table]];
-  if (table === "objective") {
+  if (table === "objective" || table === "practical") {
     const count = Math.max(
       4,
       ...rows.flatMap((r) =>

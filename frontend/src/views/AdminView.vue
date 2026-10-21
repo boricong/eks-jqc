@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { useProcessContext } from '../composables/useProcessContext';
 import { computed, nextTick, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
-import ManagementContext from '../components/ManagementContext.vue';
 import CourseLifecycle from '../components/CourseLifecycle.vue';
 import ComparisonPanel from '../components/ComparisonPanel.vue';
 import QualificationFields from '../components/QualificationFields.vue';
+import CourseMaterialsEditor from '../components/CourseMaterialsEditor.vue';
 import CourseLearningEditor from '../components/CourseLearningEditor.vue';
 import CourseAssessmentEditor from '../components/CourseAssessmentEditor.vue';
 import { courseIssues, type CourseIssue } from '../course-editor';
@@ -16,17 +17,10 @@ import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
 import { useListView } from '../composables/useListView';
 import PlanningPanel from '../components/PlanningPanel.vue';
+import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
 import { kindLabels, certificationStatus, kstDate } from '@eks/contracts';
-import type {
-  Assignment,
-  Course,
-  Notice,
-  Qualification,
-  AuditEvent,
-  Verdict,
-  Draft,
-} from '../types';
+import type { Assignment, Course, Notice, Qualification, AuditEvent } from '../types';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
@@ -45,12 +39,13 @@ const organizationData = computed(() => {
   };
 });
 const sections = [
+  { id: 'policies', name: '조직별 자격 설정', icon: 'users' },
   { id: 'qualifications', name: '자격 관리', icon: 'award' },
   { id: 'courses', name: '과정 관리', icon: 'book' },
   { id: 'assignments', name: '대상자·계획', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },
   { id: 'comparisons', name: '기준 검증', icon: 'check' },
-  { id: 'notices', name: '공지 관리', icon: 'notice' },
+  { id: 'notices', name: '팀 공지 관리', icon: 'notice' },
 ];
 const section = computed(() => String(route.params.section));
 const filterKey = () => `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
@@ -65,18 +60,22 @@ const assessmentEditor = ref<InstanceType<typeof CourseAssessmentEditor>>();
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
 );
+const materialsEditor = ref<InstanceType<typeof CourseMaterialsEditor>>();
 const learningEditor = ref<InstanceType<typeof CourseLearningEditor>>();
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
 watch(locatedIssues, (issues) => {
-  if (validationShown.value && courseDraft.value) errors.value = issues.map((i) => i.message);
+  if (validationShown.value && courseDraft.value)
+    errors.value = [
+      ...new Set([...store.courseErrors(courseDraft.value), ...issues.map((i) => i.message)]),
+    ];
 });
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
 const readOnly = computed(() => editor.value?.status === 'published');
+useProcessContext(() => (editor.value ? (readOnly.value ? 'readonly' : 'editing') : 'list'));
 const selectedAssignment = ref<Assignment | null>(null),
-  assignmentAction = ref<'exclude' | 'ft'>('exclude'),
-  reason = ref(''),
-  ftId = ref('');
+  assignmentAction = ref<'exclude'>('exclude'),
+  reason = ref('');
 const noticeDraft = ref<Notice | null>(null);
 function plain<T>(item: T): T {
   return JSON.parse(JSON.stringify(item));
@@ -94,7 +93,6 @@ watch(
     selectedAssignment.value = null;
     noticeDraft.value = null;
     reason.value = '';
-    ftId.value = '';
     errors.value = [];
     validationShown.value = false;
     courseDraft.value = null;
@@ -198,6 +196,10 @@ async function createCatalog() {
 }
 async function saveCatalog(publish = false) {
   if (!editor.value || readOnly.value || busy.value) return;
+  if (materialsEditor.value?.pending && !materialsEditor.value.commit(publish)) {
+    errors.value = ['학습자료의 필수값을 입력하거나 자료 편집을 취소해 주세요.'];
+    return;
+  }
   validationShown.value = publish;
   errors.value = publish
     ? courseDraft.value
@@ -230,6 +232,10 @@ async function saveCatalog(publish = false) {
   }
 }
 async function focusIssue(issue: CourseIssue) {
+  if (issue.kind === 'materials') {
+    await materialsEditor.value?.focusIssue(issue);
+    return;
+  }
   if (issue.kind === 'learning') {
     await learningEditor.value?.focusIssue(issue);
     return;
@@ -267,11 +273,10 @@ async function cloneVersion() {
     busy.value = false;
   }
 }
-function openAssignment(a: Assignment, action: 'exclude' | 'ft') {
+function openAssignment(a: Assignment, action: 'exclude') {
   selectedAssignment.value = a;
   assignmentAction.value = action;
   reason.value = '';
-  ftId.value = a.ftId || '';
   errors.value = [];
 }
 async function changeAssignment() {
@@ -282,7 +287,6 @@ async function changeAssignment() {
       selectedAssignment.value!,
       assignmentAction.value,
       reason.value.trim(),
-      ftId.value,
     );
     selectedAssignment.value = null;
     errors.value = [];
@@ -297,10 +301,11 @@ function editNotice(n?: Notice) {
     ? plain(n)
     : {
         id: crypto.randomUUID(),
+        scope: 'team',
         lv1OrganizationId: store.managementLv1,
         title: '',
         body: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: store.data.serverDate,
         published: true,
         revision: 1,
       };
@@ -322,37 +327,18 @@ async function saveNotice() {
 const labels = kindLabels;
 const auditLabels: Record<string, string> = {
   'assignment.create': '자격 배정',
-  'assignment.ft': 'FT 변경',
   'assignment.exclude': '검증 제외',
   'attempt.start': '평가 시작',
   'attempt.submit': '평가 확정',
-  'attempt.grade.save': '주관식 채점 저장',
-  'attempt.grade.finalize': '주관식 채점 확정',
   'plan.complete': '개인 계획 완료 · 결재 생략',
   'plan.save': '개인 계획 수정',
-  'learning.save': '학습 완료 기록',
+  'learning.save': '과거 학습 완료 기록',
   seed: '초기 데이터',
   'comparison.create': '비교 초안',
   'comparison.save': '비교 저장',
   'comparison.finalize': '비교 확정',
   'comparison.correct': '비교 정정',
 };
-function archivedDrafts(ev: AuditEvent) {
-  return (ev.details.archivedDrafts || []) as unknown as {
-    attemptId: string;
-    evaluatorId?: string;
-    verdicts: Record<string, Verdict>;
-    grades?: Draft['grades'];
-    feedback?: string;
-  }[];
-}
-function itemTitle(id: string) {
-  return (
-    organizationData.value.courses.flatMap((c) => c.practicalItems).find((i) => i.id === id)
-      ?.title || '실기 항목'
-  );
-}
-
 function canLeave() {
   if (!store.managementAccess) return true;
   const source = courseDraft.value
@@ -375,7 +361,7 @@ function canLeave() {
     !store.canEnterManagement ||
     !editor.value ||
     readOnly.value ||
-    JSON.stringify(source) === JSON.stringify(editor.value) ||
+    (!materialsEditor.value?.pending && JSON.stringify(source) === JSON.stringify(editor.value)) ||
     window.confirm(
       '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
     )
@@ -386,29 +372,11 @@ onBeforeRouteUpdate(canLeave);
 </script>
 <template>
   <div
-    class="container page admin-shell"
+    class="admin-section"
     :class="{ 'individual-editor': !!editor }"
     :data-density="list.density"
   >
-    <ManagementContext />
-    <aside class="admin-sidebar">
-      <p class="organization-context">{{ store.managementOrganization?.name }}</p>
-      <h2 class="small-heading">관리</h2>
-      <nav aria-label="관리 메뉴">
-        <RouterLink :to="store.managementLink('/admin/catalog')"
-          ><AppIcon name="file" :size="18" />기준 일괄 관리</RouterLink
-        >
-        <RouterLink
-          v-for="s in sections"
-          :key="s.id"
-          :to="store.managementLink(`/admin/${s.id}`)"
-          :class="{ active: section === s.id }"
-          :aria-current="section === s.id ? 'page' : undefined"
-          ><AppIcon :name="s.icon" :size="18" />{{ s.name }}</RouterLink
-        >
-      </nav>
-    </aside>
-    <div v-if="!store.managementReady" class="empty-state">
+    <div v-if="!store.managementReady && section !== 'policies'" class="empty-state">
       관리할 Lv1 조직을 선택하면 인증 업무를 관리할 수 있습니다.
     </div>
     <div v-else class="admin-content">
@@ -552,22 +520,14 @@ onBeforeRouteUpdate(canLeave);
                 </div>
               </fieldset>
             </div>
-            <label class="field"
-              ><span>학습자료</span
-              ><textarea
-                v-model="courseDraft.material"
-                :disabled="readOnly || busy"
-                rows="3"
-              /></label
-            ><label class="field"
-              ><span>학습자료 URL</span
-              ><input
-                v-model="courseDraft.materialUrl"
-                :disabled="readOnly || busy"
-                type="url"
-                placeholder="https://" /></label
-          ></template>
+          </template>
         </div>
+        <CourseMaterialsEditor
+          v-if="courseDraft"
+          ref="materialsEditor"
+          :course="courseDraft"
+          :disabled="readOnly || busy"
+        />
         <CourseLearningEditor
           v-if="courseDraft"
           ref="learningEditor"
@@ -585,7 +545,8 @@ onBeforeRouteUpdate(canLeave);
         <div v-if="!readOnly" class="actionbar">
           <span class="muted">초안 · v{{ editor.version }}</span>
           <div class="actions">
-            <button class="button secondary" @click="saveCatalog()">초안 저장</button
+            <button class="button secondary" :disabled="busy" @click="saveCatalog()">
+              초안 저장</button
             ><button class="button primary" :disabled="busy" @click="saveCatalog(true)">
               사용 등록<AppIcon name="check" :size="18" />
             </button>
@@ -614,7 +575,7 @@ onBeforeRouteUpdate(canLeave);
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </div>
-        <div v-if="section !== 'comparisons'" class="list-toolbar">
+        <div v-if="!['comparisons', 'policies'].includes(section)" class="list-toolbar">
           <div class="filter-controls">
             <label class="search-field"
               ><AppIcon name="search" :size="18" /><input
@@ -649,7 +610,7 @@ onBeforeRouteUpdate(canLeave);
           </div>
         </div>
         <ListControls
-          v-if="section !== 'comparisons'"
+          v-if="!['comparisons', 'policies'].includes(section)"
           :count="list.count"
           :pages="list.pages"
           v-model:page="list.page"
@@ -657,6 +618,7 @@ onBeforeRouteUpdate(canLeave);
           v-model:density="list.density"
           v-model:sort="list.sort"
         />
+        <OrganizationPolicies v-if="section === 'policies'" :key="store.actorId" />
         <PlanningPanel v-if="section === 'assignments'" :key="store.managementLv1" />
         <div v-if="section === 'qualifications'" class="table-panel">
           <table>
@@ -772,7 +734,6 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>대상자</th>
                 <th>자격</th>
-                <th>FT</th>
                 <th>과정 수료</th>
                 <th>상태</th>
                 <th><span class="sr-only">관리</span></th>
@@ -787,7 +748,6 @@ onBeforeRouteUpdate(canLeave);
                     >v{{ store.qualification(a.qualificationId).version }}</small
                   >
                 </td>
-                <td>{{ store.username(a.ftId) }}</td>
                 <td>{{ store.completedCount(a) }} / {{ a.enrollments.length }}</td>
                 <td>
                   <StatusBadge
@@ -799,8 +759,7 @@ onBeforeRouteUpdate(canLeave);
                   <details v-if="!a.excludedReason" class="row-menu">
                     <summary aria-label="배정 관리"><AppIcon name="settings" :size="18" /></summary>
                     <div>
-                      <button @click="openAssignment(a, 'ft')">FT 변경</button
-                      ><button @click="openAssignment(a, 'exclude')">검증 제외</button>
+                      <button @click="openAssignment(a, 'exclude')">검증 제외</button>
                     </div>
                   </details>
                   <span v-else class="muted">{{ a.excludedReason }}</span>
@@ -863,12 +822,21 @@ onBeforeRouteUpdate(canLeave);
                     }}</time
                     ><AppIcon name="down" :size="16" />
                   </summary>
-                  <div v-if="h.kind === 'objective'" class="attempt-items">
+                  <div class="attempt-items">
                     <p class="small-label">
-                      득점 {{ h.earned }} / {{ h.total }} · 합격 기준
-                      {{ store.course(e.courseId).passScore }}%
+                      자동 채점 · 득점 {{ h.earned }} / {{ h.total }} · 합격 기준
+                      {{
+                        h.kind === 'objective'
+                          ? store.course(e.courseId).passScore
+                          : store.course(e.courseId).practicalPassScore
+                      }}%
                     </p>
-                    <div v-for="q in store.course(e.courseId).questions" :key="q.id">
+                    <div
+                      v-for="q in h.kind === 'objective'
+                        ? store.course(e.courseId).questions
+                        : store.course(e.courseId).practicalQuestions"
+                      :key="q.id"
+                    >
                       <p>
                         {{ q.prompt }}
                         <span class="small-label"
@@ -880,34 +848,6 @@ onBeforeRouteUpdate(canLeave);
                         >응답 {{ q.choices[h.answers?.[q.id] ?? -1] }} · 정답
                         {{ q.correct == null ? '미정' : q.choices[q.correct] }}</span
                       >
-                    </div>
-                  </div>
-                  <div v-else-if="h.kind === 'subjective'" class="attempt-items">
-                    <p class="small-label">
-                      평가자 {{ store.username(h.evaluatorId) }} · 득점 {{ h.earned }} /
-                      {{ h.total }} · 합격 기준 {{ store.course(e.courseId).subjectivePassScore }}%
-                    </p>
-                    <div v-for="q in store.course(e.courseId).subjectiveQuestions" :key="q.id">
-                      <h3>{{ q.prompt }}</h3>
-                      <p class="preserve-lines">답안: {{ h.subjectiveAnswers?.[q.id] }}</p>
-                      <p>{{ h.grades?.[q.id]?.points }} / {{ q.points }}점</p>
-                      <p class="preserve-lines">채점 근거: {{ h.grades?.[q.id]?.reason }}</p>
-                    </div>
-                    <p class="preserve-lines">공개 피드백: {{ h.feedback || '없음' }}</p>
-                  </div>
-                  <div v-else class="attempt-items">
-                    <p class="small-label">
-                      평가자 {{ store.username(h.evaluatorId) }} ·
-                      {{ new Date(h.date).toLocaleString('ko-KR') }}
-                    </p>
-                    <div v-for="item in store.course(e.courseId).practicalItems" :key="item.id">
-                      <p>
-                        {{ item.title }}
-                        <StatusBadge
-                          :status="h.verdicts?.[item.id]?.value === 'pass' ? 'passed' : 'failed'"
-                        />
-                      </p>
-                      <span class="muted">{{ h.verdicts?.[item.id]?.evidence }}</span>
                     </div>
                   </div>
                 </details>
@@ -935,52 +875,6 @@ onBeforeRouteUpdate(canLeave);
                     {{ new Date(ev.date).toLocaleString('ko-KR') }}
                   </p>
                   <p class="muted">{{ ev.reason }}</p>
-                  <details v-if="ev.action === 'assignment.ft'">
-                    <summary>이전 FT 초안</summary>
-                    <p class="muted">
-                      {{ store.username(String(ev.details.previousFtId)) }} →
-                      {{ store.username(String(ev.details.nextFtId)) }}
-                    </p>
-                    <section v-for="archived in archivedDrafts(ev)" :key="archived.attemptId">
-                      <div
-                        v-for="(value, itemId) in archived.verdicts"
-                        :key="itemId"
-                        class="audit-row"
-                      >
-                        <p>
-                          {{ itemTitle(String(itemId)) }} ·
-                          {{
-                            value.value === 'pass'
-                              ? '통과'
-                              : value.value === 'fail'
-                                ? '미통과'
-                                : '미판정'
-                          }}
-                        </p>
-                        <p class="muted">{{ value.evidence || '근거 미입력' }}</p>
-                      </div>
-                      <div
-                        v-for="(grade, questionId) in archived.grades"
-                        :key="questionId"
-                        class="audit-row"
-                      >
-                        <p>주관식 문항 {{ questionId }} · {{ grade.points }}점</p>
-                        <p class="preserve-lines">{{ grade.reason || '근거 미입력' }}</p>
-                      </div>
-                      <p v-if="archived.feedback" class="preserve-lines">
-                        공개 피드백 초안: {{ archived.feedback }}
-                      </p>
-                      <p
-                        v-if="
-                          !Object.keys(archived.verdicts).length &&
-                          !Object.keys(archived.grades || {}).length
-                        "
-                        class="muted"
-                      >
-                        작성한 판정이 없습니다.
-                      </p>
-                    </section>
-                  </details>
                 </div>
               </details>
               <RouterLink
@@ -1035,48 +929,26 @@ onBeforeRouteUpdate(canLeave);
       </template>
       <AppDialog
         :open="!!selectedAssignment"
-        :title="assignmentAction === 'ft' ? 'FT 변경' : '검증 제외'"
+        title="검증 제외"
         @update:open="selectedAssignment = null"
         ><p>
           {{ selectedAssignment && store.username(selectedAssignment.learnerId) }} ·
           {{ selectedAssignment && store.qualification(selectedAssignment.qualificationId).title }}
         </p>
         <div v-if="errors.length" class="error-message" role="alert">{{ errors[0] }}</div>
-        <label v-if="assignmentAction === 'ft'" class="field"
-          ><span>담당 FT</span
-          ><select aria-label="담당 FT" v-model="ftId" :disabled="busy">
-            <option
-              v-for="u in organizationData.users.filter(
-                (u) =>
-                  u.roles.includes('ft') &&
-                  u.organizationActive &&
-                  u.id !== selectedAssignment?.learnerId,
-              )"
-              :key="u.id"
-              :value="u.id"
-            >
-              {{ u.name }} ·
-              {{
-                u.organizationPath
-                  .slice(1)
-                  .map((o) => o.name)
-                  .join(' › ') || 'Lv1 직속'
-              }}
-            </option>
-          </select></label
-        >
-        <p v-else class="muted">기존 기록은 보존되며, 이후 평가를 진행할 수 없습니다.</p>
+        <p class="muted">기존 기록은 보존되며, 이후 평가를 진행할 수 없습니다.</p>
         <label class="field"><span>변경 사유</span><textarea v-model="reason" rows="3" /></label
         ><template #footer
           ><button class="button secondary" @click="selectedAssignment = null">취소</button
           ><button class="button primary" :disabled="busy" @click="changeAssignment">
-            {{ assignmentAction === 'ft' ? '변경' : '검증 제외' }}
+            검증 제외
           </button></template
         ></AppDialog
       >
       <AppDialog :open="!!noticeDraft" title="공지 편집" @update:open="noticeDraft = null"
         ><template v-if="noticeDraft"
           ><div v-if="errors.length" class="error-message" role="alert">{{ errors[0] }}</div>
+          <p class="notice-body">팀 공지 · 게시 대상: {{ store.managementOrganization?.name }}</p>
           <label class="field"><span>제목</span><input v-model="noticeDraft.title" /></label
           ><label class="field"
             ><span>내용</span><textarea v-model="noticeDraft.body" rows="5" /></label

@@ -1,3 +1,8 @@
+import {
+  requiredQualifications,
+  planPolicyErrors,
+  planningReadiness,
+} from "./organization-policies.ts";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -8,6 +13,7 @@ import {
   qualificationUseErrors,
   planErrors,
   WORKFLOW_VERSION,
+  defaultPlanningDueOn,
   kstDate,
   defaultPlanSchedule,
   type State,
@@ -68,6 +74,13 @@ export function authorizeWorkflow(
         );
     return;
   }
+  if (action === "learning.save")
+    demand(
+      false,
+      410,
+      "학습 완료 기록 기능은 종료되었습니다. 학습 안내에서 평가하기로 이동해 주세요.",
+      "FEATURE_REMOVED",
+    );
   if (action === "notification.read") {
     demand(
       find(s.notifications, target).recipientId === u.id,
@@ -109,8 +122,8 @@ export function executeWorkflow(
   body: any,
   organizations: OrganizationDocument,
   scope = u.lv1OrganizationId,
+  at = new Date().toISOString(),
 ) {
-  const at = new Date().toISOString();
   const audit = (
     id: string,
     reason = "",
@@ -176,9 +189,8 @@ export function executeWorkflow(
     const input = z
       .object({
         learnerIds: z.array(z.string()).min(1).max(200),
-        dueOn: z.iso.date(),
+        dueOn: z.iso.date().optional(),
         message: z.string().max(2000),
-        ftId: z.string().nullable().default(null),
       })
       .parse(body);
     demand(
@@ -186,27 +198,7 @@ export function executeWorkflow(
       422,
       "대상자가 중복되었습니다.",
     );
-    demand(
-      s.qualifications.some(
-        (q) =>
-          q.lv1OrganizationId === scope &&
-          q.status === "published" &&
-          !qualificationUseErrors(q, s.courses).length,
-      ),
-      422,
-      "계획할 수 있는 자격을 먼저 사용 등록해 주세요.",
-    );
-    if (input.ftId) {
-      const ft = userView(find(s.users, input.ftId), organizations);
-      demand(
-        ft.roles.includes("ft") &&
-          ft.lv1OrganizationId === scope &&
-          ft.organizationActive &&
-          !input.learnerIds.includes(ft.id),
-        422,
-        "같은 Lv1의 본인이 아닌 FT를 지정해 주세요.",
-      );
-    }
+    input.dueOn ??= defaultPlanningDueOn(at);
     const ids: string[] = [];
     for (const learnerId of input.learnerIds) {
       const learner = userView(find(s.users, learnerId), organizations);
@@ -217,6 +209,16 @@ export function executeWorkflow(
         422,
         "같은 Lv1의 사용 중인 학습자를 선택해 주세요.",
       );
+      const readiness = planningReadiness(s, organizations, learner, at);
+      demand(readiness.canRequest, 422, `${learner.name}: ${readiness.reason}`);
+      const targets = requiredQualifications(s, organizations, learner, at)
+        .items.filter((i) => ["ready", "waiting"].includes(i.status))
+        .map((i) => ({
+          entityId: i.entityId,
+          qualificationId: i.qualificationId,
+          title: i.title,
+          version: i.version,
+        }));
       const id = randomUUID();
       ids.push(id);
       s.planningRequests.push({
@@ -224,7 +226,10 @@ export function executeWorkflow(
         lv1OrganizationId: scope,
         learnerId,
         requestedBy: u.id,
-        ftId: input.ftId,
+        organizationId: learner.organizationId,
+        organizationPath: learner.organizationPath,
+        targets,
+        source: "requested",
         dueOn: input.dueOn,
         message: input.message,
         createdAt: at,
@@ -263,6 +268,25 @@ export function executeWorkflow(
       422,
       "소속 조직의 계획 가능한 자격을 선택해 주세요.",
     );
+    const policyErrors = planPolicyErrors(s, organizations, u, {
+      qualificationId: q.id,
+      requestId: request.id,
+      organizationId: u.organizationId,
+    });
+    demand(
+      !policyErrors.length,
+      409,
+      policyErrors.join(" · "),
+      "POLICY_CHANGED",
+    );
+    const row = requiredQualifications(s, organizations, u, at).items.find(
+      (i) => i.entityId === q.entityId,
+    );
+    demand(
+      row && !["fulfilled", "expired", "unknown"].includes(row.status),
+      409,
+      row?.reason || "필수 자격이 아닙니다.",
+    );
     const errors = qualificationUseErrors(q, s.courses);
     demand(!errors.length, 422, errors.join("\n"));
     const existing = s.plans.find(
@@ -291,6 +315,8 @@ export function executeWorkflow(
       requestId: request.id,
       qualificationId: q.id,
       workflowVersion: WORKFLOW_VERSION,
+      organizationId: u.organizationId,
+      policyRevision: organizations.revision,
       status: "draft",
       revision: 1,
       createdAt: at,
@@ -376,6 +402,13 @@ export function executeWorkflow(
         422,
         "사용 중인 조직에서 계획을 완료할 수 있습니다.",
       );
+      const policyErrors = planPolicyErrors(s, organizations, u, p);
+      demand(
+        !policyErrors.length,
+        409,
+        policyErrors.join(" · "),
+        "POLICY_CHANGED",
+      );
       const errors = [
         ...planErrors(p),
         ...qualificationUseErrors(q, s.courses),
@@ -396,28 +429,11 @@ export function executeWorkflow(
         "이미 배정된 자격입니다.",
       );
       const request = find(s.planningRequests, p.requestId);
-      const ft = s.users.find((x) => x.id === request.ftId);
-      const needsFT = q.courseIds.some((id) =>
-        find(s.courses, id).assessmentKinds.some(
-          (kind) => kind !== "objective",
-        ),
-      );
-      const ftView = ft && userView(ft, organizations);
-      const ftId =
-        needsFT &&
-        ftView &&
-        ftView.id !== u.id &&
-        ftView.roles.includes("ft") &&
-        ftView.organizationActive &&
-        ftView.lv1OrganizationId === p.lv1OrganizationId
-          ? ftView.id
-          : null;
       const assignmentId = randomUUID();
       s.assignments.push({
         id: assignmentId,
         qualificationId: q.id,
         learnerId: u.id,
-        ftId,
         ownerAdminId: request.requestedBy,
         createdBy: u.id,
         planId: p.id,
@@ -452,54 +468,6 @@ export function executeWorkflow(
       { before, after: p },
     );
     return { id: p.id, revision: p.revision, assignmentId: p.assignmentId };
-  }
-  if (action === "learning.save") {
-    const e = find(s.enrollments, target),
-      a = find(s.assignments, e.assignmentId),
-      c = find(s.courses, e.courseId);
-    demand(
-      a.planId && !a.excludedReason,
-      409,
-      "학습 기록을 작성할 수 없는 배정입니다.",
-    );
-    find(c.learningItems, body.itemId);
-    const old = s.learningRecords.find(
-      (r) => r.enrollmentId === e.id && r.itemId === body.itemId,
-    );
-    if (old) expected(old, body.revision);
-    else
-      demand(
-        body.revision === undefined || body.revision === 0,
-        409,
-        "기록이 변경되었습니다. 다시 불러와 주세요.",
-      );
-    const record = LearningRecordSchema.parse({
-      ...body,
-      id: old?.id || randomUUID(),
-      learnerId: u.id,
-      enrollmentId: e.id,
-      revision: (old?.revision || 0) + 1,
-      createdAt: old?.createdAt || at,
-      updatedAt: at,
-    });
-    demand(
-      record.performedOn <= kstDate(at),
-      422,
-      "학습 실시일은 오늘 이후일 수 없습니다.",
-    );
-    if (old) {
-      demand(
-        z.string().trim().min(1).max(2000).safeParse(body.reason).success,
-        422,
-        "학습 기록 수정 사유를 입력해 주세요.",
-      );
-      audit(record.id, body.reason, a.id, { before: old, after: record });
-      Object.assign(old, record);
-    } else {
-      s.learningRecords.push(record);
-      audit(record.id, "학습자 완료 기록", a.id);
-    }
-    return { id: record.id, revision: record.revision };
   }
   demand(false, 404, "지원하지 않는 절차입니다.");
 }

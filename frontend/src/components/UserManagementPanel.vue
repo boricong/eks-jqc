@@ -11,10 +11,12 @@ import { useRoute } from 'vue-router';
 const route = useRoute();
 const store = useDemo();
 const labels = roleLabels;
-const roleOptions = Object.entries(roleLabels).map(([value, label]) => ({
-  value: value as Role,
-  label,
-}));
+const roleOptions = Object.entries(roleLabels)
+  .filter(([value]) => value !== 'organization_admin')
+  .map(([value, label]) => ({
+    value: value as Role,
+    label,
+  }));
 const users = ref<UserView[]>([]),
   doc = shallowRef<OrganizationView | null>(null),
   query = ref(''),
@@ -33,9 +35,19 @@ const listed = computed(() =>
         .includes(query.value.toLowerCase()),
   ),
 );
-const list=useListView(listed,'users',user=>user.name);
-try {const preferences=JSON.parse(localStorage.getItem('eks-users-filter')||'{}');query.value=preferences.query||'';orgFilter.value=preferences.organization||'';}catch{}
-watch([query,orgFilter],()=>{list.page=1;localStorage.setItem('eks-users-filter',JSON.stringify({query:query.value,organization:orgFilter.value}));});
+const list = useListView(listed, 'users', (user) => user.name);
+try {
+  const preferences = JSON.parse(localStorage.getItem('eks-users-filter') || '{}');
+  query.value = preferences.query || '';
+  orgFilter.value = preferences.organization || '';
+} catch {}
+watch([query, orgFilter], () => {
+  list.page = 1;
+  localStorage.setItem(
+    'eks-users-filter',
+    JSON.stringify({ query: query.value, organization: orgFilter.value }),
+  );
+});
 async function load() {
   try {
     [users.value, doc.value] = await Promise.all([
@@ -51,7 +63,7 @@ function edit(user?: UserView) {
   form.value = {
     name: user?.name ?? '',
     organizationId: user?.organizationId ?? '',
-    roles: user ? [...user.roles] : ['learner'],
+    roles: user ? user.roles.filter((r) => r !== 'organization_admin') : ['learner'],
   };
   editing.value = true;
   error.value = '';
@@ -106,42 +118,53 @@ onMounted(async () => {
     </div>
   </div>
   <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-  <AppDialog :open="editing && !!doc" :title="selected ? `${selected.name} 정보 수정` : '사용자 추가'" class="user-drawer" @update:open="editing=false">
-  <section v-if="editing && doc" class="user-editor">
-    <p v-if="selected" class="muted">{{selected.organizationPath.map(p=>p.name).join(' › ')}}</p>
-    <form @submit.prevent="save">
-      <label class="field"
-        ><span>이름</span><input v-model="form.name" required maxlength="100" :disabled="busy"
-      /></label>
-      <OrganizationSelect
-        v-model="form.organizationId"
-        :entries="doc.entries"
-        :fixed-lv1="selected?.lv1OrganizationId"
-        :disabled="busy"
-      />
-      <fieldset class="role-choices">
-        <legend>역할</legend>
-        <label v-for="option in roleOptions" :key="option.value" class="checkbox-field"
-          ><input v-model="form.roles" :value="option.value" type="checkbox" :disabled="busy" />{{
-            option.label
-          }}</label
-        >
-      </fieldset>
+  <AppDialog
+    :open="editing && !!doc"
+    :title="selected ? `${selected.name} 정보 수정` : '사용자 추가'"
+    class="user-drawer"
+    @update:open="editing = false"
+  >
+    <section v-if="editing && doc" class="user-editor">
       <p v-if="selected" class="muted">
-        같은 Lv1 안에서 소속을 변경할 수 있습니다. 기존 기록의 배정 당시 소속은 유지됩니다.
+        {{ selected.organizationPath.map((p) => p.name).join(' › ') }}
       </p>
-      <div class="actions">
-        <button
-          class="button primary"
-          :disabled="busy || !form.name.trim() || !form.organizationId || !form.roles.length"
-        >
-          사용자 저장</button
-        ><button type="button" class="button secondary" :disabled="busy" @click="editing = false">
-          취소
-        </button>
-      </div>
-    </form>
-  </section>
+      <form @submit.prevent="save">
+        <label class="field"
+          ><span>이름</span><input v-model="form.name" required maxlength="100" :disabled="busy"
+        /></label>
+        <OrganizationSelect
+          v-model="form.organizationId"
+          :entries="doc.entries"
+          :fixed-lv1="selected?.lv1OrganizationId"
+          :disabled="busy"
+        />
+        <fieldset class="role-choices">
+          <legend>역할</legend>
+          <label v-for="option in roleOptions" :key="option.value" class="checkbox-field"
+            ><input v-model="form.roles" :value="option.value" type="checkbox" :disabled="busy" />{{
+              option.label
+            }}</label
+          >
+        </fieldset>
+        <p v-if="selected?.organizationAdministration" class="notice-body">
+          세부 조직 관리자 지정은 조직별 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재 지정이
+          해제되며 새 소속에서 다시 지정해야 합니다.
+        </p>
+        <p v-if="selected" class="muted">
+          같은 Lv1 안에서 소속을 변경할 수 있습니다. 기존 기록의 배정 당시 소속은 유지됩니다.
+        </p>
+        <div class="actions">
+          <button
+            class="button primary"
+            :disabled="busy || !form.name.trim() || !form.organizationId || !form.roles.length"
+          >
+            사용자 저장</button
+          ><button type="button" class="button secondary" :disabled="busy" @click="editing = false">
+            취소
+          </button>
+        </div>
+      </form>
+    </section>
   </AppDialog>
   <div class="list-toolbar system-filters">
     <label class="field"
@@ -157,7 +180,14 @@ onMounted(async () => {
       </select></label
     >
   </div>
-  <ListControls :count="list.count" :pages="list.pages" v-model:page="list.page" v-model:size="list.size" v-model:density="list.density" v-model:sort="list.sort"/>
+  <ListControls
+    :count="list.count"
+    :pages="list.pages"
+    v-model:page="list.page"
+    v-model:size="list.size"
+    v-model:density="list.density"
+    v-model:sort="list.sort"
+  />
   <div class="table-wrap" :data-density="list.density">
     <table>
       <thead>
@@ -172,8 +202,15 @@ onMounted(async () => {
         <tr v-for="user in list.rows" :key="user.id">
           <td>{{ user.name }}</td>
           <td>{{ user.roles.map((r) => labels[r]).join(' · ') }}</td>
-          <td class="organization-path" :title="user.organizationPath.map(p=>p.name).join(' › ')">
-            {{ [user.organizationPath[0]?.name.split('(')[0],...(user.organizationPath.length>1?[user.organizationPath.at(-1)?.name]:[])].join(' › ')
+          <td
+            class="organization-path"
+            :title="user.organizationPath.map((p) => p.name).join(' › ')"
+          >
+            {{
+              [
+                user.organizationPath[0]?.name.split('(')[0],
+                ...(user.organizationPath.length > 1 ? [user.organizationPath.at(-1)?.name] : []),
+              ].join(' › ')
             }}<span v-if="!user.organizationActive" class="small-label"> · 사용 중지 조직</span>
           </td>
           <td>

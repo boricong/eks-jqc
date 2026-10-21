@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
+import SystemNotices from '../components/SystemNotices.vue';
 import TestProgressPanel from '../components/TestProgressPanel.vue';
 const route = useRoute();
 const section = computed(() => String(route.params.section));
@@ -12,6 +13,7 @@ const sections = [
   { id: 'users', name: '사용자 관리' },
   { id: 'overview', name: '전체 업무 조회' },
   { id: 'testing', name: '테스트 관리' },
+  { id: 'notices', name: '시스템 공지 관리' },
 ];
 </script>
 <template>
@@ -31,7 +33,9 @@ const sections = [
     <div class="admin-content">
       <OrganizationPanel v-if="section === 'organizations'" /><UserManagementPanel
         v-else-if="section === 'users'"
-      /><SystemOverview v-else-if="section === 'overview'" /><template v-else
+      /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
+        v-else-if="section === 'notices'"
+      /><template v-else
         ><h1>테스트 관리</h1>
         <TestProgressPanel
       /></template>

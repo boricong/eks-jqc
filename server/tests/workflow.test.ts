@@ -1,3 +1,4 @@
+import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
@@ -34,14 +35,14 @@ async function fixture(t: TestContext) {
     {
       id: "etch-ft",
       name: "Etch FT",
-      roles: ["ft"],
+      roles: ["learner"],
       organizationId: "org-etch",
       revision: 1,
     },
     {
       id: "dual",
       name: "겸직자",
-      roles: ["learner", "ft"],
+      roles: ["learner"],
       organizationId: "org-photo",
       revision: 1,
     },
@@ -276,7 +277,7 @@ test("미확정 계획 삭제는 본인·revision·최신 역할을 검사하고
     randomUUID(),
     () => {},
     (s) => {
-      s.users.find((u) => u.id === "learner-2")!.roles = ["ft"];
+      s.users.find((u) => u.id === "learner-2")!.roles = ["admin"];
       return {};
     },
   );
@@ -358,7 +359,7 @@ const period: ValidityPolicy = {
 async function catalog(
   f: Fixture,
   root = "org-photo",
-  kinds: Kind[] = ["objective", "subjective", "practical"],
+  kinds: Kind[] = ["objective", "practical"],
 ) {
   const c = await f.call("operator-1", scope("/courses", root), {});
   await f.call("operator-1", scope(`/courses/${c.id}/publish`, root), {
@@ -374,16 +375,6 @@ async function catalog(
         required: true,
       },
     ],
-    subjectiveQuestions: [
-      {
-        id: "essay-1",
-        prompt: "문제 원인과 조치를 설명하세요.",
-        points: 10,
-        rubric: "내부 채점 기준",
-        modelAnswer: "비공개 모범답안",
-      },
-    ],
-    subjectivePassScore: 60,
   });
   const q = await f.call("operator-1", scope("/qualifications", root), {});
   await f.call("operator-1", scope(`/qualifications/${q.id}/publish`, root), {
@@ -401,10 +392,10 @@ async function invitation(
   ftId: string | null = null,
   root = "org-photo",
 ) {
+  await configureTestPolicies(f.store, root);
   return (
     await f.call("operator-1", scope("/planning-requests", root), {
       learnerIds: [learner],
-      ftId,
       dueOn: "2026-10-31",
       message: "자격별 계획을 작성하세요.",
     })
@@ -464,18 +455,40 @@ async function plan(
   return { a, e, p: p.id as string, request };
 }
 async function learning(f: Fixture, enrollment: string, learner = "learner-2") {
-  return f.call(
+  await f.call(
     learner,
     `/enrollments/${enrollment}/learning`,
     {
       itemId: "learn-1",
-      performedOn: kstDate(),
-      content: "독립 수행 학습 완료",
+      performedOn: "2026-10-19",
+      content: "deprecated",
       evidenceUrl: "",
       revision: 0,
     },
-    200,
+    410,
     "PUT",
+  );
+  return f.store.transact(
+    learner,
+    randomUUID(),
+    "historical-fixture",
+    () => {},
+    (state) => {
+      const record = {
+        id: randomUUID(),
+        enrollmentId: enrollment,
+        itemId: "learn-1",
+        learnerId: learner,
+        performedOn: "2026-10-19",
+        content: "이관된 과거 학습 기록",
+        evidenceUrl: "",
+        revision: 1,
+        createdAt: "2026-10-19T01:00:00Z",
+        updatedAt: "2026-10-19T01:00:00Z",
+      };
+      state.learningRecords.push(record);
+      return record;
+    },
   );
 }
 async function attempt(
@@ -506,25 +519,18 @@ async function finish(
         f.store.snapshot().enrollments.find((e) => e.id === enrollment)!
           .courseId,
     )!;
-  const actor = kind === "objective" ? learner : ft;
+  const actor = learner;
   await f.call(
     actor,
     `/attempts/${t.id}/draft`,
     {
       revision: t.revision,
-      answers:
-        kind === "objective"
-          ? Object.fromEntries(course.questions.map((q) => [q.id, q.correct]))
-          : {},
-      verdicts:
-        kind === "practical"
-          ? Object.fromEntries(
-              course.practicalItems.map((i) => [
-                i.id,
-                { value: "pass", evidence: "독립 수행 관찰" },
-              ]),
-            )
-          : {},
+      answers: Object.fromEntries(
+        (kind === "objective"
+          ? course.questions
+          : course.practicalQuestions
+        ).map((q) => [q.id, q.correct]),
+      ),
     },
     200,
     "PUT",
@@ -532,30 +538,6 @@ async function finish(
   await f.call(actor, `/attempts/${t.id}/submit`, { revision: t.revision + 1 });
   return t.id as string;
 }
-async function submitEssay(
-  f: Fixture,
-  enrollment: string,
-  learner = "learner-2",
-) {
-  const t = await attempt(f, enrollment, "subjective", learner);
-  await f.call(
-    learner,
-    `/attempts/${t.id}/draft`,
-    {
-      revision: t.revision,
-      answers: {},
-      verdicts: {},
-      subjectiveAnswers: { "essay-1": "원인 확인 후 조치합니다." },
-    },
-    200,
-    "PUT",
-  );
-  const submitted = await f.call(learner, `/attempts/${t.id}/submit`, {
-    revision: t.revision + 1,
-  });
-  return submitted as { id: string; revision: number };
-}
-
 test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 차단·추가 자격", async (t) => {
   const f = await fixture(t);
   const incompleteCourse = await f.call("admin-1", "/courses", {});
@@ -652,6 +634,12 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   );
   const { q: custom } = await catalog(f);
   assert.ok(
+    !(await f.call("learner-2", "/workspace")).qualifications.some(
+      (q: any) => q.id === custom,
+    ),
+  );
+  await configureTestPolicies(f.store);
+  assert.ok(
     (await f.call("learner-2", "/workspace")).qualifications.some(
       (q: any) => q.id === custom,
     ),
@@ -671,7 +659,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   await f.call(
     "admin-1",
     "/assignments",
-    { learnerId: "learner-2", qualificationId: q, ftId: null },
+    { learnerId: "learner-2", qualificationId: q },
     409,
   );
   const { q: etch } = await catalog(f, "org-etch");
@@ -737,7 +725,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   assert.deepEqual(results[0], results[1]);
   const done = f.store.snapshot().plans.find((x) => x.id === p.id)!;
   assert.equal(done.approval, "skipped_by_policy");
-  assert.equal(done.workflowVersion, "personal-certification-v1");
+  assert.equal(done.workflowVersion, "personal-certification-v3");
   assert.equal(
     f.store.snapshot().assignments.filter((a) => a.planId === p.id).length,
     1,
@@ -747,7 +735,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
     .assignments.find((a) => a.id === done.assignmentId)!;
   assert.equal(fixed.createdBy, "learner-2");
   assert.equal(fixed.ownerAdminId, "operator-1");
-  assert.equal(fixed.ftId, null);
+  assert.ok(!("ftId" in fixed));
   await f.call(
     "learner-2",
     `/plans/${p.id}`,
@@ -772,285 +760,6 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   assert.deepEqual(
     f.store.snapshot().plans.find((x) => x.id === p.id),
     record,
-  );
-});
-
-test("FT 없이 학습·객관식→주관식 제출·독립 재응시·FT 교체·수료 인증·근거 보존", async (t) => {
-  const f = await fixture(t),
-    { c, q } = await catalog(f),
-    { a, e, p } = await plan(f, q);
-  for (const kind of ["objective", "subjective", "practical"])
-    await f.call("learner-2", `/enrollments/${e.id}/attempts`, { kind }, 409);
-  await f.call(
-    "learner-1",
-    `/enrollments/${e.id}/learning`,
-    { itemId: "learn-1" },
-    403,
-    "PUT",
-  );
-  await learning(f, e.id);
-  const objective = await finish(f, e.id, "objective");
-  const essay = await attempt(f, e.id, "subjective");
-  await f.call(
-    "learner-2",
-    `/attempts/${essay.id}/draft`,
-    {
-      revision: 1,
-      answers: {},
-      verdicts: {},
-      subjectiveAnswers: { "essay-1": "학습한 원인과 조치" },
-    },
-    200,
-    "PUT",
-  );
-  await f.call(
-    "learner-2",
-    `/attempts/${essay.id}/submit`,
-    { revision: 2 },
-    409,
-  );
-  await f.call(
-    "learner-2",
-    `/enrollments/${e.id}/attempts`,
-    { kind: "practical" },
-    409,
-  );
-  const learnerView = await f.call("learner-2", "/workspace");
-  assert.equal(
-    learnerView.courses.find((x: any) => x.id === c).subjectiveQuestions[0]
-      .rubric,
-    undefined,
-  );
-  assert.equal(
-    learnerView.courses.find((x: any) => x.id === c).subjectiveQuestions[0]
-      .modelAnswer,
-    undefined,
-  );
-  await f.call("admin-1", `/assignments/${a.id}/ft`, {
-    revision: 1,
-    ftId: "ft-1",
-    reason: "FT 지정",
-  });
-  const essayRevision = f.store
-    .snapshot()
-    .attempts.find((t) => t.id === essay.id)!.revision;
-  assert.equal(
-    essayRevision,
-    2,
-    "FT assignment must not modify the learner-owned answer draft",
-  );
-  const submitted = await f.call("learner-2", `/attempts/${essay.id}/submit`, {
-    revision: essayRevision,
-  });
-  await f.call(
-    "learner-2",
-    `/attempts/${essay.id}/draft`,
-    {
-      revision: submitted.revision,
-      answers: {},
-      verdicts: {},
-      subjectiveAnswers: { "essay-1": "변경" },
-    },
-    409,
-    "PUT",
-  );
-  for (const actor of ["operator-1", "admin-1", "ft-2", "learner-2"])
-    await f.call(
-      actor,
-      `/attempts/${essay.id}/grading/finalize`,
-      { revision: submitted.revision },
-      403,
-    );
-  await f.call(
-    "ft-1",
-    `/attempts/${essay.id}/grading/finalize`,
-    {
-      revision: submitted.revision,
-      grades: { "essay-1": { points: 11, reason: "초과" } },
-      feedback: "",
-    },
-    422,
-  );
-  await f.call(
-    "ft-1",
-    `/attempts/${essay.id}/grading/finalize`,
-    {
-      revision: submitted.revision,
-      grades: { "essay-1": { points: 5, reason: "원인 누락" } },
-      feedback: "",
-    },
-    422,
-  );
-  await f.call("ft-1", `/attempts/${essay.id}/grading/finalize`, {
-    revision: submitted.revision,
-    grades: { "essay-1": { points: 5, reason: "내부 미통과 이유" } },
-    feedback: "원인 설명을 보완하세요.",
-  });
-  const publicResult = await f.call("learner-2", `/attempts/${essay.id}`);
-  assert.deepEqual(publicResult.grades, {});
-  assert.equal(publicResult.feedback, "원인 설명을 보완하세요.");
-  await finish(f, e.id, "practical");
-  assert.ok(
-    !f.store.snapshot().completions.some((x) => x.enrollmentId === e.id),
-  );
-  const next = await submitEssay(f, e.id);
-  await f.call(
-    "ft-1",
-    `/attempts/${next.id}/grading`,
-    {
-      revision: next.revision,
-      grades: { "essay-1": { points: 8, reason: "이전 FT의 미확정 근거" } },
-      feedback: "이전 초안",
-    },
-    200,
-    "PUT",
-  );
-  await f.call("admin-1", `/assignments/${a.id}/ft`, {
-    revision: 2,
-    ftId: "ft-2",
-    reason: "담당자 변경",
-  });
-  await f.call(
-    "ft-1",
-    `/attempts/${next.id}/grading/finalize`,
-    { revision: next.revision + 1 },
-    403,
-  );
-  const fresh = await f.call("ft-2", `/attempts/${next.id}`);
-  assert.deepEqual(fresh.grades, {});
-  assert.equal(fresh.feedback, "");
-  assert.equal(fresh.subjectiveAnswers["essay-1"], "원인 확인 후 조치합니다.");
-  assert.ok(
-    JSON.stringify(f.store.snapshot().audits).includes("이전 FT의 미확정 근거"),
-  );
-  await f.call(
-    "operator-1",
-    "/system/users/learner-2",
-    {
-      revision: 1,
-      name: "정하린 수정",
-      roles: ["learner"],
-      organizationId: "org-photo-pyeongtaek-1",
-    },
-    200,
-    "PATCH",
-  );
-  const body = {
-      revision: fresh.revision,
-      grades: { "essay-1": { points: 6, reason: "필수 요소 충족" } },
-      feedback: "통과했습니다.",
-    },
-    key = randomUUID();
-  const results = await Promise.all([
-    f.call(
-      "ft-2",
-      `/attempts/${next.id}/grading/finalize`,
-      body,
-      200,
-      "POST",
-      key,
-    ),
-    f.call(
-      "ft-2",
-      `/attempts/${next.id}/grading/finalize`,
-      body,
-      200,
-      "POST",
-      key,
-    ),
-  ]);
-  assert.deepEqual(results[0], results[1]);
-  const s = f.store.snapshot(),
-    co = s.completions.find((x) => x.enrollmentId === e.id)!,
-    cert = s.certifications.find((x) => x.assignmentId === a.id)!;
-  assert.equal(co.evidence.length, 3);
-  assert.ok(co.evidence.some((x) => x.attemptId === objective));
-  assert.equal(
-    s.attempts.filter((x) => x.enrollmentId === e.id && x.kind === "subjective")
-      .length,
-    2,
-  );
-  assert.equal(cert.snapshot!.learnerName, "정하린 수정");
-  assert.equal(
-    cert.snapshot!.organizationPath.at(-1)!.id,
-    "org-photo-pyeongtaek-1",
-  );
-  assert.deepEqual(cert.validity, period);
-  assert.equal(cert.expiresOn, expirationDate(cert.date, period));
-  assert.equal(
-    s.notifications.filter(
-      (n) => n.type === "certification" && n.assignmentId === a.id,
-    ).length,
-    1,
-  );
-  assert.equal(
-    (await f.call("learner-2", `/completions/${co.id}`)).completion.id,
-    co.id,
-  );
-  await f.call("learner-1", `/completions/${co.id}`, undefined, 404);
-  const notification = s.notifications.find(
-    (n) => n.certificationId === cert.id,
-  )!;
-  await f.call("learner-2", `/notifications/${notification.id}/read`, {});
-  assert.deepEqual(
-    f.store.snapshot().certifications.find((x) => x.id === cert.id),
-    cert,
-  );
-  // Process/learning data do not modify the comparison's independent task evidence.
-  const comparison = await f.call(
-    "admin-1",
-    `/enrollments/${e.id}/comparisons`,
-    {},
-  );
-  await f.call("admin-1", `/comparisons/${comparison.id}/finalize`, {
-    revision: 1,
-    attemptIds: co.evidence.map((ev) => ev.attemptId),
-    observedAt: "2026-10-19",
-    observer: "현장 관찰자",
-    task: "작업",
-    criterion: "독립 수행",
-    evidence: "별도 관찰",
-    evidenceUrl: "",
-    independence: "independent",
-    performance: "met",
-  });
-  const usage = await f.call("admin-1", `/courses/${c}/usage`);
-  await f.call("admin-1", `/courses/${c}/retirement`, {
-    ...usage,
-    reason: "신규 운영 종료",
-  });
-  const clone = await f.call("admin-1", `/qualifications/${q}/versions`, {});
-  const copy = f.store
-    .snapshot()
-    .qualifications.find((x) => x.id === clone.id)!;
-  await f.call(
-    "admin-1",
-    `/qualifications/${clone.id}`,
-    {
-      ...copy,
-      validity: { type: "unlimited", months: null, reminderDays: [] },
-    },
-    200,
-    "PUT",
-  );
-  await f.restart();
-  assert.deepEqual(
-    f.store.snapshot().certifications.find((x) => x.id === cert.id),
-    cert,
-  );
-  assert.deepEqual(
-    f.store.snapshot().completions.find((x) => x.id === co.id),
-    co,
-  );
-  assert.equal(
-    f.store.snapshot().plans.find((x) => x.id === p)!.status,
-    "completed",
-  );
-  assert.equal(
-    (await f.call("learner-2", "/workspace")).assignments.find(
-      (x: any) => x.id === a.id,
-    ).enrollments[0].subjective,
-    "passed",
   );
 });
 
@@ -1089,7 +798,7 @@ test("계획 완료 직전 운영 종료 차단, 기존 미시작 계획 배정�
     "dual",
     `/plans/${draft.id}/complete`,
     { revision: 2 },
-    422,
+    409,
   );
   assert.match(error.message, /운영 종료/);
   await learning(f, active.e.id);
@@ -1168,7 +877,7 @@ test("선택 조직 초기화는 계획·학습 일정·역할·기준을 보존
     "learner-2",
     `/enrollments/${a.e.id}/learning`,
     { ...previousLearning, reason: "오래된 탭" },
-    409,
+    410,
     "PUT",
   );
   await learning(f, a.e.id);
@@ -1275,73 +984,6 @@ test("알림 시작 시 누락 보충·최신 시점만 생성·중복 방지·�
   );
 });
 
-test("스키마3 명시적 이관은 기존 ID·점수·시각·종료 정책·조직을 보존하고 반복 안전", async (t) => {
-  const f = await fixture(t);
-  const source: any = f.store.snapshot();
-  source.schemaVersion = 3;
-  for (const c of source.courses) {
-    c.mode = c.assessmentKinds.length === 2 ? "both" : c.assessmentKinds[0];
-    delete c.assessmentKinds;
-    delete c.learningItems;
-    delete c.subjectiveQuestions;
-    delete c.subjectivePassScore;
-  }
-  for (const q of source.qualifications) {
-    delete q.englishName;
-    delete q.description;
-    delete q.validity;
-  }
-  for (const a of source.attempts) {
-    if (a.status === "graded") a.status = "submitted";
-    delete a.submittedAt;
-  }
-  delete source.plans;
-  delete source.planningRequests;
-  delete source.learningRecords;
-  delete source.notifications;
-  source.courses[0].operationalStatus = "retired";
-  source.courses[0].retiredAt = "2026-10-18T00:00:00.000Z";
-  source.courses[0].retiredBy = "admin-1";
-  source.courses[0].retirementReason = "운영 종료";
-  const master = f.store.organizations.snapshot();
-  const migrated = migrateState(source, master);
-  assert.equal(migrated.schemaVersion, 5);
-  assert.equal(migrated.courses[0]!.operationalStatus, "retired");
-  for (const [i, a] of migrated.attempts.entries()) {
-    const { status, submittedAt, ...preserved } = a;
-    const { status: oldStatus, ...previous } = source.attempts[i];
-    assert.deepEqual(preserved, previous);
-    assert.equal(status, "graded");
-    assert.equal(submittedAt, a.date);
-  }
-  assert.ok(
-    migrated.qualifications.every((q) => q.validity.type === "unknown"),
-  );
-  assert.deepEqual(migrateState(migrated, master), migrated);
-  assert.deepEqual(f.store.organizations.snapshot(), master);
-  // Normal startup must reject schema3 and must not rewrite the input.
-  const other = path.join(f.dir, "legacy", "state.json"),
-    org = path.join(f.dir, "legacy-master.json");
-  await writeFile(org, JSON.stringify(master));
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(path.dirname(other));
-  await writeFile(other, JSON.stringify(source));
-  await assert.rejects(new JsonStore(other, org).load());
-  assert.equal(await readFile(other, "utf8"), JSON.stringify(source));
-  await new JsonStore(other, org).migrate(migrateState);
-  const bytes = await readFile(other, "utf8");
-  await new JsonStore(other, org).migrate(migrateState);
-  assert.equal(await readFile(other, "utf8"), bytes);
-  assert.equal(
-    (await readdir(new JsonStore(other, org).backupDir)).filter((name) =>
-      name.startsWith("before-migration-"),
-    ).length,
-    1,
-  );
-  const restored: State = JSON.parse(bytes);
-  validateState(restored, master);
-});
-
 test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 재시도만 중복 방지", async (t) => {
   const f = await fixture(t),
     { q } = await catalog(f),
@@ -1350,7 +992,6 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
     key = randomUUID();
   const body = {
     learnerIds: ["learner-2"],
-    ftId: "ft-1",
     dueOn: "2027-01-31",
     message: "추가 직무 자격을 계획하세요.",
   };
@@ -1413,107 +1054,4 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
       .validity.months,
     6,
   );
-});
-
-test("한 과정 채점 대기 중 다른 과정 수료와 마지막 유형 동시 확정은 단일 인증 생성", async (t) => {
-  const f = await fixture(t),
-    first = await catalog(f),
-    second = await catalog(f);
-  const qualification = await f.call("admin-1", "/qualifications", {});
-  await f.call("admin-1", `/qualifications/${qualification.id}/publish`, {
-    revision: 1,
-    title: "독립 진행 검증",
-    description: "과정별 진행 확인",
-    validity: period,
-    courseIds: [first.c, second.c],
-  });
-  const { a, e } = await plan(f, qualification.id, "learner-2", "ft-1");
-  const other = f.store
-    .snapshot()
-    .enrollments.find((x) => x.assignmentId === a.id && x.id !== e.id)!;
-  await learning(f, e.id);
-  await learning(f, other.id);
-  await finish(f, e.id, "objective");
-  const pending = await submitEssay(f, e.id);
-  await finish(f, other.id, "objective");
-  await finish(f, other.id, "practical");
-  const otherEssay = await submitEssay(f, other.id);
-  const grade = {
-    grades: { "essay-1": { points: 10, reason: "독립 수행 요건 충족" } },
-    feedback: "",
-  };
-  await f.call("ft-1", `/attempts/${otherEssay.id}/grading/finalize`, {
-    revision: otherEssay.revision,
-    ...grade,
-  });
-  assert.ok(
-    f.store.snapshot().completions.some((x) => x.enrollmentId === other.id),
-  );
-  assert.equal(
-    f.store.snapshot().attempts.find((x) => x.id === pending.id)!.status,
-    "submitted",
-  );
-  assert.ok(
-    !f.store.snapshot().certifications.some((x) => x.assignmentId === a.id),
-  );
-  const practical = await attempt(f, e.id, "practical");
-  const course = f.store.snapshot().courses.find((x) => x.id === first.c)!;
-  await f.call(
-    "ft-1",
-    `/attempts/${practical.id}/draft`,
-    {
-      revision: practical.revision,
-      answers: {},
-      verdicts: Object.fromEntries(
-        course.practicalItems.map((i) => [
-          i.id,
-          { value: "pass", evidence: "수행 확인" },
-        ]),
-      ),
-    },
-    200,
-    "PUT",
-  );
-  await Promise.all([
-    f.call("ft-1", `/attempts/${pending.id}/grading/finalize`, {
-      revision: pending.revision,
-      ...grade,
-    }),
-    f.call("ft-1", `/attempts/${practical.id}/submit`, {
-      revision: practical.revision + 1,
-    }),
-  ]);
-  const before = f.store.snapshot(),
-    cert = before.certifications.find((x) => x.assignmentId === a.id)!;
-  assert.equal(
-    before.certifications.filter((x) => x.assignmentId === a.id).length,
-    1,
-  );
-  assert.equal(
-    before.completions.filter((x) => x.enrollmentId === e.id).length,
-    1,
-  );
-  assert.equal(
-    before.notifications.filter(
-      (x) => x.type === "certification" && x.assignmentId === a.id,
-    ).length,
-    1,
-  );
-  await f.call(
-    "operator-1",
-    "/system/users/learner-2",
-    {
-      revision: 1,
-      name: "취득 후 이름 변경",
-      organizationId: "org-photo-pyeongtaek-1",
-      roles: ["learner"],
-    },
-    200,
-    "PATCH",
-  );
-  assert.deepEqual(
-    f.store.snapshot().certifications.find((x) => x.id === cert.id),
-    cert,
-  );
-  assert.deepEqual(f.store.snapshot().completions, before.completions);
 });

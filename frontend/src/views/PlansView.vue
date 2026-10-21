@@ -5,8 +5,10 @@ import { planErrors, kstDate, type PersonalPlan } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
 import { useSavedDraft } from '../composables/useSavedDraft';
 import LearnerNav from '../components/LearnerNav.vue';
+import RequiredQualifications from '../components/RequiredQualifications.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { ApiError } from '../api';
+import { useProcessContext } from '../composables/useProcessContext';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter(),
@@ -32,23 +34,34 @@ const requestId = computed(() =>
 );
 const request = computed(() => requests.value.find((r) => r.id === requestId.value));
 const current = computed(() => plans.value.find((p) => p.id === route.params.id));
+useProcessContext(() =>
+  current.value?.status === 'completed'
+    ? 'plan-completed'
+    : route.params.id
+      ? `plan-${step.value}`
+      : 'plan-1',
+);
 const eligible = computed(() =>
   store.data.qualifications.filter(
     (q) =>
-      q.lv1OrganizationId === store.actor.lv1OrganizationId &&
-      q.status === 'published' &&
-      !store.qualificationErrors(q).length &&
-      !plans.value.some(
-        (p) =>
-          store.qualification(p.qualificationId).entityId === q.entityId &&
-          (!p.assignmentId || !store.assignment(p.assignmentId)?.excludedReason),
+      store.data.requiredQualifications?.items.some(
+        (i) => i.qualificationId === q.id && i.canStart,
       ) &&
-      !store.myAssignments.some(
-        (a) => store.qualification(a.qualificationId).entityId === q.entityId,
-      ),
+      request.value?.organizationId === store.actor.organizationId &&
+      request.value.targets?.some((t) => t.entityId === q.entityId),
   ),
 );
+const policyErrors = computed(
+  () => store.data.planEligibility.find((p) => p.planId === current.value?.id)?.reasons || [],
+);
 const selection = ref('');
+watch(
+  () => route.query.qualification,
+  (value) => {
+    if (typeof value === 'string') selection.value = value;
+  },
+  { immediate: true },
+);
 type Fields = Pick<PersonalPlan, 'targetOn' | 'schedules'>;
 const draft = useSavedDraft<Fields>((value, revision) =>
   store.command(
@@ -291,6 +304,10 @@ onBeforeRouteUpdate(leave);
 <template>
   <div class="container page">
     <LearnerNav />
+    <RequiredQualifications v-if="!current" />
+    <div v-if="current && policyErrors.length" class="error-message" role="alert">
+      {{ policyErrors.join(' · ') }}<RouterLink to="/plans">내 계획에서 현재 요청 확인</RouterLink>
+    </div>
     <div class="page-heading">
       <h1>{{ current ? '개인 인증 계획' : '내 계획' }}</h1>
       <span>{{ store.actor.name }}</span>
@@ -443,6 +460,37 @@ onBeforeRouteUpdate(leave);
       </section>
       <section v-else class="panel editor-panel">
         <h2>{{ current.status === 'completed' ? '계획 내용' : '계획 최종 확인' }}</h2>
+        <div
+          v-if="current.status === 'draft' && store.data.requiredQualifications"
+          class="notice-body"
+        >
+          <p
+            v-if="
+              current.policyRevision &&
+              current.policyRevision !== store.data.requiredQualifications.revision
+            "
+          >
+            작성 이후 조직 기준 정보가 변경되었습니다. 아래의 현재 소속·필수 자격과 적용 버전을 다시
+            확인해 주세요. 입력한 일정과 목표는 보존됩니다.
+          </p>
+          <p>
+            현재 소속 ·
+            {{ store.data.requiredQualifications.organizationPath.map((p) => p.name).join(' › ') }}
+          </p>
+          <p>
+            현재 필수 자격 ·
+            {{
+              store.data.requiredQualifications.items
+                .map((i) => `${i.title} v${i.version}`)
+                .join(' · ') || '없음 또는 미설정'
+            }}
+          </p>
+          <p>
+            이 계획 · {{ store.qualification(current.qualificationId).title }} v{{
+              store.qualification(current.qualificationId).version
+            }}
+          </p>
+        </div>
         <p>목표 인증일 {{ form.targetOn || '미정' }}</p>
         <div v-for="s in form.schedules" :key="s.courseId" class="plan-course">
           <h3>{{ store.course(s.courseId).title }}</h3>
@@ -453,24 +501,15 @@ onBeforeRouteUpdate(leave);
           <p class="preserve-lines">{{ s.goal || '학습 목표를 입력해 주세요.' }}</p>
         </div>
         <p class="muted">현재 운영정책에 따라 결재를 생략하고 계획을 완료합니다.</p>
-        <p
-          v-if="
-            !(current.assignmentId
-              ? store.assignment(current.assignmentId)?.ftId
-              : requests.find((r) => r.id === current!.requestId)?.ftId)
-          "
-          class="muted"
-        >
-          담당 FT가 지정되지 않았습니다. 계획·학습·객관식은 진행할 수 있으며, 주관식 제출·실기
-          요청에는 FT 배정이 필요합니다.
-        </p>
         <ul v-if="planErrors(form).length" class="validation-list">
           <li v-for="message in planErrors(form)" :key="message">{{ message }}</li>
         </ul>
         <button
           v-if="current.status === 'draft'"
           class="button primary"
-          :disabled="busy || !!planErrors(form).length || draft.conflict.value"
+          :disabled="
+            busy || !!planErrors(form).length || !!policyErrors.length || draft.conflict.value
+          "
           @click="complete"
         >
           계획 완료</button
@@ -523,7 +562,11 @@ onBeforeRouteUpdate(leave);
                 {{ q.title }} · v{{ q.version }}
               </option>
             </select></label
-          ><button class="button primary" :disabled="busy || !selection" @click="create">
+          ><button
+            class="button primary"
+            :disabled="busy || !eligible.some((q) => q.id === selection)"
+            @click="create"
+          >
             계획 시작
           </button>
         </div>

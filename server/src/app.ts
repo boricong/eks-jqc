@@ -20,9 +20,21 @@ import {
 } from "./organizations.ts";
 import { JsonStore, DomainError, demand } from "./storage.ts";
 import { isManagementAction, managementScope } from "./management.ts";
+import {
+  policyScope,
+  administratorsView,
+  changeAdministrators,
+} from "./organization-administrators.ts";
+import { authorizeNotice, saveNotice } from "./notices.ts";
 import { courseUsage } from "./course-lifecycle.ts";
 import { qualificationTemplates } from "./workflow.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
+import {
+  policiesView,
+  changePolicy,
+  requiredQualifications,
+  validatePolicies,
+} from "./organization-policies.ts";
 import {
   authorize,
   execute,
@@ -168,6 +180,7 @@ export async function buildApp(
       z
         .object({ lv1OrganizationId: z.string().optional() })
         .parse(request.query).lv1OrganizationId,
+      clock(),
     ),
   );
   app.get("/api/testing/progress", async (request) => {
@@ -202,7 +215,7 @@ export async function buildApp(
     );
     return {
       assignments: view.assignments.filter((a) => !a.excludedReason),
-      notices: view.notices.filter((n) => n.published),
+      notices: view.homeNotices,
     };
   });
   for (const name of [
@@ -406,11 +419,169 @@ export async function buildApp(
               payload,
               store.organizations.snapshot(),
               scope,
+              clock(),
             ),
           transactionOptions,
         );
       },
     });
+  app.get("/api/me/required-qualifications", async (request) => {
+    const u = actor(request);
+    demand(u.roles.includes("learner"), 403, "학습자 권한이 필요합니다.");
+    return requiredQualifications(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      u,
+      clock(),
+    );
+  });
+  app.get("/api/organization-policies", async (request) => {
+    const scope = policyScope(
+      actor(request),
+      store.organizations.snapshot(),
+      (request.query as any).lv1OrganizationId,
+    );
+    return policiesView(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      scope,
+      actor(request),
+    );
+  });
+  for (const pool of [false, true])
+    app.put(
+      `/api/organization-policies/:id${pool ? "/qualification-pool" : ""}`,
+      async (request) => {
+        const u = actor(request),
+          body = request.body,
+          target = (request.params as any).id;
+        const scope = policyScope(
+          u,
+          store.organizations.snapshot(),
+          (request.query as any).lv1OrganizationId,
+        );
+        const key = z
+          .string()
+          .min(1)
+          .max(160)
+          .parse(request.headers["idempotency-key"]);
+        const fingerprint = createHash("sha256")
+          .update(JSON.stringify({ pool, target, scope, body }))
+          .digest("hex");
+        return store.organizations.transact(
+          u.id,
+          key,
+          fingerprint,
+          (doc) => {
+            policyScope(actor(request), doc, scope, target, pool);
+            demand(
+              organization(doc, target).lv1OrganizationId === scope,
+              403,
+              "다른 Lv1의 조직 설정입니다.",
+            );
+          },
+          (doc) =>
+            changePolicy(
+              store.snapshot(),
+              doc,
+              actor(request),
+              scope,
+              target,
+              body,
+              pool,
+            ),
+          {
+            action: pool ? "organization.pool" : "organization.policy",
+            lv1OrganizationId: scope,
+            preserveBackup: true,
+          },
+        );
+      },
+    );
+  app.get("/api/organization-policies/:id/administrators", async (request) =>
+    administratorsView(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      actor(request),
+      (request.params as any).id,
+      (request.query as any).lv1OrganizationId,
+    ),
+  );
+  app.put("/api/organization-policies/:id/administrators", async (request) => {
+    const u = actor(request),
+      doc = store.organizations.snapshot(),
+      target = (request.params as any).id;
+    const scope = managementScope(
+      u,
+      doc,
+      (request.query as any).lv1OrganizationId,
+    );
+    const key = z
+      .string()
+      .min(1)
+      .max(160)
+      .parse(request.headers["idempotency-key"]);
+    const fingerprint = createHash("sha256")
+      .update(
+        JSON.stringify({
+          action: "administrators",
+          target,
+          scope,
+          body: request.body,
+        }),
+      )
+      .digest("hex");
+    return store.transact(
+      u.id,
+      key,
+      fingerprint,
+      (s) => {
+        const latest = actor(request, s);
+        managementScope(latest, store.organizations.snapshot(), scope);
+        policyScope(latest, store.organizations.snapshot(), scope, target);
+      },
+      (s) =>
+        changeAdministrators(
+          s,
+          store.organizations.snapshot(),
+          actor(request, s),
+          target,
+          scope,
+          request.body,
+        ),
+      {
+        action: "organization.administrators",
+        lv1OrganizationId: scope,
+        preserveBackup: true,
+      },
+    );
+  });
+  app.get("/api/system/notices", async (request) => {
+    systemOperator(actor(request));
+    return store.snapshot().notices.filter((n) => n.scope === "system");
+  });
+  app.post("/api/system/notices", async (request) => {
+    const u = actor(request);
+    systemOperator(u);
+    const key = z
+      .string()
+      .min(1)
+      .max(160)
+      .parse(request.headers["idempotency-key"]);
+    const fingerprint = createHash("sha256")
+      .update(
+        JSON.stringify({ action: "system.notice.save", body: request.body }),
+      )
+      .digest("hex");
+    return store.transact(
+      u.id,
+      key,
+      fingerprint,
+      (s) => authorizeNotice(s, actor(request, s), request.body, "system"),
+      (s) => saveNotice(s, actor(request, s), request.body, "system"),
+      { action: "system.notice.save", preserveBackup: true },
+    );
+  });
   app.get("/api/system/organizations", async (request) => {
     systemOperator(actor(request));
     const doc = store.organizations.snapshot(),
@@ -463,7 +634,16 @@ export async function buildApp(
               key,
               fingerprint,
               () => systemOperator(actor(request)),
-              (doc) => changeOrganization(doc, actor(request), target, body),
+              (doc) => {
+                const result = changeOrganization(
+                  doc,
+                  actor(request),
+                  target,
+                  body,
+                );
+                validatePolicies(store.snapshot(), doc);
+                return result;
+              },
               { action: "organization.change" },
             );
           return store.transact(
@@ -545,7 +725,22 @@ export async function buildApp(
   );
   mutation("DELETE", "/api/plans/:id", "plan.delete");
   mutation("POST", "/api/plans/:id/complete", "plan.complete");
-  mutation("PUT", "/api/enrollments/:id/learning", "learning.save");
+  app.put("/api/enrollments/:id/learning", async (request, reply) => {
+    const u = actor(request),
+      s = store.snapshot(),
+      e = s.enrollments.find((e) => e.id === (request.params as any).id);
+    const a = s.assignments.find(
+      (a) => a.id === e?.assignmentId && a.learnerId === u.id,
+    );
+    return reply.code(410).send({
+      code: "FEATURE_REMOVED",
+      message:
+        "학습 완료 기록 기능은 종료되었습니다. 학습 안내에서 평가하기로 이동해 주세요.",
+      href: a
+        ? `/qualifications/${a.id}?course=${e!.courseId}`
+        : "/qualifications",
+    });
+  });
   mutation("POST", "/api/notifications/:id/read", "notification.read");
   mutation("POST", "/api/notices", "notice.save", () => "");
   mutation("POST", "/api/testing/progress/reset", "progress.reset", () => "");

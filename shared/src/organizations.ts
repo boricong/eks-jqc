@@ -10,13 +10,15 @@ export const organizationId = z
   );
 export const OrganizationPathSchema = z
   .array(z.object({ id: organizationId, name: z.string().min(1) }))
-  .min(1)
-  .max(4);
+  .min(1);
 export interface OrganizationNode {
   id: string;
   name: string;
   active: boolean;
   children: OrganizationNode[];
+  description?: string;
+  duties?: string;
+  requiredQualifications?: string[] | null;
 }
 export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
   z.object({
@@ -24,6 +26,9 @@ export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
     name: z.string().trim().min(1).max(200),
     active: z.boolean(),
     children: z.array(OrganizationNodeSchema),
+    description: z.string().max(4000).default(""),
+    duties: z.string().max(4000).default(""),
+    requiredQualifications: z.array(organizationId).nullable().default(null),
   }),
 );
 export const RequestRecordSchema = z.object({
@@ -36,9 +41,18 @@ export const RequestRecordSchema = z.object({
   action: z.string().optional(),
 });
 export const OrganizationDocumentSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   revision: z.number().int().nonnegative(),
   roots: z.array(OrganizationNodeSchema).min(1),
+  qualificationPools: z
+    .array(
+      z.object({
+        lv1OrganizationId: organizationId,
+        entityId: organizationId,
+        qualificationId: organizationId,
+      }),
+    )
+    .default([]),
   audits: z.array(
     z.object({
       id: organizationId,
@@ -69,29 +83,41 @@ export interface OrganizationEntry {
   effectiveActive: boolean;
   lv1OrganizationId: string;
   path: { id: string; name: string }[];
+  description: string;
+  duties: string;
+  requiredQualifications: string[] | null;
 }
 export function organizationEntries(
   doc: Pick<OrganizationDocument, "roots">,
 ): OrganizationEntry[] {
   const entries: OrganizationEntry[] = [];
-  function walk(nodes: OrganizationNode[], parent?: OrganizationEntry) {
-    nodes.forEach((node, order) => {
-      const entry: OrganizationEntry = {
-        id: node.id,
-        name: node.name,
-        parentId: parent?.id ?? null,
-        level: (parent?.level ?? 0) + 1,
-        order,
-        active: node.active,
-        effectiveActive: node.active && (parent?.effectiveActive ?? true),
-        lv1OrganizationId: parent?.lv1OrganizationId ?? node.id,
-        path: [...(parent?.path ?? []), { id: node.id, name: node.name }],
-      };
-      entries.push(entry);
-      walk(node.children, entry);
-    });
+  const pending = doc.roots
+    .map((node, order) => ({
+      node,
+      order,
+      parent: undefined as OrganizationEntry | undefined,
+    }))
+    .reverse();
+  while (pending.length) {
+    const { node, order, parent } = pending.pop()!;
+    const entry: OrganizationEntry = {
+      id: node.id,
+      name: node.name,
+      parentId: parent?.id ?? null,
+      level: (parent?.level ?? 0) + 1,
+      order,
+      active: node.active,
+      effectiveActive: node.active && (parent?.effectiveActive ?? true),
+      lv1OrganizationId: parent?.lv1OrganizationId ?? node.id,
+      path: [...(parent?.path ?? []), { id: node.id, name: node.name }],
+      description: node.description ?? "",
+      duties: node.duties ?? "",
+      requiredQualifications: node.requiredQualifications ?? null,
+    };
+    entries.push(entry);
+    for (let i = node.children.length - 1; i >= 0; i--)
+      pending.push({ node: node.children[i]!, order: i, parent: entry });
   }
-  walk(doc.roots);
   return entries;
 }
 export const ResetScopeSchema = z.discriminatedUnion("type", [
@@ -102,3 +128,65 @@ export const ResetScopeSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type ResetScope = z.infer<typeof ResetScopeSchema>;
+
+export interface RequiredQualification {
+  entityId: string;
+  qualificationId: string;
+  title: string;
+  version: number;
+  status:
+    | "fulfilled"
+    | "expired"
+    | "unknown"
+    | "draft"
+    | "progress"
+    | "ready"
+    | "waiting"
+    | "blocked";
+  reason: string;
+  canStart: boolean;
+  requestId?: string;
+  requestedVersion?: number;
+  planId?: string;
+  assignmentId?: string;
+  certificationId?: string;
+}
+export interface RequiredQualificationsView {
+  revision: number;
+  organizationId: string;
+  organizationPath: OrganizationEntry["path"];
+  description: string;
+  duties: string;
+  configured: boolean;
+  items: RequiredQualification[];
+}
+export interface RequestProgress {
+  id: string;
+  learnerId: string;
+  total: number;
+  planned: number;
+  valid: number;
+  excluded: number;
+  stage: string;
+}
+export interface OrganizationPoliciesView {
+  revision: number;
+  stateRevision: number;
+  lv1OrganizationId: string;
+  canManagePool: boolean;
+  canAssignAdministrators: boolean;
+  entries: (OrganizationEntry & { userCount: number; draftCount: number })[];
+  pool: {
+    entityId: string;
+    qualificationId: string;
+    title: string;
+    version: number;
+    errors: string[];
+  }[];
+}
+export interface OrganizationAdministratorsView {
+  revision: number;
+  organizationRevision: number;
+  organizationId: string;
+  candidates: { id: string; name: string; assigned: boolean }[];
+}

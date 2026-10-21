@@ -5,7 +5,7 @@ import {
   OrganizationDocumentSchema,
   organizationEntries,
   organizationId,
-  RoleSchema,
+  BaseRoleSchema,
   type OrganizationDocument,
   type OrganizationNode,
   type User,
@@ -16,18 +16,18 @@ import { demand } from "./errors.ts";
 
 export const PHOTO_ID = "org-photo";
 export function validateOrganizations(input: unknown): OrganizationDocument {
-  // Bound depth before passing untrusted JSON to the recursive schema.
-  function depth(nodes: unknown, level: number) {
-    if (!Array.isArray(nodes)) return;
+  const pending: unknown[] = [...((input as any)?.roots || [])],
+    visited = new Set<unknown>();
+  while (pending.length) {
+    const node: any = pending.pop();
     demand(
-      !nodes.length || level <= 4,
+      node && typeof node === "object" && !visited.has(node),
       422,
-      "조직은 Lv4까지만 등록할 수 있습니다.",
+      "조직 트리에 순환 또는 중복 노드가 있습니다.",
     );
-    for (const node of nodes)
-      if (node && typeof node === "object") depth(node.children, level + 1);
+    visited.add(node);
+    if (Array.isArray(node.children)) pending.push(...node.children);
   }
-  depth((input as any)?.roots, 1);
   const doc = OrganizationDocumentSchema.parse(input),
     ids = new Set<string>();
   function walk(nodes: OrganizationNode[]) {
@@ -73,6 +73,10 @@ export function userView(user: User, doc: OrganizationDocument): UserView {
   const entry = organization(doc, user.organizationId);
   return {
     ...user,
+    roles:
+      user.organizationAdministration?.organizationId === user.organizationId
+        ? [...user.roles, "organization_admin"]
+        : [...user.roles],
     lv1OrganizationId: entry.lv1OrganizationId,
     organizationPath: entry.path,
     organizationActive: entry.effectiveActive,
@@ -93,14 +97,15 @@ function expected(current: number, value: number) {
     "REVISION_CONFLICT",
   );
 }
-function nodeFor(
+export function nodeFor(
   nodes: OrganizationNode[],
   id: string,
 ): OrganizationNode | undefined {
-  for (const node of nodes) {
+  const pending = [...nodes];
+  while (pending.length) {
+    const node = pending.pop()!;
     if (node.id === id) return node;
-    const child = nodeFor(node.children, id);
-    if (child) return child;
+    pending.push(...node.children);
   }
 }
 const name = z
@@ -135,9 +140,9 @@ export function changeOrganization(
   if (!node) {
     demand(input.name, 422, "조직명을 입력해 주세요.");
     demand(
-      !parent || (parent.level < 4 && parent.effectiveActive),
+      !parent || parent.effectiveActive,
       422,
-      "사용 중인 Lv1~Lv3 조직 아래에 추가해 주세요.",
+      "사용 중인 조직 아래에 추가해 주세요.",
     );
     node = { id: randomUUID(), name: input.name, active: true, children: [] };
   } else if (parentId !== before!.parentId) {
@@ -196,7 +201,7 @@ export function changeUser(
       name: z.string().trim().min(1).max(100),
       organizationId,
       roles: z
-        .array(RoleSchema)
+        .array(BaseRoleSchema)
         .min(1)
         .refine((r) => new Set(r).size === r.length),
       revision: z.number().int().positive().optional(),
@@ -229,13 +234,6 @@ export function changeUser(
       "진행 중인 학습자 배정을 먼저 정리해 주세요.",
     );
     demand(
-      !user.roles.includes("ft") ||
-        input.roles.includes("ft") ||
-        !open.some((a) => a.ftId === user.id),
-      409,
-      "진행 중인 FT 배정을 먼저 정리해 주세요.",
-    );
-    demand(
       !user.roles.includes("system_operator") ||
         input.roles.includes("system_operator") ||
         s.users.some(
@@ -257,8 +255,25 @@ export function changeUser(
     roles: input.roles,
     revision: (user?.revision ?? 0) + 1,
   };
-  if (user) Object.assign(user, updated);
-  else s.users.push(updated);
+  if (user) {
+    if (
+      user.organizationId !== input.organizationId &&
+      user.organizationAdministration
+    ) {
+      s.audits.push({
+        id: randomUUID(),
+        actorId: actor.id,
+        date: new Date().toISOString(),
+        action: "organization.administrator.revoke",
+        targetId: user.id,
+        lv1OrganizationId: entry.lv1OrganizationId,
+        reason: "소속 이동에 따른 세부 조직 관리자 지정 해제",
+        details: { previous: user.organizationAdministration },
+      });
+      delete user.organizationAdministration;
+    }
+    Object.assign(user, updated);
+  } else s.users.push(updated);
   s.audits.push({
     id: randomUUID(),
     actorId: actor.id,

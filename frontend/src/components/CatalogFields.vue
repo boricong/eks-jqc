@@ -72,8 +72,8 @@ const choiceErrors = computed(() =>
         </option></select
       ><CatalogFieldErrors :issues="issues" field="courseCode"
     /></label>
-    <label class="field" v-if="['courses', 'learning', 'practical'].includes(table)"
-      >{{ table === 'courses' ? '과정명' : table === 'learning' ? '학습 항목명' : '평가 항목'
+    <label class="field" v-if="['courses', 'learning', 'materials'].includes(table)"
+      >{{ table === 'courses' ? '과정명' : table === 'learning' ? '학습 항목명' : '자료명'
       }}<input v-model="row.title" data-field="title" /><CatalogFieldErrors
         :issues="issues"
         field="title"
@@ -83,9 +83,8 @@ const choiceErrors = computed(() =>
         <legend>필수 평가 유형</legend>
         <label
           v-for="[key, label] in [
-            ['objective', '객관식'],
-            ['subjective', '주관식'],
-            ['practical', '실기'],
+            ['objective', '객관식 · 지식 평가'],
+            ['practical', '실기 · 상황 대응 평가'],
           ]"
           :key="key"
           ><input v-model="kinds" type="checkbox" :value="key" />{{ label }}</label
@@ -102,34 +101,18 @@ const choiceErrors = computed(() =>
             placeholder="사용 등록 전 입력" /><CatalogFieldErrors
             :issues="issues"
             field="passScore" /></label
-        ><label v-if="kinds.includes('subjective')" class="field"
-          >주관식 합격 기준 (%)<input
-            v-model.number="row.subjectivePassScore"
-            data-field="subjectivePassScore"
+        ><label v-if="kinds.includes('practical')" class="field"
+          >상황 대응 합격 기준 (%)<input
+            v-model.number="row.practicalPassScore"
+            data-field="practicalPassScore"
             type="number"
             min="0"
             max="100"
             placeholder="사용 등록 전 입력" /><CatalogFieldErrors
             :issues="issues"
-            field="subjectivePassScore"
+            field="practicalPassScore"
         /></label>
       </div>
-      <label class="field"
-        >학습자료<textarea
-          v-model="content.material"
-          data-field="material"
-          rows="4" /><CatalogFieldErrors :issues="issues" field="material" /></label
-      ><label class="field"
-        >자료 URL<input v-model="row.materialUrl" data-field="materialUrl" /><CatalogFieldErrors
-          :issues="issues"
-          field="materialUrl" /></label
-      ><label v-if="kinds.includes('practical')" class="field"
-        >실기 수행 조건<textarea
-          v-model="content.instruction"
-          data-field="instruction"
-          rows="2"
-        /><CatalogFieldErrors :issues="issues" field="instruction" />
-      </label>
     </template>
     <template v-if="table === 'learning'"
       ><div class="form-grid">
@@ -146,15 +129,10 @@ const choiceErrors = computed(() =>
           ><CatalogFieldErrors :issues="issues" field="required"
         /></label></div
     ></template>
-    <template v-if="table === 'objective' || table === 'subjective'">
-      <p class="muted">정답·모범답안·채점 기준은 관리자와 지정 평가자가 확인하는 정보입니다.</p>
+    <template v-if="table === 'objective' || table === 'practical'">
+      <p class="muted">정답은 관리자만 확인하는 정보입니다.</p>
       <div class="form-grid">
-        <label v-if="table === 'objective'" class="field"
-          >문항 종류<select v-model="row.category" data-field="category" aria-label="문항 종류">
-            <option value="written">필기</option>
-            <option value="case">Case</option></select
-          ><CatalogFieldErrors :issues="issues" field="category" /></label
-        ><label class="field"
+        <label class="field"
           >배점<input
             v-model.number="row.points"
             data-field="points"
@@ -162,6 +140,12 @@ const choiceErrors = computed(() =>
             min="1" /><CatalogFieldErrors :issues="issues" field="points"
         /></label>
       </div>
+      <label v-if="table === 'practical'" class="field"
+        >상황 설명<textarea
+          v-model="content.scenario"
+          data-field="scenario"
+          rows="4" /><CatalogFieldErrors :issues="issues" field="scenario"
+      /></label>
       <label class="field"
         >문항<textarea v-model="content.prompt" data-field="prompt" rows="4" /><CatalogFieldErrors
           :issues="issues"
@@ -170,37 +154,30 @@ const choiceErrors = computed(() =>
       </label>
 
       <ObjectiveChoices
-        v-if="table === 'objective'"
         v-model:choices="choices"
         v-model:correct="correct"
         :disabled="disabled"
         :errors="choiceErrors"
       />
-      <div v-else class="subjective-fields">
-        <label class="field"
-          >모범답안<textarea
-            v-model="content.modelAnswer"
-            data-field="modelAnswer"
-            rows="4" /><CatalogFieldErrors :issues="issues" field="modelAnswer" /></label
-        ><label class="field"
-          >채점 기준<textarea
-            v-model="content.rubric"
-            data-field="rubric"
-            rows="4" /><CatalogFieldErrors :issues="issues" field="rubric"
-        /></label>
-      </div>
     </template>
-    <template v-if="table === 'practical'"
+    <template v-if="table === 'materials'"
       ><label class="field"
-        >관찰·판정 기준<textarea
-          v-model="content.criterion"
-          data-field="criterion"
-          rows="4" /><CatalogFieldErrors :issues="issues" field="criterion" /></label
-      ><label class="field"
-        >필수 여부<select v-model="row.mandatory" data-field="mandatory" aria-label="필수 여부">
-          <option :value="true">필수</option>
-          <option :value="false">선택</option></select
-        ><CatalogFieldErrors :issues="issues" field="mandatory" /></label
+        >자료 유형<select v-model="row.type" data-field="type">
+          <option value="text">직접 작성</option>
+          <option value="edm">EDM Link</option>
+          <option value="confluence">Confluence</option>
+          <option value="url">일반 URL</option>
+        </select></label
+      ><label v-if="row.type === 'text'" class="field"
+        >본문<textarea v-model="content.content" data-field="content" rows="5" /></label
+      ><template v-else
+        ><label class="field">URL<input v-model="row.url" data-field="url" type="url" /></label
+        ><label class="field"
+          >설명<textarea
+            v-model="content.description"
+            data-field="description"
+            rows="2"
+          /></label></template
     ></template>
   </fieldset>
 </template>

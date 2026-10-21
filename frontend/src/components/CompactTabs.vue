@@ -1,17 +1,40 @@
 <script setup lang="ts">
-import { nextTick, ref, useId } from 'vue';
-defineProps<{
+import { nextTick, ref, useId, watch } from 'vue';
+const props = defineProps<{
   items: { id: string; label: string; invalid?: boolean }[];
   modelValue: string;
   label: string;
   panelId: string;
+  vertical?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
 const host = ref<HTMLElement>();
 const prefix = useId();
 const tabId = (id: string) => `${prefix}-${id}`;
+watch(
+  () => props.modelValue,
+  async () => {
+    await nextTick();
+    const tab = host.value?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!tab || !host.value) return;
+    const parent = host.value;
+    if (props.vertical) {
+      const offset = tab.offsetTop - parent.offsetTop;
+      if (offset < parent.scrollTop) parent.scrollTop = offset;
+      else if (offset + tab.offsetHeight > parent.scrollTop + parent.clientHeight)
+        parent.scrollTop = offset + tab.offsetHeight - parent.clientHeight;
+    }
+  },
+);
 async function move(event: KeyboardEvent) {
-  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  if (
+    ![
+      ...(props.vertical ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight']),
+      'Home',
+      'End',
+    ].includes(event.key)
+  )
+    return;
   event.preventDefault();
   event.stopPropagation();
   const tabs = [...host.value!.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -21,7 +44,8 @@ async function move(event: KeyboardEvent) {
       ? 0
       : event.key === 'End'
         ? tabs.length - 1
-        : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        : (current + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + tabs.length) %
+          tabs.length;
   tabs[target]?.click();
   await nextTick();
   tabs[target]?.focus();
@@ -30,9 +54,17 @@ async function move(event: KeyboardEvent) {
 defineExpose({ tabId });
 </script>
 <template>
-  <div ref="host" class="compact-tabs" role="tablist" :aria-label="label" @keydown="move">
+  <div
+    ref="host"
+    class="compact-tabs"
+    :class="{ 'number-tabs': vertical }"
+    role="tablist"
+    :aria-orientation="vertical ? 'vertical' : 'horizontal'"
+    :aria-label="label"
+    @keydown="move"
+  >
     <button
-      v-for="item in items"
+      v-for="(item, index) in items"
       :key="item.id"
       type="button"
       role="tab"
@@ -44,7 +76,7 @@ defineExpose({ tabId });
       :tabindex="modelValue === item.id ? 0 : -1"
       @click="emit('update:modelValue', item.id)"
     >
-      <span>{{ item.label }}</span
+      <span>{{ vertical ? index + 1 : item.label }}</span
       ><span v-if="item.invalid" class="tab-warning" aria-hidden="true">!</span>
     </button>
   </div>

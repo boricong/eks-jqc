@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import type { OrganizationView, OrganizationEntry } from '@eks/contracts';
@@ -99,6 +99,14 @@ function toggle(id: string) {
   else next.add(id);
   collapsed.value = next;
 }
+async function revealSelected() {
+  query.value = '';
+  const next = new Set(collapsed.value);
+  selected.value?.path.forEach((p) => next.delete(p.id));
+  collapsed.value = next;
+  await nextTick();
+  document.querySelector('.tree-node[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+}
 async function save(order?: number) {
   if (!doc.value || busy.value) return;
   busy.value = true;
@@ -146,12 +154,13 @@ onMounted(() => load());
       /></label>
       <div class="actions">
         <button class="text-link" @click="collapsed = new Set()">모두 펼치기</button>
+        <button class="text-link" @click="revealSelected">선택 조직으로 이동</button>
       </div>
       <ul class="organization-nodes">
         <li
           v-for="entry in visible"
           :key="entry.id"
-          :style="{ paddingLeft: `${(entry.level - 1) * 14}px` }"
+          :style="{ paddingLeft: `${Math.min(entry.level - 1, 5) * 14}px` }"
         >
           <button
             v-if="doc.entries.some((e) => e.parentId === entry.id)"
@@ -222,7 +231,7 @@ onMounted(() => load());
         >
         <button
           class="button secondary"
-          :disabled="busy || selected.level === 4 || !selected.effectiveActive"
+          :disabled="busy || !selected.effectiveActive"
           @click="add(selected.id)"
         >
           하위 조직 추가

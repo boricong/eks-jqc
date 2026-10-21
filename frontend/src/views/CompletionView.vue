@@ -21,7 +21,7 @@ const back = computed(() =>
         ? '/system/overview'
         : store.hasRole('admin')
           ? '/admin/results'
-          : '/evaluations',
+          : '/',
 );
 </script>
 <template>
@@ -51,13 +51,14 @@ const back = computed(() =>
     <section class="panel editor-panel">
       <h2>수료 근거</h2>
       <p v-for="item in record.evidence" :key="item.kind">
-        {{ kindLabels[item.kind] }} 통과 ·
+        {{ kindLabels[item.kind] }} 통과 · 자동 채점 ·
+        {{ e.history.find((h) => h.id === item.attemptId)?.earned }} /
+        {{ e.history.find((h) => h.id === item.attemptId)?.total }}점 ·
         {{ e.history.find((h) => h.id === item.attemptId)?.round }}회 ·
         {{
-          new Date(e.history.find((h) => h.id === item.attemptId)!.date).toLocaleDateString(
-            'ko-KR',
-            { timeZone: 'Asia/Seoul' },
-          )
+          new Date(e.history.find((h) => h.id === item.attemptId)!.date).toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul',
+          })
         }}
       </p>
       <p v-if="store.course(record.courseId).operationalStatus === 'retired'" class="muted">

@@ -1,10 +1,15 @@
+import {
+  requiredQualifications,
+  requestProgress,
+  planningReadiness,
+  planPolicyErrors,
+} from "./organization-policies.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   CourseSchema,
   QualificationSchema,
   DraftSchema,
-  NoticeSchema,
   ComparisonSchema,
   requiredKinds,
   courseUseErrors,
@@ -23,7 +28,9 @@ import {
   type AuditEvent,
   type ProgressSummary,
   KindSchema,
-  GradeSchema,
+  assessmentQuestions,
+  assessmentPassScore,
+  kstDate,
   expirationDate,
   unknownValidity,
   kindLabels,
@@ -37,6 +44,8 @@ import {
   executeWorkflow,
 } from "./workflow.ts";
 import { notify } from "./notifications.ts";
+import { editableOrganizations } from "./organization-administrators.ts";
+import { authorizeNotice, saveNotice } from "./notices.ts";
 
 const now = () => new Date().toISOString();
 const uid = () => randomUUID();
@@ -57,11 +66,7 @@ export function canRead(a: StoredAssignment, u: User) {
     owner(a, u) ||
     (a.lv1OrganizationId === u.lv1OrganizationId &&
       u.roles.includes("learner") &&
-      a.learnerId === u.id) ||
-    (a.lv1OrganizationId === u.lv1OrganizationId &&
-      u.roles.includes("ft") &&
-      a.ftId === u.id &&
-      a.learnerId !== u.id)
+      a.learnerId === u.id)
   );
 }
 function active(a: StoredAssignment) {
@@ -121,17 +126,54 @@ export function authorize(
   body: any,
   managementLv1?: string,
 ) {
+  demand(
+    !action.startsWith("attempt.grade") && action !== "assignment.ft",
+    410,
+    "FT·주관식 평가 기능은 종료되었습니다.",
+    "FEATURE_REMOVED",
+  );
+  const deprecated = new Set([
+    "ftId",
+    "verdicts",
+    "grades",
+    "feedback",
+    "subjectiveAnswers",
+    "subjectiveQuestions",
+    "subjectivePassScore",
+    "practicalItems",
+    "category",
+    "material",
+    "materialUrl",
+    "instruction",
+  ]);
+  function obsolete(v: unknown): boolean {
+    return (
+      !!v &&
+      typeof v === "object" &&
+      (Array.isArray(v)
+        ? v.some(obsolete)
+        : Object.entries(v).some(
+            ([key, value]) => deprecated.has(key) || obsolete(value),
+          ))
+    );
+  }
+  demand(
+    !obsolete(body),
+    422,
+    "폐지된 평가/자료 필드입니다. 새 화면을 불러와 주세요.",
+    "OBSOLETE_FIELDS",
+  );
   if (isWorkflowAction(action))
     return authorizeWorkflow(s, u, action, target, body, managementLv1);
   if (action === "progress.reset") {
     systemOperator(u);
     return;
   }
-  if (
-    action.startsWith("catalog.") ||
-    action.startsWith("notice.") ||
-    action === "assignment.create"
-  ) {
+  if (action === "notice.save") {
+    authorizeNotice(s, u, body, "team", managementLv1);
+    return;
+  }
+  if (action.startsWith("catalog.") || action === "assignment.create") {
     demand(managementLv1, 403, "관리할 Lv1 조직을 선택해 주세요.");
     if (action.startsWith("catalog.") && action !== "catalog.create") {
       const list = target === "courses" ? s.courses : s.qualifications;
@@ -144,15 +186,6 @@ export function authorize(
         403,
         "소속 Lv1의 기준만 관리할 수 있습니다.",
       );
-    }
-    if (action.startsWith("notice.") && body.id) {
-      const notice = s.notices.find((n) => n.id === body.id);
-      if (notice)
-        demand(
-          notice.lv1OrganizationId === managementLv1,
-          403,
-          "소속 Lv1의 공지만 관리할 수 있습니다.",
-        );
     }
     if (action === "assignment.create")
       demand(
@@ -191,35 +224,22 @@ export function authorize(
       403,
       "다른 Lv1의 평가를 처리할 수 없습니다.",
     );
-    const kind =
-      action === "attempt.start" ? body.kind : find(s.attempts, target).kind;
-    if (
-      action === "attempt.start" ||
-      kind === "objective" ||
-      (kind === "subjective" && !action.startsWith("attempt.grade"))
-    )
-      demand(
-        u.roles.includes("learner") && a.learnerId === u.id,
-        403,
-        "본인의 평가만 처리할 수 있습니다.",
-      );
-    else
-      demand(
-        u.roles.includes("ft") && a.ftId === u.id && a.learnerId !== u.id,
-        403,
-        "지정 FT만 평가할 수 있습니다.",
-      );
+    demand(
+      u.roles.includes("learner") && a.learnerId === u.id,
+      403,
+      "본인의 평가만 처리할 수 있습니다.",
+    );
   }
 }
 function reconcile(
   s: State,
   enrollmentId: string,
   organizations: OrganizationDocument,
+  at = now(),
 ) {
   const { e, a, c } = context(s, enrollmentId);
   active(a);
-  const at = now(),
-    learner = find(s.users, a.learnerId),
+  const learner = find(s.users, a.learnerId),
     q = find(s.qualifications, a.qualificationId);
   const snapshot = (catalog: { title: string; version: number }) => ({
     learnerName: learner.name,
@@ -313,62 +333,15 @@ function validateDraft(t: AssessmentAttempt, s: State, body: unknown) {
   const draft = DraftSchema.parse(body),
     c = find(s.courses, t.courseId);
   demand(
-    !Object.keys(draft.grades || {}).length && !draft.feedback,
+    Object.entries(draft.answers).every(([id, v]) =>
+      assessmentQuestions(c, t.kind).some(
+        (q) => q.id === id && v < q.choices.length,
+      ),
+    ),
     422,
-    "답안 저장에는 채점 결과를 넣을 수 없습니다.",
+    "문항과 선택지를 확인해 주세요.",
   );
-  if (t.kind === "subjective") {
-    demand(
-      !Object.keys(draft.answers).length && !Object.keys(draft.verdicts).length,
-      422,
-      "주관식 답안만 입력해 주세요.",
-    );
-    demand(
-      Object.keys(draft.subjectiveAnswers || {}).every((id) =>
-        c.subjectiveQuestions.some((q) => q.id === id),
-      ),
-      422,
-      "주관식 문항을 확인해 주세요.",
-    );
-    return {
-      answers: {},
-      verdicts: {},
-      subjectiveAnswers: draft.subjectiveAnswers || {},
-    };
-  }
-  demand(
-    !Object.keys(draft.subjectiveAnswers || {}).length,
-    422,
-    "평가 유형을 확인해 주세요.",
-  );
-  if (t.kind === "objective") {
-    demand(
-      !Object.keys(draft.verdicts).length,
-      422,
-      "객관식 답안만 입력해 주세요.",
-    );
-    demand(
-      Object.entries(draft.answers).every(([id, v]) =>
-        c.questions.some((q) => q.id === id && v < q.choices.length),
-      ),
-      422,
-      "문항과 선택지를 확인해 주세요.",
-    );
-  } else {
-    demand(
-      !Object.keys(draft.answers).length,
-      422,
-      "실기 판정만 입력해 주세요.",
-    );
-    demand(
-      Object.keys(draft.verdicts).every((id) =>
-        c.practicalItems.some((i) => i.id === id),
-      ),
-      422,
-      "실기 항목을 확인해 주세요.",
-    );
-  }
-  return { answers: draft.answers, verdicts: draft.verdicts };
+  return draft;
 }
 export function execute(
   s: State,
@@ -378,7 +351,9 @@ export function execute(
   body: any,
   organizations: OrganizationDocument,
   managementLv1?: string,
+  at = now(),
 ): any {
+  const now = () => at;
   if (isWorkflowAction(action))
     return executeWorkflow(
       s,
@@ -388,6 +363,7 @@ export function execute(
       body,
       organizations,
       managementLv1,
+      at,
     );
   const scope = managementLv1 || u.lv1OrganizationId;
   const audit = (
@@ -409,21 +385,6 @@ export function execute(
       details,
       scope,
     );
-  const participant = (id: string | null, role: "learner" | "ft") => {
-    const user = s.users.find((user) => user.id === id);
-    demand(
-      user && user.roles.includes(role),
-      422,
-      "학습자·FT 역할을 확인해 주세요.",
-    );
-    const view = userView(user, organizations);
-    demand(
-      view.lv1OrganizationId === scope && view.organizationActive,
-      422,
-      "같은 Lv1의 사용 중인 조직에 소속된 사용자를 선택해 주세요.",
-    );
-    return view;
-  };
   if (action === "progress.reset") {
     const input = z
       .object({
@@ -528,13 +489,12 @@ export function execute(
           CourseSchema.parse({
             ...base,
             operationalStatus: "active",
-            assessmentKinds: ["objective", "subjective"],
+            assessmentKinds: ["objective"],
             passScore: null,
-            material: "",
-            materialUrl: "",
-            instruction: "매뉴얼 참고 가능 · 타인의 도움 없이 수행",
+            practicalPassScore: null,
+            materials: [],
             questions: [],
-            practicalItems: [],
+            practicalQuestions: [],
           }),
         );
       else
@@ -687,77 +647,13 @@ export function execute(
       a.excludedReason = reason;
       a.excludedAt = now();
       audit(s, u, action, a.id, reason, a.id);
-    } else {
-      const ftId = idSchema.parse(body.ftId);
-      participant(ftId, "ft");
+    } else
       demand(
-        ftId !== a.learnerId &&
-          s.users.some((x) => x.id === ftId && x.roles.includes("ft")),
-        422,
-        "FT를 확인해 주세요.",
+        false,
+        410,
+        "담당 FT 변경 기능은 종료되었습니다.",
+        "FEATURE_REMOVED",
       );
-      demand(ftId !== a.ftId, 422, "다른 FT를 선택해 주세요.");
-      demand(
-        s.enrollments
-          .filter((e) => e.assignmentId === a.id)
-          .some((e) =>
-            requiredKinds(find(s.courses, e.courseId)).some(
-              (k) => k !== "objective",
-            ),
-          ),
-        422,
-        "FT 평가가 없는 과제입니다.",
-      );
-      const drafts = s.attempts.filter(
-        (t) =>
-          ((t.kind === "practical" && t.status !== "graded") ||
-            (t.kind === "subjective" && t.status === "submitted")) &&
-          s.enrollments.some(
-            (e) => e.id === t.enrollmentId && e.assignmentId === a.id,
-          ),
-      );
-      audit(
-        s,
-        u,
-        action,
-        a.id,
-        reason,
-        a.id,
-        JSON.parse(
-          JSON.stringify({
-            previousFtId: a.ftId,
-            nextFtId: ftId,
-            archivedDrafts: drafts.map((t) => ({
-              attemptId: t.id,
-              revision: t.revision,
-              evaluatorId: t.evaluatorId,
-              verdicts: t.verdicts,
-              grades: t.grades,
-              feedback: t.feedback,
-            })),
-          }),
-        ),
-      );
-      for (const t of drafts) {
-        t.verdicts = {};
-        t.grades = {};
-        t.feedback = "";
-        t.evaluatorId = ftId;
-        t.revision++;
-        notify(s, {
-          key: `assessment:${t.id}:ft:${ftId}`,
-          recipientId: ftId,
-          lv1OrganizationId: a.lv1OrganizationId,
-          assignmentId: a.id,
-          type: "assessment",
-          title:
-            t.kind === "subjective" ? "주관식 채점 요청" : "실기 평가 요청",
-          body: `${find(s.users, a.learnerId).name} · ${find(s.courses, t.courseId).title}`,
-          href: `/evaluations/${a.id}/${t.courseId}${t.kind === "subjective" ? "/subjective" : ""}`,
-        });
-      }
-      a.ftId = ftId;
-    }
     a.revision++;
     return { id: a.id, revision: a.revision };
   }
@@ -766,25 +662,6 @@ export function execute(
     active(a);
     const kind = KindSchema.parse(body.kind);
     demand(requiredKinds(c).includes(kind), 422, "필수 평가가 아닙니다.");
-    demand(
-      !a.planId ||
-        c.learningItems
-          .filter((i) => i.required)
-          .every((i) =>
-            s.learningRecords.some(
-              (r) => r.enrollmentId === e.id && r.itemId === i.id,
-            ),
-          ),
-      409,
-      "필수 학습 항목의 완료 기록을 먼저 작성해 주세요.",
-      "LEARNING_REQUIRED",
-    );
-    if (kind === "practical")
-      demand(
-        s.users.some((user) => user.id === a.ftId && user.roles.includes("ft")),
-        409,
-        "담당 FT의 역할이 변경되었습니다. 조직 관리자에게 FT 재배정을 요청해 주세요.",
-      );
     demand(
       !s.attempts.some(
         (t) =>
@@ -811,24 +688,8 @@ export function execute(
       revision: 1,
       createdAt: now(),
       answers: {},
-      verdicts: {},
-      ...(kind === "subjective"
-        ? { subjectiveAnswers: {}, grades: {}, feedback: "" }
-        : {}),
-      ...(kind === "practical" ? { evaluatorId: a.ftId! } : {}),
     };
     s.attempts.push(t);
-    if (kind === "practical")
-      notify(s, {
-        key: `assessment:${t.id}:ft:${a.ftId}`,
-        recipientId: a.ftId!,
-        lv1OrganizationId: a.lv1OrganizationId,
-        assignmentId: a.id,
-        type: "assessment",
-        title: "실기 평가 요청",
-        body: `${u.name} · ${c.title}`,
-        href: `/evaluations/${a.id}/${c.id}`,
-      });
     audit(s, u, action, t.id, "", a.id);
     return { id: t.id, revision: t.revision };
   }
@@ -837,148 +698,35 @@ export function execute(
       { a, c } = context(s, t.enrollmentId);
     active(a);
     expected(t, body.revision);
-    if (action.startsWith("attempt.grade")) {
-      demand(
-        t.kind === "subjective" && t.status === "submitted",
-        409,
-        "제출된 주관식 답안만 채점할 수 있습니다.",
-      );
-      const fields = z
-        .object({
-          grades: z.record(idSchema, GradeSchema),
-          feedback: z.string().max(20000),
-        })
-        .parse(body);
-      demand(
-        Object.entries(fields.grades).every(([id, grade]) =>
-          c.subjectiveQuestions.some(
-            (q) => q.id === id && grade.points <= q.points,
-          ),
-        ),
-        422,
-        "문항별 배점 범위를 확인해 주세요.",
-      );
-      Object.assign(t, fields);
-      if (action === "attempt.grade.finalize") {
-        demand(
-          c.subjectiveQuestions.every((q) => t.grades?.[q.id]?.reason.trim()),
-          422,
-          "모든 문항의 점수와 채점 근거를 입력해 주세요.",
-        );
-        t.total = c.subjectiveQuestions.reduce((n, q) => n + q.points, 0);
-        t.earned = c.subjectiveQuestions.reduce(
-          (n, q) => n + t.grades![q.id]!.points,
-          0,
-        );
-        t.result =
-          t.earned * 100 >= t.total * c.subjectivePassScore!
-            ? "passed"
-            : "failed";
-        demand(
-          t.result !== "failed" || fields.feedback.trim(),
-          422,
-          "미통과한 학습자에게 공개할 피드백을 입력해 주세요.",
-        );
-        t.status = "graded";
-        t.date = now();
-        t.evaluatorId = u.id;
-        const awarded = reconcile(s, t.enrollmentId, organizations);
-        if (!awarded)
-          notify(s, {
-            key: `result:${t.id}`,
-            recipientId: a.learnerId,
-            lv1OrganizationId: a.lv1OrganizationId,
-            assignmentId: a.id,
-            type: "result",
-            title: `주관식 평가 ${t.result === "passed" ? "통과" : "미통과"}`,
-            body: c.title,
-            href: `/qualifications/${a.id}/courses/${c.id}/subjective`,
-          });
-      }
-      t.revision++;
-      audit(
-        s,
-        u,
-        action,
-        t.id,
-        action.endsWith("finalize") ? "주관식 채점 확정" : "채점 초안 저장",
-        a.id,
-      );
-      return { id: t.id, revision: t.revision, result: t.result };
-    }
     demand(t.status === "in_progress", 409, "이미 확정된 평가입니다.");
     if (action === "attempt.save") {
       Object.assign(t, validateDraft(t, s, body));
       t.revision++;
       return { id: t.id, revision: t.revision };
     }
-    if (t.kind === "subjective") {
-      demand(
-        s.users.some(
-          (u) =>
-            u.id === a.ftId && u.roles.includes("ft") && u.id !== a.learnerId,
-        ),
-        409,
-        "담당 FT 배정 후 주관식 답안을 제출할 수 있습니다.",
-        "FT_REQUIRED",
-      );
-      demand(
-        c.subjectiveQuestions.every((q) => t.subjectiveAnswers?.[q.id]?.trim()),
-        422,
-        "모든 문항에 답해 주세요.",
-      );
-      t.status = "submitted";
-      t.submittedAt = now();
-      t.evaluatorId = a.ftId!;
-      t.revision++;
-      notify(s, {
-        key: `assessment:${t.id}:ft:${a.ftId}`,
-        recipientId: a.ftId!,
-        lv1OrganizationId: a.lv1OrganizationId,
-        assignmentId: a.id,
-        type: "assessment",
-        title: "주관식 채점 요청",
-        body: `${u.name} · ${c.title}`,
-        href: `/evaluations/${a.id}/${c.id}/subjective`,
-      });
-      audit(s, u, action, t.id, "주관식 답안 제출", a.id);
-      return { id: t.id, revision: t.revision, status: t.status };
-    }
-    if (t.kind === "objective") {
-      demand(
-        c.questions.every((q) => t.answers[q.id] !== undefined),
-        422,
-        "모든 문항에 답해 주세요.",
-      );
-      t.itemResults = c.questions.map((q) => ({
-        itemId: q.id,
-        correct: t.answers[q.id] === q.correct,
-        earned: t.answers[q.id] === q.correct ? q.points : 0,
-        possible: q.points,
-      }));
-      t.total = c.questions.reduce((v, q) => v + q.points, 0);
-      t.earned = t.itemResults.reduce((v, r) => v + r.earned, 0);
-      t.result = t.earned * 100 >= t.total * c.passScore! ? "passed" : "failed";
-    } else {
-      demand(
-        c.practicalItems.every(
-          (i) => t.verdicts[i.id]?.value && t.verdicts[i.id]?.evidence.trim(),
-        ),
-        422,
-        "각 항목의 판정과 근거를 입력해 주세요.",
-      );
-      t.evaluatorId = u.id;
-      t.result = c.practicalItems
-        .filter((i) => i.mandatory)
-        .every((i) => t.verdicts[i.id]?.value === "pass")
+    const questions = assessmentQuestions(c, t.kind);
+    demand(
+      questions.every((q) => t.answers[q.id] !== undefined),
+      422,
+      "모든 문항에 답해 주세요.",
+    );
+    t.itemResults = questions.map((q) => ({
+      itemId: q.id,
+      correct: t.answers[q.id] === q.correct,
+      earned: t.answers[q.id] === q.correct ? q.points : 0,
+      possible: q.points,
+    }));
+    t.total = questions.reduce((v, q) => v + q.points, 0);
+    t.earned = t.itemResults.reduce((v, r) => v + r.earned, 0);
+    t.result =
+      t.earned * 100 >= t.total * assessmentPassScore(c, t.kind)!
         ? "passed"
         : "failed";
-    }
     t.status = "graded";
     t.date = now();
     t.submittedAt = t.date;
     t.revision++;
-    const awarded = reconcile(s, t.enrollmentId, organizations);
+    const awarded = reconcile(s, t.enrollmentId, organizations, at);
     if (!awarded)
       notify(s, {
         key: `result:${t.id}`,
@@ -993,26 +741,7 @@ export function execute(
     audit(s, u, action, t.id, "평가 확정", a.id);
     return { id: t.id, result: t.result };
   }
-  if (action === "notice.save") {
-    const current = s.notices.find((n) => n.id === body.id);
-    if (current) expected(current, body.revision);
-    const n = NoticeSchema.parse({
-      ...body,
-      id: current?.id || uid(),
-      lv1OrganizationId: current?.lv1OrganizationId || scope,
-      date: body.date || now().slice(0, 10),
-      revision: current ? current.revision + 1 : 1,
-    });
-    demand(
-      n.title.trim() && n.body.trim(),
-      422,
-      "제목과 내용을 입력해 주세요.",
-    );
-    if (current) Object.assign(current, n);
-    else s.notices.push(n);
-    audit(s, u, action, n.id, "공지 저장");
-    return { id: n.id, revision: n.revision };
-  }
+  if (action === "notice.save") return saveNotice(s, u, body, "team", scope);
   if (action === "comparison.create") {
     const { e, a, c } = context(s, target);
     active(a);
@@ -1163,9 +892,6 @@ export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
       practicalAttempts: s.attempts.filter(
         (t) => enrollments.has(t.enrollmentId) && t.kind === "practical",
       ).length,
-      subjectiveAttempts: s.attempts.filter(
-        (t) => enrollments.has(t.enrollmentId) && t.kind === "subjective",
-      ).length,
       learningRecords: s.learningRecords.filter((r) =>
         enrollments.has(r.enrollmentId),
       ).length,
@@ -1190,25 +916,10 @@ export function attemptView(
 ): AssessmentAttempt {
   const { a } = context(s, t.enrollmentId);
   demand(canRead(a, u), 403, "접근 권한이 없습니다.");
-  const copy = structuredClone(t),
-    full = owner(a, u) || u.roles.includes("system_operator"),
-    practicalFT =
-      u.roles.includes("ft") && a.ftId === u.id && a.learnerId !== u.id;
-  if (!full) {
-    delete copy.earned;
-    delete copy.total;
+  const copy = structuredClone(t);
+  if (!(owner(a, u) || u.roles.includes("system_operator"))) {
     delete copy.itemResults;
-    if (!(
-      t.kind === "objective" &&
-      t.status === "in_progress" &&
-      a.learnerId === u.id
-    ))
-      copy.answers = {};
-    if (!(t.kind === "practical" && practicalFT)) copy.verdicts = {};
-    if (!(t.kind === "subjective" && (a.learnerId === u.id || practicalFT)))
-      copy.subjectiveAnswers = {};
-    if (!(t.kind === "subjective" && practicalFT)) copy.grades = {};
-    if (t.status !== "graded" && !practicalFT) delete copy.feedback;
+    if (t.status !== "in_progress" || a.learnerId !== u.id) copy.answers = {};
   }
   return copy;
 }
@@ -1217,6 +928,7 @@ export function workspace(
   u: User,
   organizations: OrganizationDocument,
   lv1?: string,
+  at = now(),
 ): Workspace {
   const operator = u.roles.includes("system_operator");
   if (lv1) {
@@ -1252,13 +964,12 @@ export function workspace(
         .map((e) => e.courseId),
     );
   for (const p of plans) qids.add(p.qualificationId);
+  const requiredView = u.roles.includes("learner")
+    ? requiredQualifications(s, organizations, u, at)
+    : null;
   if (u.roles.includes("learner") && u.organizationActive)
     for (const q of s.qualifications)
-      if (
-        q.lv1OrganizationId === u.lv1OrganizationId &&
-        q.status === "published" &&
-        !qualificationUseErrors(q, s.courses).length
-      )
+      if (requiredView?.items.some((i) => i.qualificationId === q.id))
         qids.add(q.id);
   const visibleCourseIds = new Set([
     ...cids,
@@ -1268,6 +979,35 @@ export function workspace(
   ]);
   return {
     actor: u,
+    requiredQualifications: requiredView,
+    requestProgress: s.planningRequests
+      .filter(
+        (r) =>
+          visibleScope(r.lv1OrganizationId) && (admin || r.learnerId === u.id),
+      )
+      .map((r) => requestProgress(s, organizations, r.id, at)),
+    planningReadiness: admin
+      ? s.users
+          .map((user) => userView(user, organizations))
+          .filter(
+            (user) =>
+              visibleScope(user.lv1OrganizationId) &&
+              user.roles.includes("learner"),
+          )
+          .map((user) => planningReadiness(s, organizations, user, at))
+      : [],
+    planEligibility: plans
+      .filter((p) => p.status === "draft")
+      .map((p) => ({
+        planId: p.id,
+        reasons: planPolicyErrors(
+          s,
+          organizations,
+          userView(find(s.users, p.learnerId), organizations),
+          p,
+        ),
+      })),
+    serverDate: kstDate(at),
     plans,
     planningRequests: s.planningRequests.filter(
       (r) =>
@@ -1278,14 +1018,32 @@ export function workspace(
     management: {
       lv1OrganizationId: operator
         ? lv1 || null
-        : u.roles.includes("admin")
+        : u.roles.includes("admin") || u.roles.includes("organization_admin")
           ? u.lv1OrganizationId
           : null,
       canManage: operator ? !!lv1 : u.roles.includes("admin"),
+      canManagePolicies: operator
+        ? !!lv1
+        : u.roles.includes("admin") || u.roles.includes("organization_admin"),
+      editableOrganizationIds: editableOrganizations(
+        u,
+        organizations,
+        operator ? lv1 : u.lv1OrganizationId,
+      ),
     },
-    organizations: organizationEntries(organizations).filter(
-      (e) => operator || e.lv1OrganizationId === u.lv1OrganizationId,
-    ),
+    organizations: organizationEntries(organizations)
+      .filter(
+        (e) =>
+          operator ||
+          (admin
+            ? e.lv1OrganizationId === u.lv1OrganizationId
+            : u.organizationPath.some((p) => p.id === e.id)),
+      )
+      .map((e) =>
+        !admin && e.id !== u.organizationId
+          ? { ...e, description: "", duties: "", requiredQualifications: null }
+          : e,
+      ),
     users: s.users
       .map((user) => userView(user, organizations))
       .filter(
@@ -1299,16 +1057,7 @@ export function workspace(
               ),
             ) ||
             assignments.some((a) =>
-              [a.learnerId, a.ftId, a.ownerAdminId].includes(user.id),
-            ) ||
-            s.attempts.some(
-              (t) =>
-                t.evaluatorId === user.id &&
-                assignments.some((a) =>
-                  s.enrollments.some(
-                    (e) => e.id === t.enrollmentId && e.assignmentId === a.id,
-                  ),
-                ),
+              [a.learnerId, a.ownerAdminId].includes(user.id),
             )),
       ),
     qualifications: s.qualifications.filter(
@@ -1327,24 +1076,12 @@ export function workspace(
             const { correct, ...safe } = q;
             return safe;
           });
-          const assignedFT =
-            u.roles.includes("ft") &&
-            assignments.some(
-              (a) =>
-                a.ftId === u.id &&
-                a.learnerId !== u.id &&
-                s.enrollments.some(
-                  (e) => e.assignmentId === a.id && e.courseId === c.id,
-                ),
-            );
-          if (!assignedFT)
-            copy.subjectiveQuestions = copy.subjectiveQuestions.map(
-              ({ rubric, modelAnswer, ...q }) => q,
-            );
+          copy.practicalQuestions = copy.practicalQuestions.map(
+            ({ correct, ...q }) => q,
+          );
           if (!cids.has(c.id)) {
             copy.questions = [];
-            copy.subjectiveQuestions = [];
-            copy.practicalItems = [];
+            copy.practicalQuestions = [];
           }
         }
         return copy;
@@ -1368,10 +1105,7 @@ export function workspace(
               ts.some((t) => t.kind === kind && t.result === "passed")
                 ? "passed"
                 : activeAttempts[kind]
-                  ? kind === "practical" ||
-                    activeAttempts[kind]?.status === "submitted"
-                    ? "waiting"
-                    : "draft"
+                  ? "draft"
                   : ts.some((t) => t.kind === kind && t.result === "failed")
                     ? "failed"
                     : "ready";
@@ -1380,21 +1114,7 @@ export function workspace(
               courseId: e.courseId,
               objective: state("objective"),
               practical: state("practical"),
-              subjective: state("subjective"),
-              learningComplete:
-                !a.planId ||
-                find(s.courses, e.courseId)
-                  .learningItems.filter((i) => i.required)
-                  .every((i) =>
-                    s.learningRecords.some(
-                      (r) => r.enrollmentId === e.id && r.itemId === i.id,
-                    ),
-                  ),
-              learningRecords: s.learningRecords.filter(
-                (r) => r.enrollmentId === e.id,
-              ),
               answers: activeAttempts.objective?.answers || {},
-              verdicts: activeAttempts.practical?.verdicts || {},
               activeAttempts,
               completion: s.completions.find((c) => c.enrollmentId === e.id),
               history: ts
@@ -1407,25 +1127,11 @@ export function workspace(
                     round: v.round,
                     result: v.result!,
                     date: v.date!,
-                    evaluatorId: v.evaluatorId,
-                    feedback: v.feedback,
+                    earned: v.earned,
+                    total: v.total,
                     ...(admin
-                      ? {
-                          answers: v.answers,
-                          verdicts: v.verdicts,
-                          earned: v.earned,
-                          total: v.total,
-                          itemResults: v.itemResults,
-                          subjectiveAnswers: v.subjectiveAnswers,
-                          grades: v.grades,
-                        }
-                      : a.ftId === u.id
-                        ? {
-                            verdicts: v.verdicts,
-                            subjectiveAnswers: v.subjectiveAnswers,
-                            grades: v.grades,
-                          }
-                        : {}),
+                      ? { answers: v.answers, itemResults: v.itemResults }
+                      : {}),
                   };
                 }),
             };
@@ -1433,7 +1139,15 @@ export function workspace(
       };
     }),
     notices: s.notices.filter(
-      (n) => visibleScope(n.lv1OrganizationId) && (admin || n.published),
+      (n) =>
+        n.scope === "team" &&
+        visibleScope(n.lv1OrganizationId) &&
+        (admin || n.published),
+    ),
+    homeNotices: s.notices.filter(
+      (n) =>
+        n.published &&
+        (n.scope === "system" || n.lv1OrganizationId === u.lv1OrganizationId),
     ),
     comparisons: s.comparisons.filter(
       (c) =>

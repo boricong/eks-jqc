@@ -28,13 +28,24 @@ export const useDemo = defineStore('workspace', () => {
   };
   const empty = (): Workspace => ({
     actor: anonymous,
-    management: { lv1OrganizationId: null, canManage: false },
+    requiredQualifications: null,
+    requestProgress: [],
+    planningReadiness: [],
+    planEligibility: [],
+    serverDate: new Date().toISOString().slice(0, 10),
+    management: {
+      lv1OrganizationId: null,
+      canManage: false,
+      canManagePolicies: false,
+      editableOrganizationIds: [],
+    },
     organizations: [],
     users: [],
     courses: [],
     qualifications: [],
     assignments: [],
     notices: [],
+    homeNotices: [],
     comparisons: [],
     audits: [],
     planningRequests: [],
@@ -49,7 +60,11 @@ export const useDemo = defineStore('workspace', () => {
     connectionError = ref('');
   const actor = computed(() => ({
     ...(sessionActor.value || anonymous),
-    role: sessionActor.value?.roles[0] || 'learner',
+    role: sessionActor.value?.roles.includes('system_operator')
+      ? 'system_operator'
+      : sessionActor.value?.roles.includes('admin')
+        ? 'admin'
+        : 'learner',
   }));
   const actorId = computed(() => actor.value.id),
     signedIn = computed(() => !!sessionActor.value);
@@ -57,7 +72,10 @@ export const useDemo = defineStore('workspace', () => {
   const workspaceScope = ref(''),
     contextLoading = ref(false),
     writing = ref(0);
-  const canEnterManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
+  const fullManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
+  const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
+  const canManageSection = (section: string) =>
+    fullManagement.value || (section === 'policies' && hasRole('organization_admin'));
   const managementAccess = computed(
     () =>
       canEnterManagement.value &&
@@ -68,7 +86,7 @@ export const useDemo = defineStore('workspace', () => {
   const managementLv1 = computed(() =>
     hasRole('system_operator')
       ? workspaceScope.value
-      : hasRole('admin')
+      : canEnterManagement.value
         ? actor.value.lv1OrganizationId
         : '',
   );
@@ -76,7 +94,7 @@ export const useDemo = defineStore('workspace', () => {
     () =>
       managementAccess.value &&
       !!managementLv1.value &&
-      data.value.management.canManage &&
+      data.value.management.canManagePolicies &&
       data.value.management.lv1OrganizationId === managementLv1.value,
   );
   const managementOrganization = computed(() =>
@@ -185,13 +203,8 @@ export const useDemo = defineStore('workspace', () => {
   const myAssignments = computed(() =>
     data.value.assignments.filter((a) => a.learnerId === actorId.value && !a.excludedReason),
   );
-  const ftAssignments = computed(() =>
-    data.value.assignments.filter(
-      (a) => a.ftId === actorId.value && a.learnerId !== actorId.value && !a.excludedReason,
-    ),
-  );
   const notices = computed(() =>
-    data.value.notices.filter((n) => n.published).sort((a, b) => b.date.localeCompare(a.date)),
+    data.value.homeNotices.filter((n) => n.published).sort((a, b) => b.date.localeCompare(a.date)),
   );
   const complete = (e: Assignment['enrollments'][number]) => !!e.completion;
   const completedCount = (a: Assignment) => a.enrollments.filter(complete).length;
@@ -243,10 +256,6 @@ export const useDemo = defineStore('workspace', () => {
     await command(`/enrollments/${encodeURIComponent(e.id)}/attempts`, { kind });
     return enrollmentFor(aid, cid)!.activeAttempts[kind]!;
   }
-  async function requestPractical(aid: string, cid: string) {
-    await startAttempt(aid, cid, 'practical');
-    notify('실기 평가를 요청했습니다.');
-  }
   async function createCatalog(section: string) {
     return command(`/${section}`);
   }
@@ -262,21 +271,19 @@ export const useDemo = defineStore('workspace', () => {
   async function cloneCatalog(section: string, id: string) {
     return command(`/${section}/${id}/versions`);
   }
-  async function changeAssignment(
-    a: Assignment,
-    action: 'exclude' | 'ft',
-    reason: string,
-    ftId: string,
-  ) {
-    await command(`/assignments/${a.id}/${action === 'exclude' ? 'exclusion' : 'ft'}`, {
+  async function changeAssignment(a: Assignment, action: 'exclude', reason: string) {
+    await command(`/assignments/${a.id}/exclusion`, {
       revision: a.revision,
       reason,
-      ftId,
     });
-    notify(action === 'exclude' ? '검증 대상에서 제외했습니다.' : 'FT를 변경했습니다.');
+    notify('검증 대상에서 제외했습니다.');
   }
   async function saveNotice(n: Notice) {
-    await command('/notices', n);
+    const { id, ...values } = n;
+    await command('/notices', {
+      ...values,
+      ...(data.value.notices.some((item) => item.id === id) ? { id } : {}),
+    });
     notify('공지를 저장했습니다.');
   }
   return {
@@ -293,6 +300,8 @@ export const useDemo = defineStore('workspace', () => {
     contextLoading,
     writing,
     canEnterManagement,
+    fullManagement,
+    canManageSection,
     managementAccess,
     managementLv1,
     managementReady,
@@ -312,7 +321,6 @@ export const useDemo = defineStore('workspace', () => {
     assignment,
     enrollmentFor,
     myAssignments,
-    ftAssignments,
     notices,
     complete,
     completedCount,
@@ -324,7 +332,6 @@ export const useDemo = defineStore('workspace', () => {
     qualificationErrors: (q: Qualification) => checkQualification(q, data.value.courses),
     command,
     startAttempt,
-    requestPractical,
     createCatalog,
     saveCatalog,
     cloneCatalog,

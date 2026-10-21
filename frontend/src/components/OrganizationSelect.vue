@@ -9,6 +9,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 const path = computed(() => props.entries.find((e) => e.id === props.modelValue)?.path ?? []);
+const levels = computed(() =>
+  Math.max(
+    1,
+    path.value.length + (props.entries.some((e) => e.parentId === props.modelValue) ? 1 : 0),
+  ),
+);
 function options(level: number) {
   const parent = level === 1 ? null : path.value[level - 2]?.id;
   return props.entries.filter(
@@ -28,7 +34,7 @@ function select(level: number, event: Event) {
 </script>
 <template>
   <div class="organization-select">
-    <label v-for="level in 4" :key="level" class="field">
+    <label v-for="level in levels" :key="level" class="field">
       <span>Lv{{ level }} 조직</span>
       <select
         :aria-label="`Lv${level} 조직`"

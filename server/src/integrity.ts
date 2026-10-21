@@ -1,5 +1,8 @@
+import { validatePolicies } from "./organization-policies.ts";
 import {
   StateSchema,
+  assessmentQuestions,
+  assessmentPassScore,
   courseErrors,
   qualificationErrors,
   requiredKinds,
@@ -21,14 +24,28 @@ export function validateState(
     s.users.some((u) => u.roles.includes("system_operator")),
     "시스템 운영자 누락",
   );
-  for (const user of s.users)
+  for (const user of s.users) {
     check(new Set(user.roles).size === user.roles.length, "역할 중복");
+    if (user.organizationAdministration) {
+      check(
+        user.organizationAdministration.organizationId === user.organizationId,
+        "관리 지정과 실제 소속 불일치",
+      );
+      check(
+        s.users.some(
+          (u) => u.id === user.organizationAdministration!.grantedBy,
+        ),
+        "관리 지정자 참조",
+      );
+    }
+  }
   const entries = organizations ? organizationEntries(organizations) : [];
   const rootOf = (id: string) =>
     entries.find(
       (e) => e.id === s.users.find((u) => u.id === id)?.organizationId,
     )?.lv1OrganizationId;
   if (organizations) {
+    validatePolicies(s, organizations);
     for (const user of s.users)
       check(
         entries.some((e) => e.id === user.organizationId),
@@ -38,7 +55,7 @@ export function validateState(
       ...s.courses,
       ...s.qualifications,
       ...s.assignments,
-      ...s.notices,
+      ...s.notices.filter((n) => n.scope === "team"),
       ...s.plans,
       ...s.planningRequests,
       ...s.notifications,
@@ -61,12 +78,6 @@ export function validateState(
         rootOf(record.learnerId) === record.lv1OrganizationId,
         "계획 사용자 Lv1 불일치",
       );
-    for (const request of s.planningRequests)
-      if (request.ftId)
-        check(
-          rootOf(request.ftId) === request.lv1OrganizationId,
-          "계획 요청 FT Lv1 불일치",
-        );
   }
   for (const key of [
     "users",
@@ -155,8 +166,7 @@ export function validateState(
     );
     if (organizations)
       check(
-        rootOf(a.learnerId) === a.lv1OrganizationId &&
-          (!a.ftId || rootOf(a.ftId) === a.lv1OrganizationId),
+        rootOf(a.learnerId) === a.lv1OrganizationId,
         "배정 사용자 Lv1 불일치",
       );
     // Identity is permanent; current roles are enforced by mutation authorization.
@@ -169,18 +179,6 @@ export function validateState(
       s.users.some((u) => u.id === a.ownerAdminId),
       "담당 운영자 참조",
     );
-    if (
-      !a.planId &&
-      q.courseIds.some((id) =>
-        requiredKinds(s.courses.find((c) => c.id === id)!).includes(
-          "practical",
-        ),
-      )
-    )
-      check(
-        a.ftId !== a.learnerId && s.users.some((u) => u.id === a.ftId),
-        "FT 배정",
-      );
     const es = s.enrollments.filter((e) => e.assignmentId === a.id);
     check(
       es.length === q.courseIds.length &&
@@ -204,21 +202,16 @@ export function validateState(
         requiredKinds(c).includes(t.kind),
       "응시의 수강·직원·기준 연결",
     );
+    const questions = assessmentQuestions(c, t.kind);
     const key = `${e.id}:${t.kind}`,
       roundKey = `${key}:${t.round}`;
     check(!rounds.has(roundKey), "응시 회차 중복");
     rounds.add(roundKey);
     check(
       Object.entries(t.answers).every(([id, value]) =>
-        c.questions.some((q) => q.id === id && value < q.choices.length),
+        questions.some((q) => q.id === id && value < q.choices.length),
       ),
       "답안 항목/선택지",
-    );
-    check(
-      Object.keys(t.verdicts).every((id) =>
-        c.practicalItems.some((i) => i.id === id),
-      ),
-      "실기 항목",
     );
     if (t.status !== "graded") {
       check(
@@ -226,15 +219,6 @@ export function validateState(
         "진행 중 응시 중복/결과",
       );
       activeKeys.add(key);
-      if (t.status === "submitted")
-        check(
-          t.kind === "subjective" &&
-            t.submittedAt &&
-            c.subjectiveQuestions.every((q) =>
-              t.subjectiveAnswers?.[q.id]?.trim(),
-            ),
-          "주관식 제출 답안 누락",
-        );
       check(
         !s.attempts.some(
           (other) =>
@@ -246,23 +230,25 @@ export function validateState(
       );
     } else {
       check(t.date && t.result, "확정 응시 결과 누락");
-      if (t.kind === "objective") {
-        const total = c.questions.reduce((v, q) => v + q.points, 0),
-          earned = c.questions.reduce(
+      {
+        const total = questions.reduce((v, q) => v + q.points, 0),
+          earned = questions.reduce(
             (v, q) => v + (t.answers[q.id] === q.correct ? q.points : 0),
             0,
           );
         check(
-          c.questions.every((q) => t.answers[q.id] !== undefined) &&
+          questions.every((q) => t.answers[q.id] !== undefined) &&
             t.total === total &&
             t.earned === earned &&
             t.result ===
-              (earned * 100 >= total * c.passScore! ? "passed" : "failed"),
+              (earned * 100 >= total * assessmentPassScore(c, t.kind)!
+                ? "passed"
+                : "failed"),
           "객관식 채점 결과",
         );
         check(
-          t.itemResults?.length === c.questions.length &&
-            c.questions.every((q) =>
+          t.itemResults?.length === questions.length &&
+            questions.every((q) =>
               t.itemResults?.some(
                 (r) =>
                   r.itemId === q.id &&
@@ -272,61 +258,6 @@ export function validateState(
               ),
             ),
           "문항별 채점 결과",
-        );
-      } else if (t.kind === "subjective") {
-        check(
-          t.submittedAt &&
-            t.evaluatorId !== a.learnerId &&
-            s.users.some((u) => u.id === t.evaluatorId),
-          "주관식 평가자·제출일",
-        );
-        check(
-          c.subjectiveQuestions.every(
-            (q) =>
-              t.subjectiveAnswers?.[q.id]?.trim() &&
-              t.grades?.[q.id]?.reason.trim() &&
-              t.grades[q.id]!.points <= q.points,
-          ),
-          "주관식 답안·채점 근거",
-        );
-        const total = c.subjectiveQuestions.reduce((n, q) => n + q.points, 0);
-        const earned = c.subjectiveQuestions.reduce(
-          (n, q) => n + t.grades![q.id]!.points,
-          0,
-        );
-        check(
-          t.total === total &&
-            t.earned === earned &&
-            t.result ===
-              (earned * 100 >= total * c.subjectivePassScore!
-                ? "passed"
-                : "failed"),
-          "주관식 점수·판정",
-        );
-        check(
-          t.result !== "failed" || t.feedback?.trim(),
-          "주관식 미통과 피드백",
-        );
-      } else {
-        check(
-          t.evaluatorId !== a.learnerId &&
-            s.users.some((u) => u.id === t.evaluatorId),
-          "확정 평가자",
-        );
-        check(
-          c.practicalItems.every(
-            (i) => t.verdicts[i.id]?.value && t.verdicts[i.id]?.evidence.trim(),
-          ),
-          "실기 근거 누락",
-        );
-        check(
-          t.result ===
-            (c.practicalItems
-              .filter((i) => i.mandatory)
-              .every((i) => t.verdicts[i.id]?.value === "pass")
-              ? "passed"
-              : "failed"),
-          "실기 결과",
         );
       }
     }

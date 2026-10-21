@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CourseMaterials from './CourseMaterials.vue';
 import ValidityBadge from './ValidityBadge.vue';
 import { kindLabels, kstDate } from '@eks/contracts';
 import { computed, ref } from 'vue';
@@ -57,7 +58,6 @@ const actionLabels: Record<string, string> = {
   'catalog.publish': '기준 사용 등록',
   'catalog.clone': '기준 새 버전 생성',
   'assignment.create': '자격 배정',
-  'assignment.ft': '담당 FT 변경',
   'assignment.exclude': '검증 제외 설정',
   'attempt.start': '평가 시작·요청',
   'attempt.submit': '평가 확정',
@@ -74,9 +74,7 @@ const actionLabels: Record<string, string> = {
   'plan.create': '개인 계획 시작',
   'plan.save': '개인 계획 저장',
   'plan.complete': '개인 계획 완료',
-  'learning.save': '학습 완료 기록',
-  'attempt.grade.save': '주관식 채점 저장',
-  'attempt.grade.finalize': '주관식 채점 확정',
+  'learning.save': '과거 학습 완료 기록',
 };
 </script>
 <template>
@@ -119,7 +117,7 @@ const actionLabels: Record<string, string> = {
         }}</span>
       </summary>
       <p class="muted">
-        {{ rootName(a.lv1OrganizationId) }} · 담당 FT {{ store.username(a.ftId) }}
+        {{ rootName(a.lv1OrganizationId) }}
       </p>
       <p class="muted">
         {{ a.organizationSource === 'migration' ? '이관 시 소속' : '배정 당시 소속' }}:
@@ -140,9 +138,8 @@ const actionLabels: Record<string, string> = {
             >{{ kindLabels[kind] }}: {{ stateLabels[e[kind]] }} · </span
           >{{ e.completion ? '수료' : '진행 중' }}
         </p>
-        <p v-if="a.planId">학습 기록: {{ e.learningComplete ? '필수 항목 완료' : '미완료' }}</p>
-        <p v-for="record in e.learningRecords" :key="record.id">
-          {{ record.performedOn }} · {{ record.content }} · 학습자 기록
+        <p class="muted">
+          자료 열람 여부를 완료로 집계하지 않습니다. 필수 평가 통과로 수료를 확인합니다.
         </p>
         <RouterLink v-if="e.completion" :to="`/completions/${e.completion.id}`" class="text-link"
           >과정 수료증 보기</RouterLink
@@ -156,26 +153,14 @@ const actionLabels: Record<string, string> = {
             {{ kindLabels[t!.kind] }} {{ t!.round }}회 ·
             {{ t!.result === 'passed' ? '통과' : t!.result === 'failed' ? '미통과' : '작성 중' }}
           </summary>
-          <p v-if="t!.evaluatorId">평가자: {{ store.username(t!.evaluatorId) }}</p>
-          <template v-if="t!.kind === 'practical'"
-            ><p v-for="item in store.course(e.courseId).practicalItems" :key="item.id">
-              {{ item.title }} · {{ valueLabel(t!.verdicts?.[item.id]?.value) }}<br />{{
-                t!.verdicts?.[item.id]?.evidence || '근거 미작성'
-              }}
-            </p></template
-          >
-          <template v-else-if="t!.kind === 'subjective'"
-            ><div v-for="q in store.course(e.courseId).subjectiveQuestions" :key="q.id">
-              <h3>{{ q.prompt }}</h3>
-              <p class="preserve-lines">{{ t!.subjectiveAnswers?.[q.id] || '미응답' }}</p>
-              <p>
-                {{ t!.grades?.[q.id]?.points }} / {{ q.points }}점 · {{ t!.grades?.[q.id]?.reason }}
-              </p>
-            </div>
-            <p class="preserve-lines">{{ t!.feedback }}</p></template
-          >
-          <template v-else
-            ><p v-for="q in store.course(e.courseId).questions" :key="q.id">
+          <p>자동 채점</p>
+          <template
+            ><p
+              v-for="q in t!.kind === 'objective'
+                ? store.course(e.courseId).questions
+                : store.course(e.courseId).practicalQuestions"
+              :key="q.id"
+            >
               {{ q.prompt }}<br />응답: {{ q.choices[t!.answers?.[q.id] ?? -1] || '미응답' }}
             </p>
             <p v-if="t!.total">점수: {{ t!.earned }} / {{ t!.total }}</p></template
@@ -239,25 +224,13 @@ const actionLabels: Record<string, string> = {
         />
       </summary>
       <p class="muted">{{ rootName(c.lv1OrganizationId) }}</p>
-      <p class="preserve-lines">{{ c.material }}</p>
-      <a v-if="c.materialUrl" :href="c.materialUrl" target="_blank" rel="noopener noreferrer"
-        >학습 자료</a
-      >
-      <p>{{ c.instruction }}</p>
+      <CourseMaterials :materials="c.materials" />
       <p>필수 평가: {{ assessmentNames(c.assessmentKinds) }}</p>
       <p v-for="item in c.learningItems" :key="item.id">
         {{ item.title }} ·
         {{ item.type === 'mtc' ? 'MTC교육' : item.type === 'team' ? '팀 특화 교육' : '현업 OJT' }} ·
         {{ item.required ? '필수 학습' : '선택 학습' }}
       </p>
-      <p v-if="c.assessmentKinds.includes('subjective')">
-        주관식 합격 기준 {{ c.subjectivePassScore }}%
-      </p>
-      <article v-for="q in c.subjectiveQuestions" :key="q.id">
-        <h3>{{ q.prompt }} · {{ q.points }}점</h3>
-        <p class="preserve-lines">채점 기준: {{ q.rubric }}</p>
-        <p v-if="q.modelAnswer" class="preserve-lines">모범답안: {{ q.modelAnswer }}</p>
-      </article>
       <p v-if="c.passScore">객관식 합격 기준 {{ c.passScore }}%</p>
       <article v-for="q in c.questions" :key="q.id">
         <h3>{{ q.prompt }}</h3>
@@ -267,9 +240,15 @@ const actionLabels: Record<string, string> = {
           </li>
         </ol>
       </article>
-      <article v-for="item in c.practicalItems" :key="item.id">
-        <h3>{{ item.title }} · {{ item.mandatory ? '필수' : '선택' }}</h3>
-        <p>{{ item.criterion }}</p>
+      <p v-if="c.practicalPassScore">상황 대응 합격 기준 {{ c.practicalPassScore }}%</p>
+      <article v-for="q in c.practicalQuestions" :key="q.id">
+        <p>{{ q.scenario }}</p>
+        <h3>{{ q.prompt }}</h3>
+        <ol>
+          <li v-for="(choice, i) in q.choices" :key="i">
+            {{ choice }}{{ q.correct === i ? ' · 정답' : '' }}
+          </li>
+        </ol>
       </article>
     </details>
   </section>
@@ -292,17 +271,23 @@ const actionLabels: Record<string, string> = {
     </details>
   </section>
   <section v-else-if="tab === 'notices'" class="system-records">
-    <p v-if="!store.data.notices.some((n) => matches(n.lv1OrganizationId))" class="empty-state">
+    <p
+      v-if="!store.data.notices.some((n) => n.scope === 'team' && matches(n.lv1OrganizationId))"
+      class="empty-state"
+    >
       공지가 없습니다.
     </p>
     <article
-      v-for="n in store.data.notices.filter((n) => matches(n.lv1OrganizationId))"
+      v-for="n in store.data.notices.filter(
+        (n) => n.scope === 'team' && matches(n.lv1OrganizationId),
+      )"
       :key="n.id"
       class="panel record-detail"
     >
       <h2>{{ n.title }}</h2>
       <p class="muted">
-        {{ rootName(n.lv1OrganizationId) }} · {{ n.published ? '게시' : '비공개' }}
+        {{ n.scope === 'team' ? rootName(n.lv1OrganizationId) : '시스템 공지' }} ·
+        {{ n.published ? '게시' : '비공개' }}
       </p>
       <p class="preserve-lines">{{ n.body }}</p>
     </article>

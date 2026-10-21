@@ -25,7 +25,7 @@ export function clean(w: CatalogWorkbook): CatalogWorkbook {
 }
 export const fingerprint = (s: CatalogSheet) =>
   JSON.stringify(
-    clean({ format: 'eks-catalog-v1', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
+    clean({ format: 'eks-catalog-v3', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
   );
 export function newRow(table: CatalogTable, rows: CatalogRow[], courseCode = ''): CatalogRow {
   const r: CatalogRow = Object.fromEntries(columnsFor(table, rows).map(([k]) => [k, '']));
@@ -45,17 +45,15 @@ export function newRow(table: CatalogTable, rows: CatalogRow[], courseCode = '')
     r.type = 'ojt';
     r.required = true;
   }
-  if (table === 'objective') {
-    r.category = 'written';
+  if (table === 'objective' || table === 'practical') {
     r.points = 1;
     r.correct = null;
   }
-  if (table === 'subjective') r.points = 1;
-  if (table === 'practical') r.mandatory = true;
+  if (table === 'materials') r.type = 'text';
   if (table === 'courses') {
     r.sourceRevision = null;
     r.passScore = null;
-    r.subjectivePassScore = null;
+    r.practicalPassScore = null;
   }
   return r;
 }
@@ -70,7 +68,7 @@ export function newSheet(): CatalogSheet {
     validityType: 'unknown',
     months: null,
     reminderDays: [],
-    tables: { courses: [], learning: [], objective: [], subjective: [], practical: [] },
+    tables: { courses: [], learning: [], objective: [], materials: [], practical: [] },
   };
 }
 // Hidden rows retain position and content when the displayed projection changes.

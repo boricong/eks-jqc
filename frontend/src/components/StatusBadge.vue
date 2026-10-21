@@ -6,7 +6,6 @@ const names: Record<string, string> = {
   ready: '미시작',
   retired: '운영 종료',
   draft: '작성 중',
-  waiting: '평가 대기',
   passed: '통과',
   failed: '미통과',
   complete: '수료',
@@ -18,13 +17,11 @@ const names: Record<string, string> = {
 const icon = computed(() =>
   ['passed', 'complete', 'certified'].includes(props.status)
     ? 'check'
-    : props.status === 'waiting'
-      ? 'clock'
-      : props.status === 'failed'
-        ? 'retry'
-        : props.status === 'excluded'
-          ? 'alert'
-          : 'circle',
+    : props.status === 'failed'
+      ? 'retry'
+      : props.status === 'excluded'
+        ? 'alert'
+        : 'circle',
 );
 </script>
 <template>
