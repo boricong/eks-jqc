@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { certificationStatus, certificationStatusLabels, type Certification } from '@eks/contracts';
-defineProps<{ certification: Certification }>();
+import { computed } from 'vue';
+import {
+  certificationStatus,
+  certificationStatusLabels,
+  renewalPhase,
+  type Certification,
+} from '@eks/contracts';
+const props = defineProps<{ certification: Certification }>();
+const status = computed(() => certificationStatus(props.certification)),
+  phase = computed(() => renewalPhase(props.certification));
 </script>
 <template>
-  <span class="validity-badge" :class="certificationStatus(certification)">{{
-    certificationStatusLabels[certificationStatus(certification)]
-  }}</span>
+  <span class="validity-badge" :class="status">{{
+    status === 'expiring' ? '유효' : certificationStatusLabels[status]
+  }}</span
+  ><span v-if="phase?.state === 'upcoming' || phase?.state === 'open'" class="renewal-phase-label"
+    >{{ phase.state === 'open' ? '재인증 가능' : '재인증 예정' }} · {{ phase.opensOn }}</span
+  >
 </template>

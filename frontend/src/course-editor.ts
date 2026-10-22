@@ -10,8 +10,14 @@ export function courseIssues(c: Course): CourseIssue[] {
   const issues: CourseIssue[] = [];
   const add = (kind: CourseIssue['kind'], field: string, message: string, itemId?: string) =>
     issues.push({ kind, field, message, itemId });
-  if (!c.title.trim()) add('basic', 'title', '과정명을 입력해 주세요.');
+  if (!c.title.trim()) add('basic', 'title', '인증Set명을 입력해 주세요.');
   if (!c.assessmentKinds.length) add('basic', 'assessmentKinds', '필수 평가 유형을 선택해 주세요.');
+  if (c.assessmentKinds.includes('practical') && !c.assessmentKinds.includes('objective'))
+    add(
+      'basic',
+      'assessmentKinds',
+      '상황 대응 평가를 사용하려면 지식 평가도 필수로 설정해 주세요.',
+    );
   c.materials.forEach((m, n) => {
     if (!m.title.trim())
       add('materials', 'title', `학습자료 ${n + 1}번의 자료명을 입력해 주세요.`, m.id);

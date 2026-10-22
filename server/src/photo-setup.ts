@@ -30,7 +30,7 @@ const testQualificationEntities = new Set(["demo-qualification", "recipe"]);
 const oldNotice =
   "평가 흐름 체험은 가상의 평가 데이터입니다. Recipe Management는 미정 항목이 있는 초안으로 등록되어 있습니다.";
 const oldAssessmentNotice =
-  "배정된 과정의 객관식과 실기 평가를 진행해 주세요. 실기 평가는 지정된 FT가 담당합니다.";
+  "배정된 인증Set의 객관식과 실기 평가를 진행해 주세요. 실기 평가는 지정된 FT가 담당합니다.";
 export const photoSetupFingerprint = createHash("sha256")
   .update(
     JSON.stringify({
@@ -181,7 +181,7 @@ export function preparePhotoSetup(
   requirement(
     qualificationTemplates.length === 15 &&
       Object.keys(photoCourseSpecs).length === 15,
-    "15종 템플릿과 과정 구성이 일치하지 않습니다.",
+    "15종 템플릿과 인증Set 구성이 일치하지 않습니다.",
   );
   const state = structuredClone(source);
   const before = count(state);
@@ -207,12 +207,12 @@ export function preparePhotoSetup(
       [...testCourseEntities].every((id) =>
         removedCourses.some((c) => c.entityId === id),
       ),
-    "기존 체험 자격·과정의 ID 계보가 예상과 다릅니다.",
+    "기존 체험 자격·인증Set의 ID 계보가 예상과 다릅니다.",
   );
   requirement(
     removedQualifications.filter((q) => q.templateId === "eqp-backup")
       .length === 1,
-    "Recipe 과정을 참조하는 설비 Backup 시험 버전이 예상과 다릅니다.",
+    "Recipe 인증Set을 참조하는 설비 Backup 시험 버전이 예상과 다릅니다.",
   );
   requirement(
     state.qualifications.every(
@@ -220,7 +220,7 @@ export function preparePhotoSetup(
         removedQualificationIds.has(q.id) ||
         q.courseIds.every((id) => !removedCourseIds.has(id)),
     ),
-    "삭제할 과정이 예상 밖의 자격에서 사용 중입니다.",
+    "삭제할 인증Set이 예상 밖의 자격에서 사용 중입니다.",
   );
   const oldProgressIds = new Set([
     ...state.assignments.map((x) => x.id),
@@ -285,7 +285,7 @@ export function preparePhotoSetup(
     const specs = photoCourseSpecs[template.id];
     requirement(
       specs?.length === 5,
-      `${template.title} 과정이 5개가 아닙니다.`,
+      `${template.title} 인증Set이 5개가 아닙니다.`,
     );
     const courses = specs.map((spec, index) =>
       assessmentCourse(template.id, index, spec, at),

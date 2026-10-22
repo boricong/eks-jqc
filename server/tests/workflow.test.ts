@@ -725,7 +725,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   assert.deepEqual(results[0], results[1]);
   const done = f.store.snapshot().plans.find((x) => x.id === p.id)!;
   assert.equal(done.approval, "skipped_by_policy");
-  assert.equal(done.workflowVersion, "personal-certification-v3");
+  assert.equal(done.workflowVersion, "personal-certification-v5");
   assert.equal(
     f.store.snapshot().assignments.filter((a) => a.planId === p.id).length,
     1,
@@ -954,10 +954,10 @@ test("알림 시작 시 누락 보충·최신 시점만 생성·중복 방지·�
   let reminders = f.store
     .snapshot()
     .notifications.filter(
-      (n) => n.certificationId === cert.id && n.type === "expiry",
+      (n) => n.certificationId === cert.id && n.type === "renewal",
     );
   assert.equal(reminders.length, 1);
-  assert.match(reminders[0]!.key, /7/);
+  assert.match(reminders[0]!.key, /^renewal:notice:/);
   const revision = f.store.snapshot().revision;
   await f.store.refreshNotifications(dateAt(5));
   assert.equal(f.store.snapshot().revision, revision);
@@ -974,8 +974,13 @@ test("알림 시작 시 누락 보충·최신 시점만 생성·중복 방지·�
     1,
   );
   assert.deepEqual(
-    f.store.snapshot().certifications.find((c) => c.id === cert.id),
-    cert,
+    f.store.snapshot().certifications.find((c) => c.id === cert.id)?.evidence,
+    cert.evidence,
+  );
+  assert.equal(
+    f.store.snapshot().certifications.find((c) => c.id === cert.id)
+      ?.lifecycleStatus,
+    "Revoke",
   );
   assert.ok(
     (await f.call("learner-1", "/notifications")).every(

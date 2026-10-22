@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CredentialManagement from '../components/CredentialManagement.vue';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, nextTick, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
@@ -8,6 +9,8 @@ import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
 import CourseLifecycle from '../components/CourseLifecycle.vue';
 import ComparisonPanel from '../components/ComparisonPanel.vue';
+import CertificationTargets from '../components/CertificationTargets.vue';
+import QualificationLifecycle from '../components/QualificationLifecycle.vue';
 import QualificationFields from '../components/QualificationFields.vue';
 import CourseMaterialsEditor from '../components/CourseMaterialsEditor.vue';
 import CourseLearningEditor from '../components/CourseLearningEditor.vue';
@@ -19,7 +22,13 @@ import { useListView } from '../composables/useListView';
 import PlanningPanel from '../components/PlanningPanel.vue';
 import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
-import { kindLabels, certificationStatus, kstDate } from '@eks/contracts';
+import {
+  kindLabels,
+  certificationStatus,
+  kstDate,
+  credentialCurrent,
+  criterionLifecycleLabels,
+} from '@eks/contracts';
 import type { Assignment, Course, Notice, Qualification, AuditEvent } from '../types';
 const store = useDemo(),
   route = useRoute(),
@@ -39,9 +48,11 @@ const organizationData = computed(() => {
   };
 });
 const sections = [
+  { id: 'credentials', name: '개인 자격 관리', icon: 'award' },
+  { id: 'targets', name: '인증 대상자 관리', icon: 'users' },
   { id: 'policies', name: '조직별 자격 설정', icon: 'users' },
   { id: 'qualifications', name: '자격 관리', icon: 'award' },
-  { id: 'courses', name: '과정 관리', icon: 'book' },
+  { id: 'courses', name: '인증Set 관리', icon: 'book' },
   { id: 'assignments', name: '대상자·계획', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },
   { id: 'comparisons', name: '기준 검증', icon: 'check' },
@@ -392,7 +403,7 @@ onBeforeRouteUpdate(canLeave);
           ><AppIcon name="back" :size="16" />{{ title }}</RouterLink
         >
         <div class="page-heading">
-          <h1>{{ editor.title || (courseDraft ? '새 과정' : '새 자격') }}</h1>
+          <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
             <StatusBadge
               :status="
@@ -425,6 +436,17 @@ onBeforeRouteUpdate(canLeave);
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
           다시 불러오기
         </button>
+        <QualificationLifecycle
+          v-if="qualificationDraft"
+          :qualification="store.qualification(qualificationDraft.id)"
+          :disabled="
+            busy ||
+            (!readOnly &&
+              JSON.stringify(qualificationDraft) !==
+                JSON.stringify(store.qualification(qualificationDraft.id)))
+          "
+          @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
+        />
         <CourseLifecycle
           v-if="courseDraft"
           :key="courseDraft.id"
@@ -450,13 +472,13 @@ onBeforeRouteUpdate(canLeave);
           운영 종료.
           {{
             readOnly
-              ? '새 버전에서 종료 과정을 제거하거나 대체해 주세요.'
-              : '사용 등록 전에 종료 과정을 제거하거나 대체해 주세요.'
+              ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
+              : '사용 등록 전에 종료 인증Set을 제거하거나 대체해 주세요.'
           }}
         </p>
         <div class="panel editor-panel">
           <label class="field"
-            ><span>{{ courseDraft ? '과정명' : '자격명' }}</span
+            ><span>{{ courseDraft ? '인증Set명' : '자격명' }}</span
             ><input
               v-model="editor.title"
               data-course-field="title"
@@ -467,19 +489,19 @@ onBeforeRouteUpdate(canLeave);
             v-if="locatedIssues.some((i) => i.kind === 'basic' && i.field === 'title')"
             class="field-error"
           >
-            과정명을 입력해 주세요.
+            인증Set명을 입력해 주세요.
           </p>
           <template v-if="qualificationDraft">
             <QualificationFields :qualification="qualificationDraft" :disabled="readOnly || busy" />
             <fieldset class="course-selection">
-              <legend>필수 과정</legend>
+              <legend>필수 인증Set</legend>
               <label class="field course-selection-search"
-                ><span>과정 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
+                ><span>인증Set 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
                 <input
                   v-model="courseSearch"
                   type="search"
-                  placeholder="과정명 또는 버전 검색"
-                  aria-label="필수 과정 검색"
+                  placeholder="인증Set명 또는 버전 검색"
+                  aria-label="필수 인증Set 검색"
                 />
               </label>
               <div class="course-selection-list">
@@ -564,7 +586,7 @@ onBeforeRouteUpdate(canLeave);
             @click="createCatalog"
           >
             <AppIcon name="plus" :size="18" />{{
-              section === 'courses' ? '과정 추가' : '새 자격 만들기'
+              section === 'courses' ? '인증Set 추가' : '새 자격 만들기'
             }}</button
           ><button
             v-else-if="section === 'notices'"
@@ -575,7 +597,10 @@ onBeforeRouteUpdate(canLeave);
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </div>
-        <div v-if="!['comparisons', 'policies'].includes(section)" class="list-toolbar">
+        <div
+          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
+          class="list-toolbar"
+        >
           <div class="filter-controls">
             <label class="search-field"
               ><AppIcon name="search" :size="18" /><input
@@ -584,7 +609,7 @@ onBeforeRouteUpdate(canLeave);
                   section === 'assignments' || section === 'results'
                     ? '대상자 · 자격 검색'
                     : section === 'courses'
-                      ? '과정 검색'
+                      ? '인증Set 검색'
                       : section === 'notices'
                         ? '공지 검색'
                         : '자격 검색'
@@ -602,7 +627,8 @@ onBeforeRouteUpdate(canLeave);
                 <option value="certified">인증 취득 전체</option>
                 <option value="valid">현재 유효</option>
                 <option value="expiring">만료 예정</option>
-                <option value="expired">만료</option>
+                <option value="revoked">Revoke · 폐기</option>
+                <option value="held">Hold · 효력 정지</option>
                 <option value="unknown">유효기간 미설정</option>
                 <option value="excluded">검증 제외</option></template
               >
@@ -610,13 +636,18 @@ onBeforeRouteUpdate(canLeave);
           </div>
         </div>
         <ListControls
-          v-if="!['comparisons', 'policies'].includes(section)"
+          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
           :count="list.count"
           :pages="list.pages"
           v-model:page="list.page"
           v-model:size="list.size"
           v-model:density="list.density"
           v-model:sort="list.sort"
+        />
+        <CredentialManagement v-if="section === 'credentials'" />
+        <CertificationTargets
+          v-else-if="section === 'targets'"
+          :key="`${store.actorId}:${store.managementLv1}`"
         />
         <OrganizationPolicies v-if="section === 'policies'" :key="store.actorId" />
         <PlanningPanel v-if="section === 'assignments'" :key="store.managementLv1" />
@@ -626,7 +657,7 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>자격명</th>
                 <th>버전</th>
-                <th>필수 과정</th>
+                <th>필수 인증Set</th>
                 <th>상태</th>
                 <th><span class="sr-only">상세</span></th>
               </tr>
@@ -644,8 +675,11 @@ onBeforeRouteUpdate(canLeave);
                   >
                 </td>
                 <td>v{{ q.version }}</td>
-                <td>{{ q.courseIds.length }}과정</td>
+                <td>{{ q.courseIds.length }}인증Set</td>
                 <td>
+                  <span class="lifecycle-badge">{{
+                    criterionLifecycleLabels[q.lifecycleStatus || 'Active']
+                  }}</span>
                   <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : 'published'" />
                   <details v-if="store.qualificationErrors(q).length" class="readiness">
                     <summary>설정 필요 {{ store.qualificationErrors(q).length }}건</summary>
@@ -686,7 +720,7 @@ onBeforeRouteUpdate(canLeave);
           <table>
             <thead>
               <tr>
-                <th>과정명</th>
+                <th>인증Set명</th>
                 <th>버전</th>
                 <th>필수 평가</th>
                 <th>상태</th>
@@ -734,7 +768,7 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>대상자</th>
                 <th>자격</th>
-                <th>과정 수료</th>
+                <th>인증Set 수료</th>
                 <th>상태</th>
                 <th><span class="sr-only">관리</span></th>
               </tr>
@@ -793,9 +827,9 @@ onBeforeRouteUpdate(canLeave);
               <p v-if="a.certification" class="muted">
                 취득일 {{ kstDate(a.certification.date) }} ·
                 {{
-                  a.certification.expiresOn
-                    ? `만료일 ${a.certification.expiresOn}`
-                    : a.certification.validity?.type === 'unlimited'
+                  credentialCurrent(a.certification).expiresOn
+                    ? `만료일 ${credentialCurrent(a.certification).expiresOn}`
+                    : credentialCurrent(a.certification).validity?.type === 'unlimited'
                       ? '무기한'
                       : '유효기간 미설정 · 기존 기록'
                 }}
@@ -859,7 +893,7 @@ onBeforeRouteUpdate(canLeave);
                   v-if="e.completion"
                   class="text-link"
                   :to="store.managementLink(`/completions/${e.completion.id}`)"
-                  >과정 수료증 보기</RouterLink
+                  >인증Set 수료증 보기</RouterLink
                 >
                 <p v-if="!e.history.length" class="muted">평가 이력이 없습니다.</p>
               </section>

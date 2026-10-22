@@ -468,8 +468,8 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "administration",
   );
   const after = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(after.schemaVersion, 8);
-  assert.equal(after.revision, raw.revision + 1);
+  assert.equal(after.schemaVersion, 10);
+  assert.equal(after.revision, raw.revision + 3);
   for (const key of [
     "users",
     "plans",
@@ -480,7 +480,26 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "courses",
     "qualifications",
   ])
-    assert.deepEqual(after[key], raw[key]);
+    assert.deepEqual(
+      after[key].map((r: any) => {
+        const copy = { ...r };
+        delete copy.certificationEligibility;
+        delete copy.lifecycleStatus;
+        delete copy.renewalLeadMonths;
+        delete copy.renewalNoticeDaysBefore;
+        delete copy.acquisitionCycleId;
+        return copy;
+      }),
+      raw[key].map((r: any) => {
+        const copy = { ...r };
+        delete copy.certificationEligibility;
+        delete copy.lifecycleStatus;
+        delete copy.renewalLeadMonths;
+        delete copy.renewalNoticeDaysBefore;
+        delete copy.acquisitionCycleId;
+        return copy;
+      }),
+    );
   assert(after.notices.every((n: any) => n.scope === "team"));
   assert.deepEqual(await readFile(store.organizations.file), org);
   const backups = await readdir(store.backupDir),

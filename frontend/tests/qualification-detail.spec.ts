@@ -1,7 +1,7 @@
 import { test, expect, actor } from './fixtures';
 import { requestPlan, completePlan } from './workflow-helpers';
 
-test('홈 자격 상세·설명 펼치기·다중 자료·과정별 펼침 기억·열람은 기록을 변경하지 않는다', async ({
+test('홈 자격 상세·설명 펼치기·다중 자료·인증Set별 펼침 기억·열람은 기록을 변경하지 않는다', async ({
   page,
   backend,
 }) => {
@@ -93,14 +93,14 @@ test('홈 자격 상세·설명 펼치기·다중 자료·과정별 펼침 기�
   await expect(materials.locator('details[open]')).toHaveCount(2);
   await expect(first.locator('.material-content')).toHaveCSS('white-space', 'pre-wrap');
   await page
-    .getByRole('navigation', { name: '필수 과정', exact: true })
+    .getByRole('navigation', { name: '필수 인증Set', exact: true })
     .getByRole('button')
     .nth(1)
     .click();
   await expect(materials).toContainText('등록된 학습자료가 없습니다.');
   await expect(page.getByRole('link', { name: '평가하기', exact: true })).toBeVisible();
   await page
-    .getByRole('navigation', { name: '필수 과정', exact: true })
+    .getByRole('navigation', { name: '필수 인증Set', exact: true })
     .getByRole('button')
     .first()
     .click();
@@ -166,7 +166,7 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
   const goals = page.getByRole('region', { name: '내 학습 목표와 일정', exact: true });
   await expect(summary).toContainText('2027-02-01');
   await expect(goals).toContainText('기준의 이름과 버전을 독립적으로 확인한다.');
-  await page.getByRole('navigation', { name: '필수 과정' }).getByRole('button').nth(1).click();
+  await page.getByRole('navigation', { name: '필수 인증Set' }).getByRole('button').nth(1).click();
   await expect(goals).toContainText('수행 기록의 누락 여부를 판단한다.');
   await expect(goals).not.toContainText('목표 인증일');
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
@@ -195,20 +195,20 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
         await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(i).click();
         await page.getByRole('radio').nth(question.correct!).check();
       }
-      await page.getByRole('button', { name: '답안 확인', exact: true }).click();
       await page.getByRole('button', { name: '제출', exact: true }).click();
+      await page.getByRole('button', { name: '최종 제출', exact: true }).click();
       await expect(page.locator('.result-panel')).toContainText('자동 채점');
     }
   }
   await page.goto(`/qualifications/${a.id}?course=demo-course-2`);
   await expect(summary).toContainText('인증 취득');
   await expect(summary).toContainText('유효');
-  await expect(page.getByRole('link', { name: '과정 수료증 보기', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '인증Set 수료증 보기', exact: true })).toBeVisible();
   await page.locator('.qualification-history > summary').click();
   await expect(page.locator('.qualification-history')).toContainText('자동 채점');
-  await page.getByRole('link', { name: '과정 수료증 보기', exact: true }).click();
+  await page.getByRole('link', { name: '인증Set 수료증 보기', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: '검증용 과정 수료증', exact: true }),
+    page.getByRole('heading', { name: '검증용 인증Set 수료증', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.award-document')).toContainText('정하린');
   await page.goto(`/qualifications/${a.id}`);
@@ -216,11 +216,11 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
   await expect(page.locator('.cert-header')).toContainText('정하린');
   await page.clock.install({ time: Date.now() + 100 * 86400000 });
   await page.goto(`/qualifications/${a.id}`);
-  await expect(summary.locator('.validity-badge')).toHaveText('만료');
+  await expect(summary.locator('.validity-badge')).toHaveText('Revoke · 폐기');
   await expect(summary).toContainText('인증 취득');
 });
 
-test('최대 100과정·긴 설명/자료의 네 화면 폭과 모바일 선택·제외 배정의 읽기 전용 상태', async ({
+test('최대 100인증Set·긴 설명/자료의 네 화면 폭과 모바일 선택·제외 배정의 읽기 전용 상태', async ({
   page,
   backend,
 }) => {
@@ -235,7 +235,7 @@ test('최대 100과정·긴 설명/자료의 네 화면 폭과 모바일 선택�
       for (let i = 3; i <= 100; i++) {
         const c = structuredClone(s.courses.find((c) => c.id === 'demo-course-2')!);
         c.id = c.entityId = `detail-course-${i}`;
-        c.title = `${i}번째 과정 · 설비 변경 시 반도체 공정 기준과 구성 버전 및 기록을 확인하는 상세 학습`;
+        c.title = `${i}번째 인증Set · 설비 변경 시 반도체 공정 기준과 구성 버전 및 기록을 확인하는 상세 학습`;
         c.materials = [
           {
             id: `detail-material-${i}`,
@@ -274,7 +274,7 @@ test('최대 100과정·긴 설명/자료의 네 화면 폭과 모바일 선택�
     '확정된 배정은 계속 진행할 수 있습니다.',
   );
   await expect(page.getByRole('link', { name: '평가하기', exact: true })).toBeVisible();
-  const nav = page.getByRole('navigation', { name: '필수 과정', includeHidden: true });
+  const nav = page.getByRole('navigation', { name: '필수 인증Set', includeHidden: true });
   await expect(nav.getByRole('button')).toHaveCount(100);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });

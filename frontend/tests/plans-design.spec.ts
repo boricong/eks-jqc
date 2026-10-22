@@ -162,7 +162,10 @@ for (const failure of ['response', 'refresh'] as const) {
   });
 }
 
-test('5과정 일정의 밀도·과정 구분·단일 디자인과 반응형 입력 유지', async ({ page, backend }) => {
+test('5인증Set 일정의 밀도·인증Set 구분·단일 디자인과 반응형 입력 유지', async ({
+  page,
+  backend,
+}) => {
   await backend.store.transact(
     'admin-1',
     'five-course',
@@ -346,7 +349,7 @@ test('Excel 지연 로딩 표와 대화상자는 단일 스타일과 편집 상�
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByRole('button', { name: '전체 과정 표 보기', exact: true }).click();
+  await page.getByRole('button', { name: '전체 인증Set 표 보기', exact: true }).click();
   const cell = page.locator('.tabulator-row').first().locator('[tabulator-field=title]');
   await cell.dblclick();
   const input = cell.locator('input');

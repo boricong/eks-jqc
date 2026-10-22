@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
-import ValidityBadge from '../components/ValidityBadge.vue';
+import CredentialLifecycle from '../components/CredentialLifecycle.vue';
 import { kindLabels } from '@eks/contracts';
 const store = useDemo(),
   route = useRoute();
@@ -51,7 +51,7 @@ const back = computed(() =>
       </div>
       <span class="cert-number"
         >{{ store.completedCount(a) }} / {{ a.enrollments.length
-        }}<small>필수 과정 수료</small></span
+        }}<small>필수 인증Set 수료</small></span
       >
     </div>
     <p class="muted">
@@ -73,24 +73,7 @@ const back = computed(() =>
       프로세스 검증용 가상 기준으로 발급된 시험 인증입니다. 실제 사내 직무 자격으로 사용하지
       않습니다.
     </p>
-    <section v-if="a.certification" class="panel editor-panel validity-panel">
-      <div class="section-heading">
-        <h2>현재 유효 여부</h2>
-        <ValidityBadge :certification="a.certification" />
-      </div>
-      <p v-if="a.certification.expiresOn">
-        만료일 {{ a.certification.expiresOn }} · 대한민국 시간 기준 해당 날짜가 끝날 때까지
-        유효합니다.
-      </p>
-      <p v-else>
-        {{
-          a.certification.validity?.type === 'unlimited'
-            ? '이 인증은 무기한 정책으로 발급되었습니다.'
-            : '기존 인증의 유효기간이 설정되지 않았습니다. 무기한이나 현재 유효한 자격으로 집계하지 않습니다.'
-        }}
-      </p>
-      <p class="muted">취득 사실과 수료 근거는 유효기간이 만료되어도 보존됩니다.</p>
-    </section>
+    <CredentialLifecycle v-if="a.certification" :certification="a.certification" />
     <p v-if="a.excludedReason" class="error-message">검증 제외 · {{ a.excludedReason }}</p>
     <section class="panel evidence-panel">
       <div class="section-heading"><h2>수료 근거</h2></div>
@@ -142,7 +125,7 @@ const back = computed(() =>
               ? { lv1OrganizationId: route.query.lv1OrganizationId }
               : {},
           }"
-          >과정 수료증 보기 →</RouterLink
+          >인증Set 수료증 보기 →</RouterLink
         >
       </details>
     </section>

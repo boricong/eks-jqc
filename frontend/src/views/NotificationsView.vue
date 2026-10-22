@@ -41,14 +41,15 @@ async function view(n: Notification) {
         v-for="n in list"
         :key="n.id"
         class="panel notification-row"
-        :class="{ unread: !n.readAt }"
+        :class="{ unread: !n.readAt && !n.resolvedAt }"
       >
         <div>
           <h2>{{ n.title }}</h2>
           <p>{{ n.body }}</p>
           <small class="muted"
             >{{ new Date(n.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }} ·
-            {{ n.readAt ? '읽음' : '읽지 않음' }}</small
+            {{ n.readAt ? '읽음' : '읽지 않음'
+            }}{{ n.resolvedAt ? ' · 종료된 안내 · 이력 보존' : '' }}</small
           >
         </div>
         <button class="button secondary" :disabled="busy" @click="view(n)">내용 확인</button>

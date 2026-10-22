@@ -55,7 +55,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v3",
+    format: "eks-catalog-v5",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const q = s.qualifications.find((q) => q.id === id);
@@ -147,7 +147,10 @@ export function exportCatalog(
         description: q.description,
         validityType: q.validity.type,
         months: q.validity.months,
-        reminderDays: q.validity.reminderDays,
+        reminderDays: [],
+        renewalLeadMonths: q.renewalLeadMonths ?? 3,
+        renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
+        lifecycleStatus: q.lifecycleStatus || "Active",
         tables,
       };
     }),
@@ -155,7 +158,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v3",
+    format: "eks-catalog-v5",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -168,6 +171,9 @@ export function emptyCatalog(scope: string): CatalogWorkbook {
         validityType: "unknown",
         months: null,
         reminderDays: [],
+        renewalLeadMonths: 3,
+        renewalNoticeDaysBefore: 7,
+        lifecycleStatus: "Active",
         tables: {
           courses: [],
           learning: [],
@@ -231,7 +237,9 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
   if (!parsedWorkbook.success) {
     const raw = input as CatalogWorkbook;
     if (
-      raw?.format === "eks-catalog-v3" &&
+      ["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"].includes(
+        raw?.format,
+      ) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
       raw.sheets.length > 0 &&
@@ -335,7 +343,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               table,
               ri + 1,
               field,
-              "폐지된 입력 필드입니다. 새 양식 v3을 사용해 주세요.",
+              "폐지된 입력 필드입니다. 새 양식 v5를 사용해 주세요.",
             );
     if (!sheet.code.trim() || qCodes.has(sheet.code))
       issue(
@@ -348,6 +356,10 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
     let original: Qualification | undefined;
     if (sheet.mode === "revise") {
       original = s.qualifications.find((q) => q.id === sheet.sourceId);
+      sheet.renewalLeadMonths ??= original?.renewalLeadMonths ?? 3;
+      sheet.lifecycleStatus = original?.lifecycleStatus || "Active";
+      sheet.renewalNoticeDaysBefore ??= original?.renewalNoticeDaysBefore ?? 7;
+      sheet.reminderDays = original?.validity.reminderDays || [];
       if (!original || original.lv1OrganizationId !== scope)
         issue(
           "metadata",
@@ -420,7 +432,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               table,
               ri + 1,
               "sourceId",
-              "같은 원본 과정을 중복 연결할 수 없습니다. 복제 행의 원본 ID를 비워 새 과정으로 만드세요.",
+              "같은 원본 인증Set을 중복 연결할 수 없습니다. 복제 행의 원본 ID를 비워 새 인증Set으로 만드세요.",
             );
           courseSources.add(str(r.sourceId));
         }
@@ -523,7 +535,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             table,
             i + 1,
             "courseCode",
-            "연결할 과정을 선택해 주세요. 제외한 과정의 항목이라면 함께 제외해 주세요.",
+            "연결할 인증Set을 선택해 주세요. 제외한 인증Set의 항목이라면 함께 제외해 주세요.",
           );
       });
     const builtCourses: Course[] = [];
@@ -548,14 +560,14 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
           "courses",
           ri,
           "sourceId",
-          "원본 자격에 연결된 같은 조직의 과정만 개정할 수 있습니다.",
+          "원본 자격에 연결된 같은 조직의 인증Set만 개정할 수 있습니다.",
         );
       if (source && source.revision !== Number(r.sourceRevision))
         issue(
           "courses",
           ri,
           "sourceRevision",
-          "과정 원본이 변경되었습니다. 다시 내보내 주세요.",
+          "인증Set 원본이 변경되었습니다. 다시 내보내 주세요.",
         );
       const shared =
         source &&
@@ -688,7 +700,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             "courses",
             ri,
             "sourceRevision",
-            "다른 과정 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
+            "다른 인증Set 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
           );
         if (source) changed++;
         else added++;
@@ -746,10 +758,15 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       title: sheet.title,
       englishName: sheet.englishName,
       description: sheet.description,
+      lifecycleStatus: original?.lifecycleStatus || "Active",
+      renewalNoticeDaysBefore:
+        sheet.renewalNoticeDaysBefore ?? original?.renewalNoticeDaysBefore ?? 7,
+      renewalLeadMonths:
+        sheet.renewalLeadMonths ?? original?.renewalLeadMonths ?? 3,
       validity: {
         type: sheet.validityType,
         months: sheet.months,
-        reminderDays: sheet.reminderDays,
+        reminderDays: original?.validity.reminderDays || [],
       },
       courseIds: builtCourses.map((c) => c.id),
     });
@@ -758,6 +775,8 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       englishName: v.englishName,
       description: v.description,
       validity: v.validity,
+      renewalLeadMonths: v.renewalLeadMonths ?? 3,
+      renewalNoticeDaysBefore: v.renewalNoticeDaysBefore ?? 7,
       courseIds: v.courseIds,
     });
     const noChange =
@@ -788,6 +807,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
           ...q,
           id: randomUUID(),
           parentId: original.id,
+          lifecycleStatus: "Active",
           version:
             Math.max(
               ...s.qualifications
@@ -969,7 +989,7 @@ export function publishCatalogBatch(
     demand(
       c && c.lv1OrganizationId === scope,
       409,
-      "연결된 과정을 다시 확인해 주세요.",
+      "연결된 인증Set을 다시 확인해 주세요.",
     );
     if (batch.courseIds.includes(cid) && c.status === "published")
       demand(
@@ -980,7 +1000,7 @@ export function publishCatalogBatch(
               ?.courseIds.includes(cid),
           ),
         409,
-        "저장 이후 과정이 변경되었습니다. 다시 확인해 주세요.",
+        "저장 이후 인증Set이 변경되었습니다. 다시 확인해 주세요.",
         "REVISION_CONFLICT",
       );
   }
@@ -1032,7 +1052,7 @@ export function publishCatalogBatch(
     action: "catalog.batch.publish",
     targetId: id,
     lv1OrganizationId: scope,
-    reason: "관련 과정과 자격 원자적 사용 등록",
+    reason: "관련 인증Set과 자격 원자적 사용 등록",
     details: {
       qualificationIds: pending,
       courseIds: courses.map((c) => c.id),

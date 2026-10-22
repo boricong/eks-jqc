@@ -22,6 +22,11 @@ import {
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
 import { userView, organization } from "./organizations.ts";
+import {
+  requireEligible,
+  openAssignment,
+  lastRevoked,
+} from "./qualification-lifecycle.ts";
 import { notify } from "./notifications.ts";
 
 export const qualificationTemplates: {
@@ -124,6 +129,7 @@ export function executeWorkflow(
   scope = u.lv1OrganizationId,
   at = new Date().toISOString(),
 ) {
+  if (["plan.create", "plan.complete"].includes(action)) requireEligible(u);
   const audit = (
     id: string,
     reason = "",
@@ -176,6 +182,8 @@ export function executeWorkflow(
           title: template.title,
           englishName: template.englishName,
           templateId,
+          lifecycleStatus: "Active",
+          renewalLeadMonths: 3,
           status: "draft",
           courseIds: [],
         }),
@@ -209,6 +217,7 @@ export function executeWorkflow(
         422,
         "같은 Lv1의 사용 중인 학습자를 선택해 주세요.",
       );
+      requireEligible(learner);
       const readiness = planningReadiness(s, organizations, learner, at);
       demand(readiness.canRequest, 422, `${learner.name}: ${readiness.reason}`);
       const targets = requiredQualifications(s, organizations, learner, at)
@@ -218,6 +227,9 @@ export function executeWorkflow(
           qualificationId: i.qualificationId,
           title: i.title,
           version: i.version,
+          ...(i.previousCertificationId
+            ? { previousCertificationId: i.previousCertificationId }
+            : {}),
         }));
       const id = randomUUID();
       ids.push(id);
@@ -268,11 +280,17 @@ export function executeWorkflow(
       422,
       "소속 조직의 계획 가능한 자격을 선택해 주세요.",
     );
-    const policyErrors = planPolicyErrors(s, organizations, u, {
-      qualificationId: q.id,
-      requestId: request.id,
-      organizationId: u.organizationId,
-    });
+    const policyErrors = planPolicyErrors(
+      s,
+      organizations,
+      u,
+      {
+        qualificationId: q.id,
+        requestId: request.id,
+        organizationId: u.organizationId,
+      },
+      at,
+    );
     demand(
       !policyErrors.length,
       409,
@@ -289,20 +307,22 @@ export function executeWorkflow(
     );
     const errors = qualificationUseErrors(q, s.courses);
     demand(!errors.length, 422, errors.join("\n"));
+    const previous = lastRevoked(s, u.id, q.entityId, at);
     const existing = s.plans.find(
       (p) =>
         !p.deletedAt &&
         p.learnerId === u.id &&
+        p.previousCertificationId === previous?.id &&
         find(s.qualifications, p.qualificationId).entityId === q.entityId &&
         (!p.assignmentId ||
-          !find(s.assignments, p.assignmentId).excludedReason),
+          openAssignment(s, find(s.assignments, p.assignmentId), at)),
     );
     if (existing) return { id: existing.id };
     demand(
       !s.assignments.some(
         (a) =>
           a.learnerId === u.id &&
-          !a.excludedReason &&
+          openAssignment(s, a, at) &&
           find(s.qualifications, a.qualificationId).entityId === q.entityId,
       ),
       409,
@@ -315,6 +335,7 @@ export function executeWorkflow(
       requestId: request.id,
       qualificationId: q.id,
       workflowVersion: WORKFLOW_VERSION,
+      ...(previous ? { previousCertificationId: previous.id } : {}),
       organizationId: u.organizationId,
       policyRevision: organizations.revision,
       status: "draft",
@@ -329,6 +350,7 @@ export function executeWorkflow(
         goal: "",
       })),
     });
+    p.acquisitionCycleId = p.id;
     s.plans.push(p);
     audit(p.id, "개인 계획 시작");
     return { id: p.id };
@@ -378,7 +400,7 @@ export function executeWorkflow(
             q.courseIds.length &&
           value.schedules.every((x) => q.courseIds.includes(x.courseId)),
         422,
-        "계획의 필수 과정은 변경할 수 없습니다.",
+        "계획의 필수 인증Set은 변경할 수 없습니다.",
       );
       if (p.status === "completed") {
         demand(
@@ -402,7 +424,7 @@ export function executeWorkflow(
         422,
         "사용 중인 조직에서 계획을 완료할 수 있습니다.",
       );
-      const policyErrors = planPolicyErrors(s, organizations, u, p);
+      const policyErrors = planPolicyErrors(s, organizations, u, p, at);
       demand(
         !policyErrors.length,
         409,
@@ -422,7 +444,7 @@ export function executeWorkflow(
         !s.assignments.some(
           (a) =>
             a.learnerId === u.id &&
-            !a.excludedReason &&
+            openAssignment(s, a, at) &&
             find(s.qualifications, a.qualificationId).entityId === q.entityId,
         ),
         409,
@@ -432,6 +454,10 @@ export function executeWorkflow(
       const assignmentId = randomUUID();
       s.assignments.push({
         id: assignmentId,
+        acquisitionCycleId: p.acquisitionCycleId || p.id,
+        ...(p.previousCertificationId
+          ? { previousCertificationId: p.previousCertificationId }
+          : {}),
         qualificationId: q.id,
         learnerId: u.id,
         ownerAdminId: request.requestedBy,

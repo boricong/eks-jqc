@@ -106,7 +106,7 @@ test("사용자 양식 v3은 동일한 기준으로 왕복하며 연결 이름 �
     t.name.startsWith("EKS_courses_"),
   ).table;
   const start = Number(/\d+/.exec(ct.tableRef)![0]),
-    titleColumn = ct.columns.findIndex((c: any) => c.name === "과정명") + 1;
+    titleColumn = ct.columns.findIndex((c: any) => c.name === "인증Set명") + 1;
   ws.getCell(start + 1, titleColumn).value = "새 과정 이름";
   const p = await readCatalogWorkbook(
     Buffer.from(await book.xlsx.writeBuffer()),

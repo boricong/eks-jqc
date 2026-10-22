@@ -108,7 +108,7 @@ onBeforeRouteUpdate(canLeave);
       "
     >
       <p>{{ store.managementOrganization?.name }}</p>
-      <h3>{{ course.title || '이름 없는 과정' }} · v{{ course.version }}</h3>
+      <h3>{{ course.title || '이름 없는 인증Set' }} · v{{ course.version }}</h3>
       <p v-if="action === 'retirement'">
         신규 배정은 중단되며 기존 배정과 취득한 인증은 유지됩니다.
       </p>

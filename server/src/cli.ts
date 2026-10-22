@@ -1,3 +1,4 @@
+import { migrateAssessmentFlow } from "./assessment-flow-migration.ts";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
@@ -15,6 +16,7 @@ import {
 import { PHOTO_FIXTURE_VERSION } from "./photo-certification-fixture.ts";
 import { migrateAdministration } from "./administration-migration.ts";
 import { migratePolicies } from "./policy-migration.ts";
+import { migrateLifecycle } from "./lifecycle-migration.ts";
 
 const file = path.resolve(
   process.env.EKS_DATA_FILE ||
@@ -22,11 +24,22 @@ const file = path.resolve(
 );
 const store = new JsonStore(file),
   command = process.argv[2];
-if (["migrate-policies", "migrate-administration"].includes(command)) {
+if (
+  [
+    "migrate-policies",
+    "migrate-administration",
+    "migrate-lifecycle",
+    "migrate-assessment-flow",
+  ].includes(command)
+) {
   const transform =
-    command === "migrate-administration"
-      ? migrateAdministration
-      : migratePolicies;
+    command === "migrate-assessment-flow"
+      ? migrateAssessmentFlow
+      : command === "migrate-lifecycle"
+        ? migrateLifecycle
+        : command === "migrate-administration"
+          ? migrateAdministration
+          : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -52,7 +65,13 @@ if (["migrate-policies", "migrate-administration"].includes(command)) {
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-administration" ? "administration" : "policies",
+          command === "migrate-assessment-flow"
+            ? "assessment-flow"
+            : command === "migrate-lifecycle"
+              ? "lifecycle"
+              : command === "migrate-administration"
+                ? "administration"
+                : "policies",
         ),
         null,
         2,

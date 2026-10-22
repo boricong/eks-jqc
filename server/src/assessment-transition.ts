@@ -14,7 +14,7 @@ function validateV6(value: any, organizations: OrganizationDocument): State {
   const checked = validateState(
     {
       ...value,
-      schemaVersion: 8,
+      schemaVersion: 10,
       notices: value.notices.map((n: any) => ({ ...n, scope: "team" })),
     },
     organizations,

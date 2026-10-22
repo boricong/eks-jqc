@@ -117,7 +117,7 @@ test('평가 10,000행 표는 가상 렌더링하고 편집에 응답한다', as
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer,
   });
-  await page.getByRole('button', { name: '전체 과정 표 보기', exact: true }).click();
+  await page.getByRole('button', { name: '전체 인증Set 표 보기', exact: true }).click();
   await expect(page.getByRole('tab', { name: '지식 평가 10000', exact: true })).toBeVisible();
   const at = Date.now();
   await page.getByRole('tab', { name: '지식 평가 10000', exact: true }).click();
@@ -148,11 +148,11 @@ test('Excel 가져오기→표 셀 편집→변경 비교→초안 저장→일�
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer,
   });
-  await page.getByRole('button', { name: '전체 과정 표 보기', exact: true }).click();
+  await page.getByRole('button', { name: '전체 인증Set 표 보기', exact: true }).click();
   await expect(page.locator('.tabulator')).toBeVisible();
   const cell = page.locator('.tabulator-row').first().locator('[tabulator-field=title]');
   await cell.dblclick();
-  await cell.locator('input').fill('엑셀 수정 과정');
+  await cell.locator('input').fill('엑셀 수정 인증Set');
   await cell.locator('input').press('Enter');
   await expect(
     page.getByText('서버 저장 전 수정 내용이 있습니다.', { exact: false }),
@@ -183,19 +183,19 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByRole('button', { name: '전체 과정 표 보기', exact: true }).click();
+  await page.getByRole('button', { name: '전체 인증Set 표 보기', exact: true }).click();
   const grid = page.locator('.tabulator');
   await expect(grid).toBeVisible();
   const cell = grid.locator('.tabulator-row').first().locator('[tabulator-field=title]');
   await cell.click();
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.evaluate(() => navigator.clipboard.writeText('붙여넣은 과정명'));
+  await page.evaluate(() => navigator.clipboard.writeText('붙여넣은 인증Set명'));
   await page.keyboard.press('Control+V');
-  await expect(cell).toContainText('붙여넣은 과정명');
+  await expect(cell).toContainText('붙여넣은 인증Set명');
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
   await expect(cell).toContainText('자료 확인');
   await page.getByRole('button', { name: '다시 실행', exact: true }).click();
-  await expect(cell).toContainText('붙여넣은 과정명');
+  await expect(cell).toContainText('붙여넣은 인증Set명');
   await grid.locator('.tabulator-row').first().locator('input[type=checkbox]').check();
   await page.getByRole('button', { name: '선택 항목 제외', exact: true }).click();
   await page.getByRole('button', { name: '함께 제외', exact: true }).click();

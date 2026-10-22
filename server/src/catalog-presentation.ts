@@ -14,7 +14,9 @@ const metadataLabels: Record<string, string> = {
   description: "자격 설명",
   validityType: "인증기간",
   months: "유효 개월 수",
-  reminderDays: "만료 알림",
+  reminderDays: "이전 만료 알림 · 이력",
+  renewalNoticeDaysBefore: "재인증 시작 전 알림 일수",
+  renewalLeadMonths: "재인증 시작 개월",
   code: "자격 연결",
   sourceId: "원본 기준",
   sourceRevision: "원본 변경",
@@ -75,11 +77,11 @@ export function describeIssues(sheet: CatalogSheet, issues: CatalogIssue[]) {
         : 0;
     i.pathLabel = [
       sheet.title || "이름 없는 자격",
-      course?.title || (courseCode ? "연결할 과정 선택" : ""),
+      course?.title || (courseCode ? "연결할 인증Set 선택" : ""),
       i.table === "metadata"
         ? "기본정보"
         : i.table === "courses"
-          ? "과정 정보"
+          ? "인증Set 정보"
           : `${catalogLabels[i.table]} ${localIndex}번`,
       field || "내용",
     ]
@@ -116,7 +118,8 @@ export function describeChanges(
     "description",
     "validityType",
     "months",
-    "reminderDays",
+    "renewalNoticeDaysBefore",
+    "renewalLeadMonths",
   ] as const)
     push(
       "metadata",
@@ -144,7 +147,7 @@ export function describeChanges(
         before?.tables.courses.find(
           (c) => c.code === (table === "courses" ? r.code : r.courseCode),
         );
-      const label = `${course?.title || "이름 없는 과정"}${table === "courses" ? "" : ` · ${catalogLabels[table]} ${r.order}번`}`;
+      const label = `${course?.title || "이름 없는 인증Set"}${table === "courses" ? "" : ` · ${catalogLabels[table]} ${r.order}번`}`;
       if (!a || !b) {
         details.push({
           table,

@@ -1,0 +1,112 @@
+.lifecycle-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.lifecycle-panel p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.lifecycle-panel .section-heading {
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.lifecycle-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--surface-tint);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.lifecycle-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 16px 24px;
+  margin: 0;
+  padding: 16px 0;
+}
+.lifecycle-facts > div {
+  min-width: 0;
+}
+.lifecycle-facts dt {
+  color: var(--ink-secondary);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.lifecycle-facts dd {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.lifecycle-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lifecycle-target-table {
+  overflow: auto;
+  max-height: 520px;
+}
+.lifecycle-target-table th {
+  position: sticky;
+  top: 0;
+  background: var(--table-header);
+}
+.lifecycle-target-table td {
+  vertical-align: top;
+}
+.lifecycle-target-table input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.lifecycle-history {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.lifecycle-history summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-weight: 500;
+}
+.lifecycle-history ol {
+  padding: 0 0 0 24px;
+}
+.lifecycle-history li {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--surface-tint);
+  border-radius: 8px;
+}
+.lifecycle-renewal-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+.lifecycle-renewal-link > span {
+  font-size: 14px;
+}
+@media (max-width: 767px) {
+  .lifecycle-target-table table {
+    min-width: 580px;
+  }
+  .lifecycle-panel .button {
+    min-height: 44px;
+    white-space: normal;
+  }
+  .lifecycle-facts {
+    grid-template-columns: 1fr;
+  }
+}

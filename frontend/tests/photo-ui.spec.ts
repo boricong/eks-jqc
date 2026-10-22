@@ -9,7 +9,7 @@ async function noPageOverflow(page: import('@playwright/test').Page) {
   expect(content).toBeLessThanOrEqual(viewport);
 }
 
-test('과정 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 화면', async ({ page }) => {
+test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 화면', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
@@ -46,7 +46,7 @@ test('과정 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 화�
   await page.goto('/admin/qualifications/recipe');
   await page.getByLabel('인증기간').selectOption('three-years');
   await expect(page.getByLabel('유효 개월 수')).toHaveCount(0);
-  await expect(page.getByLabel('만료 전 알림 일수')).toHaveValue('');
+  await expect(page.getByLabel('재인증 시작 N일 전 알림')).toHaveValue('7');
   await page.getByLabel('인증기간').selectOption('months');
   await expect(page.getByLabel('유효 개월 수')).toBeVisible();
   await noPageOverflow(page);
@@ -83,7 +83,7 @@ test('계획 단계 탭과 다음 버튼이 날짜·목표·저장 실패를 함
   await page.getByLabel('목표 인증일').fill('2026-11-01');
   await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
   await expect(
-    page.getByText('목표 인증일은 모든 과정의 평가 예정일 이후여야 합니다.'),
+    page.getByText('목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.'),
   ).toBeVisible();
   await expect(page.getByLabel('목표 인증일')).toBeFocused();
   await page.route('**/api/plans/**', async (route) => {

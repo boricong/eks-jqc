@@ -565,13 +565,15 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
       const c = s.certifications.find((c) => c.id === cert.id)!;
       c.validity = { type: "months", months: 1, reminderDays: [7] };
       c.expiresOn = "2026-11-21";
+      c.periods![0]!.validity = structuredClone(c.validity);
+      c.periods![0]!.expiresOn = c.expiresOn;
       return {};
     },
   );
   f.clock("2026-11-22T01:00:00Z");
   assert.equal(
     (await f.call("learner-2", "/me/required-qualifications")).items[0].status,
-    "expired",
+    "waiting",
   );
   assert.equal(
     f.store
@@ -715,7 +717,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 8);
+  assert.equal(migrated.schemaVersion, 10);
   assert.equal(master.schemaVersion, 2);
   for (const key of [
     "users",
@@ -728,7 +730,26 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
     "completions",
     "certifications",
   ] as const)
-    assert.deepEqual(migrated[key], raw[key]);
+    assert.deepEqual(
+      migrated[key].map((r: any) => {
+        const copy = { ...r };
+        delete copy.certificationEligibility;
+        delete copy.lifecycleStatus;
+        delete copy.renewalLeadMonths;
+        delete copy.renewalNoticeDaysBefore;
+        delete copy.acquisitionCycleId;
+        return copy;
+      }),
+      raw[key].map((r: any) => {
+        const copy = { ...r };
+        delete copy.certificationEligibility;
+        delete copy.lifecycleStatus;
+        delete copy.renewalLeadMonths;
+        delete copy.renewalNoticeDaysBefore;
+        delete copy.acquisitionCycleId;
+        return copy;
+      }),
+    );
   assert.equal(migrated.plans[0]!.workflowVersion, "personal-certification-v2");
   assert.equal(migrated.planningRequests[0]!.source, "migration");
   assert.equal(master.qualificationPools.length, 0);

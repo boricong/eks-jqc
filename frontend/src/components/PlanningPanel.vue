@@ -197,7 +197,7 @@ onBeforeRouteUpdate(leave);
                   :key="state"
                   class="table-subtext"
                   >{{ state }}
-                  {{ a.enrollments.filter((e) => phase(e) === state).length }}과정</span
+                  {{ a.enrollments.filter((e) => phase(e) === state).length }}인증Set</span
                 >
               </p>
               <p v-if="row.late">목표일·기한 경과</p>

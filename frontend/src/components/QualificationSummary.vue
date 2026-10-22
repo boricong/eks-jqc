@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { credentialCurrent } from '@eks/contracts';
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount, useId } from 'vue';
 import { kstDate, type Assignment, type Qualification } from '@eks/contracts';
 import StatusBadge from './StatusBadge.vue';
@@ -53,7 +54,7 @@ watch(
       <div>
         <div class="heading-meta">
           <span>v{{ qualification.version }}</span
-          ><span>필수 {{ assignment.enrollments.length }}과정</span>
+          ><span>필수 {{ assignment.enrollments.length }}인증Set</span>
         </div>
         <h2>{{ qualification.title }}</h2>
         <p v-if="qualification.englishName" class="muted">{{ qualification.englishName }}</p>
@@ -89,11 +90,11 @@ watch(
     </div>
     <div class="qualification-conditions">
       <h3>취득 조건</h3>
-      <p>필수 과정 전체 수료 · 각 과정에 설정된 평가 유형별 통과</p>
+      <p>필수 인증Set 전체 수료 · 각 인증Set에 설정된 평가 유형별 통과</p>
     </div>
     <dl class="qualification-facts">
       <div>
-        <dt>수료 과정</dt>
+        <dt>수료 인증Set</dt>
         <dd>{{ completed }} / {{ assignment.enrollments.length }}</dd>
       </div>
       <div>
@@ -127,8 +128,8 @@ watch(
       <div>
         <span>취득 {{ assignment.certifiedAt ? kstDate(assignment.certifiedAt) : '미설정' }}</span
         ><ValidityBadge :certification="assignment.certification" /><span
-          v-if="assignment.certification.expiresOn"
-          >만료 {{ assignment.certification.expiresOn }}</span
+          v-if="credentialCurrent(assignment.certification).expiresOn"
+          >만료 {{ credentialCurrent(assignment.certification).expiresOn }}</span
         >
       </div>
       <RouterLink :to="`/certifications/${assignment.id}`" class="button primary"

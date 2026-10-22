@@ -29,7 +29,9 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 8,
+    schemaVersion: 10,
+    renewals: [],
+    lifecycleEvents: [],
     catalogBatches: [],
     revision: 0,
     users: source.users.map((u: any) => ({

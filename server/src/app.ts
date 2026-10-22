@@ -29,6 +29,7 @@ import { authorizeNotice, saveNotice } from "./notices.ts";
 import { courseUsage } from "./course-lifecycle.ts";
 import { qualificationTemplates } from "./workflow.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
+import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
 import {
   policiesView,
   changePolicy,
@@ -113,7 +114,11 @@ export async function buildApp(
     if (error instanceof DomainError)
       return reply
         .status(error.status)
-        .send({ code: error.code, message: error.message });
+        .send({
+          code: error.code,
+          message: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        });
     if (error instanceof z.ZodError)
       return reply.status(422).send({
         code: "VALIDATION_ERROR",
@@ -332,6 +337,7 @@ export async function buildApp(
     };
   });
   registerCatalogRoutes(app, store, actor);
+  registerLifecycleRoutes(app, store, actor, clock);
   const mutation = (
     method: "POST" | "PUT" | "DELETE",
     url: string,

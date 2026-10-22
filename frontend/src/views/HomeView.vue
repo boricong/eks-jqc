@@ -5,9 +5,33 @@ import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import PersonalTasks from '../components/PersonalTasks.vue';
 import RequiredQualifications from '../components/RequiredQualifications.vue';
-import { certificationStatus, kindLabels } from '@eks/contracts';
+import {
+  certificationStatus,
+  kindLabels,
+  latestPeriod,
+  renewalOpensOn,
+  credentialCurrent,
+} from '@eks/contracts';
 const store = useDemo();
-const active = computed(() => store.myAssignments.filter((a) => !a.certifiedAt));
+const active = computed(() =>
+  store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt),
+);
+const renewables = computed(() =>
+  store.actor.certificationEligibility === 'hold'
+    ? []
+    : store.myAssignments
+        .filter(
+          (a) =>
+            a.certification &&
+            latestPeriod(a.certification) &&
+            renewalOpensOn(latestPeriod(a.certification)!) &&
+            ['valid', 'expiring'].includes(certificationStatus(a.certification)),
+        )
+        .slice(0, 3),
+);
+const eligibleAssignment = (a: { learnerId: string; acquisitionClosedAt?: string }) =>
+  !a.acquisitionClosedAt &&
+  store.data.users.find((u) => u.id === a.learnerId)?.certificationEligibility !== 'hold';
 const upcoming = computed(() =>
   store.data.plans
     .filter((p) => p.learnerId === store.actorId && p.targetOn)
@@ -44,7 +68,7 @@ const stats = computed(() =>
           to: '/qualifications',
         },
         {
-          label: '수료 과정',
+          label: '수료 인증Set',
           value: store.myAssignments.reduce((n, a) => n + store.completedCount(a), 0),
           icon: 'check',
           to: '/qualifications',
@@ -76,7 +100,9 @@ const stats = computed(() =>
           },
           {
             label: '진행 중인 배정',
-            value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason).length,
+            value: store.data.assignments.filter(
+              (a) => !a.certifiedAt && !a.excludedReason && eligibleAssignment(a),
+            ).length,
             icon: 'clipboard',
             to: '/system/overview',
           },
@@ -89,14 +115,16 @@ const stats = computed(() =>
             to: '/admin/qualifications',
           },
           {
-            label: '과정 초안',
+            label: '인증Set 초안',
             value: store.data.courses.filter((c) => c.status === 'draft').length,
             icon: 'book',
             to: '/admin/courses',
           },
           {
             label: '진행 중인 배정',
-            value: store.data.assignments.filter((a) => !a.certifiedAt && !a.excludedReason).length,
+            value: store.data.assignments.filter(
+              (a) => !a.certifiedAt && !a.excludedReason && eligibleAssignment(a),
+            ).length,
             icon: 'users',
             to: '/admin/assignments',
           },
@@ -124,6 +152,18 @@ const stats = computed(() =>
         }).format(new Date())
       }}</span>
     </div>
+    <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
+      취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은 별도로
+      유지됩니다.
+    </p>
+    <p v-if="store.fullManagement" class="muted">
+      {{
+        store.data.eligibilitySummary.eligible
+          ? `취득 대상 ${store.data.eligibilitySummary.eligible}명`
+          : '취득 대상 없음'
+      }}
+      · Hold 제외 {{ store.data.eligibilitySummary.held }}명
+    </p>
     <section class="stats-panel" aria-label="내 현황">
       <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
         ><div class="stat-top">
@@ -139,6 +179,20 @@ const stats = computed(() =>
       <div class="home-primary">
         <RequiredQualifications v-if="store.hasRole('learner')" />
         <PersonalTasks />
+        <section v-if="renewables.length" class="home-card lifecycle-panel">
+          <div class="section-heading"><h2>보유 자격 · 재인증</h2></div>
+          <RouterLink
+            v-for="a in renewables"
+            :key="a.id"
+            class="lifecycle-renewal-link"
+            :to="`/certifications/${a.id}`"
+            ><strong>{{ store.qualification(a.qualificationId).title }}</strong
+            ><span
+              >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification!)!) }} · 만료
+              {{ credentialCurrent(a.certification!).expiresOn }}</span
+            ><span class="text-link">상태·재인증 확인 →</span></RouterLink
+          >
+        </section>
         <section class="home-card">
           <div class="section-heading">
             <h2>
@@ -158,10 +212,10 @@ const stats = computed(() =>
           </div>
           <template v-if="store.actor.role === 'learner' && active.length">
             <div class="home-current">
-              <span class="small-label">필수 과정 {{ active[0]!.enrollments.length }}개</span>
+              <span class="small-label">필수 인증Set {{ active[0]!.enrollments.length }}개</span>
               <h3>{{ store.qualification(active[0]!.qualificationId).title }}</h3>
               <div class="progress-label">
-                <span>과정 수료</span
+                <span>인증Set 수료</span
                 ><span
                   >{{ store.completedCount(active[0]!) }} /
                   {{ active[0]!.enrollments.length }}</span
@@ -270,7 +324,7 @@ const stats = computed(() =>
         <section v-else class="home-card focus-card">
           <span class="eyebrow">CATALOG WORKSPACE</span>
           <h2>기준을 한눈에 관리</h2>
-          <p>자격·과정·문항을 Excel 또는 웹 표에서 함께 준비하세요.</p>
+          <p>자격·인증Set·문항을 Excel 또는 웹 표에서 함께 준비하세요.</p>
           <RouterLink :to="store.managementLink('/admin/catalog')" class="text-link"
             >기준 일괄 관리 열기 →</RouterLink
           >

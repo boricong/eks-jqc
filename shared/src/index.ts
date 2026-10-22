@@ -1,5 +1,14 @@
 import { z } from "zod";
 import { CatalogBatchSchema } from "./catalog.ts";
+import {
+  LifecycleStatusSchema,
+  RenewalLeadSchema,
+  RenewalNoticeDaysSchema,
+  CertificationPeriodSchema,
+  RenewalSchema,
+  LifecycleEventSchema,
+} from "./lifecycle.ts";
+export * from "./lifecycle.ts";
 export * from "./catalog.ts";
 import {
   ValiditySchema,
@@ -66,6 +75,7 @@ const url = z.union([
 ]);
 export const UserSchema = z.object({
   id,
+  certificationEligibility: z.enum(["eligible", "hold"]).optional(),
   name: z.string().min(1).max(100),
   roles: z
     .array(RoleSchema)
@@ -148,6 +158,9 @@ export const CourseSchema = z.object({
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
   ...revision,
+  lifecycleStatus: LifecycleStatusSchema.optional(),
+  renewalLeadMonths: RenewalLeadSchema.optional(),
+  renewalNoticeDaysBefore: RenewalNoticeDaysSchema.optional(),
   courseIds: z.array(id).max(100),
   englishName: z.string().max(300).default(""),
   description: text.default(""),
@@ -194,6 +207,10 @@ export const EnrollmentSchema = z.object({
 });
 export const AssignmentSchema = z.object({
   id,
+  acquisitionCycleId: id.optional(),
+  previousCertificationId: id.optional(),
+  acquisitionClosedAt: z.iso.datetime().optional(),
+  resetPreviousCertificationId: id.optional(),
   lv1OrganizationId: id,
   organizationPath: OrganizationPathSchema,
   organizationSource: z.enum(["assigned", "migration"]),
@@ -220,6 +237,11 @@ export const CompletionSchema = z.object({
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
   id,
+  lifecycleStatus: LifecycleStatusSchema.optional(),
+  revision: z.number().int().positive().optional(),
+  periods: z.array(CertificationPeriodSchema).optional(),
+  previousCertificationId: id.optional(),
+  validityNeedsCorrection: z.boolean().optional(),
   assignmentId: id,
   learnerId: id,
   qualificationId: id,
@@ -298,7 +320,7 @@ export const comparisonLabels = {
   pending: "비교 보류",
 };
 export const StateSchema = z.object({
-  schemaVersion: z.literal(8),
+  schemaVersion: z.literal(10),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
   courses: z.array(CourseSchema),
@@ -317,6 +339,8 @@ export const StateSchema = z.object({
   learningRecords: z.array(LearningRecordSchema),
   notifications: z.array(NotificationSchema),
   catalogBatches: z.array(CatalogBatchSchema).default([]),
+  renewals: z.array(RenewalSchema).default([]),
+  lifecycleEvents: z.array(LifecycleEventSchema).default([]),
 });
 export type State = z.infer<typeof StateSchema>;
 export interface ProgressSummary {
@@ -330,6 +354,9 @@ export interface ProgressSummary {
     completions: number;
     certifications: number;
     comparisons: number;
+    renewals: number;
+    certificationPeriods: number;
+    credentialEvents: number;
   };
 }
 
@@ -376,6 +403,7 @@ export interface Workspace {
     lv1OrganizationId: string | null;
     canManage: boolean;
     canManagePolicies: boolean;
+    canManageEligibility: boolean;
     editableOrganizationIds: string[];
   };
   organizations: OrganizationEntry[];
@@ -390,6 +418,7 @@ export interface Workspace {
   planningRequests: PlanningRequest[];
   plans: PersonalPlan[];
   notifications: Notification[];
+  eligibilitySummary: { eligible: number; held: number };
 }
 
 export interface CourseUsage {
@@ -414,9 +443,22 @@ export type DemoState = Workspace;
 export const requiredKinds = (
   course: Pick<Course, "assessmentKinds">,
 ): Kind[] => course.assessmentKinds;
+export function assessmentPrerequisite(
+  course: Pick<Course, "assessmentKinds">,
+  kind: Kind,
+  knowledgePassed: boolean,
+) {
+  return kind === "practical" &&
+    (!course.assessmentKinds.includes("objective") || !knowledgePassed)
+    ? {
+        code: "ASSESSMENT_PREREQUISITE_NOT_PASSED",
+        message: "지식 평가를 먼저 통과해 주세요.",
+      }
+    : undefined;
+}
 export function courseErrors(course: Course): string[] {
   const errors: string[] = [];
-  if (!course.title.trim()) errors.push("과정명을 입력해 주세요.");
+  if (!course.title.trim()) errors.push("인증Set명을 입력해 주세요.");
   if (
     !course.assessmentKinds.length ||
     new Set(course.assessmentKinds).size !== course.assessmentKinds.length
@@ -468,6 +510,10 @@ export function courseErrors(course: Course): string[] {
 export function courseUseErrors(course: Course): string[] {
   return [
     ...courseErrors(course),
+    ...(course.assessmentKinds.includes("practical") &&
+    !course.assessmentKinds.includes("objective")
+      ? ["상황 대응 평가를 사용하려면 지식 평가도 필수로 설정해 주세요."]
+      : []),
     ...(!course.learningItems.some((item) => item.required)
       ? ["필수 학습 항목을 하나 이상 설정해 주세요."]
       : []),
@@ -479,12 +525,12 @@ export function qualificationErrors(
 ): string[] {
   return [
     !q.title.trim() && "자격명을 입력해 주세요.",
-    !q.courseIds.length && "필수 과정을 선택해 주세요.",
+    !q.courseIds.length && "필수 인증Set을 선택해 주세요.",
     new Set(q.courseIds).size !== q.courseIds.length &&
-      "필수 과정이 중복되었습니다.",
+      "필수 인증Set이 중복되었습니다.",
     q.courseIds.some(
       (id) => courses.find((c) => c.id === id)?.status !== "published",
-    ) && "필수 과정을 먼저 사용 등록해 주세요.",
+    ) && "필수 인증Set을 먼저 사용 등록해 주세요.",
   ].filter(Boolean) as string[];
 }
 
@@ -499,6 +545,11 @@ export function qualificationUseErrors(
   courses: Course[],
 ): string[] {
   return [
+    ...(q.lifecycleStatus && q.lifecycleStatus !== "Active"
+      ? [
+          `자격 기준 ${q.lifecycleStatus} 상태로 신규 계획·재인증을 시작할 수 없습니다.`,
+        ]
+      : []),
     ...qualificationErrors(q, courses),
     ...(!q.description.trim() ? ["자격 설명을 입력해 주세요."] : []),
     ...validityErrors(q.validity),
@@ -510,11 +561,11 @@ export function qualificationUseErrors(
       )
       .map(
         (c) =>
-          `${c.title} v${c.version}에 필수 학습 항목이 없습니다. 새 과정 버전에서 학습 항목을 준비해 주세요.`,
+          `${c.title} v${c.version}에 필수 학습 항목이 없습니다. 새 인증Set 버전에서 학습 항목을 준비해 주세요.`,
       ),
     ...retiredCourses(q, courses).map(
       (c) =>
-        `운영 종료된 과정 ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
+        `운영 종료된 인증Set ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
     ),
   ];
 }

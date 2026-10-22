@@ -1,25 +1,33 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { certificationStatus, kstDate } from '@eks/contracts';
+import { certificationStatus, kstDate, credentialCurrent, renewalPhase } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
 const store = useDemo();
 const plans = computed(() =>
-  store.data.plans.filter((p) => p.learnerId === store.actorId && p.status === 'draft'),
+  store.actor.certificationEligibility === 'hold'
+    ? []
+    : store.data.plans.filter((p) => p.learnerId === store.actorId && p.status === 'draft'),
 );
 const requests = computed(() =>
-  store.data.planningRequests.filter(
-    (r) => r.learnerId === store.actorId && !store.data.plans.some((p) => p.requestId === r.id),
-  ),
+  store.actor.certificationEligibility === 'hold'
+    ? []
+    : store.data.planningRequests.filter(
+        (r) => r.learnerId === store.actorId && !store.data.plans.some((p) => p.requestId === r.id),
+      ),
 );
 const expiring = computed(() =>
-  store.myAssignments.filter(
-    (a) =>
-      a.certification && ['expiring', 'expired'].includes(certificationStatus(a.certification)),
-  ),
+  store.actor.certificationEligibility === 'hold'
+    ? []
+    : store.myAssignments.filter(
+        (a) =>
+          a.certification &&
+          (['upcoming', 'open'].includes(renewalPhase(a.certification)?.state || '') ||
+            certificationStatus(a.certification) === 'revoked'),
+      ),
 );
 const alerts = computed(() =>
   store.data.notifications
-    .filter((n) => !n.readAt)
+    .filter((n) => !n.readAt && !n.resolvedAt)
     .slice(-3)
     .reverse(),
 );
@@ -53,9 +61,13 @@ const alerts = computed(() =>
         ><strong>{{ store.qualification(a.qualificationId).title }}</strong
         ><small
           >{{
-            certificationStatus(a.certification!) === 'expired' ? '유효기간 만료' : '만료 예정'
+            certificationStatus(a.certification!) === 'revoked'
+              ? '자격 폐기 · 이력 확인'
+              : renewalPhase(a.certification!)?.state === 'open'
+                ? '재인증 가능'
+                : '재인증 예정'
           }}
-          · {{ a.certification?.expiresOn }}</small
+          · {{ a.certification && credentialCurrent(a.certification).expiresOn }}</small
         ></span
       ><span>유효기간 확인 →</span></RouterLink
     >

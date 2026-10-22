@@ -35,7 +35,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/policies/);
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
-    1,
+    2,
   );
   await expect(page.getByRole('treeitem')).toHaveCount(1);
   await expect(page.locator('.policy-pool-management')).toHaveCount(0);
@@ -156,7 +156,7 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
     ).toBeTruthy();
     if (width < 1025) {
       await page.locator('.management-menu-toggle').click();
-      await expect(sidebar.getByRole('link', { name: '과정 관리', exact: true })).toBeVisible();
+      await expect(sidebar.getByRole('link', { name: '인증Set 관리', exact: true })).toBeVisible();
       await page.locator('.management-menu-toggle').click();
     }
     await page.screenshot({
@@ -168,7 +168,7 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
   await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
   await page.getByLabel('자격명', { exact: true }).fill('보존할 기준 입력');
   page.once('dialog', (d) => d.dismiss());
-  await sidebar.getByRole('link', { name: '과정 관리', exact: true }).click();
+  await sidebar.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/catalog/);
   await expect(page.getByLabel('자격명', { exact: true })).toHaveValue('보존할 기준 입력');
 });

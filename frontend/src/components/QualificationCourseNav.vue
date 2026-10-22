@@ -53,9 +53,9 @@ watch([() => props.selected, visible], async () => {
 });
 </script>
 <template>
-  <aside class="panel qualification-course-nav" aria-label="과정 선택">
+  <aside class="panel qualification-course-nav" aria-label="인증Set 선택">
     <div class="section-heading">
-      <h2>필수 과정</h2>
+      <h2>필수 인증Set</h2>
       <span class="muted">{{ courses.length }}개</span>
     </div>
     <button
@@ -68,9 +68,9 @@ watch([() => props.selected, visible], async () => {
       <span
         ><strong>{{ current?.title }}</strong
         ><small>{{ current?.status }}</small></span
-      ><span>과정 선택 {{ open ? '접기' : '열기' }}</span>
+      ><span>인증Set 선택 {{ open ? '접기' : '열기' }}</span>
     </button>
-    <nav v-show="visible" :id="id" ref="navigation" aria-label="필수 과정">
+    <nav v-show="visible" :id="id" ref="navigation" aria-label="필수 인증Set">
       <button
         v-for="(course, index) in courses"
         :key="course.id"

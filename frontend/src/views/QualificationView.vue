@@ -10,6 +10,7 @@ import QualificationSummary from '../components/QualificationSummary.vue';
 import QualificationCourseNav from '../components/QualificationCourseNav.vue';
 import {
   kindLabels,
+  assessmentPrerequisite,
   learningTypeLabels,
   kstDate,
   type Kind,
@@ -66,11 +67,23 @@ const courses = computed(
       completed: store.complete(e),
     })) || [],
 );
-const kinds = computed(() => (course.value ? store.requiredKinds(course.value) : []));
+const kinds = computed(() =>
+  course.value
+    ? [...store.requiredKinds(course.value)].sort(
+        (a, b) => (a === 'objective' ? 0 : 1) - (b === 'objective' ? 0 : 1),
+      )
+    : [],
+);
+function prerequisite(kind: Kind) {
+  return (
+    course.value &&
+    assessmentPrerequisite(course.value, kind, selected.value?.objective === 'passed')
+  );
+}
 const recommended = computed(
   () =>
-    kinds.value.find((kind) => selected.value?.[kind] === 'draft') ||
-    kinds.value.find((kind) => selected.value?.[kind] !== 'passed'),
+    kinds.value.find((kind) => !prerequisite(kind) && selected.value?.[kind] === 'draft') ||
+    kinds.value.find((kind) => !prerequisite(kind) && selected.value?.[kind] !== 'passed'),
 );
 function action(kind: Kind) {
   return selected.value?.[kind] === 'draft'
@@ -124,7 +137,7 @@ function chooseCourse(id: string) {
       검증 제외 · {{ assignment.excludedReason }}
     </p>
     <p v-else-if="previousCriteria" class="notice-body qualification-context-note">
-      이전 기준으로 진행 중 · 확정 당시 자격·과정 버전을 유지합니다.
+      이전 기준으로 진행 중 · 확정 당시 자격·인증Set 버전을 유지합니다.
     </p>
     <div class="qualification-workspace">
       <QualificationCourseNav
@@ -135,7 +148,7 @@ function chooseCourse(id: string) {
       <div class="course-workspace qualification-course-content">
         <div class="section-heading qualification-course-heading">
           <div>
-            <span class="small-label">선택 과정 · v{{ course.version }}</span>
+            <span class="small-label">선택 인증Set · v{{ course.version }}</span>
             <h2>{{ course.title }}</h2>
           </div>
           <StatusBadge v-if="store.complete(selected)" status="complete" /><span
@@ -172,8 +185,11 @@ function chooseCourse(id: string) {
               </div>
             </dl>
           </section>
-          <section class="qualification-learning-scope text-stack" aria-label="이 과정의 학습 범위">
-            <h3>이 과정의 학습 범위</h3>
+          <section
+            class="qualification-learning-scope text-stack"
+            aria-label="이 인증Set의 학습 범위"
+          >
+            <h3>이 인증Set의 학습 범위</h3>
             <ol v-if="course.learningItems.length" class="learning-scope">
               <li v-for="item in course.learningItems" :key="item.id">
                 <strong>{{ item.title }}</strong
@@ -204,7 +220,7 @@ function chooseCourse(id: string) {
               </li>
             </ul>
             <p class="muted">
-              내용을 학습한 뒤 평가하기로 이동해 주세요. 필수 평가를 모두 통과하면 과정이
+              내용을 학습한 뒤 평가하기로 이동해 주세요. 필수 평가를 모두 통과하면 인증Set이
               수료됩니다.
             </p>
             <RouterLink
@@ -245,7 +261,14 @@ function chooseCourse(id: string) {
                 <span v-if="assignment.excludedReason" class="muted">검증 제외</span
                 ><span v-else-if="selected[kind] === 'passed'" class="passed-caption"
                   ><AppIcon name="check" :size="16" />통과 유지</span
-                ><RouterLink
+                >
+                <div v-else-if="prerequisite(kind)" class="assessment-locked">
+                  <p><AppIcon name="lock" :size="16" />지식 평가를 먼저 통과해 주세요</p>
+                  <RouterLink :to="assessmentPath('objective')" class="button secondary"
+                    >지식 평가로 이동</RouterLink
+                  >
+                </div>
+                <RouterLink
                   v-else
                   :to="assessmentPath(kind)"
                   class="button"
@@ -263,7 +286,7 @@ function chooseCourse(id: string) {
             <p>수료일 {{ kstDate(selected.completion.date) }}</p>
           </div>
           <RouterLink class="button secondary" :to="`/completions/${selected.completion.id}`"
-            >과정 수료증 보기</RouterLink
+            >인증Set 수료증 보기</RouterLink
           >
         </section>
         <details :key="selected.id" class="history qualification-history">

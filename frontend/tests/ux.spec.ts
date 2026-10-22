@@ -67,7 +67,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page.getByRole('heading', { name: '자격 관리', exact: true })).toBeVisible();
   await screenshot(page, 'admin');
-  await page.getByRole('link', { name: '과정 관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await screenshot(page, 'admin-courses');
   await noOverflow(page);
   expect(errors).toEqual([]);

@@ -151,8 +151,8 @@ defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssu
         </button>
       </div>
       <p class="muted">
-        과정 초안 저장 시 서버에 반영됩니다. 미완성 자료는 초안에 보관하고 사용 등록 전에 보완할 수
-        있습니다.
+        인증Set 초안 저장 시 서버에 반영됩니다. 미완성 자료는 초안에 보관하고 사용 등록 전에 보완할
+        수 있습니다.
       </p>
     </fieldset>
   </section>

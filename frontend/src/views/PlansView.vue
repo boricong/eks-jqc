@@ -165,7 +165,7 @@ function scheduleErrors(): Record<string, string> {
       result[`${s.courseId}.assessmentOn`] =
         `${title}: 평가 예정일은 학습 완료 예정일 이후여야 합니다.`;
     if (fields.targetOn && s.assessmentOn && s.assessmentOn > fields.targetOn)
-      result.targetOn = '목표 인증일은 모든 과정의 평가 예정일 이후여야 합니다.';
+      result.targetOn = '목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.';
   });
   return result;
 }
@@ -215,7 +215,7 @@ async function moveTo(target: number) {
   if (Object.keys(goals).length) {
     step.value = 3;
     fieldErrors.value = goals;
-    error.value = '모든 과정의 학습 목표를 입력해 주세요.';
+    error.value = '모든 인증Set의 학습 목표를 입력해 주세요.';
     await focusFirstError();
     return;
   }
@@ -357,7 +357,7 @@ onBeforeRouteUpdate(leave);
         <h2>선택한 자격</h2>
         <p>{{ store.qualification(current.qualificationId).title }}</p>
         <p class="muted">
-          필수 {{ form.schedules.length }}과정 · 이 계획의 자격과 기준 버전은 고정됩니다.
+          필수 {{ form.schedules.length }}인증Set · 이 계획의 자격과 기준 버전은 고정됩니다.
         </p>
         <button class="button primary" @click="moveTo(2)">일정 수립</button>
       </section>
@@ -378,7 +378,7 @@ onBeforeRouteUpdate(leave);
         >
         <div class="schedule-table">
           <div class="schedule-header" aria-hidden="true">
-            <span>과정</span><span>학습 시작 예정일</span><span>학습 완료 예정일</span
+            <span>인증Set</span><span>학습 시작 예정일</span><span>학습 완료 예정일</span
             ><span>평가 예정일</span>
           </div>
           <div v-for="(s, index) in form.schedules" :key="s.courseId" class="schedule-row">
@@ -629,7 +629,7 @@ onBeforeRouteUpdate(leave);
           자격을 다시 선택해 계획을 작성할 수 있습니다.
         </p>
         <p class="muted">
-          {{ deleting.schedules.length }}개 과정의 일정·목표 · 목표 인증일
+          {{ deleting.schedules.length }}개 인증Set의 일정·목표 · 목표 인증일
           {{ deleting.targetOn || '미입력' }}
         </p>
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>

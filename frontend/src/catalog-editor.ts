@@ -25,7 +25,7 @@ export function clean(w: CatalogWorkbook): CatalogWorkbook {
 }
 export const fingerprint = (s: CatalogSheet) =>
   JSON.stringify(
-    clean({ format: 'eks-catalog-v3', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
+    clean({ format: 'eks-catalog-v5', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
   );
 export function newRow(table: CatalogTable, rows: CatalogRow[], courseCode = ''): CatalogRow {
   const r: CatalogRow = Object.fromEntries(columnsFor(table, rows).map(([k]) => [k, '']));
@@ -68,6 +68,9 @@ export function newSheet(): CatalogSheet {
     validityType: 'unknown',
     months: null,
     reminderDays: [],
+    renewalLeadMonths: 3,
+    renewalNoticeDaysBefore: 7,
+    lifecycleStatus: 'Active',
     tables: { courses: [], learning: [], objective: [], materials: [], practical: [] },
   };
 }
@@ -94,7 +97,7 @@ export function duplicateRows(s: CatalogSheet, table: CatalogTable, keys: string
     if (table === 'courses') {
       c.sourceId = '';
       c.sourceRevision = null;
-      c.title = `${r.title || '새 과정'} 사본`;
+      c.title = `${r.title || '새 인증Set'} 사본`;
       for (const child of catalogTables.filter((t) => t !== 'courses'))
         s.tables[child].push(
           ...s.tables[child]

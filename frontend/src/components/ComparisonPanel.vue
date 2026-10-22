@@ -312,7 +312,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
     <template v-else>
       <div class="panel editor-panel comparison-create">
         <label class="field"
-          ><span>대상 과정</span
+          ><span>대상 인증Set</span
           ><select v-model="selectedEnrollment">
             <option v-for="x in activeEntries" :key="x.e.id" :value="x.e.id">
               {{ store.username(x.a.learnerId) }} · {{ x.q.title }} · {{ x.c.title }} v{{
@@ -329,7 +329,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
           ><AppIcon name="search" :size="18" /><input
             v-model="query"
             aria-label="비교 기록 검색"
-            placeholder="대상자 · 자격 · 과정 · 버전" /></label
+            placeholder="대상자 · 자격 · 인증Set · 버전" /></label
         ><label class="field compact-field"
           ><span class="sr-only">비교 결과</span
           ><select v-model="outcome">
@@ -345,7 +345,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <table v-if="rows.length">
           <thead>
             <tr>
-              <th>대상자 · 과정</th>
+              <th>대상자 · 인증Set</th>
               <th>관찰일</th>
               <th>비교 결과</th>
               <th>기록 상태</th>

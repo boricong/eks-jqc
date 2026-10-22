@@ -134,7 +134,7 @@ function readiness(q: Qualification) {
     ...qualificationUseErrors(q, store.data.courses),
     ...q.courseIds.flatMap((id) => {
       const c = store.data.courses.find((c) => c.id === id);
-      return c ? courseUseErrors(c) : ['연결 과정 확인'];
+      return c ? courseUseErrors(c) : ['연결 인증Set 확인'];
     }),
   ];
 }
@@ -399,7 +399,7 @@ function downloadRecovery(record: CatalogRecovery) {
   URL.revokeObjectURL(url);
 }
 async function recover(record: CatalogRecovery) {
-  if (record.workbook.format !== 'eks-catalog-v3') {
+  if (!['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5'].includes(record.workbook.format)) {
     error.value =
       '구형 작성 내용입니다. 원본 보관 파일을 다운로드하고 새 양식 v3에서 기준을 작성해 주세요. 구형 내용은 삭제하지 않았습니다.';
     return;
@@ -542,7 +542,7 @@ function addSheet(copy = false) {
     }
   }
   if (!workbook.value)
-    startWork({ format: 'eks-catalog-v3', lv1OrganizationId: store.managementLv1, sheets: [] });
+    startWork({ format: 'eks-catalog-v5', lv1OrganizationId: store.managementLv1, sheets: [] });
   if (workbook.value!.sheets.length >= 100) {
     error.value = '한 작업은 자격 100개까지 편집할 수 있습니다.';
     return;
@@ -566,7 +566,7 @@ function chooseSheet(index: number) {
 function addItem(t = table.value) {
   if (!sheet.value) return;
   if (t !== 'courses' && !courseCode.value) {
-    error.value = '먼저 연결할 과정을 선택해 주세요.';
+    error.value = '먼저 연결할 인증Set을 선택해 주세요.';
     return;
   }
   checkpoint();
@@ -735,7 +735,7 @@ async function commit(path: string, body: unknown, token: number) {
       result.unchanged
         ? '변경된 기준이 없습니다.'
         : reviewIntent.value === 'publish' && path.endsWith('/publish')
-          ? '선택한 자격과 과정을 사용 등록했습니다.'
+          ? '선택한 자격과 인증Set을 사용 등록했습니다.'
           : '선택한 기준을 초안으로 저장했습니다.',
     );
   } catch (e) {
@@ -803,7 +803,7 @@ async function backToList() {
       <div>
         <span class="eyebrow">인증 업무 관리</span>
         <h1>기준 일괄 관리</h1>
-        <p class="muted">자격과 과정을 선택하고 학습·평가 내용을 작성하세요.</p>
+        <p class="muted">자격과 인증Set을 선택하고 학습·평가 내용을 작성하세요.</p>
       </div>
       <RouterLink :to="store.managementLink('/admin/qualifications')" class="button secondary"
         >개별 기준 관리</RouterLink
@@ -860,7 +860,10 @@ async function backToList() {
       <section v-if="!workbook && recoveries.length" class="panel catalog-recovery">
         <h2>이어서 작성할 작업</h2>
         <button
-          v-for="r in recoveries.filter((v) => v.workbook.format !== 'eks-catalog-v3')"
+          v-for="r in recoveries.filter(
+            (v) =>
+              !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5'].includes(v.workbook.format),
+          )"
           :key="r.id + '-download'"
           class="button secondary"
           @click="downloadRecovery(r)"
@@ -906,7 +909,7 @@ async function backToList() {
               <tr>
                 <th>선택</th>
                 <th>자격</th>
-                <th>과정</th>
+                <th>인증Set</th>
                 <th>준비 상태</th>
                 <th>다음 행동</th>
               </tr>
@@ -960,7 +963,7 @@ async function backToList() {
       </section>
       <template v-if="workbook && sheet">
         <div v-if="importName" class="catalog-import-summary" role="status">
-          <strong>{{ importName }}</strong> · 자격 {{ workbook.sheets.length }}개 · 과정
+          <strong>{{ importName }}</strong> · 자격 {{ workbook.sheets.length }}개 · 인증Set
           {{ workbook.sheets.reduce((n, s) => n + s.tables.courses.length, 0) }}개 · 평가
           {{
             workbook.sheets.reduce(
@@ -996,7 +999,7 @@ async function backToList() {
                         ? '초안 저장됨'
                         : '사용 중'
                   }}
-                  · {{ s.tables.courses.length }}과정</small
+                  · {{ s.tables.courses.length }}인증Set</small
                 >
               </button>
               <div v-if="index === sheetIndex" class="catalog-course-tree">
@@ -1012,9 +1015,9 @@ async function backToList() {
                   "
                 >
                   <span>{{ ci + 1 }}</span
-                  >{{ c.title || '이름 없는 과정' }}</button
+                  >{{ c.title || '이름 없는 인증Set' }}</button
                 ><button class="text-link" :disabled="busy" @click="addItem('courses')">
-                  + 과정 추가
+                  + 인증Set 추가
                 </button>
               </div>
             </div>
@@ -1072,7 +1075,9 @@ async function backToList() {
               </details>
             </div>
             <div class="catalog-editor-toolbar">
-              <h3>{{ allCourses ? '전체 과정 표' : course?.title || '과정을 추가하세요' }}</h3>
+              <h3>
+                {{ allCourses ? '전체 인증Set 표' : course?.title || '인증Set을 추가하세요' }}
+              </h3>
               <button
                 class="button secondary small"
                 :disabled="busy"
@@ -1081,10 +1086,10 @@ async function backToList() {
                   target = undefined;
                 "
               >
-                {{ allCourses ? '과정별 편집' : '전체 과정 표 보기' }}
+                {{ allCourses ? '인증Set별 편집' : '전체 인증Set 표 보기' }}
               </button>
             </div>
-            <div class="bulk-tabs" role="tablist" aria-label="과정 편집">
+            <div class="bulk-tabs" role="tablist" aria-label="인증Set 편집">
               <button
                 v-for="t in catalogTables"
                 :key="t"
@@ -1096,7 +1101,7 @@ async function backToList() {
                   target = undefined;
                 "
               >
-                {{ t === 'courses' && !allCourses ? '과정 정보' : catalogLabels[t] }}
+                {{ t === 'courses' && !allCourses ? '인증Set 정보' : catalogLabels[t] }}
                 <small>{{
                   allCourses
                     ? sheet.tables[t].length
@@ -1140,22 +1145,24 @@ async function backToList() {
                 @checkpoint="checkpoint"
                 @change="changed"
               />
-              <p v-else class="empty-state">과정을 추가한 뒤 학습 항목과 평가 문항을 작성하세요.</p>
+              <p v-else class="empty-state">
+                인증Set을 추가한 뒤 학습 항목과 평가 문항을 작성하세요.
+              </p>
               <div class="catalog-grid-tools">
                 <button class="button secondary small" :disabled="busy" @click="addItem('courses')">
-                  과정 추가</button
+                  인증Set 추가</button
                 ><button
                   class="button secondary small"
                   :disabled="busy || !course"
                   @click="duplicate([rowKey(course!)])"
                 >
-                  과정 복제</button
+                  인증Set 복제</button
                 ><button
                   class="button ghost small"
                   :disabled="busy || !course"
                   @click="requestRemove([rowKey(course!)])"
                 >
-                  과정 제외</button
+                  인증Set 제외</button
                 ><button
                   class="button ghost small"
                   :disabled="busy || !undo.length"

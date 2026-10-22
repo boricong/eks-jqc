@@ -6,7 +6,7 @@ const store = useDemo(),
 const labels = {
   fulfilled: '필수 충족',
   expired: '만료',
-  unknown: '기간 확인 필요',
+  unknown: '효력 확인 필요',
   draft: '작성 중',
   progress: '진행 중',
   ready: '계획 시작 가능',
@@ -22,7 +22,10 @@ const labels = {
   >
     <div class="section-heading">
       <h2>내 소속 필수 자격</h2>
-      <span v-if="view.configured"
+      <span v-if="store.actor.certificationEligibility === 'hold'"
+        >대상자 Hold · 충족 통계에서 제외</span
+      >
+      <span v-else-if="view.configured"
         >{{ view.items.filter((i) => i.status === 'fulfilled').length }} /
         {{ view.items.length }} 유효 인증 보유</span
       >

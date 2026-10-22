@@ -35,6 +35,9 @@ export const CatalogSheetSchema = z.object({
   description: z.string().max(20000),
   validityType: z.enum(["unknown", "months", "unlimited"]),
   months: z.number().int().min(1).max(1200).nullable(),
+  renewalLeadMonths: z.number().int().min(1).max(1200).optional(),
+  renewalNoticeDaysBefore: z.number().int().min(0).max(365).optional(),
+  lifecycleStatus: z.enum(["Active", "Hold", "Revoke"]).optional(),
   reminderDays: z.array(z.number().int().min(1).max(36500)).max(20),
   tables: z
     .object({
@@ -48,7 +51,7 @@ export const CatalogSheetSchema = z.object({
 });
 export type CatalogSheet = z.infer<typeof CatalogSheetSchema>;
 export const CatalogWorkbookSchema = z.object({
-  format: z.literal("eks-catalog-v3"),
+  format: z.enum(["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),
 });
@@ -118,7 +121,7 @@ export const CatalogBatchSchema = z.object({
 });
 export type CatalogBatch = z.infer<typeof CatalogBatchSchema>;
 export const catalogLabels: Record<CatalogTable, string> = {
-  courses: "과정",
+  courses: "인증Set",
   learning: "학습 항목",
   objective: "지식 평가",
   materials: "학습자료",
@@ -126,9 +129,9 @@ export const catalogLabels: Record<CatalogTable, string> = {
 };
 export const catalogColumns: Record<CatalogTable, [string, string][]> = {
   courses: [
-    ["code", "과정코드"],
+    ["code", "인증Set코드"],
     ["order", "순서"],
-    ["title", "과정명"],
+    ["title", "인증Set명"],
     ["kinds", "필수 평가 유형"],
     ["passScore", "객관식 합격 기준"],
     ["practicalPassScore", "상황 대응 합격 기준"],
@@ -136,7 +139,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["sourceRevision", "원본 revision"],
   ],
   learning: [
-    ["courseCode", "과정코드"],
+    ["courseCode", "인증Set코드"],
     ["code", "항목코드"],
     ["order", "순서"],
     ["type", "교육 종류"],
@@ -144,7 +147,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["required", "필수 여부"],
   ],
   objective: [
-    ["courseCode", "과정코드"],
+    ["courseCode", "인증Set코드"],
     ["code", "문항코드"],
     ["order", "순서"],
     ["prompt", "문항"],
@@ -156,7 +159,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["points", "배점"],
   ],
   materials: [
-    ["courseCode", "과정코드"],
+    ["courseCode", "인증Set코드"],
     ["code", "자료코드"],
     ["order", "순서"],
     ["type", "자료 유형"],
@@ -166,7 +169,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["description", "설명"],
   ],
   practical: [
-    ["courseCode", "과정코드"],
+    ["courseCode", "인증Set코드"],
     ["code", "문항코드"],
     ["order", "순서"],
     ["scenario", "상황 설명"],

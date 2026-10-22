@@ -6,7 +6,7 @@ async function draft(page: Page) {
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
   await page.getByRole('button', { name: '새 버전', exact: true }).click();
-  await expect(page.getByLabel('과정명', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('인증Set명', { exact: true })).toBeEnabled();
 }
 const types = (page: Page) => page.getByRole('tablist', { name: '평가 유형', exact: true });
 const questions = (page: Page) =>

@@ -9,7 +9,7 @@ async function manage(page: Page, root?: string) {
 }
 async function lifecycle(page: Page, action: string) {
   await page.getByRole('button', { name: action, exact: true }).click();
-  await page.getByLabel('처리 사유').fill('MVP 과정 운영 검증');
+  await page.getByLabel('처리 사유').fill('MVP 인증Set 운영 검증');
   await page.getByRole('button', { name: `${action} 실행`, exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
@@ -36,9 +36,9 @@ test('다른 창에서 전역 역할을 제거하면 선택한 타 Lv1 편집 �
     organizationId: 'org-photo',
     roles: ['system_operator'],
   });
-  await page.getByRole('link', { name: '과정 관리', exact: true }).click();
-  await page.getByRole('button', { name: '과정 추가', exact: true }).click();
-  await page.getByLabel('과정명', { exact: true }).fill('권한 제거 전 편집');
+  await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await page.getByLabel('인증Set명', { exact: true }).fill('권한 제거 전 편집');
   const other = await page.context().newPage();
   await other.goto('/');
   await actor(other, backupOperator.id);
@@ -70,13 +70,13 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   await other.goto('/');
   await actor(other, 'operator-1');
   await manage(other, 'org-photo');
-  await page.getByRole('link', { name: '과정 관리', exact: true }).click();
-  await page.getByRole('button', { name: '과정 추가', exact: true }).click();
-  await page.getByLabel('과정명', { exact: true }).fill('Etch 탭 초안');
+  await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await page.getByLabel('인증Set명', { exact: true }).fill('Etch 탭 초안');
   page.once('dialog', (d) => d.dismiss());
   await page.getByLabel('관리할 Lv1 조직').selectOption('org-photo');
   await expect(page.getByLabel('관리할 Lv1 조직')).toHaveValue('org-etch');
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('Etch 탭 초안');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('Etch 탭 초안');
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -93,9 +93,9 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   await expect(page.getByLabel('관리할 Lv1 조직')).toBeEnabled();
   await page.reload();
   await expect(page.getByLabel('관리할 Lv1 조직')).toHaveValue('org-etch');
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('Etch 탭 초안');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('Etch 탭 초안');
   await expect(other.getByLabel('관리할 Lv1 조직')).toHaveValue('org-photo');
-  await other.getByRole('link', { name: '과정 관리', exact: true }).click();
+  await other.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await expect(other.getByRole('link', { name: 'Etch 탭 초안', exact: true })).toHaveCount(0);
   // Hold an old focus refresh while a new scope is selected.
   let oldResponse!: () => void, captured!: () => void;
@@ -139,8 +139,8 @@ test('초안 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초
   await actor(page, 'operator-1');
   await manage(page, 'org-photo');
   const call = await apiFor(page);
-  await page.getByRole('link', { name: '과정 관리', exact: true }).click();
-  await page.getByRole('button', { name: '과정 추가', exact: true }).click();
+  await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
   await expect(page.getByRole('button', { name: '초안 삭제', exact: true })).toBeVisible();
   const id = backend.store.snapshot().courses.at(-1)!.id;
   await page.getByRole('button', { name: '초안 삭제', exact: true }).click();
@@ -165,7 +165,7 @@ test('초안 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초
   await expect(page.getByRole('alert')).toContainText('다시 시도');
   await page.getByRole('button', { name: '초안 삭제 실행', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: '과정 관리', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '인증Set 관리', exact: true })).toBeVisible();
   expect(
     backend.store
       .snapshot()

@@ -303,7 +303,7 @@ test("자기 응시만 저장하며 관리자·이전 FT도 다른 학습자 대
     a = await f.call(
       "learner-1",
       "/enrollments/assignment-1:demo-course-2/attempts",
-      { kind: "practical" },
+      { kind: "objective" },
     );
   for (const actor of ["ft-1", "admin-1", "operator-1", "learner-2"]) {
     await f.call(
@@ -332,7 +332,17 @@ test("새 문항 정답·합격 기준은 미정이며 상황 설명 없이는 �
   const c = {
     ...draft,
     title: "상황",
-    assessmentKinds: ["practical"],
+    assessmentKinds: ["objective", "practical"],
+    passScore: 100,
+    questions: [
+      {
+        id: "k",
+        prompt: "기준 확인",
+        choices: ["확인", "생략"],
+        correct: 0,
+        points: 1,
+      },
+    ],
     learningItems: [{ id: "l", type: "ojt", title: "연습", required: true }],
     practicalPassScore: 70,
     practicalQuestions: [

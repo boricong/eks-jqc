@@ -18,7 +18,9 @@ const meta: [string, string][] = [
   ["mode", "작성 방식"],
   ["validityType", "인증기간"],
   ["months", "유효 개월 수"],
-  ["reminderDays", "만료 전 알림 일수"],
+  ["renewalNoticeDaysBefore", "재인증 시작 N일 전 알림"],
+  ["renewalLeadMonths", "재인증 시작 · 만료 전 개월"],
+  ["lifecycleStatus", "기준 운영 상태 · 참고용"],
   ["format", "양식 연결"],
   ["lv1OrganizationId", "조직 연결"],
   ["code", "자격 연결"],
@@ -34,10 +36,10 @@ const systemKeys = [
 ];
 const systemTitles = [
   "관리 코드",
-  "관리 과정 연결",
+  "관리 인증Set 연결",
   "관리 원본",
   "관리 변경 번호",
-  "관리 이전 과정명",
+  "관리 이전 인증Set명",
 ];
 const translations: Record<string, Record<string, string>> = {
   type: {
@@ -81,25 +83,25 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v3";
+  book.subject = "eks-catalog-v5";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 사용자용 양식 v3"],
-    ["1. 자격 기본정보를 작성하고 과정 표에 과정명을 입력하세요."],
+    ["EKS 자격 기준 · 사용자용 양식 v4"],
+    ["1. 자격 기본정보를 작성하고 인증Set 표에 인증Set명을 입력하세요."],
     [
-      "2. 학습·평가 표의 과정 선택에서 연결할 과정명을 고르세요. 새 과정도 목록에 반영됩니다.",
+      "2. 학습·평가 표의 인증Set 선택에서 연결할 인증Set명을 고르세요. 새 인증Set도 목록에 반영됩니다.",
     ],
     [
       "3. 파란 입력칸을 작성하세요. 연결 정보는 접힌 관리 영역에서 보존하므로 수정할 필요가 없습니다.",
     ],
     [
-      "4. 새로운 행의 관리 코드는 비워 두면 가져올 때 자동 생성합니다. 과정명이 같아 연결이 모호하면 웹에서 선택하세요.",
+      "4. 새로운 행의 관리 코드는 비워 두면 가져올 때 자동 생성합니다. 인증Set명이 같아 연결이 모호하면 웹에서 선택하세요.",
     ],
     [
       "5. 기존 기준 수정은 작성 방식을 유지합니다. 독립 사본은 시트를 복제하고 작성 방식을 새 자격으로 선택하세요.",
     ],
     [
-      "6. 포함한 자격의 제외한 과정·문항은 새 개정안에서 빠집니다. 기존 학습과 인증은 유지됩니다.",
+      "6. 포함한 자격의 제외한 인증Set·문항은 새 개정안에서 빠집니다. 기존 학습과 인증은 유지됩니다.",
     ],
     [
       "7. 표 자체나 열 제목은 지우지 마세요. 표 안에서 행 추가·삭제·정렬을 사용하세요. 수식 대신 값을 입력하세요.",
@@ -120,7 +122,7 @@ export async function writeCatalogV3(
   index.columns = [
     { header: "자격명", key: "title", width: 55 },
     { header: "작성 방식", key: "mode", width: 22 },
-    { header: "과정 수", key: "count", width: 12 },
+    { header: "인증Set 수", key: "count", width: 12 },
     { header: "바로가기", key: "link", width: 32 },
   ];
   const names = new Set(["작성 안내", "자격 목록"]);
@@ -141,7 +143,7 @@ export async function writeCatalogV3(
         t,
         t === "courses"
           ? visibleColumns(t, q.tables[t])
-          : [["courseName", "과정 선택"], ...visibleColumns(t, q.tables[t])],
+          : [["courseName", "인증Set 선택"], ...visibleColumns(t, q.tables[t])],
       ]),
     ) as Record<(typeof catalogTables)[number], [string, string][]>;
     const width = Math.max(...catalogTables.map((t) => visible[t].length));
@@ -160,9 +162,9 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v3",
+      format: "eks-catalog-v5",
       lv1OrganizationId: data.lv1OrganizationId,
-      reminderDays: q.reminderDays.join(", "),
+      renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
     const metaCols = allColumns([
       ["label", "항목"],
@@ -189,7 +191,7 @@ export async function writeCatalogV3(
     meta.forEach(([k], i) => {
       const row = i + 4,
         cell = ws.getCell(row, 2);
-      if (i >= 7) {
+      if (i >= 9) {
         ws.getRow(row).outlineLevel = 1;
         ws.getRow(row).hidden = true;
       }
@@ -201,6 +203,27 @@ export async function writeCatalogV3(
           showErrorMessage: true,
           error: "목록에서 선택해 주세요.",
         };
+      if (k === "renewalNoticeDaysBefore")
+        cell.dataValidation = {
+          type: "whole",
+          operator: "between",
+          formulae: [0, 365],
+          allowBlank: false,
+          showErrorMessage: true,
+          error: "0~365일을 입력해 주세요.",
+        };
+      if (k === "renewalLeadMonths")
+        cell.dataValidation = {
+          type: "whole",
+          operator: "between",
+          formulae: [1, 1200],
+          allowBlank: false,
+          showErrorMessage: true,
+          error: "1~1200의 개월 수를 입력해 주세요.",
+        };
+      if (k === "lifecycleStatus")
+        cell.note =
+          "참고용 상태입니다. 변경은 시스템의 운영 상태 변경에서 수행하세요.";
       cell.alignment = { wrapText: true, vertical: "top" };
       ws.getRow(row).height = k === "description" ? 64 : 28;
       for (const issue of issues.filter(
@@ -208,7 +231,7 @@ export async function writeCatalogV3(
       ))
         cell.note = issue.message;
     });
-    let row = 18;
+    let row = meta.length + 6;
     for (const table of catalogTables) {
       ws.getCell(row, 1).value = catalogLabels[table];
       ws.getCell(row, 1).font = {
@@ -268,10 +291,10 @@ export async function writeCatalogV3(
           if (k === "courseName")
             cell.dataValidation = {
               type: "list",
-              formulae: [`INDIRECT("EKS_courses_${si + 1}[과정명]")`],
+              formulae: [`INDIRECT("EKS_courses_${si + 1}[인증Set명]")`],
               allowBlank: true,
               showErrorMessage: true,
-              error: "과정 표의 이름을 선택해 주세요.",
+              error: "인증Set 표의 이름을 선택해 주세요.",
             };
           if (
             [
@@ -346,7 +369,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v3",
+    format: "eks-catalog-v5",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -421,7 +444,7 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
       m[key] = value(r, mb.c + 1, "metadata", 0, key);
     }
     demand(
-      m.format === "eks-catalog-v3",
+      ["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
     );
@@ -445,6 +468,14 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
         m.validityType,
       ) as CatalogSheet["validityType"],
       months: m.months === "" ? null : Number(m.months),
+      ...(m.renewalLeadMonths !== undefined && m.renewalLeadMonths !== ""
+        ? { renewalLeadMonths: Number(m.renewalLeadMonths) }
+        : {}),
+      ...(m.renewalNoticeDaysBefore !== undefined &&
+      m.renewalNoticeDaysBefore !== ""
+        ? { renewalNoticeDaysBefore: Number(m.renewalNoticeDaysBefore) }
+        : {}),
+      ...(m.lifecycleStatus ? { lifecycleStatus: m.lifecycleStatus } : {}),
       reminderDays: String(m.reminderDays || "")
         .split(",")
         .map((s) => s.trim())
@@ -474,9 +505,9 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
       const b = bounds(found[0]),
         cols = new Map<number, string>();
       for (let c = b.c; c <= b.last; c++) {
-        const label = ws.getCell(b.r, c).text;
+        const label = ws.getCell(b.r, c).text.replaceAll("과정", "인증Set");
         const key =
-          label === "과정 선택"
+          label === "인증Set 선택"
             ? "courseName"
             : systemTitles.includes(label)
               ? systemKeys[systemTitles.indexOf(label)]

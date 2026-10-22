@@ -65,15 +65,15 @@ const choiceErrors = computed(() =>
     @change="emit('change')"
   >
     <label v-if="table !== 'courses'" class="field"
-      >과정<select v-model="row.courseCode" data-field="courseCode" aria-label="과정">
-        <option value="">연결할 과정 선택</option>
+      >인증Set<select v-model="row.courseCode" data-field="courseCode" aria-label="인증Set">
+        <option value="">연결할 인증Set 선택</option>
         <option v-for="(c, index) in courses" :key="String(c.code)" :value="c.code">
-          {{ index + 1 }}. {{ c.title || '이름 없는 과정' }}
+          {{ index + 1 }}. {{ c.title || '이름 없는 인증Set' }}
         </option></select
       ><CatalogFieldErrors :issues="issues" field="courseCode"
     /></label>
     <label class="field" v-if="['courses', 'learning', 'materials'].includes(table)"
-      >{{ table === 'courses' ? '과정명' : table === 'learning' ? '학습 항목명' : '자료명'
+      >{{ table === 'courses' ? '인증Set명' : table === 'learning' ? '학습 항목명' : '자료명'
       }}<input v-model="row.title" data-field="title" /><CatalogFieldErrors
         :issues="issues"
         field="title"

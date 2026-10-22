@@ -16,9 +16,9 @@ async function respond(page: Page, course: Course, kind: Kind, pass = true) {
       .nth(pass ? q.correct! : (q.correct! + 1) % q.choices.length)
       .check();
   }
-  await page.getByRole('button', { name: '답안 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '제출 전 답안 확인', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '제출', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '제출 전 답안 확인', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '최종 제출', exact: true }).click();
   await expect(page.locator('.result-panel')).toContainText('자동 채점');
 }
 
@@ -50,29 +50,20 @@ test('계획 요청 기본 기한 → 전 FT 학습자의 학습·독립 평가�
     .courseIds.map((id) => state.courses.find((c) => c.id === id)!);
   for (const [i, course] of courses.entries()) {
     await page.goto(`/qualifications/${assignment.id}/courses/${course.id}/practical`);
-    await expect(page.locator('.scenario-context')).toBeVisible();
-    await respond(page, course, 'practical');
     await expect(
-      page.getByRole('heading', { name: '과정을 수료했습니다.', exact: true }),
-    ).toHaveCount(0);
+      page.getByRole('heading', { name: '지식 평가를 먼저 통과해 주세요', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('radio').first()).toBeDisabled();
     await page.goto(`/qualifications/${assignment.id}/courses/${course.id}/objective`);
     if (i === 0) {
       await respond(page, course, 'objective', false);
-      expect(
-        backend.store
-          .snapshot()
-          .attempts.filter(
-            (a) =>
-              a.learnerId === assignment.learnerId &&
-              a.kind === 'practical' &&
-              a.status === 'graded',
-          ),
-      ).toHaveLength(1);
       await page.getByRole('button', { name: '다시 응시', exact: true }).click();
     }
     await respond(page, course, 'objective');
+    await page.getByRole('link', { name: '상황 대응 평가 시작', exact: true }).click();
+    await respond(page, course, 'practical');
     await expect(
-      page.getByRole('heading', { name: '과정을 수료했습니다.', exact: true }),
+      page.getByText('필수 평가를 모두 통과하여 인증Set을 수료했습니다.', { exact: true }),
     ).toBeVisible();
   }
   await page.getByRole('link', { name: '인증서 보기' }).click();
@@ -91,7 +82,7 @@ test('전 FT 계정·여러 탭 격리와 폐지된 평가 화면 안내', async
   const other = await context.newPage();
   await other.goto('/');
   await actor(other, 'ft-1');
-  await page.goto('/qualifications/assignment-1/courses/demo-course-2/practical');
+  await page.goto('/qualifications/assignment-1/courses/demo-course-1/practical');
   await expect(
     page.getByRole('heading', { name: '실기 · 상황 대응 평가', exact: true }),
   ).toBeVisible();

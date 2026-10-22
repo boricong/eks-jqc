@@ -99,11 +99,11 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
         await tabs.getByRole('tab').nth(i).click();
         await page.getByRole('radio').nth(q.correct!).check();
       }
-      await page.getByRole('button', { name: '답안 확인', exact: true }).click();
+      await page.getByRole('button', { name: '제출', exact: true }).click();
       await expect(page.getByTestId('process-guide')).toContainText(
         '현재 단계 · 제출 전 답안 확인',
       );
-      await page.getByRole('button', { name: '제출', exact: true }).click();
+      await page.getByRole('button', { name: '최종 제출', exact: true }).click();
       await expect(page.locator('.result-panel')).toContainText('자동 채점');
     }
   }

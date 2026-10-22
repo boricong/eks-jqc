@@ -1,0 +1,377 @@
+/* Assessment task styles follow DESIGN.md; result colour is confined to the outcome. */
+.assessment-page .assessment-progress {
+  margin: 0 0 16px;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.assessment-page .assessment-review {
+  padding: 24px;
+  display: grid;
+  gap: 24px;
+}
+.review-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 24px;
+}
+.review-heading h2 {
+  font-size: 22px;
+  line-height: 1.4;
+  margin: 8px 0;
+}
+.review-heading p {
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+.review-eyebrow,
+.review-count {
+  font-size: 14px;
+}
+.review-count {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.review-list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.assessment-page .review-question {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.review-number {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-tint);
+}
+.review-question-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.assessment-page .review-question h3 {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.assessment-page .review-question p {
+  font-size: 16px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--ink);
+}
+.review-selected {
+  padding: 16px;
+  background: var(--surface-tint);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  display: grid;
+  gap: 8px;
+}
+.review-selected > span,
+.review-scenario h4 {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  font-weight: 500;
+  margin: 0;
+}
+.review-scenario {
+  display: grid;
+  gap: 8px;
+}
+.assessment-page .review-scenario p {
+  font-size: 15px;
+  color: var(--ink-secondary);
+}
+.review-edit {
+  align-self: start;
+  min-height: 36px;
+}
+.review-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  font-size: 14px;
+}
+.assessment-page .assessment-submitbar {
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--surface);
+  box-shadow: 0 2px 10px #00000008;
+}
+.assessment-submit-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.submission-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+.assessment-submit-actions .actions {
+  justify-content: flex-end;
+}
+.assessment-locked {
+  display: grid;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.assessment-locked p {
+  display: flex;
+  gap: 8px;
+  align-items: start;
+}
+.assessment-prerequisite {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.assessment-prerequisite h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.assessment-prerequisite p {
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.assessment-page .assessment-outcome {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 40px;
+  border-color: #c7dccd;
+  background: #edf8f0;
+  text-align: left;
+}
+.assessment-outcome:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('./assets/topography.svg');
+  background-size: 600px;
+  opacity: 0.055;
+  z-index: -1;
+  pointer-events: none;
+}
+.assessment-page .outcome-failed {
+  background: #fff1ed;
+  border-color: #ebcfc5;
+}
+.outcome-content {
+  width: 100%;
+  max-width: 960px;
+  margin: auto;
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.outcome-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: white;
+  color: #236139;
+  border: 1px solid #b9d1c1;
+}
+.outcome-failed .outcome-icon {
+  color: #943c2b;
+  border-color: #e0baae;
+}
+.outcome-eyebrow {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #41544a;
+}
+.outcome-failed .outcome-eyebrow {
+  color: #6b4a40;
+}
+.assessment-page .assessment-outcome h2 {
+  font-size: 26px;
+  line-height: 1.4;
+  margin: 0;
+  color: #19492a;
+}
+.assessment-page .outcome-failed h2 {
+  color: #813122;
+}
+.outcome-description {
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 65ch;
+  color: #263b2e;
+  overflow-wrap: anywhere;
+}
+.outcome-failed .outcome-description {
+  color: #50382f;
+}
+.outcome-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 24px;
+  padding: 24px;
+  background: #ffffffed;
+  border: 1px solid #00000014;
+  border-radius: 12px;
+  margin: 0;
+}
+.outcome-facts > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.outcome-facts dt {
+  font-size: 14px;
+  color: var(--ink-secondary);
+}
+.outcome-facts dd {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.outcome-facts strong {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.assessment-page .outcome-actions {
+  justify-content: flex-start;
+  gap: 12px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+.assessment-page .outcome-credit {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #4d554f;
+}
+.outcome-credit a {
+  color: #005bab;
+  text-decoration: underline;
+}
+.missing-number-list {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  padding: 16px 0;
+}
+@media (max-width: 767px) {
+  .assessment-page .page-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .assessment-page .page-heading p {
+    word-break: keep-all;
+    text-wrap: pretty;
+  }
+  .assessment-page .assessment-review {
+    padding: 16px;
+    gap: 16px;
+  }
+  .review-heading {
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+  .assessment-page .review-question {
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: 16px;
+    gap: 12px;
+  }
+  .review-number {
+    width: 32px;
+    height: 32px;
+  }
+  .review-edit {
+    grid-column: 2;
+    justify-self: end;
+    min-height: 44px;
+  }
+  .review-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+  }
+  .review-pagination > span {
+    order: -1;
+    flex-basis: 100%;
+    text-align: center;
+  }
+  .assessment-page .assessment-submitbar {
+    padding: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .assessment-submit-actions {
+    width: 100%;
+  }
+  .assessment-submit-actions .button,
+  .review-pagination .button {
+    min-height: 44px;
+  }
+  .submission-warning {
+    font-size: 14px;
+    align-items: flex-start;
+  }
+  .assessment-page .assessment-outcome {
+    padding: 24px 16px;
+  }
+  .outcome-content {
+    gap: 20px;
+  }
+  .outcome-facts {
+    grid-template-columns: 1fr;
+    padding: 20px;
+    gap: 20px;
+  }
+  .outcome-actions .button {
+    min-height: 44px;
+  }
+  .assessment-prerequisite {
+    padding: 16px;
+  }
+}
+
+.renewal-phase-label {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}

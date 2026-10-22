@@ -32,7 +32,7 @@ export function validateWorkflow(s: State) {
         new Set(p.schedules.map((x) => x.courseId)).size ===
           q.courseIds.length &&
         p.schedules.every((x) => q.courseIds.includes(x.courseId)),
-      "계획 필수 과정",
+      "계획 필수 인증Set",
     );
     if (p.status === "completed") {
       const a = s.assignments.find((a) => a.id === p.assignmentId);
@@ -82,7 +82,7 @@ export function validateWorkflow(s: State) {
     );
   }
   for (const c of s.certifications) {
-    if (c.validity)
+    if (c.validity && !c.periods?.length)
       check(
         c.expiresOn === expirationDate(c.date, c.validity),
         "인증 만료일 계산",

@@ -11,6 +11,7 @@ import {
   organizationEntries,
 } from "@eks/contracts";
 import { validateWorkflow } from "./workflow-integrity.ts";
+import { validateLifecycle } from "./lifecycle-integrity.ts";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`저장 데이터 무결성 오류: ${message}`);
@@ -20,6 +21,7 @@ export function validateState(
   organizations?: OrganizationDocument,
 ): State {
   const s = StateSchema.parse(input);
+  validateLifecycle(s);
   check(
     s.users.some((u) => u.roles.includes("system_operator")),
     "시스템 운영자 누락",
@@ -60,6 +62,8 @@ export function validateState(
       ...s.planningRequests,
       ...s.notifications,
       ...s.catalogBatches,
+      ...s.renewals,
+      ...s.lifecycleEvents,
     ])
       check(
         entries.some((e) => e.id === record.lv1OrganizationId && e.level === 1),
@@ -96,6 +100,8 @@ export function validateState(
     "learningRecords",
     "notifications",
     "catalogBatches",
+    "renewals",
+    "lifecycleEvents",
   ] as const)
     check(
       new Set(s[key].map((x) => x.id)).size === s[key].length,
@@ -129,15 +135,15 @@ export function validateState(
           c.retiredAt &&
           c.retirementReason &&
           s.users.some((u) => u.id === c.retiredBy),
-        "과정 운영 종료 근거",
+        "인증Set 운영 종료 근거",
       );
     else
       check(
         !c.retiredAt && !c.retiredBy && !c.retirementReason,
-        "운영 중 과정의 종료 정보",
+        "운영 중 인증Set의 종료 정보",
       );
     if (c.status === "published")
-      check(!courseErrors(c).length, "사용 중인 과정 기준 누락");
+      check(!courseErrors(c).length, "사용 중인 인증Set 기준 누락");
   }
   for (const q of s.qualifications) {
     check(
@@ -146,7 +152,7 @@ export function validateState(
           (c) => c.id === id && c.lv1OrganizationId === q.lv1OrganizationId,
         ),
       ),
-      "과정 참조 누락",
+      "인증Set 참조 누락",
     );
     if (q.status === "published")
       check(
@@ -184,7 +190,7 @@ export function validateState(
       es.length === q.courseIds.length &&
         new Set(es.map((e) => e.courseId)).size === es.length &&
         es.every((e) => q.courseIds.includes(e.courseId)),
-      "배정 필수 과정 집합",
+      "배정 필수 인증Set 집합",
     );
   }
   const activeKeys = new Set<string>(),

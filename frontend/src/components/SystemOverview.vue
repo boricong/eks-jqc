@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { credentialCurrent } from '@eks/contracts';
 import CourseMaterials from './CourseMaterials.vue';
 import ValidityBadge from './ValidityBadge.vue';
 import { kindLabels, kstDate } from '@eks/contracts';
@@ -12,7 +13,7 @@ const root = ref(''),
 const tabs = [
   { id: 'assignments', name: '배정·평가 결과' },
   { id: 'qualifications', name: '자격' },
-  { id: 'courses', name: '과정·평가 기준' },
+  { id: 'courses', name: '인증Set·평가 기준' },
   { id: 'comparisons', name: '실제 수행 비교' },
   { id: 'notices', name: '공지' },
   { id: 'audits', name: '변경 이력' },
@@ -50,9 +51,9 @@ const stateLabels: Record<string, string> = {
 const valueLabel = (value?: string) =>
   value === 'pass' ? '충족' : value === 'fail' ? '미충족' : '미판정';
 const actionLabels: Record<string, string> = {
-  'course.delete': '과정 초안 삭제',
-  'course.retire': '과정 운영 종료',
-  'course.reactivate': '과정 운영 재개',
+  'course.delete': '인증Set 초안 삭제',
+  'course.retire': '인증Set 운영 종료',
+  'course.reactivate': '인증Set 운영 재개',
   'catalog.create': '기준 초안 생성',
   'catalog.save': '기준 초안 저장',
   'catalog.publish': '기준 사용 등록',
@@ -125,7 +126,9 @@ const actionLabels: Record<string, string> = {
       </p>
       <p v-if="a.certification">
         <ValidityBadge :certification="a.certification" /> · 취득 {{ kstDate(a.certification.date)
-        }}<span v-if="a.certification.expiresOn"> · 만료 {{ a.certification.expiresOn }}</span>
+        }}<span v-if="credentialCurrent(a.certification).expiresOn">
+          · 만료 {{ credentialCurrent(a.certification).expiresOn }}</span
+        >
       </p>
       <p v-if="a.excludedReason">제외 사유: {{ a.excludedReason }}</p>
       <RouterLink v-if="a.certification" :to="`/certifications/${a.id}`" class="text-link"
@@ -142,7 +145,7 @@ const actionLabels: Record<string, string> = {
           자료 열람 여부를 완료로 집계하지 않습니다. 필수 평가 통과로 수료를 확인합니다.
         </p>
         <RouterLink v-if="e.completion" :to="`/completions/${e.completion.id}`" class="text-link"
-          >과정 수료증 보기</RouterLink
+          >인증Set 수료증 보기</RouterLink
         >
         <details
           v-for="t in [...e.history, ...Object.values(e.activeAttempts)]"
@@ -191,7 +194,7 @@ const actionLabels: Record<string, string> = {
         인증기간:
         {{
           q.validity.type === 'months'
-            ? `${q.validity.months}개월 · 만료 ${q.validity.reminderDays.join('·')}일 전 알림`
+            ? `${q.validity.months}개월 · 재인증 시작 ${q.renewalNoticeDaysBefore ?? 7}일 전 1회 알림`
             : q.validity.type === 'unlimited'
               ? '무기한'
               : '미정'
@@ -204,7 +207,7 @@ const actionLabels: Record<string, string> = {
   </section>
   <section v-else-if="tab === 'courses'" class="system-records">
     <p v-if="!store.data.courses.some((c) => matches(c.lv1OrganizationId))" class="empty-state">
-      등록된 과정이 없습니다.
+      등록된 인증Set이 없습니다.
     </p>
     <details
       v-for="c in store.data.courses.filter((c) => matches(c.lv1OrganizationId))"

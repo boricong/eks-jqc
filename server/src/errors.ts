@@ -3,6 +3,7 @@ export class DomainError extends Error {
     public status: number,
     message: string,
     public code = "INVALID_REQUEST",
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }

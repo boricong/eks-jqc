@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import RenewalNoticeExample from './RenewalNoticeExample.vue';
 import CatalogFieldErrors from './CatalogFieldErrors.vue';
 import type { CatalogIssue } from '@eks/contracts';
 import type { CatalogSheet } from '@eks/contracts';
@@ -70,28 +71,38 @@ const validity = computed({
           min="1"
           max="1200" /><CatalogFieldErrors :issues="issues" field="months" /></label
       ><label v-if="sheet.validityType === 'months'" class="field"
-        >만료 전 알림 일수<input
-          :value="sheet.reminderDays.join(', ')"
-          data-field="reminderDays"
-          placeholder="예: 90, 30, 7"
-          @change="
-            sheet.reminderDays = ($event.target as HTMLInputElement).value
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .map(Number)
-          "
+        >재인증 시작 N일 전 알림<input
+          :value="sheet.renewalNoticeDaysBefore ?? 7"
+          data-field="renewalNoticeDaysBefore"
+          type="number"
+          min="0"
+          max="365"
+          @input="
+            sheet.renewalNoticeDaysBefore = Number(($event.target as HTMLInputElement).value)
+          " /><CatalogFieldErrors :issues="issues" field="renewalNoticeDaysBefore"
       /></label>
     </div>
-    <button
+    <label v-if="sheet.validityType === 'months'" class="field"
+      >재인증 시작 · 만료 전 개월<input
+        :value="sheet.renewalLeadMonths ?? 3"
+        data-field="renewalLeadMonths"
+        type="number"
+        min="1"
+        max="1200"
+        @input="
+          sheet.renewalLeadMonths = Number(($event.target as HTMLInputElement).value);
+          emit('change');
+        " /><CatalogFieldErrors :issues="issues" field="renewalLeadMonths"
+    /></label>
+    <p class="muted">
+      운영 상태 {{ sheet.lifecycleStatus || 'Active' }} · 참고용. Hold·Revoke는 자격 관리에서 영향과
+      사유를 확인하여 변경합니다.
+    </p>
+    <RenewalNoticeExample
       v-if="sheet.validityType === 'months'"
-      class="text-link"
-      @click="
-        sheet.reminderDays = [90, 30, 7];
-        emit('change');
-      "
-    >
-      90·30·7일 전 선택
-    </button>
+      :months="sheet.months"
+      :lead="sheet.renewalLeadMonths"
+      :days="sheet.renewalNoticeDaysBefore"
+    />
   </fieldset>
 </template>

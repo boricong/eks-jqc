@@ -11,7 +11,7 @@ test('응답 유실 후 복구·동일 요청 재시도는 새 버전을 중복 
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByLabel('과정명', { exact: true }).fill('응답 유실 검증');
+  await page.getByLabel('인증Set명', { exact: true }).fill('응답 유실 검증');
   let dropped = false;
   await page.route('**/api/catalog/batches?*', async (route) => {
     if (route.request().method() === 'POST' && !dropped) {
@@ -45,7 +45,7 @@ test('여러 탭의 자동 보관은 별개이며 다른 계정에 노출되지 
     await actor(tab, 'admin-1');
     await tab.goto('/admin/catalog');
     await tab.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-    await tab.getByLabel('과정명', { exact: true }).fill(title);
+    await tab.getByLabel('인증Set명', { exact: true }).fill(title);
     await expect(tab.getByText('이 브라우저에 보관됨', { exact: true })).toBeVisible();
   }
   const records = await page.evaluate(
@@ -71,7 +71,7 @@ test('여러 탭의 자동 보관은 별개이며 다른 계정에 노출되지 
   await second.getByLabel('접속 계정').selectOption('learner-1');
   await expect(second.getByRole('heading', { name: '김민서 님', exact: true })).toBeVisible();
   await expect(second.getByText('두 번째 탭 수정', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('첫 탭 수정');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('첫 탭 수정');
 });
 
 test('Excel 수식 오류는 재검사로 사라지지 않으며 해당 값을 수정해야 저장할 수 있다', async ({
@@ -104,7 +104,7 @@ test('Excel 수식 오류는 재검사로 사라지지 않으며 해당 값을 �
   await expect(page.getByRole('dialog')).toContainText('수식 대신');
 });
 
-test('자격·과정 중심 편집: 코드 없이 문항 작성, 제외 취소와 필터 밖 과정 보존', async ({
+test('자격·인증Set 중심 편집: 코드 없이 문항 작성, 제외 취소와 필터 밖 인증Set 보존', async ({
   page,
   backend,
 }) => {
@@ -114,12 +114,12 @@ test('자격·과정 중심 편집: 코드 없이 문항 작성, 제외 취소�
   await expect(page.getByRole('button', { name: /선택 자격 편집/ })).toBeDisabled();
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
   await expect(page.locator('.catalog-nav-item')).toHaveCount(1);
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('자료 확인');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('자료 확인');
   await expect(page.getByLabel('자격코드', { exact: true })).toHaveCount(0);
-  await page.getByLabel('과정명', { exact: true }).fill('자료 확인 개정');
+  await page.getByLabel('인증Set명', { exact: true }).fill('자료 확인 개정');
   await page.locator('.catalog-course-tree button').filter({ hasText: '기록 작성' }).click();
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('기록 작성');
-  await page.getByRole('button', { name: '과정 제외', exact: true }).click();
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('기록 작성');
+  await page.getByRole('button', { name: '인증Set 제외', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('함께 제외');
   await page.getByRole('button', { name: '취소', exact: true }).click();
   await expect(page.locator('.catalog-course-tree')).toContainText('자료 확인 개정');
@@ -128,7 +128,7 @@ test('자격·과정 중심 편집: 코드 없이 문항 작성, 제외 취소�
   await expect(page.getByRole('button', { name: '선택 항목 제외', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '항목 추가', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('과정', { exact: true })).toHaveValue('demo-course-2');
+  await expect(dialog.getByLabel('인증Set', { exact: true })).toHaveValue('demo-course-2');
   await dialog.getByLabel('문항', { exact: true }).fill('기록의 출처를 어떻게 확인하나요?');
   await dialog.getByLabel('1번 선택지', { exact: true }).fill('원본과 대조');
   await dialog.getByLabel('2번 선택지', { exact: true }).fill('확인 생략');
@@ -217,7 +217,7 @@ test('브라우저 보관 실패를 알리고 저장 충돌에서도 입력과 �
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByLabel('과정명', { exact: true }).fill('보존할 수정');
+  await page.getByLabel('인증Set명', { exact: true }).fill('보존할 수정');
   await expect(
     page.getByText('브라우저에 보관하지 못했습니다. 작업 파일을 다운로드해 주세요.', {
       exact: true,
@@ -239,7 +239,7 @@ test('브라우저 보관 실패를 알리고 저장 충돌에서도 입력과 �
   ).toBeDisabled();
   await expect(page.getByRole('dialog')).toContainText('원본이 변경');
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page.getByLabel('과정명', { exact: true })).toHaveValue('보존할 수정');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 수정');
   await expect(
     page.getByRole('button', { name: '작업 파일 다운로드', exact: true }).last(),
   ).toBeEnabled();
@@ -252,8 +252,8 @@ test('새 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화
   await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
   await page.getByLabel('자격명', { exact: true }).fill('신규 설비 자격');
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
-  await page.getByRole('button', { name: '과정 추가', exact: true }).click();
-  await page.getByLabel('과정명', { exact: true }).fill('설비 구성 확인');
+  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await page.getByLabel('인증Set명', { exact: true }).fill('설비 구성 확인');
   await page.getByLabel('객관식 · 지식 평가', { exact: true }).check();
   await page.getByLabel('실기 · 상황 대응 평가', { exact: true }).check();
   for (const theme of ['single']) {

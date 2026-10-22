@@ -43,7 +43,7 @@ onMounted(async () => {
   const courseOptions = Object.fromEntries(
     props.courses.map((c, i) => [
       String(c.code),
-      `${i + 1}. ${String(c.title || '이름 없는 과정')}`,
+      `${i + 1}. ${String(c.title || '이름 없는 인증Set')}`,
     ]),
   );
   const columns: ColumnDefinition[] = [
@@ -71,7 +71,7 @@ onMounted(async () => {
           : maps[field];
     columns.push({
       field,
-      title: field === 'courseCode' ? '과정' : label,
+      title: field === 'courseCode' ? '인증Set' : label,
       width:
         field === 'order'
           ? 65

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { kstDate, certificationStatus } from '@eks/contracts';
+import {
+  kstDate,
+  certificationStatus,
+  credentialCurrent,
+  latestPeriod,
+  renewalOpensOn,
+} from '@eks/contracts';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
@@ -23,6 +29,7 @@ const list = computed(() =>
   store.data.assignments.filter(
     (a) =>
       a.learnerId === store.actorId &&
+      !a.acquisitionClosedAt &&
       (filter.value === 'excluded'
         ? !!a.excludedReason
         : !a.excludedReason && Boolean(a.certifiedAt) === (filter.value === 'certified')) &&
@@ -42,6 +49,9 @@ const list = computed(() =>
 <template>
   <div class="container page">
     <LearnerNav />
+    <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
+      취득 대상자 Hold · 새 취득·평가·재인증은 중단됩니다. 기록과 자료는 확인할 수 있습니다.
+    </p>
     <div class="page-heading">
       <h1>자격 취득</h1>
       <span class="muted">{{ store.actor.name }}</span>
@@ -54,7 +64,9 @@ const list = computed(() =>
           @click="router.replace({ query: {} })"
         >
           진행 중
-          <span>{{ store.myAssignments.filter((a) => !a.certifiedAt).length }}</span></button
+          <span>{{
+            store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt).length
+          }}</span></button
         ><button
           :class="{ active: filter === 'certified' }"
           :aria-pressed="filter === 'certified'"
@@ -73,8 +85,10 @@ const list = computed(() =>
       <select v-if="filter === 'certified'" v-model="validity" aria-label="자격 유효 상태">
         <option value="all">취득 이력 전체</option>
         <option value="valid">현재 유효</option>
-        <option value="expiring">만료 예정</option>
-        <option value="expired">만료</option>
+        <option value="expiring">재인증 기간</option>
+        <option value="revoked">Revoke · 폐기</option>
+        <option value="held">Hold · 정지</option>
+        <option value="expired">만료 처리 예정</option>
         <option value="unknown">유효기간 미설정</option>
       </select>
       <label class="search-field"
@@ -94,23 +108,35 @@ const list = computed(() =>
           ><AppIcon :name="a.certifiedAt ? 'award' : 'book'" :size="26" /></span
         ><span class="qualification-info"
           ><span class="row-title">{{ store.qualification(a.qualificationId).title }}</span
-          ><span v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')" class="test-data-tag">시험 데이터</span
+          ><span
+            v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')"
+            class="test-data-tag"
+            >시험 데이터</span
           ><span class="muted"
             >v{{ store.qualification(a.qualificationId).version }} · 필수
-            {{ a.enrollments.length }}과정</span
+            {{ a.enrollments.length }}인증Set</span
           ><span v-if="a.certification" class="muted"
             >취득 {{ kstDate(a.certifiedAt!) }} ·
             {{
-              a.certification.expiresOn
-                ? `만료 ${a.certification.expiresOn}`
-                : a.certification.validity?.type === 'unlimited'
+              credentialCurrent(a.certification).expiresOn
+                ? `만료 ${credentialCurrent(a.certification).expiresOn}`
+                : credentialCurrent(a.certification).validity?.type === 'unlimited'
                   ? '무기한'
                   : '유효기간 미설정 · 기존 기록'
             }}</span
+          ><span
+            v-if="
+              a.certification &&
+              latestPeriod(a.certification) &&
+              renewalOpensOn(latestPeriod(a.certification)!)
+            "
+            class="muted"
+            >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification)!) }} · 상태와 이력
+            보기</span
           ></span
         ><span class="qualification-progress"
           ><span class="progress-label"
-            ><span>과정 수료</span
+            ><span>인증Set 수료</span
             ><span>{{ store.completedCount(a) }} / {{ a.enrollments.length }}</span></span
           ><span class="progress-track"
             ><span

@@ -30,12 +30,13 @@ import {
   KindSchema,
   assessmentQuestions,
   assessmentPassScore,
+  assessmentPrerequisite,
   kstDate,
   expirationDate,
   unknownValidity,
   kindLabels,
 } from "@eks/contracts";
-import { demand } from "./storage.ts";
+import { demand, DomainError } from "./storage.ts";
 import { userView, organization, systemOperator } from "./organizations.ts";
 import { changeCourseLifecycle, courseUsage } from "./course-lifecycle.ts";
 import {
@@ -46,6 +47,11 @@ import {
 import { notify } from "./notifications.ts";
 import { editableOrganizations } from "./organization-administrators.ts";
 import { authorizeNotice, saveNotice } from "./notices.ts";
+import {
+  initializeCertification,
+  requireEligible,
+  reconcileLifecycle,
+} from "./qualification-lifecycle.ts";
 
 const now = () => new Date().toISOString();
 const uid = () => randomUUID();
@@ -70,6 +76,12 @@ export function canRead(a: StoredAssignment, u: User) {
   );
 }
 function active(a: StoredAssignment) {
+  demand(
+    !a.acquisitionClosedAt,
+    409,
+    "종료된 과거 취득 회차입니다. 최신 배정에서 진행해 주세요.",
+    "ACQUISITION_CLOSED",
+  );
   demand(
     !a.excludedReason,
     409,
@@ -297,6 +309,7 @@ function reconcile(
         : {}),
       evidence: completed as { enrollmentId: string; completionId: string }[],
     });
+    initializeCertification(s, s.certifications.at(-1)!, q, at);
     notify(
       s,
       {
@@ -306,7 +319,7 @@ function reconcile(
         assignmentId: a.id,
         certificationId: id,
         type: "certification",
-        title: "필수 과정을 모두 수료하여 자격을 취득했습니다",
+        title: "필수 인증Set을 모두 수료하여 자격을 취득했습니다",
         body: q.title,
         href: `/certifications/${a.id}`,
       },
@@ -321,7 +334,7 @@ function reconcile(
         lv1OrganizationId: a.lv1OrganizationId,
         assignmentId: a.id,
         type: "completion",
-        title: "과정을 수료했습니다",
+        title: "인증Set을 수료했습니다",
         body: c.title,
         href: `/completions/${newCompletion}`,
       },
@@ -354,6 +367,8 @@ export function execute(
   at = now(),
 ): any {
   const now = () => at;
+  reconcileLifecycle(s, at);
+  if (action.startsWith("attempt.")) requireEligible(u);
   if (isWorkflowAction(action))
     return executeWorkflow(
       s,
@@ -421,23 +436,65 @@ export function execute(
     s.completions = s.completions.filter(
       (r) => !enrollments.has(r.enrollmentId),
     );
+    const removedCertIds = new Set(
+      s.certifications
+        .filter((c) => affected.has(c.assignmentId))
+        .map((c) => c.id),
+    );
     s.certifications = s.certifications.filter(
       (r) => !affected.has(r.assignmentId),
     );
+    s.renewals = s.renewals.filter(
+      (r) => !removedCertIds.has(r.certificationId),
+    );
+    s.lifecycleEvents = s.lifecycleEvents.filter(
+      (e) => e.subject !== "certification" || !removedCertIds.has(e.targetId),
+    );
+    const groups = new Map<string, StoredAssignment[]>();
+    for (const a of s.assignments.filter((a) => affected.has(a.id))) {
+      const key = `${a.learnerId}:${find(s.qualifications, a.qualificationId).entityId}`;
+      groups.set(key, [...(groups.get(key) || []), a]);
+      if (
+        a.previousCertificationId &&
+        removedCertIds.has(a.previousCertificationId)
+      ) {
+        a.resetPreviousCertificationId = a.previousCertificationId;
+        delete a.previousCertificationId;
+      }
+    }
+    for (const group of groups.values())
+      for (const a of group.slice(0, -1)) a.acquisitionClosedAt ||= at;
+    for (const p of s.plans)
+      if (
+        p.previousCertificationId &&
+        removedCertIds.has(p.previousCertificationId)
+      )
+        delete p.previousCertificationId;
+    for (const r of s.planningRequests)
+      for (const t of r.targets || [])
+        if (
+          t.previousCertificationId &&
+          removedCertIds.has(t.previousCertificationId)
+        )
+          delete t.previousCertificationId;
     s.comparisons = s.comparisons.filter(
       (r) => !enrollments.has(r.enrollmentId),
     );
     s.requests = s.requests.filter(
       (r) =>
         !(
-          r.lv1OrganizationId &&
-          inScope(r.lv1OrganizationId, input.scope) &&
-          (!r.action ||
-            r.action === "legacy" ||
-            r.action.startsWith("attempt.") ||
-            r.action.startsWith("learning.") ||
-            r.action === "notification.read" ||
-            r.action.startsWith("comparison."))
+          (r.lv1OrganizationId &&
+            inScope(r.lv1OrganizationId, input.scope) &&
+            (!r.action ||
+              r.action === "legacy" ||
+              r.action.startsWith("attempt.") ||
+              r.action.startsWith("learning.") ||
+              r.action === "notification.read" ||
+              r.action.startsWith("comparison."))) ||
+          (r.lv1OrganizationId &&
+            inScope(r.lv1OrganizationId, input.scope) &&
+            (r.action?.startsWith("renewal.") ||
+              r.action?.startsWith("credential.")))
         ),
     );
     s.audits = s.audits.filter(
@@ -499,7 +556,13 @@ export function execute(
         );
       else
         s.qualifications.push(
-          QualificationSchema.parse({ ...base, courseIds: [] }),
+          QualificationSchema.parse({
+            ...base,
+            courseIds: [],
+            lifecycleStatus: "Active",
+            renewalLeadMonths: 3,
+            renewalNoticeDaysBefore: 7,
+          }),
         );
       audit(s, u, action, id);
       return { id };
@@ -534,7 +597,7 @@ export function execute(
               retiredBy: undefined,
               retirementReason: undefined,
             }
-          : {}),
+          : { lifecycleStatus: "Active" }),
       };
       if (isCourse) s.courses.push(CourseSchema.parse(clone));
       else s.qualifications.push(QualificationSchema.parse(clone));
@@ -566,7 +629,21 @@ export function execute(
             retiredBy: undefined,
             retirementReason: undefined,
           }
-        : { templateId: (item as State["qualifications"][number]).templateId }),
+        : {
+            templateId: (item as State["qualifications"][number]).templateId,
+            lifecycleStatus:
+              (item as State["qualifications"][number]).lifecycleStatus ||
+              "Active",
+            renewalNoticeDaysBefore:
+              body.renewalNoticeDaysBefore ??
+              (item as State["qualifications"][number])
+                .renewalNoticeDaysBefore ??
+              7,
+            renewalLeadMonths:
+              body.renewalLeadMonths ??
+              (item as State["qualifications"][number]).renewalLeadMonths ??
+              3,
+          }),
     });
     if (!isCourse)
       demand(
@@ -574,7 +651,7 @@ export function execute(
           s.courses.some((c) => c.id === id && c.lv1OrganizationId === scope),
         ),
         422,
-        "과정을 찾을 수 없습니다.",
+        "인증Set을 찾을 수 없습니다.",
       );
     if (!isCourse) {
       const qualification = parsed as State["qualifications"][number];
@@ -602,7 +679,7 @@ export function execute(
           u,
           "catalog.independent-copy",
           copyId,
-          "다른 자격에 연결한 과정의 독립 사본",
+          "다른 자격에 연결한 인증Set의 독립 사본",
           undefined,
           { sourceId: id, qualificationId: item.id },
         );
@@ -661,6 +738,20 @@ export function execute(
     const { e, a, c } = context(s, target);
     active(a);
     const kind = KindSchema.parse(body.kind);
+    const prerequisite = assessmentPrerequisite(
+      c,
+      kind,
+      s.attempts.some(
+        (t) =>
+          t.enrollmentId === e.id &&
+          t.kind === "objective" &&
+          t.result === "passed",
+      ),
+    );
+    if (prerequisite)
+      throw new DomainError(409, prerequisite.message, prerequisite.code, {
+        href: `/qualifications/${a.id}/courses/${c.id}/objective`,
+      });
     demand(requiredKinds(c).includes(kind), 422, "필수 평가가 아닙니다.");
     demand(
       !s.attempts.some(
@@ -699,17 +790,41 @@ export function execute(
     active(a);
     expected(t, body.revision);
     demand(t.status === "in_progress", 409, "이미 확정된 평가입니다.");
+    const prerequisite = assessmentPrerequisite(
+      c,
+      t.kind,
+      s.attempts.some(
+        (previous) =>
+          previous.enrollmentId === t.enrollmentId &&
+          previous.kind === "objective" &&
+          previous.result === "passed",
+      ),
+    );
+    if (prerequisite)
+      throw new DomainError(409, prerequisite.message, prerequisite.code, {
+        href: `/qualifications/${a.id}/courses/${c.id}/objective`,
+      });
     if (action === "attempt.save") {
       Object.assign(t, validateDraft(t, s, body));
       t.revision++;
       return { id: t.id, revision: t.revision };
     }
     const questions = assessmentQuestions(c, t.kind);
-    demand(
-      questions.every((q) => t.answers[q.id] !== undefined),
-      422,
-      "모든 문항에 답해 주세요.",
-    );
+    const missingQuestionIds = questions
+      .filter(
+        (q) =>
+          !Number.isInteger(t.answers[q.id]) ||
+          t.answers[q.id]! < 0 ||
+          t.answers[q.id]! >= q.choices.length,
+      )
+      .map((q) => q.id);
+    if (missingQuestionIds.length)
+      throw new DomainError(
+        422,
+        "모든 문항에 답해야 제출할 수 있습니다.",
+        "ASSESSMENT_INCOMPLETE",
+        { missingQuestionIds },
+      );
     t.itemResults = questions.map((q) => ({
       itemId: q.id,
       correct: t.answers[q.id] === q.correct,
@@ -829,7 +944,7 @@ export function execute(
           t.status === "graded",
       ) && new Set(selected.map((t) => t.kind)).size === selected.length,
       422,
-      "동일 과정의 확정 회차를 평가별로 선택해 주세요.",
+      "동일 인증Set의 확정 회차를 평가별로 선택해 주세요.",
     );
     Object.assign(record, fields);
     record.revision++;
@@ -886,6 +1001,20 @@ export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
     revision: s.revision,
     scope,
     counts: {
+      renewals: s.renewals.filter((r) =>
+        s.certifications.some(
+          (c) => c.id === r.certificationId && assignments.has(c.assignmentId),
+        ),
+      ).length,
+      certificationPeriods: s.certifications
+        .filter((c) => assignments.has(c.assignmentId))
+        .reduce((n, c) => n + (c.periods?.length || 0), 0),
+      credentialEvents: s.lifecycleEvents.filter(
+        (e) =>
+          e.subject === "certification" &&
+          !!e.assignmentId &&
+          assignments.has(e.assignmentId),
+      ).length,
       objectiveAttempts: s.attempts.filter(
         (t) => enrollments.has(t.enrollmentId) && t.kind === "objective",
       ).length,
@@ -979,6 +1108,22 @@ export function workspace(
   ]);
   return {
     actor: u,
+    eligibilitySummary: {
+      eligible: s.users.filter(
+        (x) =>
+          x.roles.includes("learner") &&
+          x.certificationEligibility !== "hold" &&
+          visibleScope(userView(x, organizations).lv1OrganizationId) &&
+          (admin || x.id === u.id),
+      ).length,
+      held: s.users.filter(
+        (x) =>
+          x.roles.includes("learner") &&
+          x.certificationEligibility === "hold" &&
+          visibleScope(userView(x, organizations).lv1OrganizationId) &&
+          (admin || x.id === u.id),
+      ).length,
+    },
     requiredQualifications: requiredView,
     requestProgress: s.planningRequests
       .filter(
@@ -1005,6 +1150,7 @@ export function workspace(
           organizations,
           userView(find(s.users, p.learnerId), organizations),
           p,
+          at,
         ),
       })),
     serverDate: kstDate(at),
@@ -1014,7 +1160,15 @@ export function workspace(
         visibleScope(r.lv1OrganizationId) &&
         (admin || (u.roles.includes("learner") && r.learnerId === u.id)),
     ),
-    notifications: s.notifications.filter((n) => n.recipientId === u.id),
+    notifications: s.notifications.filter(
+      (n) =>
+        n.recipientId === u.id &&
+        !n.resolvedAt &&
+        !(
+          u.certificationEligibility === "hold" &&
+          ["planning", "renewal", "expiry"].includes(n.type)
+        ),
+    ),
     management: {
       lv1OrganizationId: operator
         ? lv1 || null
@@ -1022,6 +1176,9 @@ export function workspace(
           ? u.lv1OrganizationId
           : null,
       canManage: operator ? !!lv1 : u.roles.includes("admin"),
+      canManageEligibility: operator
+        ? !!lv1
+        : u.roles.includes("admin") || u.roles.includes("organization_admin"),
       canManagePolicies: operator
         ? !!lv1
         : u.roles.includes("admin") || u.roles.includes("organization_admin"),

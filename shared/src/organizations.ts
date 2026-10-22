@@ -130,6 +130,7 @@ export const ResetScopeSchema = z.discriminatedUnion("type", [
 export type ResetScope = z.infer<typeof ResetScopeSchema>;
 
 export interface RequiredQualification {
+  previousCertificationId?: string;
   entityId: string;
   qualificationId: string;
   title: string;

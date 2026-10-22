@@ -23,11 +23,35 @@ test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초�
   );
   await page.goto('/');
   await actor(page, 'learner-1');
+  const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  const headers = () => ({ 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() });
+  const started = await page.request.post('/api/enrollments/assignment-1:demo-course-2/attempts', {
+    headers: headers(),
+    data: { kind: 'objective' },
+  });
+  expect(started.ok()).toBeTruthy();
+  const knowledge = await started.json(),
+    course = backend.store.snapshot().courses.find((c) => c.id === 'demo-course-2')!;
+  const saved = await page.request.put(`/api/attempts/${knowledge.id}/draft`, {
+    headers: headers(),
+    data: {
+      revision: knowledge.revision,
+      answers: Object.fromEntries(course.questions.map((q) => [q.id, q.correct])),
+    },
+  });
+  expect(saved.ok()).toBeTruthy();
+  const submitted = await page.request.post(`/api/attempts/${knowledge.id}/submit`, {
+    headers: headers(),
+    data: { revision: knowledge.revision + 1 },
+  });
+  expect(submitted.ok()).toBeTruthy();
+
   await page.goto('/qualifications/assignment-1/courses/demo-course-2/practical');
   const tabs = page.getByRole('tablist', { name: '응시 문항', exact: true });
   await expect(tabs.getByRole('tab')).toHaveCount(500);
-  await page.getByRole('button', { name: '답안 확인', exact: true }).click();
+  await page.getByRole('button', { name: '제출', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('모든 문항');
+  await page.getByRole('dialog').getByRole('button', { name: '확인', exact: true }).click();
   await page.route('**/api/attempts/*/draft', (r) =>
     r.fulfill({
       status: 503,
@@ -65,7 +89,7 @@ test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초�
   await expect(operator.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('radio').nth(1).check();
   await expect(page.locator('.save-error')).toBeVisible();
-  await expect(page.getByRole('button', { name: '답안 확인', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeDisabled();
   expect(backend.store.snapshot().attempts).toHaveLength(0);
   await operator.close();
 });
@@ -161,7 +185,7 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
     .toBe('500번 수정 내용');
 });
 
-test('네 자료 유형의 추가·순서·수정·삭제와 과정 저장 시 편집 중 내용 반영', async ({
+test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 시 편집 중 내용 반영', async ({
   page,
   backend,
 }) => {

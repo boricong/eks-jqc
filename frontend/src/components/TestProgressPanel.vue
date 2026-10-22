@@ -26,11 +26,14 @@ const error = ref(''),
   resetError = ref(''),
   confirmation = ref('');
 const labels: Record<keyof ProgressSummary['counts'], string> = {
+  renewals: '재인증 진행',
+  certificationPeriods: '인증 유효기간 이력',
+  credentialEvents: '개인 자격 상태 이력',
   objectiveAttempts: '지식 평가 응시',
   practicalAttempts: '상황 대응 평가 응시',
   learningRecords: '과거 학습 완료 기록',
   notifications: '진행 관련 알림',
-  completions: '과정 수료',
+  completions: '인증Set 수료',
   certifications: '검증용 인증',
   comparisons: '실제 수행 비교',
 };
@@ -99,7 +102,7 @@ watch(target, () => {
         새로고침
       </button>
     </div>
-    <p>대상 조직의 학습·평가 진행 내역을 지우고 배정된 과정을 처음부터 테스트합니다.</p>
+    <p>대상 조직의 학습·평가 진행 내역을 지우고 배정된 인증Set을 처음부터 테스트합니다.</p>
     <label class="field"
       ><span>초기화 대상</span
       ><select aria-label="초기화 대상" v-model="target" :disabled="loading || busy || open">
@@ -115,7 +118,7 @@ watch(target, () => {
       </select></label
     >
     <p class="muted">
-      조직정보·변경 이력, 사용자 소속·역할, 자격·과정 기준과 운영 상태, 개인 계획·일정·목표, 계획
+      조직정보·변경 이력, 사용자 소속·역할, 자격·인증Set 기준과 운영 상태, 개인 계획·일정·목표, 계획
       요청·알림, 배정·담당 기준·제외 설정, 공지는 유지됩니다.
     </p>
     <div v-if="error" class="error-message" role="alert">{{ error }}</div>
@@ -150,7 +153,7 @@ watch(target, () => {
   >
     <p>
       선택한 대상의 응시·평가·수료·인증·비교 기록이 삭제됩니다. 조직정보·사용자 소속·역할과
-      자격·과정·배정 설정은 유지됩니다.
+      자격·인증Set·배정 설정은 유지됩니다.
     </p>
     <p>다른 탭에서 평가 중인 사용자도 영향을 받습니다. 초기화 후 해당 화면을 새로고침해 주세요.</p>
     <p class="muted">초기화 전 기록은 백업하며, 복구는 서버를 중지한 뒤 수행할 수 있습니다.</p>

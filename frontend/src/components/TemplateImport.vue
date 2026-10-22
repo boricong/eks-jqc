@@ -56,7 +56,7 @@ onBeforeRouteUpdate(leave);
   </button>
   <AppDialog v-model:open="open" title="기본 자격 가져오기">
     <p>{{ store.managementOrganization?.name }}</p>
-    <p class="muted">필요한 자격을 선택한 뒤 설명·기간·과정 기준을 준비해 주세요.</p>
+    <p class="muted">필요한 자격을 선택한 뒤 설명·기간·인증Set 기준을 준비해 주세요.</p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <div class="template-list">
       <label v-for="t in templates" :key="t.id" class="choice"

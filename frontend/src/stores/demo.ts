@@ -28,6 +28,7 @@ export const useDemo = defineStore('workspace', () => {
   };
   const empty = (): Workspace => ({
     actor: anonymous,
+    eligibilitySummary: { eligible: 0, held: 0 },
     requiredQualifications: null,
     requestProgress: [],
     planningReadiness: [],
@@ -37,6 +38,7 @@ export const useDemo = defineStore('workspace', () => {
       lv1OrganizationId: null,
       canManage: false,
       canManagePolicies: false,
+      canManageEligibility: false,
       editableOrganizationIds: [],
     },
     organizations: [],
@@ -75,7 +77,8 @@ export const useDemo = defineStore('workspace', () => {
   const fullManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
-    fullManagement.value || (section === 'policies' && hasRole('organization_admin'));
+    fullManagement.value ||
+    (['policies', 'targets'].includes(section) && hasRole('organization_admin'));
   const managementAccess = computed(
     () =>
       canEnterManagement.value &&

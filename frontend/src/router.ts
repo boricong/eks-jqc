@@ -76,7 +76,7 @@ export const router = createRouter({
           meta: { management: true },
         },
         {
-          path: ':section(policies|qualifications|courses|assignments|results|comparisons|notices)/:id?',
+          path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|comparisons|notices)/:id?',
           name: 'admin',
           component: AdminView,
           meta: { management: true },

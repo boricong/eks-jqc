@@ -1,3 +1,4 @@
+import { renewalOpensOn } from "./lifecycle.ts";
 import { z } from "zod";
 import { OrganizationPathSchema } from "./organizations.ts";
 
@@ -7,7 +8,7 @@ const id = z
   .max(160)
   .refine((v) => !["__proto__", "constructor", "prototype"].includes(v));
 const dateOrEmpty = z.union([z.literal(""), z.iso.date()]);
-export const WORKFLOW_VERSION = "personal-certification-v3";
+export const WORKFLOW_VERSION = "personal-certification-v5";
 export const workflowSteps = [
   ["person", "신규 인력 확인"],
   ["organization", "운영 조직 지정"],
@@ -18,9 +19,9 @@ export const workflowSteps = [
   ["approval", "결재 생략"],
   ["plan", "계획 완료"],
   ["learning-assessment", "학습·평가"],
-  ["completion", "과정 수료"],
+  ["completion", "인증Set 수료"],
   ["certification", "자격 인증"],
-  ["expiry", "유효기간 확인"],
+  ["expiry", "유효기간·재인증"],
 ] as const;
 export const ValiditySchema = z.object({
   type: z.enum(["unknown", "months", "unlimited"]),
@@ -36,8 +37,8 @@ export const unknownValidity = (): ValidityPolicy => ({
 export function validityErrors(v: ValidityPolicy): string[] {
   if (v.type === "unknown")
     return ["인증기간을 기간제 또는 무기한으로 지정해 주세요."];
-  if (v.type === "months" && (!v.months || !v.reminderDays.length))
-    return ["유효 개월 수와 만료 전 알림 일수를 지정해 주세요."];
+  if (v.type === "months" && !v.months)
+    return ["유효 개월 수를 지정해 주세요."];
   if (new Set(v.reminderDays).size !== v.reminderDays.length)
     return ["알림 시점이 중복되었습니다."];
   if (v.type !== "months" && (v.months !== null || v.reminderDays.length))
@@ -81,6 +82,7 @@ export const PlanningRequestSchema = z.object({
         qualificationId: id,
         title: z.string(),
         version: z.number().int().positive(),
+        previousCertificationId: id.optional(),
       }),
     )
     .optional(),
@@ -96,11 +98,18 @@ export const PlanScheduleSchema = z.object({
 });
 export const PersonalPlanSchema = z.object({
   id,
+  acquisitionCycleId: id.optional(),
+  previousCertificationId: id.optional(),
   lv1OrganizationId: id,
   learnerId: id,
   requestId: id,
   qualificationId: id,
-  workflowVersion: z.enum(["personal-certification-v2", WORKFLOW_VERSION]),
+  workflowVersion: z.enum([
+    "personal-certification-v2",
+    "personal-certification-v3",
+    "personal-certification-v4",
+    WORKFLOW_VERSION,
+  ]),
   organizationId: id.optional(),
   policyRevision: z.number().int().nonnegative().optional(),
   status: z.enum(["draft", "completed"]),
@@ -124,17 +133,17 @@ export function planErrors(
   if (!p.targetOn) errors.push("목표 인증일을 입력해 주세요.");
   p.schedules.forEach((s, i) => {
     if (!s.learningStart || !s.learningEnd || !s.assessmentOn)
-      errors.push(`${i + 1}번째 과정의 일정을 입력해 주세요.`);
+      errors.push(`${i + 1}번째 인증Set의 일정을 입력해 주세요.`);
     else if (
       s.learningStart > s.learningEnd ||
       s.learningEnd > s.assessmentOn ||
       (p.targetOn && s.assessmentOn > p.targetOn)
     )
       errors.push(
-        `${i + 1}번째 과정은 학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일 순서여야 합니다.`,
+        `${i + 1}번째 인증Set은 학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일 순서여야 합니다.`,
       );
     if (!s.goal.trim())
-      errors.push(`${i + 1}번째 과정의 학습 목표를 입력해 주세요.`);
+      errors.push(`${i + 1}번째 인증Set의 학습 목표를 입력해 주세요.`);
   });
   return errors;
 }
@@ -167,6 +176,8 @@ export const NotificationSchema = z.object({
     "certification",
     "expiry",
     "expired",
+    "renewal",
+    "lifecycle",
   ]),
   title: z.string().max(500),
   body: z.string().max(2000),
@@ -176,6 +187,8 @@ export const NotificationSchema = z.object({
   readAt: z.iso.datetime().optional(),
   assignmentId: id.optional(),
   certificationId: id.optional(),
+  periodId: id.optional(),
+  resolvedAt: z.iso.datetime().optional(),
 });
 export type Notification = z.infer<typeof NotificationSchema>;
 export function kstDate(value: string | Date = new Date()): string {
@@ -220,23 +233,42 @@ export function daysUntil(on: string, at: string | Date = new Date()): number {
   return Math.round((Date.parse(on) - Date.parse(kstDate(at))) / 86400000);
 }
 export function certificationStatus(
-  c: { validity?: ValidityPolicy; expiresOn?: string },
+  c: {
+    validity?: ValidityPolicy;
+    expiresOn?: string;
+    lifecycleStatus?: string;
+    periods?: {
+      validity: ValidityPolicy;
+      expiresOn?: string;
+      startsOn?: string;
+      renewalLeadMonths?: number;
+    }[];
+  },
   at: string | Date = new Date(),
-): "unknown" | "valid" | "expiring" | "expired" {
+): "unknown" | "valid" | "expiring" | "expired" | "held" | "revoked" {
+  const p = c.periods?.at(-1);
+  c = { ...c, ...(p ? { validity: p.validity, expiresOn: p.expiresOn } : {}) };
+  if (c.lifecycleStatus === "Revoke") return "revoked";
   if (!c.validity || c.validity.type === "unknown") return "unknown";
+  if (c.expiresOn && daysUntil(c.expiresOn, at) < 0)
+    return c.lifecycleStatus ? "revoked" : "expired";
+  if (c.lifecycleStatus === "Hold") return "held";
   if (c.validity.type === "unlimited") return "valid";
   if (!c.expiresOn) return "unknown";
-  const days = daysUntil(c.expiresOn, at);
-  return days < 0
-    ? "expired"
-    : days <= Math.max(0, ...c.validity.reminderDays)
-      ? "expiring"
-      : "valid";
+  const opensOn = renewalOpensOn({
+    validity: c.validity,
+    expiresOn: c.expiresOn,
+    startsOn: p?.startsOn || "0001-01-01",
+    renewalLeadMonths: p?.renewalLeadMonths ?? 3,
+  });
+  return opensOn && kstDate(at) >= opensOn ? "expiring" : "valid";
 }
 export const certificationStatusLabels = {
+  held: "Hold · 효력 정지",
+  revoked: "Revoke · 폐기",
   unknown: "유효기간 미설정 · 기존 기록",
   valid: "유효",
-  expiring: "만료 예정",
+  expiring: "재인증 기간",
   expired: "만료",
 };
 

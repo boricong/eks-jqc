@@ -28,8 +28,8 @@ const back = computed(() =>
   <div v-if="a && e && record" class="container page">
     <RouterLink :to="back" class="back-link">목록으로</RouterLink>
     <div class="page-heading">
-      <h1>검증용 과정 수료증</h1>
-      <span>과정 수료</span>
+      <h1>검증용 인증Set 수료증</h1>
+      <span>인증Set 수료</span>
     </div>
     <section class="panel award-document">
       <p>{{ record.snapshot?.learnerName || store.username(a.learnerId) }}</p>
@@ -62,7 +62,7 @@ const back = computed(() =>
         }}
       </p>
       <p v-if="store.course(record.courseId).operationalStatus === 'retired'" class="muted">
-        현재 운영 종료된 과정입니다. 수료 기록과 평가 근거는 유지됩니다.
+        현재 운영 종료된 인증Set입니다. 수료 기록과 평가 근거는 유지됩니다.
       </p>
       <RouterLink
         v-if="a.certification"

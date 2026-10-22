@@ -848,7 +848,17 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   await finish(f, es[0]!.id, "practical", false, "learner-2");
   for (const e of es)
     for (const kind of ["objective", "practical"] as Kind[])
-      await finish(f, e.id, kind, true, "learner-2");
+      if (
+        !f.store
+          .snapshot()
+          .attempts.some(
+            (t) =>
+              t.enrollmentId === e.id &&
+              t.kind === kind &&
+              t.result === "passed",
+          )
+      )
+        await finish(f, e.id, kind, true, "learner-2");
   assert.ok(
     f.store.snapshot().certifications.some((c) => c.assignmentId === a.id),
   );
@@ -1010,6 +1020,19 @@ async function start(
   kind: Kind,
   learner = "learner-1",
 ) {
+  // Existing unrelated tests prepare the newly required knowledge pass first.
+  if (
+    kind === "practical" &&
+    !f.store
+      .snapshot()
+      .attempts.some(
+        (t) =>
+          t.enrollmentId === enrollmentId &&
+          t.kind === "objective" &&
+          t.result === "passed",
+      )
+  )
+    await finish(f, enrollmentId, "objective", true, learner);
   return f.call(
     learner,
     `/enrollments/${encodeURIComponent(enrollmentId)}/attempts`,
@@ -1125,10 +1148,10 @@ test("부분 통과 유지·실기 재응시·복수 합격 근거·자동 인�
     2,
   );
   const e2 = "assignment-1:demo-course-2";
-  await finish(f, e2, "practical");
   await finish(f, e2, "objective", false);
   assert.equal(f.store.snapshot().certifications.length, 0);
   await finish(f, e2, "objective");
+  await finish(f, e2, "practical");
   s = f.store.snapshot();
   assert.equal(s.certifications.length, 1);
   assert.equal(s.completions.length, 2);
@@ -1149,17 +1172,15 @@ test("부분 통과 유지·실기 재응시·복수 합격 근거·자동 인�
 test("중복 제출·동시 마지막 평가 확정·요청 식별자 충돌", async (t) => {
   const f = await fixture(t);
   await finish(f, eid, "practical");
-  const e2 = "assignment-1:demo-course-2",
-    objective = await start(f, e2, "objective"),
-    practical = await start(f, e2, "practical");
-  await saved(f, objective.id);
+  const e2 = "assignment-1:demo-course-2";
+  await finish(f, e2, "objective");
+  const practical = await start(f, e2, "practical");
   await saved(f, practical.id);
   const key = randomUUID(),
     payload = { revision: 2 };
   const results = await Promise.all([
-    f.call("learner-1", `/attempts/${objective.id}/submit`, payload, 200, key),
-    f.call("learner-1", `/attempts/${objective.id}/submit`, payload, 200, key),
-    f.call("learner-1", `/attempts/${practical.id}/submit`, { revision: 2 }),
+    f.call("learner-1", `/attempts/${practical.id}/submit`, payload, 200, key),
+    f.call("learner-1", `/attempts/${practical.id}/submit`, payload, 200, key),
   ]);
   assert.deepEqual(results[0], results[1]);
   const s = f.store.snapshot();
@@ -1167,7 +1188,7 @@ test("중복 제출·동시 마지막 평가 확정·요청 식별자 충돌", a
   assert.equal(s.certifications.length, 1);
   await f.call(
     "learner-1",
-    `/attempts/${objective.id}/submit`,
+    `/attempts/${practical.id}/submit`,
     { revision: 3 },
     409,
     key,
@@ -1176,7 +1197,7 @@ test("중복 제출·동시 마지막 평가 확정·요청 식별자 충돌", a
   assert.deepEqual(
     await f.call(
       "learner-1",
-      `/attempts/${objective.id}/submit`,
+      `/attempts/${practical.id}/submit`,
       payload,
       200,
       key,
@@ -1544,6 +1565,9 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
   assert.ok(original.attempts.length > 0);
   const preview = await f.call("operator-1", "/testing/progress?scope=all");
   assert.deepEqual(preview.counts, {
+    renewals: 0,
+    certificationPeriods: 1,
+    credentialEvents: 1,
     objectiveAttempts: 2,
     practicalAttempts: 3,
     learningRecords: 0,
@@ -1618,7 +1642,7 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
     { revision: 1 },
     404,
   );
-  const fresh = await start(f, eid, "practical");
+  const fresh = await start(f, eid, "objective");
   assert.notEqual(fresh.id, practical.id);
   assert.equal(f.store.snapshot().attempts[0]!.round, 1);
   // A delayed retry of the reset must not clear the newly started attempt.

@@ -8,11 +8,11 @@ export function courseUsage(
   scope: string,
 ): CourseUsage {
   const course = s.courses.find((c) => c.id === courseId);
-  demand(course, 404, "과정을 찾을 수 없습니다.");
+  demand(course, 404, "인증Set을 찾을 수 없습니다.");
   demand(
     course.lv1OrganizationId === scope,
     403,
-    "선택한 Lv1의 과정만 관리할 수 있습니다.",
+    "선택한 Lv1의 인증Set만 관리할 수 있습니다.",
   );
   const qualifications = s.qualifications.filter((q) =>
     q.courseIds.includes(courseId),
@@ -35,7 +35,7 @@ export function courseUsage(
   const blockers = [
     ...(course.status !== "draft"
       ? [
-          "한 번 사용 등록된 과정은 삭제할 수 없습니다. 운영 종료를 사용해 주세요.",
+          "한 번 사용 등록된 인증Set은 삭제할 수 없습니다. 운영 종료를 사용해 주세요.",
         ]
       : []),
     ...qualifications.map(
@@ -96,13 +96,13 @@ export function changeCourseLifecycle(
     demand(
       course.status === "published",
       409,
-      "사용 등록된 과정만 운영 상태를 변경할 수 있습니다.",
+      "사용 등록된 인증Set만 운영 상태를 변경할 수 있습니다.",
     );
     const retire = action === "course.retire";
     demand(
       course.operationalStatus === (retire ? "active" : "retired"),
       409,
-      "과정의 운영 상태가 변경되었습니다. 다시 확인해 주세요.",
+      "인증Set의 운영 상태가 변경되었습니다. 다시 확인해 주세요.",
     );
     course.operationalStatus = retire ? "retired" : "active";
     course.revision++;
