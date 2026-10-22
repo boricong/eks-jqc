@@ -1,3 +1,4 @@
+import { migrateCatalogEditing } from "./catalog-editing-migration.ts";
 import { type State } from "@eks/contracts";
 import { validateOrganizations } from "./organizations.ts";
 import { validateState } from "./integrity.ts";
@@ -9,12 +10,12 @@ export function migrateAssessmentFlow(
 ) {
   const raw = input as any,
     organizations = validateOrganizations(organizationInput);
-  if (![9, 10].includes(raw?.schemaVersion))
+  if (![9, 10, 11].includes(raw?.schemaVersion))
     throw new Error(
       "평가 순서·단일 알림 이관에는 업무 스키마9와 조직 스키마2가 필요합니다.",
     );
   const next = structuredClone(raw),
-    alreadyApplied = raw.schemaVersion === 10;
+    alreadyApplied = raw.schemaVersion >= 10;
   if (!alreadyApplied) {
     const invalid = next.courses.filter(
       (c: any) =>
@@ -46,7 +47,7 @@ export function migrateAssessmentFlow(
       details: { fromSchema: 9, progressReset: false },
     });
   }
-  const state: State = validateState(next, organizations);
+  const state: State = migrateCatalogEditing(next, organizations, at).state;
   return {
     state,
     organizations,

@@ -1,3 +1,4 @@
+import { courseSection, saveCriterion } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 import { requestPlan } from './workflow-helpers';
 
@@ -13,9 +14,9 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
-  await page.getByRole('button', { name: '새 버전', exact: true }).click();
   const group = page.getByRole('group', { name: '필수 평가' });
   await expect(group.getByRole('checkbox')).toHaveCount(2);
+  await courseSection(page, '학습 항목');
   await page.getByRole('button', { name: '학습 항목 추가' }).click();
   await expect(page.getByRole('tablist', { name: '학습 항목' }).getByRole('tab')).toHaveCount(2);
   const title = page.getByLabel('학습 항목명');
@@ -39,7 +40,7 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
   );
   for (const width of [1920, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(group.getByRole('checkbox', { name: '실기 · 상황 대응 평가' })).toBeVisible();
+
     await expect(tabs).toBeVisible();
     await noPageOverflow(page);
   }

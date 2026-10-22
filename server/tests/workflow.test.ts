@@ -362,28 +362,40 @@ async function catalog(
   kinds: Kind[] = ["objective", "practical"],
 ) {
   const c = await f.call("operator-1", scope("/courses", root), {});
-  await f.call("operator-1", scope(`/courses/${c.id}/publish`, root), {
-    ...f.store.snapshot().courses[0],
-    revision: 1,
-    title: "계획 검증 과정",
-    assessmentKinds: kinds,
-    learningItems: [
-      {
-        id: "learn-1",
-        title: "OJT 독립 수행 학습",
-        type: "ojt",
-        required: true,
-      },
-    ],
-  });
+  await f.call(
+    "operator-1",
+    scope(`/courses/${c.id}`, root),
+    {
+      ...f.store.snapshot().courses[0],
+      revision: 1,
+      title: "계획 검증 과정",
+      assessmentKinds: kinds,
+      learningItems: [
+        {
+          id: "learn-1",
+          title: "OJT 독립 수행 학습",
+          type: "ojt",
+          required: true,
+        },
+      ],
+    },
+    undefined,
+    "PUT",
+  );
   const q = await f.call("operator-1", scope("/qualifications", root), {});
-  await f.call("operator-1", scope(`/qualifications/${q.id}/publish`, root), {
-    revision: 1,
-    title: "개인 계획 자격",
-    description: "직무를 독립 수행할 수 있는지 검증",
-    validity: period,
-    courseIds: [c.id],
-  });
+  await f.call(
+    "operator-1",
+    scope(`/qualifications/${q.id}`, root),
+    {
+      revision: 1,
+      title: "개인 계획 자격",
+      description: "직무를 독립 수행할 수 있는지 검증",
+      validity: period,
+      courseIds: [c.id],
+    },
+    undefined,
+    "PUT",
+  );
   return { c: c.id as string, q: q.id as string };
 }
 async function invitation(
@@ -543,11 +555,14 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   const incompleteCourse = await f.call("admin-1", "/courses", {});
   const noLearning = await f.call(
     "admin-1",
-    `/courses/${incompleteCourse.id}/publish`,
+    `/courses/${incompleteCourse.id}`,
     { ...f.store.snapshot().courses[0], revision: 1, learningItems: [] },
-    422,
+    200,
+    "PUT",
   );
-  assert.match(noLearning.message, /필수 학습 항목/);
+  assert.ok(
+    noLearning.readiness.some((m: string) => m.includes("필수 학습 항목")),
+  );
   const templates = await f.call(
     "operator-1",
     scope("/qualification-templates"),
@@ -604,7 +619,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === imported.imported[0])!;
-  await f.call("admin-1", `/qualifications/${q.id}/publish`, q, 422);
+  await f.call("admin-1", `/qualifications/${q.id}`, q, 200, "PUT");
   const etch = await f.call(
     "operator-1",
     scope("/qualification-templates/import", "org-etch"),
@@ -1044,11 +1059,13 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
   );
   await f.call(
     "operator-1",
-    scope(`/qualifications/${etchDraft.id}/publish`, "org-etch"),
+    scope(`/qualifications/${etchDraft.id}`, "org-etch"),
     {
       ...f.store.snapshot().qualifications.find((q) => q.id === etchDraft.id)!,
       validity: { type: "months", months: 6, reminderDays: [90] },
     },
+    undefined,
+    "PUT",
   );
   assert.deepEqual(
     f.store.snapshot().qualifications.find((x) => x.id === q)!.validity,

@@ -29,7 +29,7 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 10,
+    schemaVersion: 11,
     renewals: [],
     lifecycleEvents: [],
     catalogBatches: [],

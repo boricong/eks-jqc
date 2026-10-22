@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import CourseEditor from '../components/CourseEditor.vue';
+import QualificationDelete from '../components/QualificationDelete.vue';
+import { api } from '../api';
 import CredentialManagement from '../components/CredentialManagement.vue';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, nextTick, ref, watch } from 'vue';
@@ -12,9 +15,6 @@ import ComparisonPanel from '../components/ComparisonPanel.vue';
 import CertificationTargets from '../components/CertificationTargets.vue';
 import QualificationLifecycle from '../components/QualificationLifecycle.vue';
 import QualificationFields from '../components/QualificationFields.vue';
-import CourseMaterialsEditor from '../components/CourseMaterialsEditor.vue';
-import CourseLearningEditor from '../components/CourseLearningEditor.vue';
-import CourseAssessmentEditor from '../components/CourseAssessmentEditor.vue';
 import { courseIssues, type CourseIssue } from '../course-editor';
 import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
@@ -22,13 +22,7 @@ import { useListView } from '../composables/useListView';
 import PlanningPanel from '../components/PlanningPanel.vue';
 import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
-import {
-  kindLabels,
-  certificationStatus,
-  kstDate,
-  credentialCurrent,
-  criterionLifecycleLabels,
-} from '@eks/contracts';
+import { kindLabels, certificationStatus, kstDate, credentialCurrent } from '@eks/contracts';
 import type { Assignment, Course, Notice, Qualification, AuditEvent } from '../types';
 const store = useDemo(),
   route = useRoute(),
@@ -62,17 +56,18 @@ const section = computed(() => String(route.params.section));
 const filterKey = () => `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
 const title = computed(() => sections.find((s) => s.id === section.value)!.name);
 const busy = ref(false);
+const editingContext = ref('');
 const query = ref(''),
   courseSearch = ref(''),
   filter = ref('all'),
   errors = ref<string[]>([]);
 const validationShown = ref(false);
-const assessmentEditor = ref<InstanceType<typeof CourseAssessmentEditor>>();
+const courseEditor = ref<InstanceType<typeof CourseEditor>>();
+const savePreview = ref<any>(null);
+const savedLinks = ref<{ id: string; title: string; version: number }[]>([]);
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
 );
-const materialsEditor = ref<InstanceType<typeof CourseMaterialsEditor>>();
-const learningEditor = ref<InstanceType<typeof CourseLearningEditor>>();
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
 watch(locatedIssues, (issues) => {
@@ -82,7 +77,14 @@ watch(locatedIssues, (issues) => {
     ];
 });
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
-const readOnly = computed(() => editor.value?.status === 'published');
+const relatedVersions = computed(() =>
+  editor.value
+    ? (courseDraft.value ? organizationData.value.courses : organizationData.value.qualifications)
+        .filter((v) => v.entityId === editor.value!.entityId)
+        .sort((a, b) => b.version - a.version)
+    : [],
+);
+const readOnly = computed(() => !!editor.value?.deletedAt);
 useProcessContext(() => (editor.value ? (readOnly.value ? 'readonly' : 'editing') : 'list'));
 const selectedAssignment = ref<Assignment | null>(null),
   assignmentAction = ref<'exclude'>('exclude'),
@@ -92,15 +94,26 @@ function plain<T>(item: T): T {
   return JSON.parse(JSON.stringify(item));
 }
 watch(
-  () => route.fullPath,
+  () => [route.fullPath, store.actorId, store.managementLv1],
   () => {
+    if (
+      editingContext.value === `${store.actorId}:${store.managementLv1}` &&
+      editor.value &&
+      route.params.id === editor.value.id &&
+      section.value === (courseDraft.value ? 'courses' : 'qualifications')
+    )
+      return;
+    editingContext.value = `${store.actorId}:${store.managementLv1}`;
     let remembered: { query?: string; filter?: string } = {};
     try {
       remembered = JSON.parse(localStorage.getItem(filterKey()) || '{}');
     } catch {}
     query.value = remembered.query || '';
     courseSearch.value = '';
-    filter.value = remembered.filter || (section.value === 'courses' ? 'active' : 'all');
+    filter.value = ['draft', 'published'].includes(remembered.filter || '')
+      ? 'all'
+      : remembered.filter || (section.value === 'courses' ? 'active' : 'all');
+    savePreview.value = null;
     selectedAssignment.value = null;
     noticeDraft.value = null;
     reason.value = '';
@@ -124,7 +137,12 @@ watch(
 const matches = (text: string) => text.toLowerCase().includes(query.value.toLowerCase());
 const qualifications = computed(() =>
   organizationData.value.qualifications.filter(
-    (q) => matches(q.title) && (filter.value === 'all' || q.status === filter.value),
+    (q) =>
+      matches(q.title) &&
+      (filter.value === 'deleted'
+        ? !!q.deletedAt
+        : !q.deletedAt &&
+          (filter.value === 'all' || (q.lifecycleStatus || 'Active') === filter.value)),
   ),
 );
 const courses = computed(() =>
@@ -133,11 +151,7 @@ const courses = computed(() =>
       matches(c.title) &&
       (filter.value === 'all' ||
         (filter.value === 'active' && c.operationalStatus !== 'retired') ||
-        (filter.value === 'retired' && c.operationalStatus === 'retired') ||
-        (filter.value === 'draft' && c.status === 'draft') ||
-        (filter.value === 'published' &&
-          c.status === 'published' &&
-          c.operationalStatus === 'active')),
+        (filter.value === 'retired' && c.operationalStatus === 'retired')),
   ),
 );
 const selectableCourses = computed(() => {
@@ -205,60 +219,42 @@ async function createCatalog() {
     busy.value = false;
   }
 }
-async function saveCatalog(publish = false) {
+async function saveCatalog(confirm = false) {
   if (!editor.value || readOnly.value || busy.value) return;
-  if (materialsEditor.value?.pending && !materialsEditor.value.commit(publish)) {
-    errors.value = ['학습자료의 필수값을 입력하거나 자료 편집을 취소해 주세요.'];
-    return;
-  }
-  validationShown.value = publish;
-  errors.value = publish
-    ? courseDraft.value
-      ? [
-          ...new Set([
-            ...store.courseErrors(courseDraft.value),
-            ...courseIssues(courseDraft.value).map((i) => i.message),
-          ]),
-        ]
-      : store.qualificationErrors(qualificationDraft.value!)
-    : [];
-  if (errors.value.length) {
-    if (locatedIssues.value[0]) await focusIssue(locatedIssues.value[0]);
-    else {
-      await nextTick();
-      document.querySelector<HTMLElement>('.editor-errors')?.focus();
-    }
-    return;
-  }
+  if (courseEditor.value && !courseEditor.value.commit()) return;
+  const context = `${store.actorId}:${store.managementLv1}:${editor.value.id}`;
   busy.value = true;
+  errors.value = [];
   try {
-    const result = await store.saveCatalog(section.value, plain(editor.value), publish);
+    if (!confirm) {
+      const preview = await api(
+        store.managementPath(`/${section.value}/${editor.value.id}/save-preview`),
+        { method: 'POST', body: JSON.stringify(plain(editor.value)) },
+      );
+      if (context === `${store.actorId}:${store.managementLv1}:${editor.value?.id}`)
+        savePreview.value = preview;
+      return;
+    }
+    const result = await store.saveCatalog(section.value, plain(editor.value), {
+      stateRevision: savePreview.value.stateRevision,
+      organizationRevision: savePreview.value.organizationRevision,
+    });
+    if (context !== `${store.actorId}:${store.managementLv1}:${editor.value?.id}`) return;
+    savePreview.value = null;
+    savedLinks.value = result.linkedQualifications || [];
     if (courseDraft.value) courseDraft.value = plain(store.course(result.id));
     else qualificationDraft.value = plain(store.qualification(result.id));
+    await router.replace(store.managementLink(`/admin/${section.value}/${result.id}`));
+    validationShown.value = true;
+    errors.value = result.readiness || [];
   } catch (error) {
-    validationShown.value = false;
     errors.value = [(error as Error).message];
   } finally {
     busy.value = false;
   }
 }
 async function focusIssue(issue: CourseIssue) {
-  if (issue.kind === 'materials') {
-    await materialsEditor.value?.focusIssue(issue);
-    return;
-  }
-  if (issue.kind === 'learning') {
-    await learningEditor.value?.focusIssue(issue);
-    return;
-  }
-  if (issue.kind !== 'basic') {
-    await assessmentEditor.value?.focusIssue(issue);
-    return;
-  }
-  await nextTick();
-  const input = document.querySelector<HTMLElement>(`[data-course-field="${issue.field}"]`);
-  input?.focus({ preventScroll: true });
-  input?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  await courseEditor.value?.focusIssue(issue);
 }
 async function reloadCatalog() {
   if (!window.confirm('저장하지 않은 내용을 버리고 다시 불러올까요?')) return;
@@ -270,18 +266,6 @@ async function reloadCatalog() {
     errors.value = [];
   } catch (error) {
     errors.value = [(error as Error).message];
-  }
-}
-async function cloneVersion() {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    const result = await store.cloneCatalog(section.value, editor.value!.id);
-    await router.push(store.managementLink(`/admin/${section.value}/${result.id}`));
-  } catch (error) {
-    errors.value = [(error as Error).message];
-  } finally {
-    busy.value = false;
   }
 }
 function openAssignment(a: Assignment, action: 'exclude') {
@@ -372,7 +356,7 @@ function canLeave() {
     !store.canEnterManagement ||
     !editor.value ||
     readOnly.value ||
-    (!materialsEditor.value?.pending && JSON.stringify(source) === JSON.stringify(editor.value)) ||
+    (!courseEditor.value?.pending && JSON.stringify(source) === JSON.stringify(editor.value)) ||
     window.confirm(
       '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
     )
@@ -405,18 +389,23 @@ onBeforeRouteUpdate(canLeave);
         <div class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
-            <StatusBadge
-              :status="
-                courseDraft?.operationalStatus === 'retired'
-                  ? 'retired'
-                  : readOnly
-                    ? 'published'
-                    : 'catalogDraft'
+            <span class="small-label">v{{ editor.version }}</span>
+            <span v-if="editor.deletedAt" class="muted"
+              >삭제된 항목 · {{ editor.deletionReason }}</span
+            >
+            <QualificationDelete
+              v-if="qualificationDraft"
+              :qualification="qualificationDraft"
+              :disabled="
+                busy ||
+                JSON.stringify(qualificationDraft) !==
+                  JSON.stringify(store.qualification(qualificationDraft.id))
               "
-            /><span class="small-label">v{{ editor.version }}</span
-            ><button v-if="readOnly" class="button primary" :disabled="busy" @click="cloneVersion">
-              <AppIcon name="plus" :size="18" />새 버전
-            </button>
+              @deleted="
+                qualificationDraft = null;
+                router.push(store.managementLink('/admin/qualifications'));
+              "
+            />
           </div>
         </div>
         <div v-if="errors.length" class="error-message editor-errors" role="alert" tabindex="-1">
@@ -436,8 +425,19 @@ onBeforeRouteUpdate(canLeave);
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
           다시 불러오기
         </button>
+        <details class="criterion-versions">
+          <summary>버전 이력 · {{ relatedVersions.length }}개</summary>
+          <ul>
+            <li v-for="version in relatedVersions" :key="version.id">
+              <RouterLink :to="store.managementLink(`/admin/${section}/${version.id}`)"
+                >v{{ version.version }} · {{ version.title || '이름 없는 기준'
+                }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
+              >
+            </li>
+          </ul>
+        </details>
         <QualificationLifecycle
-          v-if="qualificationDraft"
+          v-if="qualificationDraft && !readOnly"
           :qualification="store.qualification(qualificationDraft.id)"
           :disabled="
             busy ||
@@ -446,12 +446,17 @@ onBeforeRouteUpdate(canLeave);
                 JSON.stringify(store.qualification(qualificationDraft.id)))
           "
           @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
+          @version-created="
+            (id) => router.push(store.managementLink(`/admin/qualifications/${id}`))
+          "
         />
         <CourseLifecycle
           v-if="courseDraft"
           :key="courseDraft.id"
           :course="store.course(courseDraft.id) || courseDraft"
-          :disabled="busy"
+          :disabled="
+            busy || JSON.stringify(courseDraft) !== JSON.stringify(store.course(courseDraft.id))
+          "
           @changed="courseDraft = plain(store.course(courseDraft.id))"
           @deleted="
             courseDraft = null;
@@ -473,10 +478,10 @@ onBeforeRouteUpdate(canLeave);
           {{
             readOnly
               ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
-              : '사용 등록 전에 종료 인증Set을 제거하거나 대체해 주세요.'
+              : '신규 운영 전에 종료 인증Set을 제거하거나 대체해 주세요.'
           }}
         </p>
-        <div class="panel editor-panel">
+        <div v-if="qualificationDraft" class="panel editor-panel">
           <label class="field"
             ><span>{{ courseDraft ? '인증Set명' : '자격명' }}</span
             ><input
@@ -512,68 +517,91 @@ onBeforeRouteUpdate(canLeave);
                     :value="c.id"
                     :disabled="readOnly || busy" /><span>{{ c.title || '이름 없음' }}</span
                   ><span class="muted">v{{ c.version }}</span
-                  ><StatusBadge
-                    :status="
-                      c.operationalStatus === 'retired'
-                        ? 'retired'
-                        : c.status === 'draft'
-                          ? 'catalogDraft'
-                          : 'published'
-                    "
+                  ><StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
                 /></label>
                 <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
               </div>
             </fieldset></template
           >
-          <template v-if="courseDraft"
-            ><div class="form-grid">
-              <fieldset class="assessment-kind-group">
-                <legend>필수 평가</legend>
-                <div class="assessment-kind-options">
-                  <label v-for="(label, kind) in labels" :key="kind" class="checkbox-label"
-                    ><input
-                      v-model="courseDraft.assessmentKinds"
-                      type="checkbox"
-                      :value="kind"
-                      :disabled="readOnly || busy"
-                      :data-course-field="kind === 'objective' ? 'assessmentKinds' : undefined"
-                    />{{ label }}</label
-                  >
-                </div>
-              </fieldset>
-            </div>
-          </template>
         </div>
-        <CourseMaterialsEditor
+        <CourseEditor
           v-if="courseDraft"
-          ref="materialsEditor"
-          :course="courseDraft"
-          :disabled="readOnly || busy"
-        />
-        <CourseLearningEditor
-          v-if="courseDraft"
-          ref="learningEditor"
+          ref="courseEditor"
           :course="courseDraft"
           :disabled="readOnly || busy"
           :issues="locatedIssues"
-        />
-        <CourseAssessmentEditor
-          v-if="courseDraft"
-          ref="assessmentEditor"
-          :course="courseDraft"
-          :disabled="readOnly || busy"
           :show-errors="validationShown"
         />
-        <div v-if="!readOnly" class="actionbar">
-          <span class="muted">초안 · v{{ editor.version }}</span>
-          <div class="actions">
-            <button class="button secondary" :disabled="busy" @click="saveCatalog()">
-              초안 저장</button
-            ><button class="button primary" :disabled="busy" @click="saveCatalog(true)">
-              사용 등록<AppIcon name="check" :size="18" />
-            </button>
-          </div>
+        <div v-if="savedLinks.length" class="panel editor-panel">
+          <p>새 인증Set 버전은 기존 자격 구성에 자동 반영되지 않습니다.</p>
+          <RouterLink
+            v-for="q in savedLinks"
+            :key="q.id"
+            :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+            >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
+          >
         </div>
+        <div v-if="!readOnly" class="actionbar">
+          <span class="muted">전체 기준을 저장합니다. 팀 적용 버전은 유지됩니다.</span
+          ><button class="button primary" :disabled="busy" @click="saveCatalog()">저장</button>
+        </div>
+        <AppDialog
+          :open="!!savePreview"
+          title="기준 저장 확인"
+          @update:open="
+            (v) => {
+              if (!v && !busy) savePreview = null;
+            }
+          "
+        >
+          <template v-if="savePreview"
+            ><h3>{{ editor.title || '이름 없는 기준' }} · v{{ editor.version }}</h3>
+            <p>
+              {{
+                savePreview.unchanged
+                  ? '변경 내용이 없습니다.'
+                  : savePreview.newVersion
+                    ? '기존 기록을 보존하고 v' +
+                      savePreview.candidate.version +
+                      ' 버전을 생성합니다.'
+                    : '현재 버전을 수정합니다.'
+              }}
+            </p>
+            <p>기존 진행과 팀 적용 버전은 변경하지 않습니다.</p>
+            <details v-if="savePreview.changes?.length" class="criterion-changes">
+              <summary>변경 전후 확인 · {{ savePreview.changes.length }}개 항목</summary>
+              <section v-for="change in savePreview.changes" :key="change.label">
+                <h4>{{ change.label }}</h4>
+                <div>
+                  <p>
+                    <strong>변경 전</strong><span>{{ change.before || '미입력' }}</span>
+                  </p>
+                  <p>
+                    <strong>변경 후</strong><span>{{ change.after || '미입력' }}</span>
+                  </p>
+                </div>
+              </section>
+            </details>
+            <details v-if="savePreview.readiness.length" open>
+              <summary>
+                설정 필요 {{ savePreview.readiness.length }}건 · 미완성 내용도 저장할 수 있습니다
+              </summary>
+              <ul>
+                <li v-for="message in savePreview.readiness" :key="message">{{ message }}</li>
+              </ul>
+            </details>
+            <p v-if="errors.length" class="error-message" role="alert">
+              {{ errors.join(' · ') }}
+            </p></template
+          >
+          <template #footer
+            ><button class="button secondary" :disabled="busy" @click="savePreview = null">
+              계속 편집</button
+            ><button class="button primary" :disabled="busy" @click="saveCatalog(true)">
+              저장 확인
+            </button></template
+          >
+        </AppDialog>
       </template>
       <template v-else>
         <div class="page-heading">
@@ -616,13 +644,15 @@ onBeforeRouteUpdate(canLeave);
                 "
                 :aria-label="`${title} 검색`" /></label
             ><select v-if="section !== 'notices'" v-model="filter" aria-label="상태 필터">
-              <option v-if="section === 'courses'" value="active">초안 · 운영 중</option>
+              <option v-if="section === 'courses'" value="active">운영 중</option>
               <option v-if="section === 'courses'" value="retired">운영 종료</option>
               <option value="all">전체 상태</option>
-              <template v-if="section === 'qualifications' || section === 'courses'"
-                ><option value="draft">초안</option>
-                <option value="published">사용 중</option></template
-              ><template v-else
+              <template v-if="section === 'qualifications'"
+                ><option value="Active">Active</option>
+                <option value="Hold">Hold</option>
+                <option value="Revoke">Revoke</option>
+                <option value="deleted">삭제된 항목</option></template
+              ><template v-else-if="section !== 'courses'"
                 ><option value="active">진행 중</option>
                 <option value="certified">인증 취득 전체</option>
                 <option value="valid">현재 유효</option>
@@ -657,7 +687,6 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>자격명</th>
                 <th>버전</th>
-                <th>필수 인증Set</th>
                 <th>상태</th>
                 <th><span class="sr-only">상세</span></th>
               </tr>
@@ -670,17 +699,6 @@ onBeforeRouteUpdate(canLeave);
                     class="table-title"
                     >{{ q.title || '이름 없음' }}</RouterLink
                   >
-                  <span v-if="q.description.includes('프로세스 검증용')" class="test-data-tag"
-                    >시험 데이터</span
-                  >
-                </td>
-                <td>v{{ q.version }}</td>
-                <td>{{ q.courseIds.length }}인증Set</td>
-                <td>
-                  <span class="lifecycle-badge">{{
-                    criterionLifecycleLabels[q.lifecycleStatus || 'Active']
-                  }}</span>
-                  <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : 'published'" />
                   <details v-if="store.qualificationErrors(q).length" class="readiness">
                     <summary>설정 필요 {{ store.qualificationErrors(q).length }}건</summary>
                     <ul>
@@ -702,8 +720,16 @@ onBeforeRouteUpdate(canLeave);
                     }}
                     운영 종료
                   </p>
+                  <span v-if="q.description.includes('프로세스 검증용')" class="test-data-tag"
+                    >시험 데이터</span
+                  >
+                </td>
+                <td>v{{ q.version }}</td>
+                <td>
+                  <span class="lifecycle-badge">{{ q.lifecycleStatus || 'Active' }}</span>
                 </td>
                 <td>
+                  <QualificationDelete :qualification="q" :disabled="busy" />
                   <RouterLink
                     :to="store.managementLink(`/admin/qualifications/${q.id}`)"
                     class="icon-button"
@@ -739,15 +765,7 @@ onBeforeRouteUpdate(canLeave);
                 <td>v{{ c.version }}</td>
                 <td class="muted">{{ c.assessmentKinds.map((k) => labels[k]).join(' · ') }}</td>
                 <td>
-                  <StatusBadge
-                    :status="
-                      c.operationalStatus === 'retired'
-                        ? 'retired'
-                        : c.status === 'draft'
-                          ? 'catalogDraft'
-                          : 'published'
-                    "
-                  />
+                  <StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'" />
                 </td>
                 <td>
                   <RouterLink
@@ -999,3 +1017,53 @@ onBeforeRouteUpdate(canLeave);
     </div>
   </div>
 </template>
+
+<style scoped>
+.criterion-versions {
+  margin: 16px 0;
+  font-size: 14px;
+}
+.criterion-versions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding-left: 20px;
+}
+.criterion-changes {
+  margin: 24px 0;
+}
+.criterion-changes section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.criterion-changes h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.criterion-changes section > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.criterion-changes p {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.criterion-changes span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
+  max-height: 300px;
+  overflow: auto;
+}
+@media (max-width: 600px) {
+  .criterion-changes section > div {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

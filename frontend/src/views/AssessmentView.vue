@@ -374,6 +374,7 @@ onBeforeRouteUpdate(canLeave);
           v-model="selected"
           :items="options"
           vertical
+          numbered
           label="응시 문항"
           :panel-id="uid + '-answer'"
         />

@@ -1,3 +1,4 @@
+import { validateCatalogStructure } from "./catalog-editing.ts";
 import { validatePolicies } from "./organization-policies.ts";
 import {
   StateSchema,
@@ -114,7 +115,18 @@ export function validateState(
       "기준 버전 중복",
     );
   for (const list of [s.courses, s.qualifications]) {
-    for (const item of list)
+    for (const item of list) {
+      if (item.deletedAt)
+        check(
+          item.deletionReason?.trim() &&
+            s.users.some((u) => u.id === item.deletedBy),
+          "삭제 기준의 사유·실행자 누락",
+        );
+      else
+        check(
+          !item.deletedBy && !item.deletionReason,
+          "삭제 일시 없는 삭제 정보",
+        );
       if (item.parentId)
         check(
           list.some(
@@ -122,17 +134,16 @@ export function validateState(
               parent.id === item.parentId &&
               parent.entityId === item.entityId &&
               parent.lv1OrganizationId === item.lv1OrganizationId &&
-              parent.version < item.version &&
-              parent.status === "published",
+              parent.version < item.version,
           ),
           "기준 버전 계보",
         );
+    }
   }
   for (const c of s.courses) {
     if (c.operationalStatus === "retired")
       check(
-        c.status === "published" &&
-          c.retiredAt &&
+        c.retiredAt &&
           c.retirementReason &&
           s.users.some((u) => u.id === c.retiredBy),
         "인증Set 운영 종료 근거",
@@ -142,8 +153,7 @@ export function validateState(
         !c.retiredAt && !c.retiredBy && !c.retirementReason,
         "운영 중 인증Set의 종료 정보",
       );
-    if (c.status === "published")
-      check(!courseErrors(c).length, "사용 중인 인증Set 기준 누락");
+    validateCatalogStructure(s, "courses", c);
   }
   for (const q of s.qualifications) {
     check(
@@ -154,16 +164,12 @@ export function validateState(
       ),
       "인증Set 참조 누락",
     );
-    if (q.status === "published")
-      check(
-        !qualificationErrors(q, s.courses).length,
-        "사용 중인 자격 기준 누락",
-      );
+    validateCatalogStructure(s, "qualifications", q);
   }
   for (const a of s.assignments) {
     const q = s.qualifications.find((q) => q.id === a.qualificationId);
     check(
-      q?.status === "published" && q.lv1OrganizationId === a.lv1OrganizationId,
+      q && q.lv1OrganizationId === a.lv1OrganizationId,
       "배정된 자격 버전·Lv1",
     );
     check(

@@ -304,18 +304,18 @@ test("실기 전용 사용 등록은 개별·일괄 모두 차단하고 지식 �
   const x = await f.call("/courses", {}, 200, "admin-1"),
     draft = f.store.snapshot().courses.find((c) => c.id === x.id)!;
   await f.call(
-    `/courses/${x.id}/publish`,
+    `/courses/${x.id}`,
     {
       ...draft,
       ...c,
       id: x.id,
       entityId: x.id,
-      status: "draft",
       revision: 1,
       assessmentKinds: ["practical"],
     },
-    422,
+    200,
     "admin-1",
+    "PUT",
   );
   const data = exportCatalog(s, "org-photo", ["demo-qualification"]);
   const row = data.sheets[0]!.tables.courses.find(
@@ -338,7 +338,7 @@ test("v5 왕복과 v3/v4 누락 정책은 새 버전 없이 유지하며 기존 
   const s = f.store.snapshot(),
     data = exportCatalog(s, "org-photo", ["demo-qualification"]);
   const parsed = await readCatalogWorkbook(await writeCatalogWorkbook(data));
-  assert.equal(parsed.workbook.format, "eks-catalog-v5");
+  assert.equal(parsed.workbook.format, "eks-catalog-v6");
   assert.equal(parsed.workbook.sheets[0]!.renewalNoticeDaysBefore, 14);
   assert.equal(
     prepareCatalog(s, parsed.workbook, "org-photo").changes[0]!.kind,
@@ -355,7 +355,7 @@ test("v5 왕복과 v3/v4 누락 정책은 새 버전 없이 유지하며 기존 
   }
   const b = new ExcelJS.Workbook();
   await b.xlsx.load((await writeCatalogWorkbook(data)) as any);
-  assert.equal(b.subject, "eks-catalog-v5");
+  assert.equal(b.subject, "eks-catalog-v6");
   assert.ok(
     b.worksheets[2]!.getSheetValues()
       .flat()
@@ -374,8 +374,8 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 10);
-  assert.equal(next.state.revision, raw.revision + 1);
+  assert.equal(next.state.schemaVersion, 11);
+  assert.equal(next.state.revision, raw.revision + 2);
   for (const key of [
     "attempts",
     "completions",

@@ -464,7 +464,7 @@ test("적용 버전·소속 변경은 초안 확정을 막고 입력과 요청 �
     before = structuredClone(p.schedules);
   const v = await f.call("admin-1", `/qualifications/${q1}/versions`, {});
   const draft = f.store.snapshot().qualifications.find((q) => q.id === v.id)!;
-  await f.call("admin-1", `/qualifications/${v.id}/publish`, draft);
+  await f.call("admin-1", `/qualifications/${v.id}`, draft, undefined, "PUT");
   await f.pool([v.id]);
   await f.complete(p.id, "learner-2", 409);
   assert.deepEqual(
@@ -532,8 +532,10 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
   const v = await f.call("admin-1", `/qualifications/${q1}/versions`, {});
   await f.call(
     "admin-1",
-    `/qualifications/${v.id}/publish`,
+    `/qualifications/${v.id}`,
     f.store.snapshot().qualifications.find((q) => q.id === v.id),
+    undefined,
+    "PUT",
   );
   await f.pool([v.id]);
   assert.equal(
@@ -717,7 +719,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 10);
+  assert.equal(migrated.schemaVersion, 11);
   assert.equal(master.schemaVersion, 2);
   for (const key of [
     "users",

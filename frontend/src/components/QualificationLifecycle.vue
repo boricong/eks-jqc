@@ -10,13 +10,14 @@ import {
   type LifecycleEvent,
 } from '@eks/contracts';
 const props = defineProps<{ qualification: Qualification; disabled?: boolean }>();
-const emit = defineEmits<{ changed: [] }>();
+const emit = defineEmits<{ changed: []; versionCreated: [string] }>();
 const store = useDemo();
 const open = ref(false),
   busy = ref(false),
   error = ref(''),
   reason = ref('');
 const status = ref<LifecycleStatus>('Hold');
+const createOpen = ref(false);
 const impact = ref<{
   revision: number;
   organizationRevision: number;
@@ -81,6 +82,22 @@ async function save() {
     busy.value = false;
   }
 }
+async function createVersion() {
+  busy.value = true;
+  error.value = '';
+  try {
+    const result = await store.command(`/qualifications/${props.qualification.id}/versions`, {
+      revision: props.qualification.revision,
+    });
+    createOpen.value = false;
+    emit('versionCreated', result.id);
+    store.notify('새 Active 버전을 만들었습니다. 팀 적용 버전은 유지됩니다.');
+  } catch (e) {
+    error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
 </script>
 <template>
   <section class="panel editor-panel lifecycle-panel">
@@ -105,10 +122,31 @@ async function save() {
       운영 상태 이력 보기
     </button>
     <p v-if="qualification.lifecycleStatus === 'Revoke'" class="muted">
-      폐기한 버전은 재개할 수 없습니다. 새 버전을 만들어 사용 등록해 주세요.
+      폐기한 버전은 재개할 수 없습니다. 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.
     </p>
+    <button
+      v-if="qualification.lifecycleStatus === 'Revoke'"
+      class="button secondary"
+      :disabled="disabled || busy"
+      @click="createOpen = true"
+    >
+      새 버전 작성
+    </button>
     <p v-if="error && !open" role="alert" class="error-message">{{ error }}</p>
   </section>
+  <AppDialog v-model:open="createOpen" title="폐기 기준의 새 버전 작성">
+    <p>
+      기존 Revoke 버전과 취득 근거는 그대로 보존하고 동일한 내용의 새 Active 버전을 만듭니다. 기준을
+      보완한 뒤 조직별 자격 설정에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지 않습니다.
+    </p>
+    <p v-if="error" role="alert" class="error-message">{{ error }}</p>
+    <template #footer
+      ><button class="button secondary" :disabled="busy" @click="createOpen = false">취소</button
+      ><button class="button primary" :disabled="busy" @click="createVersion">
+        새 버전 만들기
+      </button></template
+    >
+  </AppDialog>
   <AppDialog v-model:open="open" title="자격 기준 상태 변경">
     <template v-if="impact">
       <h3>{{ qualification.title }} · v{{ qualification.version }}</h3>

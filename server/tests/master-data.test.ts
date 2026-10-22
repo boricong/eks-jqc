@@ -216,7 +216,7 @@ test("손상·구형·진행 혼입·숨은 필드·중복 ID·참조 누락·�
   const base = exportMaster(original, f.store.organizations.snapshot(), clock);
   const mutations = [
     (v: any) => {
-      v.formatVersion = 2;
+      v.formatVersion = 99;
     },
     (v: any) => {
       v.stateSchemaVersion = 9;

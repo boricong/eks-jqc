@@ -137,9 +137,10 @@ const revision = {
   version: z.number().int().positive(),
   revision: z.number().int().positive(),
   title: z.string().max(300),
-  status: z.enum(["draft", "published"]),
   parentId: id.optional(),
-  publishedAt: z.iso.datetime().optional(),
+  deletedAt: z.iso.datetime().optional(),
+  deletedBy: id.optional(),
+  deletionReason: z.string().trim().min(1).max(2000).optional(),
 };
 export const CourseSchema = z.object({
   ...revision,
@@ -320,7 +321,7 @@ export const comparisonLabels = {
   pending: "비교 보류",
 };
 export const StateSchema = z.object({
-  schemaVersion: z.literal(10),
+  schemaVersion: z.literal(11),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
   courses: z.array(CourseSchema),
@@ -428,7 +429,7 @@ export interface CourseUsage {
   stateRevision: number;
   canDelete: boolean;
   blockers: string[];
-  qualifications: Pick<Qualification, "id" | "title" | "version" | "status">[];
+  qualifications: Pick<Qualification, "id" | "title" | "version">[];
   successorVersions: { id: string; version: number }[];
   counts: {
     assignments: number;
@@ -528,9 +529,8 @@ export function qualificationErrors(
     !q.courseIds.length && "필수 인증Set을 선택해 주세요.",
     new Set(q.courseIds).size !== q.courseIds.length &&
       "필수 인증Set이 중복되었습니다.",
-    q.courseIds.some(
-      (id) => courses.find((c) => c.id === id)?.status !== "published",
-    ) && "필수 인증Set을 먼저 사용 등록해 주세요.",
+    q.courseIds.some((id) => !courses.some((c) => c.id === id)) &&
+      "연결된 인증Set을 찾을 수 없습니다.",
   ].filter(Boolean) as string[];
 }
 
@@ -540,29 +540,37 @@ export function retiredCourses(q: Qualification, courses: Course[]): Course[] {
     (c) => q.courseIds.includes(c.id) && c.operationalStatus === "retired",
   );
 }
+export function qualificationReadinessErrors(
+  q: Qualification,
+  courses: Course[],
+): string[] {
+  return [
+    ...qualificationErrors(q, courses),
+    ...(!q.description.trim() ? ["자격 설명을 입력해 주세요."] : []),
+    ...validityErrors(q.validity),
+    ...courses
+      .filter((c) => q.courseIds.includes(c.id))
+      .flatMap((c) =>
+        courseUseErrors(c).map(
+          (error) => `${c.title || "이름 없는 인증Set"}: ${error}`,
+        ),
+      ),
+  ];
+}
 export function qualificationUseErrors(
   q: Qualification,
   courses: Course[],
 ): string[] {
   return [
+    ...(q.deletedAt
+      ? ["삭제된 자격으로 신규 계획·재인증을 시작할 수 없습니다."]
+      : []),
     ...(q.lifecycleStatus && q.lifecycleStatus !== "Active"
       ? [
           `자격 기준 ${q.lifecycleStatus} 상태로 신규 계획·재인증을 시작할 수 없습니다.`,
         ]
       : []),
-    ...qualificationErrors(q, courses),
-    ...(!q.description.trim() ? ["자격 설명을 입력해 주세요."] : []),
-    ...validityErrors(q.validity),
-    ...courses
-      .filter(
-        (c) =>
-          q.courseIds.includes(c.id) &&
-          !c.learningItems.some((i) => i.required),
-      )
-      .map(
-        (c) =>
-          `${c.title} v${c.version}에 필수 학습 항목이 없습니다. 새 인증Set 버전에서 학습 항목을 준비해 주세요.`,
-      ),
+    ...qualificationReadinessErrors(q, courses),
     ...retiredCourses(q, courses).map(
       (c) =>
         `운영 종료된 인증Set ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
@@ -580,4 +588,4 @@ export function assessmentPassScore(course: Course, kind: Kind) {
   return kind === "objective" ? course.passScore : course.practicalPassScore;
 }
 
-export * from './master-data.ts';
+export * from "./master-data.ts";

@@ -120,8 +120,6 @@ function assessmentCourse(
     version: 1,
     revision: 1,
     title,
-    status: "published",
-    publishedAt: at,
     operationalStatus: "active",
     assessmentKinds: ["objective", "practical"],
     learningItems: [
@@ -138,8 +136,8 @@ function assessmentCourse(
       {
         id: `${id}-text`,
         type: "text",
-        title: `${title} ????`,
-        content: `???? ??? ?? ?????. ${checkpoints.join(" ? ")}`,
+        title: `${title} 학습자료`,
+        content: `프로세스 검증을 위한 가상 학습자료입니다. ${checkpoints.join(" · ")}`,
         url: "",
         description: "",
       },
@@ -301,7 +299,7 @@ export function preparePhotoSetup(
       );
       requirement(
         !courseUseErrors(course).length,
-        `${course.title} 사용 등록 기준이 부족합니다.`,
+        `${course.title} 신규 운영 기준이 부족합니다.`,
       );
       state.courses.push(course);
       publishedCourseIds.push(course.id);
@@ -316,13 +314,12 @@ export function preparePhotoSetup(
     const draft = existing[0];
     if (draft)
       requirement(
-        draft.status === "draft" &&
-          draft.version === 1 &&
+        draft.version === 1 &&
           !draft.courseIds.length &&
           !draft.parentId &&
           !draft.description.trim() &&
           draft.validity.type === "unknown",
-        `${template.title} 초안이 변경되었습니다. 덮어쓰지 않습니다.`,
+        `${template.title} 기준이 변경되었습니다. 덮어쓰지 않습니다.`,
       );
     const id = draft?.id || `${PHOTO_FIXTURE_VERSION}-${template.id}`;
     const qualification = QualificationSchema.parse({
@@ -338,14 +335,12 @@ export function preparePhotoSetup(
       description: `[프로세스 검증용] ${template.title}의 학습·평가·수료·인증 흐름을 시험하는 가상 기준입니다. 실제 사내 자격 기준으로 사용하지 않습니다.`,
       validity: { type: "months", months: 36, reminderDays: [90, 30, 7] },
       courseIds: courses.map((course) => course.id),
-      status: "published",
-      publishedAt: at,
       templateId: template.id,
       revision: draft ? draft.revision + 1 : 1,
     });
     requirement(
       !qualificationUseErrors(qualification, state.courses).length,
-      `${template.title} 사용 등록 기준이 부족합니다.`,
+      `${template.title} 신규 운영 기준이 부족합니다.`,
     );
     if (draft) Object.assign(draft, qualification);
     else state.qualifications.push(qualification);

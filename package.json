@@ -30,7 +30,8 @@
     "data:recover-master": "node --import tsx server/src/cli.ts recover-master",
     "data:restore": "node --import tsx server/src/cli.ts restore",
     "data:unlock": "node --import tsx server/src/cli.ts unlock",
-    "start": "node --import tsx server/src/index.ts"
+    "start": "node --import tsx server/src/index.ts",
+    "data:migrate-catalog-editing": "node --import tsx server/src/cli.ts migrate-catalog-editing"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -131,7 +131,7 @@ test('평가 10,000행 표는 가상 렌더링하고 편집에 응답한다', as
   await cell.locator('input').press('Enter');
   await expect(cell).toHaveText('2');
 });
-test('Excel 가져오기→표 셀 편집→변경 비교→초안 저장→일괄 등록→다운로드 왕복', async ({
+test('Excel 가져오기→표 셀 편집→변경 비교→선택 기준 저장→다운로드 왕복', async ({
   page,
   backend,
 }) => {
@@ -157,19 +157,13 @@ test('Excel 가져오기→표 셀 편집→변경 비교→초안 저장→일�
   await expect(
     page.getByText('서버 저장 전 수정 내용이 있습니다.', { exact: false }),
   ).toBeVisible();
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('개정');
-  await page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
-  await expect(page.locator('.catalog-history')).toContainText('초안');
+  await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
+  await expect(page.locator('.catalog-history')).toContainText('기준 저장');
   const draft = backend.store.snapshot().qualifications.find((q) => q.title === '엑셀 개정 검증')!;
-  expect(draft.status).toBe('draft');
+  expect('status' in draft).toBe(false);
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByRole('button', { name: '검토 후 사용 등록', exact: true }).click();
-  await page.getByRole('button', { name: '선택 기준 사용 등록', exact: true }).click();
-  await expect(page.locator('.catalog-history')).toContainText('사용 등록 완료');
-  expect(backend.store.snapshot().qualifications.find((q) => q.id === draft.id)!.status).toBe(
-    'published',
-  );
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '작업 파일 다운로드', exact: true }).last().click();
   const download = await downloadPromise;
@@ -208,7 +202,9 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await overflow(page);
-    await expect(page.getByRole('button', { name: '초안 저장', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '변경 검토 후 저장', exact: true }),
+    ).toBeVisible();
     if (width === 1920) await page.screenshot({ path: test.info().outputPath('catalog-grid.png') });
   }
   await page.getByRole('tab', { name: /지식 평가/ }).click();
@@ -219,10 +215,8 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await correct.dblclick();
   await correct.locator('input').fill('99');
   await correct.locator('input').press('Enter');
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
-  ).toBeDisabled();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeDisabled();
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await page
     .locator('.bulk-issues button')

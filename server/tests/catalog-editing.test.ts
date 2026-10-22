@@ -1,0 +1,428 @@
+import test, { type TestContext } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { randomUUID, createHash } from "node:crypto";
+import { qualificationUseErrors, type State } from "@eks/contracts";
+import { seedState } from "../src/seed.ts";
+import { seedOrganizations } from "../src/organizations.ts";
+import { JsonStore } from "../src/storage.ts";
+import { buildApp } from "../src/app.ts";
+import { migrateCatalogEditing } from "../src/catalog-editing-migration.ts";
+import {
+  exportMaster,
+  readMaster,
+  masterCandidate,
+  contentHash,
+} from "../src/master-data.ts";
+import {
+  exportCatalog,
+  prepareCatalog,
+  saveCatalogBatch,
+} from "../src/catalog.ts";
+
+async function fixture(t: TestContext) {
+  const dir = await mkdtemp(path.join(tmpdir(), "eks-editing-")),
+    file = path.join(dir, "runtime/state.json");
+  await new JsonStore(file).initialize(seedState(true));
+  const store = await new JsonStore(file).load(),
+    app = await buildApp(store),
+    cookies = new Map<string, string>();
+  t.after(async () => {
+    await app.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  async function call(
+    url: string,
+    body?: any,
+    method: any = body === undefined ? "GET" : "POST",
+    status = 200,
+    actor = "admin-1",
+    key = randomUUID(),
+  ) {
+    if (!cookies.has(actor)) {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/session",
+        payload: { actorId: actor },
+      });
+      cookies.set(
+        actor,
+        `${login.cookies[0]!.name}=${login.cookies[0]!.value}`,
+      );
+    }
+    const r = await app.inject({
+      method,
+      url: "/api" + url,
+      headers: { cookie: cookies.get(actor)!, "idempotency-key": key },
+      ...(body === undefined ? {} : { payload: body }),
+    });
+    assert.equal(r.statusCode, status, r.body);
+    return r.json();
+  }
+  return { store, call, file, app };
+}
+test("직접 저장은 미완성을 허용하고 참조된 기준만 새 버전으로 보존하며 재시도는 한 번이다", async (t) => {
+  const f = await fixture(t),
+    original = f.store.snapshot();
+  const created = await f.call("/qualifications", {});
+  const q = f.store.snapshot().qualifications.find((q) => q.id === created.id)!;
+  const incomplete = await f.call(
+    `/qualifications/${q.id}`,
+    { ...q, title: "작성 중 기준" },
+    "PUT",
+  );
+  assert.equal(incomplete.id, q.id);
+  assert.ok(incomplete.readiness.length);
+  assert.equal(incomplete.revision, 2);
+  const c = original.courses.find((c) => c.id === "demo-course-1")!,
+    body = { ...c, title: "새 지식 기준" };
+  const preview = await f.call(`/courses/${c.id}/save-preview`, body);
+  assert.equal(preview.newVersion, true);
+  const key = randomUUID(),
+    payload = {
+      ...body,
+      stateRevision: preview.stateRevision,
+      organizationRevision: preview.organizationRevision,
+    };
+  const saved = await f.call(
+    `/courses/${c.id}`,
+    payload,
+    "PUT",
+    200,
+    "admin-1",
+    key,
+  );
+  assert.notEqual(saved.id, c.id);
+  assert.equal(saved.version, 2);
+  assert.deepEqual(
+    await f.call(`/courses/${c.id}`, payload, "PUT", 200, "admin-1", key),
+    saved,
+  );
+  assert.deepEqual(
+    f.store.snapshot().courses.find((x) => x.id === c.id),
+    c,
+  );
+  assert.deepEqual(f.store.snapshot().assignments, original.assignments);
+  assert.deepEqual(
+    f.store
+      .snapshot()
+      .qualifications.find((q) => q.id === "demo-qualification"),
+    original.qualifications.find((q) => q.id === "demo-qualification"),
+  );
+  const next = f.store.snapshot().courses.find((x) => x.id === saved.id)!;
+  assert.equal(
+    (await f.call(`/courses/${next.id}`, next, "PUT")).unchanged,
+    true,
+  );
+  await f.call(`/courses/${next.id}/publish`, next, "POST", 410);
+  await f.call(`/courses/${next.id}`, { ...next, status: "draft" }, "PUT", 409);
+});
+test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후 선택 버전만 보존 삭제한다", async (t) => {
+  const f = await fixture(t),
+    before = f.store.snapshot();
+  await f.call(
+    "/organization-policies/org-photo/qualification-pool",
+    {
+      revision: f.store.organizations.snapshot().revision,
+      qualificationIds: ["demo-qualification"],
+    },
+    "PUT",
+  );
+  const q = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === "demo-qualification")!;
+  const blocked = await f.call(`/qualifications/${q.id}/deletion-impact`);
+  assert.equal(blocked.canDelete, false);
+  await f.call(
+    `/qualifications/${q.id}`,
+    { ...blocked, reason: "제거" },
+    "DELETE",
+    409,
+  );
+  const saved = await f.call(
+    `/qualifications/${q.id}`,
+    { ...q, title: "새 자격 기준" },
+    "PUT",
+  );
+  assert.equal(
+    f.store.organizations.snapshot().qualificationPools[0]!.qualificationId,
+    q.id,
+  );
+  await f.call(
+    "/organization-policies/org-photo/qualification-pool",
+    {
+      revision: f.store.organizations.snapshot().revision,
+      qualificationIds: [saved.id],
+    },
+    "PUT",
+  );
+  const impact = await f.call(`/qualifications/${q.id}/deletion-impact`);
+  assert.equal(impact.mode, "archive");
+  const key = randomUUID(),
+    body = { ...impact, reason: "이전 기준 정리" };
+  const result = await f.call(
+    `/qualifications/${q.id}`,
+    body,
+    "DELETE",
+    200,
+    "admin-1",
+    key,
+  );
+  assert.deepEqual(
+    await f.call(
+      `/qualifications/${q.id}`,
+      body,
+      "DELETE",
+      200,
+      "admin-1",
+      key,
+    ),
+    result,
+  );
+  const removed = f.store.snapshot().qualifications.find((x) => x.id === q.id)!;
+  assert.ok(removed.deletedAt);
+  assert.ok(
+    qualificationUseErrors(removed, before.courses).some((e) =>
+      e.includes("삭제"),
+    ),
+  );
+  assert.deepEqual(f.store.snapshot().courses, before.courses);
+  assert.deepEqual(f.store.snapshot().assignments, before.assignments);
+  assert.equal(
+    f.store.organizations.snapshot().qualificationPools[0]!.qualificationId,
+    saved.id,
+  );
+  assert.ok(
+    (await readdir(f.store.backupDir)).some((n) =>
+      n.startsWith("before-qualification-delete-"),
+    ),
+  );
+});
+test("미참조 자격 실제 제거·권한·최신 참조·백업 실패와 응답 유실 재시도를 보호한다", async (t) => {
+  const f = await fixture(t),
+    q = await f.call("/qualifications", {});
+  await f.call(
+    `/qualifications/${q.id}/deletion-impact`,
+    undefined,
+    "GET",
+    403,
+    "learner-1",
+  );
+  let impact = await f.call(`/qualifications/${q.id}/deletion-impact`);
+  assert.equal(impact.mode, "remove");
+  const snapshot = await readFile(f.file, "utf8");
+  f.store.beforeReplace = () => {
+    throw new Error("disk failure");
+  };
+  await f.call(
+    `/qualifications/${q.id}`,
+    { ...impact, reason: "실패 시험" },
+    "DELETE",
+    503,
+  );
+  assert.equal(await readFile(f.file, "utf8"), snapshot);
+  f.store.beforeReplace = undefined;
+  await f.call("/qualifications", {});
+  await f.call(
+    `/qualifications/${q.id}`,
+    { ...impact, reason: "이전 확인" },
+    "DELETE",
+    409,
+  );
+  impact = await f.call(`/qualifications/${q.id}/deletion-impact`);
+  const key = randomUUID(),
+    body = { ...impact, reason: "미사용 기준 정리" };
+  await f.call(`/qualifications/${q.id}`, body, "DELETE", 200, "admin-1", key);
+  await f.call(`/qualifications/${q.id}`, body, "DELETE", 200, "admin-1", key);
+  assert.ok(!f.store.snapshot().qualifications.some((x) => x.id === q.id));
+});
+test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저장과 Excel 무변경은 보존된다", () => {
+  const s = seedState(true),
+    org = seedOrganizations();
+  const q = s.qualifications.find((q) => q.id === "demo-qualification")!;
+  org.qualificationPools = [
+    {
+      lv1OrganizationId: "org-photo",
+      entityId: q.entityId,
+      qualificationId: q.id,
+    },
+  ];
+  const before = structuredClone(s),
+    book = exportCatalog(s, "org-photo", [q.id]);
+  book.sheets[0]!.description = "";
+  const p = prepareCatalog(s, book, "org-photo", org);
+  assert.ok(p.issues.some((i) => i.severity === "readiness"));
+  assert.equal(p.qualifications[0]!.version, 2);
+  const saved = saveCatalogBatch(
+    s,
+    book,
+    "org-photo",
+    "admin-1",
+    undefined,
+    org,
+  );
+  assert.deepEqual(
+    s.qualifications.find((x) => x.id === q.id),
+    before.qualifications.find((x) => x.id === q.id),
+  );
+  assert.equal(
+    saveCatalogBatch(s, saved.workbook, "org-photo", "admin-1", undefined, org)
+      .unchanged,
+    true,
+  );
+  assert.equal(org.qualificationPools[0]!.qualificationId, q.id);
+});
+test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 표시를 보존하고 반복 이관은 무변경이다", () => {
+  const source: any = seedState(true),
+    org = seedOrganizations();
+  source.schemaVersion = 10;
+  for (const x of [...source.courses, ...source.qualifications]) {
+    x.status = "published";
+    x.publishedAt = "2026-10-15T00:00:00.000Z";
+  }
+  const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
+  assert.equal(next.state.schemaVersion, 11);
+  assert.deepEqual(next.state.assignments, source.assignments);
+  assert.deepEqual(next.organizations, org);
+  assert.ok(next.state.qualifications.every((q) => !("status" in q)));
+  assert.deepEqual(migrateCatalogEditing(next.state, org).state, next.state);
+  const q = next.state.qualifications[0]!;
+  q.deletedAt = "2026-10-22T00:00:00.000Z";
+  q.deletedBy = "admin-1";
+  q.deletionReason = "보존";
+  const file = exportMaster(next.state, org, "2026-10-22T00:00:00.000Z");
+  const copied = masterCandidate(readMaster(file).payload, 0, 0);
+  assert.equal(copied.state.qualifications[0]!.deletedAt, q.deletedAt);
+  const legacy: any = exportMaster(next.state, org, "2026-10-22T00:00:00.000Z");
+  legacy.formatVersion = 1;
+  legacy.stateSchemaVersion = 10;
+  for (const x of [
+    ...legacy.payload.courses,
+    ...legacy.payload.qualifications,
+  ]) {
+    x.status = "draft";
+  }
+  legacy.sha256 = contentHash(legacy.payload);
+  const converted = readMaster(legacy);
+  assert.equal(converted.stateSchemaVersion, 11);
+  assert.deepEqual(converted.payload, file.payload);
+});
+
+test("스키마11 이관의 중간 실패는 파일 쌍·세대를 복구하고 성공 시 한 번만 세대를 바꾼다", async (t) => {
+  const f = await fixture(t);
+  await f.app.close();
+  const raw: any = JSON.parse(await readFile(f.file, "utf8"));
+  raw.schemaVersion = 10;
+  raw.qualifications.forEach((q: any) => (q.status = "published"));
+  raw.courses.forEach((c: any) => (c.status = "draft"));
+  await writeFile(f.file, JSON.stringify(raw));
+  const original = await readFile(f.file),
+    org = await readFile(f.store.organizations.file),
+    meta = await readFile(f.store.maintenanceFile);
+  const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+  const expected = {
+    revision: raw.revision,
+    stateHash: hash(original),
+    organizationHash: hash(org),
+  };
+  const broken = new JsonStore(f.file);
+  broken.beforeReplace = () => {
+    throw Error("migration failure");
+  };
+  await assert.rejects(
+    broken.migratePolicies(expected, migrateCatalogEditing, "catalog-editing"),
+    /migration failure/,
+  );
+  assert.deepEqual(await readFile(f.file), original);
+  assert.deepEqual(await readFile(f.store.organizations.file), org);
+  assert.deepEqual(await readFile(f.store.maintenanceFile), meta);
+  const result: any = await new JsonStore(f.file).migratePolicies(
+    expected,
+    migrateCatalogEditing,
+    "catalog-editing",
+  );
+  assert.deepEqual(await readFile(result.stateBackup), original);
+  assert.deepEqual(await readFile(result.organizationBackup), org);
+  const after = await readFile(f.file),
+    nextMeta = await readFile(f.store.maintenanceFile);
+  assert.notEqual(
+    JSON.parse(nextMeta.toString()).generation,
+    JSON.parse(meta.toString()).generation,
+  );
+  assert.deepEqual(await readFile(f.store.organizations.file), org);
+  await new JsonStore(f.file).migratePolicies(
+    { ...expected, revision: raw.revision + 1, stateHash: hash(after) },
+    migrateCatalogEditing,
+    "catalog-editing",
+  );
+  assert.deepEqual(await readFile(f.file), after);
+  assert.deepEqual(await readFile(f.store.maintenanceFile), nextMeta);
+});
+
+test("보존 삭제 후 확정 배정은 원래 평가로 수료·인증하며 보유 근거를 삭제하지 않는다", async (t) => {
+  const f = await fixture(t),
+    original = f.store.snapshot();
+  const q = original.qualifications.find((q) => q.id === "demo-qualification")!;
+  const impact = await f.call("/qualifications/" + q.id + "/deletion-impact");
+  await f.call(
+    "/qualifications/" + q.id,
+    { ...impact, reason: "관리 목록 정리" },
+    "DELETE",
+  );
+  for (const e of original.enrollments.filter(
+    (e) =>
+      original.assignments.find((a) => a.id === e.assignmentId)
+        ?.qualificationId === q.id,
+  )) {
+    const c = original.courses.find((c) => c.id === e.courseId)!;
+    for (const kind of ["objective", "practical"] as const) {
+      if (
+        !c.assessmentKinds.includes(kind) ||
+        f.store
+          .snapshot()
+          .attempts.some(
+            (a) =>
+              a.enrollmentId === e.id &&
+              a.kind === kind &&
+              a.result === "passed",
+          )
+      )
+        continue;
+      const attempt = await f.call(
+        "/enrollments/" + encodeURIComponent(e.id) + "/attempts",
+        { kind },
+        "POST",
+        200,
+        "learner-1",
+      );
+      const answers = Object.fromEntries(
+        (kind === "objective" ? c.questions : c.practicalQuestions).map((q) => [
+          q.id,
+          q.correct,
+        ]),
+      );
+      await f.call(
+        "/attempts/" + attempt.id + "/draft",
+        { revision: attempt.revision, answers },
+        "PUT",
+        200,
+        "learner-1",
+      );
+      await f.call(
+        "/attempts/" + attempt.id + "/submit",
+        { revision: attempt.revision + 1 },
+        "POST",
+        200,
+        "learner-1",
+      );
+    }
+  }
+  const next = f.store.snapshot();
+  assert.ok(next.certifications.some((c) => c.qualificationId === q.id));
+  assert.deepEqual(next.courses, original.courses);
+  const legacyAwards = next.certifications;
+  await f.call("/qualifications", {});
+  assert.deepEqual(f.store.snapshot().certifications, legacyAwards);
+});

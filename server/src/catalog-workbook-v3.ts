@@ -83,7 +83,7 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v5";
+  book.subject = "eks-catalog-v6";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
     ["EKS 자격 기준 · 사용자용 양식 v4"],
@@ -107,7 +107,7 @@ export async function writeCatalogV3(
       "7. 표 자체나 열 제목은 지우지 마세요. 표 안에서 행 추가·삭제·정렬을 사용하세요. 수식 대신 값을 입력하세요.",
     ],
     [
-      "8. 가져오기 → 오류 확인 → 초안 저장 → 검토 후 사용 등록 순서입니다. 파일을 가져오는 것만으로 반영되지 않습니다.",
+      "8. 가져오기 → 보완 항목 확인 → 변경 검토 → 기준 저장 순서입니다. 파일을 가져오는 것만으로 반영되지 않습니다.",
     ],
     [
       "한 파일은 한 조직 · .xlsx 10MB · 자격 100개 · 평가 10,000행. 정답과 채점 기준이 포함된 관리자용 파일입니다.",
@@ -162,7 +162,7 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v5",
+      format: "eks-catalog-v6",
       lv1OrganizationId: data.lv1OrganizationId,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
@@ -369,7 +369,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v5",
+    format: "eks-catalog-v6",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -444,7 +444,12 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
       m[key] = value(r, mb.c + 1, "metadata", 0, key);
     }
     demand(
-      ["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"].includes(m.format),
+      [
+        "eks-catalog-v3",
+        "eks-catalog-v4",
+        "eks-catalog-v5",
+        "eks-catalog-v6",
+      ].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
     );

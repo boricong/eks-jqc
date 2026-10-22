@@ -1,3 +1,8 @@
+import {
+  referencedCatalog,
+  validateCatalogStructure,
+} from "./catalog-editing.ts";
+import type { OrganizationDocument } from "@eks/contracts";
 import { createHash, randomUUID } from "node:crypto";
 import {
   CatalogWorkbookSchema,
@@ -55,7 +60,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v5",
+    format: "eks-catalog-v6",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const q = s.qualifications.find((q) => q.id === id);
@@ -158,7 +163,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v5",
+    format: "eks-catalog-v6",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -210,7 +215,12 @@ function courseContent(c: Course) {
   };
 }
 const same = (a: unknown, b: unknown) => catalogHash(a) === catalogHash(b);
-export function prepareCatalog(s: State, input: unknown, scope: string) {
+export function prepareCatalog(
+  s: State,
+  input: unknown,
+  scope: string,
+  organizations?: OrganizationDocument,
+) {
   const incoming = input as CatalogWorkbook;
   if (Array.isArray(incoming?.sheets)) {
     demand(
@@ -237,9 +247,12 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
   if (!parsedWorkbook.success) {
     const raw = input as CatalogWorkbook;
     if (
-      ["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"].includes(
-        raw?.format,
-      ) &&
+      [
+        "eks-catalog-v3",
+        "eks-catalog-v4",
+        "eks-catalog-v5",
+        "eks-catalog-v6",
+      ].includes(raw?.format) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
       raw.sheets.length > 0 &&
@@ -360,7 +373,11 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       sheet.lifecycleStatus = original?.lifecycleStatus || "Active";
       sheet.renewalNoticeDaysBefore ??= original?.renewalNoticeDaysBefore ?? 7;
       sheet.reminderDays = original?.validity.reminderDays || [];
-      if (!original || original.lv1OrganizationId !== scope)
+      if (
+        !original ||
+        original.deletedAt ||
+        original.lv1OrganizationId !== scope
+      )
         issue(
           "metadata",
           0,
@@ -472,7 +489,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               table,
               ri + 1,
               field,
-              "사용 등록 전 내용을 입력해 주세요.",
+              "신규 운영 전 내용을 입력해 주세요.",
               "readiness",
             );
         if (
@@ -522,7 +539,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
               table,
               ri + 1,
               "correct",
-              "사용 등록 전 정답 번호를 지정해 주세요.",
+              "신규 운영 전 정답 번호를 지정해 주세요.",
               "readiness",
             );
         }
@@ -620,7 +637,6 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
         lv1OrganizationId: scope,
         version: source?.version || 1,
         revision: source?.revision || 1,
-        status: "draft",
         operationalStatus: source?.operationalStatus || "active",
         catalogCode: code,
         title: str(r.title),
@@ -685,26 +701,14 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       ) {
         c = source;
         unchanged++;
-        if (c.status === "draft") courses.push(c);
       } else {
-        if (
-          source &&
-          s.courses.some(
-            (c) =>
-              c.entityId === source.entityId &&
-              c.id !== source.id &&
-              c.status === "draft",
-          )
-        )
-          issue(
-            "courses",
-            ri,
-            "sourceRevision",
-            "다른 인증Set 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
-          );
         if (source) changed++;
         else added++;
-        if (source?.status === "published" || shared) {
+        if (
+          (source &&
+            referencedCatalog(s, "courses", source.id, organizations)) ||
+          shared
+        ) {
           c = {
             ...c,
             id: randomUUID(),
@@ -718,13 +722,7 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
                     .map((i) => i.version),
                 ) + 1,
             revision: 1,
-            status: "draft",
-            operationalStatus: "active",
           };
-          delete c.publishedAt;
-          delete c.retiredAt;
-          delete c.retiredBy;
-          delete c.retirementReason;
         } else if (source) c = { ...c, revision: source.revision + 1 };
         courses.push(c);
       }
@@ -753,7 +751,6 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       lv1OrganizationId: scope,
       version: original?.version || 1,
       revision: original?.revision || 1,
-      status: "draft",
       catalogCode: sheet.code,
       title: sheet.title,
       englishName: sheet.englishName,
@@ -785,29 +782,15 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
       sheet.code === codeOf(original);
     if (noChange) {
       q = original!;
-      if (q.status === "draft") qualifications.push(q);
     } else {
       if (
         original &&
-        s.qualifications.some(
-          (q) =>
-            q.entityId === original.entityId &&
-            q.status === "draft" &&
-            q.id !== original.id,
-        )
-      )
-        issue(
-          "metadata",
-          0,
-          "sourceId",
-          "다른 초안 개정안이 있습니다. 해당 초안을 먼저 확인해 주세요.",
-        );
-      if (original?.status === "published") {
+        referencedCatalog(s, "qualifications", original.id, organizations)
+      ) {
         q = {
           ...q,
           id: randomUUID(),
           parentId: original.id,
-          lifecycleStatus: "Active",
           version:
             Math.max(
               ...s.qualifications
@@ -816,14 +799,10 @@ export function prepareCatalog(s: State, input: unknown, scope: string) {
             ) + 1,
           revision: 1,
         };
-        delete q.publishedAt;
       } else if (original) q.revision++;
       qualifications.push(q);
     }
-    qualificationUseErrors(
-      q,
-      builtCourses.map((c) => ({ ...c, status: "published" })),
-    ).forEach((m) =>
+    qualificationUseErrors(q, builtCourses).forEach((m) =>
       issue(
         "metadata",
         0,
@@ -857,8 +836,9 @@ export function saveCatalogBatch(
   scope: string,
   actorId: string,
   fileHash?: string,
+  organizations?: OrganizationDocument,
 ) {
-  const prepared = prepareCatalog(s, input, scope);
+  const prepared = prepareCatalog(s, input, scope, organizations);
   demand(
     !prepared.issues.some((i) => i.severity === "structure"),
     409,
@@ -905,7 +885,7 @@ export function saveCatalogBatch(
     contentHash: catalogHash(prepared.workbook),
     qualificationIds: qualifications.map((q) => q.id),
     courseIds: courses.map((c) => c.id),
-    status: "draft",
+    status: "saved",
     revisions: Object.fromEntries(
       [...qualifications, ...courses].map((v) => [v.id, v.revision]),
     ),
@@ -918,7 +898,7 @@ export function saveCatalogBatch(
     action: "catalog.batch.save",
     targetId: batch.id,
     lv1OrganizationId: scope,
-    reason: "Excel/웹 표 기준 초안 일괄 저장",
+    reason: "Excel/웹 표 기준 일괄 저장",
     details: {
       fileHash: fileHash || "",
       contentHash: batch.contentHash,
@@ -935,133 +915,11 @@ export function saveCatalogBatch(
     workbook: resultWorkbook(),
   };
 }
-export function publishCatalogBatch(
-  s: State,
-  id: string,
-  scope: string,
-  actorId: string,
-  selectedIds?: string[],
-) {
-  const batch = s.catalogBatches.find((b) => b.id === id);
+export function publishCatalogBatch(..._args: any[]): never {
   demand(
-    batch && batch.lv1OrganizationId === scope,
-    404,
-    "선택 조직의 저장 배치를 찾을 수 없습니다.",
+    false,
+    410,
+    "사용 등록 절차는 종료되었습니다. 기준 저장을 사용해 주세요.",
+    "FEATURE_REMOVED",
   );
-  const requested = selectedIds || batch.qualificationIds;
-  demand(
-    requested.length > 0 &&
-      new Set(requested).size === requested.length &&
-      requested.every((q) => batch.qualificationIds.includes(q)),
-    422,
-    "이 작업에 저장한 자격을 선택해 주세요.",
-  );
-  const published = new Set(
-    batch.publishedQualificationIds ||
-      (batch.status === "published" ? batch.qualificationIds : []),
-  );
-  const pending = requested.filter((q) => !published.has(q));
-  if (!pending.length)
-    return {
-      id,
-      status: batch.status,
-      qualificationIds: requested,
-      workbook: exportCatalog(s, scope, requested),
-    };
-  const qualifications = pending.map((id) =>
-    s.qualifications.find((q) => q.id === id)!,
-  );
-  demand(
-    qualifications.every(Boolean),
-    409,
-    "저장한 자격을 찾을 수 없습니다. 최신 기준을 확인해 주세요.",
-  );
-  const courseIds = new Set(qualifications.flatMap((q) => q.courseIds));
-  const courses = s.courses.filter(
-    (c) =>
-      courseIds.has(c.id) &&
-      batch.courseIds.includes(c.id) &&
-      c.status === "draft",
-  );
-  // A course already published by another operation must still match this batch's evidence.
-  for (const cid of courseIds) {
-    const c = s.courses.find((c) => c.id === cid);
-    demand(
-      c && c.lv1OrganizationId === scope,
-      409,
-      "연결된 인증Set을 다시 확인해 주세요.",
-    );
-    if (batch.courseIds.includes(cid) && c.status === "published")
-      demand(
-        c.revision === batch.revisions[cid]! + 1 &&
-          batch.publicationResults?.some((r) =>
-            s.qualifications
-              .find((q) => q.id === r.qualificationId)
-              ?.courseIds.includes(cid),
-          ),
-        409,
-        "저장 이후 인증Set이 변경되었습니다. 다시 확인해 주세요.",
-        "REVISION_CONFLICT",
-      );
-  }
-  for (const item of [...courses, ...qualifications])
-    demand(
-      item &&
-        item.revision === batch.revisions[item.id] &&
-        item.status === "draft",
-      409,
-      "저장 이후 기준이 변경되었습니다. 다시 확인해 주세요.",
-      "REVISION_CONFLICT",
-    );
-  for (const c of courses)
-    demand(!courseUseErrors(c).length, 422, courseUseErrors(c).join("\n"));
-  for (const c of courses) {
-    c.status = "published";
-    c.revision++;
-    c.publishedAt = new Date().toISOString();
-  }
-  for (const q of qualifications)
-    demand(
-      !qualificationUseErrors(q, s.courses).length,
-      422,
-      qualificationUseErrors(q, s.courses).join("\n"),
-    );
-  for (const q of qualifications) {
-    q.status = "published";
-    q.revision++;
-    q.publishedAt = new Date().toISOString();
-  }
-  const publishedAt = new Date().toISOString();
-  pending.forEach((q) => published.add(q));
-  batch.publishedQualificationIds = [...published];
-  batch.publicationResults = [
-    ...(batch.publicationResults || []),
-    ...pending.map((qualificationId) => ({
-      qualificationId,
-      actorId,
-      publishedAt,
-    })),
-  ];
-  batch.status =
-    published.size === batch.qualificationIds.length ? "published" : "partial";
-  if (batch.status === "published") batch.publishedAt = publishedAt;
-  s.audits.push({
-    id: randomUUID(),
-    actorId,
-    date: publishedAt,
-    action: "catalog.batch.publish",
-    targetId: id,
-    lv1OrganizationId: scope,
-    reason: "관련 인증Set과 자격 원자적 사용 등록",
-    details: {
-      qualificationIds: pending,
-      courseIds: courses.map((c) => c.id),
-    },
-  });
-  return {
-    id,
-    status: batch.status,
-    qualificationIds: requested,
-    workbook: exportCatalog(s, scope, requested),
-  };
 }

@@ -6,7 +6,7 @@ import { api, mutate, ApiError } from '../api';
 import {
   requiredKinds,
   courseUseErrors as courseErrors,
-  qualificationUseErrors as checkQualification,
+  qualificationReadinessErrors as checkQualification,
   retiredCourses,
   type Assignment,
   type Course,
@@ -234,6 +234,10 @@ export const useDemo = defineStore('workspace', () => {
   const username = (id: string | null | undefined) =>
     actors.value.find((u) => u.id === id)?.name || '미지정';
   type CommandResult = {
+    newVersion?: boolean;
+    version?: number;
+    readiness?: string[];
+    linkedQualifications?: { id: string; title: string; version: number }[];
     id: string;
     revision: number;
     assignmentId?: string;
@@ -290,13 +294,17 @@ export const useDemo = defineStore('workspace', () => {
   async function createCatalog(section: string) {
     return command(`/${section}`);
   }
-  async function saveCatalog(section: string, item: Course | Qualification, publish: boolean) {
-    const result = await command(
-      `/${section}/${item.id}${publish ? '/publish' : ''}`,
-      item,
-      publish ? 'POST' : 'PUT',
+  async function saveCatalog(
+    section: string,
+    item: Course | Qualification,
+    review: { stateRevision: number; organizationRevision: number },
+  ) {
+    const result = await command(`/${section}/${item.id}`, { ...item, ...review }, 'PUT');
+    notify(
+      result.newVersion
+        ? `기존 기록을 보존하고 v${result.version} 버전을 저장했습니다. 팀 적용 버전은 유지됩니다.`
+        : '기준을 저장했습니다.',
     );
-    notify(publish ? '사용 등록했습니다.' : '초안을 저장했습니다.');
     return result;
   }
   async function cloneCatalog(section: string, id: string) {

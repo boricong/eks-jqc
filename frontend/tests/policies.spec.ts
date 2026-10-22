@@ -222,7 +222,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
             document.querySelector('main')!.getBoundingClientRect().top,
         ),
       ).toBeTruthy();
-      if (path.includes('demo-course-1')) await expect(guide).toContainText('사용 중 기준 조회');
+      if (path.includes('demo-course-1')) await expect(guide).toContainText('기준 편집');
     }
   }
   await responsive(page, 'process-explanation');

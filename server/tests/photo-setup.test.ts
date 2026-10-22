@@ -82,21 +82,19 @@ test("Photo 15종 × 5과정 × 2유형 3항목: 정답 표기·채점값·진�
   );
   assert.equal(
     state.qualifications.filter(
-      (q) => q.lv1OrganizationId === PHOTO_ID && q.status === "published",
+      (q) => q.lv1OrganizationId === PHOTO_ID && q.courseIds.length > 0,
     ).length,
     15,
   );
   assert.deepEqual(
     state.qualifications
-      .filter(
-        (q) => q.lv1OrganizationId === PHOTO_ID && q.status === "published",
-      )
+      .filter((q) => q.lv1OrganizationId === PHOTO_ID && q.courseIds.length > 0)
       .map((q) => q.title),
     qualificationTemplates.map((template) => template.title),
   );
   assert.ok(
     state.qualifications.some(
-      (q) => q.id === "old-proc-backup-draft" && q.status === "published",
+      (q) => q.id === "old-proc-backup-draft" && q.courseIds.length > 0,
     ),
   );
   assert.ok(state.courses.some((c) => c.id === "fab-unrelated-course"));
@@ -161,7 +159,7 @@ test("Photo 15종 × 5과정 × 2유형 3항목: 정답 표기·채점값·진�
     qualification.courseIds.forEach((id, i) => {
       const course = state.courses.find((c) => c.id === id)!;
       assert.equal(course.title, photoCourseSpecs[template.id]![i]![0]);
-      assert.equal(course.status, "published");
+      assert.equal("status" in course, false);
       assert.deepEqual(course.assessmentKinds, ["objective", "practical"]);
       assert.equal(course.learningItems.length, 1);
       assert.equal(course.learningItems[0]!.required, true);

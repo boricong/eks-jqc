@@ -24,7 +24,7 @@ export function validateWorkflow(s: State) {
         r.learnerId === p.learnerId &&
         r.lv1OrganizationId === p.lv1OrganizationId &&
         q.lv1OrganizationId === p.lv1OrganizationId &&
-        q.status === "published",
+        !!q,
       "계획 요청·자격 연결",
     );
     check(

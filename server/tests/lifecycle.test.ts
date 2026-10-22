@@ -699,7 +699,7 @@ test("Excel v4·v3 호환 왕복은 재인증 정책 보존, 운영 상태 조�
     data = exportCatalog(state, "org-photo", [qid]);
   const bytes = await writeCatalogWorkbook(data),
     parsed = await readCatalogWorkbook(bytes);
-  assert.equal(parsed.workbook.format, "eks-catalog-v5");
+  assert.equal(parsed.workbook.format, "eks-catalog-v6");
   assert.equal(parsed.workbook.sheets[0]!.renewalLeadMonths, 5);
   assert.equal(
     prepareCatalog(state, parsed.workbook, "org-photo").changes[0]!.kind,
@@ -781,7 +781,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 10);
+  assert.equal(candidate.schemaVersion, 11);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

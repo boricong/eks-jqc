@@ -6,6 +6,7 @@ export const isManagementAction = (action: string) =>
   [
     "catalog.",
     "course.",
+    "qualification.delete",
     "assignment.",
     "comparison.",
     "notice.",

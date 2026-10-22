@@ -20,8 +20,8 @@ test('응답 유실 후 복구·동일 요청 재시도는 새 버전을 중복 
       await route.abort('failed');
     } else await route.continue();
   });
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-  await page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: '연결할 수 없습니다' })).toBeVisible();
   expect(
     backend.store.snapshot().qualifications.filter((q) => q.entityId === 'demo-qualification'),
@@ -97,10 +97,8 @@ test('Excel 수식 오류는 재검사로 사라지지 않으며 해당 값을 �
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: Buffer.from(await book.xlsx.writeBuffer()),
   });
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
-  ).toBeDisabled();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeDisabled();
   await expect(page.getByRole('dialog')).toContainText('수식 대신');
 });
 
@@ -134,13 +132,11 @@ test('자격·인증Set 중심 편집: 코드 없이 문항 작성, 제외 취�
   await dialog.getByLabel('2번 선택지', { exact: true }).fill('확인 생략');
   await dialog.getByLabel('1번 선택지를 정답으로 지정', { exact: true }).check();
   await dialog.getByRole('button', { name: '내용 반영' }).click();
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-  await page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
   await expect(page.getByText('서버 기준과 같습니다.', { exact: true })).toBeVisible();
   const snapshot = backend.store.snapshot(),
-    q = snapshot.qualifications.find(
-      (q) => q.status === 'draft' && q.entityId === 'demo-qualification',
-    )!;
+    q = snapshot.qualifications.find((q) => q.version > 1 && q.entityId === 'demo-qualification')!;
   expect(q).toBeTruthy();
   const courses = q.courseIds.map((id) => snapshot.courses.find((c) => c.id === id)!);
   expect(courses.map((c) => c.title)).toEqual(['자료 확인 개정', '기록 작성']);
@@ -148,7 +144,7 @@ test('자격·인증Set 중심 편집: 코드 없이 문항 작성, 제외 취�
   expect(courses[0]!.questions).toHaveLength(2);
 });
 
-test('일부 초안 저장·등록은 다른 자격의 입력을 유지하고 브라우저 복구로 이어 쓴다', async ({
+test('일부 기준 저장은 다른 자격의 입력을 유지하고 브라우저 복구로 이어 쓴다', async ({
   page,
   backend,
 }) => {
@@ -167,25 +163,15 @@ test('일부 초안 저장·등록은 다른 자격의 입력을 유지하고 �
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: await writeCatalogWorkbook(data),
   });
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
   const review = page.getByRole('dialog');
   await review.locator('.catalog-review-list label').nth(1).getByRole('checkbox').uncheck();
-  await review.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
+  await review.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
   await expect(page.locator('.catalog-nav-item')).toHaveCount(2);
   await expect(page.getByText('서버 저장 전 수정 내용이 있습니다.', { exact: true })).toBeVisible();
-  await expect(
-    review.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
-  ).toBeEnabled();
+  await expect(review.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeEnabled();
   await review.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(review).not.toBeVisible();
-  await page.getByRole('button', { name: '검토 후 사용 등록', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .locator('.catalog-review-list label')
-    .nth(1)
-    .getByRole('checkbox')
-    .uncheck();
-  await page.getByRole('button', { name: '선택 기준 사용 등록', exact: true }).click();
   expect(
     backend.store
       .snapshot()
@@ -233,10 +219,8 @@ test('브라우저 보관 실패를 알리고 저장 충돌에서도 입력과 �
       return {};
     },
   );
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
-  ).toBeDisabled();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeDisabled();
   await expect(page.getByRole('dialog')).toContainText('원본이 변경');
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 수정');
@@ -263,13 +247,13 @@ test('새 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );
-      await expect(page.getByRole('button', { name: '초안 저장', exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: '변경 검토 후 저장', exact: true }),
+      ).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`friendly-${theme}-${width}.png`) });
     }
   }
-  await page.getByRole('button', { name: '검토 후 사용 등록', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '선택 기준 사용 등록', exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByRole('dialog')).toContainText('등록 전');
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
+  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeEnabled();
+  await expect(page.getByRole('dialog')).toContainText('신규 운영 전');
 });

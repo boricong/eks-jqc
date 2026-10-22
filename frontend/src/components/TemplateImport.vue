@@ -32,7 +32,7 @@ async function save() {
   try {
     await store.command('/qualification-templates/import', { templateIds: chosen.value });
     open.value = false;
-    store.notify('선택한 자격을 조직의 독립 초안으로 등록했습니다.');
+    store.notify('선택한 자격을 조직의 독립 기준으로 저장했습니다.');
   } catch (err) {
     error.value = (err as Error).message;
   } finally {

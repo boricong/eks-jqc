@@ -51,7 +51,12 @@ export const CatalogSheetSchema = z.object({
 });
 export type CatalogSheet = z.infer<typeof CatalogSheetSchema>;
 export const CatalogWorkbookSchema = z.object({
-  format: z.enum(["eks-catalog-v3", "eks-catalog-v4", "eks-catalog-v5"]),
+  format: z.enum([
+    "eks-catalog-v3",
+    "eks-catalog-v4",
+    "eks-catalog-v5",
+    "eks-catalog-v6",
+  ]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),
 });
@@ -92,6 +97,8 @@ export interface CatalogDiff {
   };
 }
 export interface CatalogPreview {
+  stateRevision?: number;
+  organizationRevision?: number;
   workbook: CatalogWorkbook;
   issues: CatalogIssue[];
   changes: CatalogDiff[];
@@ -105,7 +112,7 @@ export const CatalogBatchSchema = z.object({
   contentHash: z.string(),
   qualificationIds: z.array(z.string()),
   courseIds: z.array(z.string()),
-  status: z.enum(["draft", "partial", "published"]),
+  status: z.enum(["saved", "draft", "partial", "published"]),
   publishedAt: z.iso.datetime().optional(),
   publishedQualificationIds: z.array(z.string()).optional(),
   publicationResults: z

@@ -5,10 +5,23 @@ import { courseIssues, type CourseIssue } from '../course-editor';
 import CompactTabs from './CompactTabs.vue';
 import ObjectiveChoices from './ObjectiveChoices.vue';
 import AppDialog from './AppDialog.vue';
-const props = defineProps<{ course: Course; disabled: boolean; showErrors: boolean }>();
+const props = defineProps<{
+  course: Course;
+  disabled: boolean;
+  showErrors: boolean;
+  kind?: Kind;
+  embedded?: boolean;
+}>();
 const root = ref<HTMLElement>();
 const uid = useId();
 const activeKind = ref<Kind | ''>('');
+watch(
+  () => props.kind,
+  (kind) => {
+    if (kind) activeKind.value = kind;
+  },
+  { immediate: true },
+);
 const selected = ref<Record<Kind, string>>({ objective: '', practical: '' });
 const typeTabs = ref<InstanceType<typeof CompactTabs>>();
 const itemTabs = ref<InstanceType<typeof CompactTabs>>();
@@ -62,19 +75,13 @@ const itemOptions = computed(() =>
   })),
 );
 watch(
-  () => props.course.id,
-  () => {
-    activeKind.value = '';
-    selected.value = { objective: '', practical: '' };
-  },
-);
-watch(
   () => [
     ...kinds.value,
     ...props.course.questions.map((q) => q.id),
     ...props.course.practicalQuestions.map((q) => q.id),
   ],
   () => {
+    if (props.kind && kinds.value.includes(props.kind)) activeKind.value = props.kind;
     if (!kinds.value.includes(activeKind.value as Kind)) activeKind.value = kinds.value[0] || '';
     for (const k of ['objective', 'practical'] as Kind[])
       if (!list(k).some((q) => q.id === selected.value[k]))
@@ -132,11 +139,12 @@ defineExpose({ focusIssue });
 </script>
 <template>
   <section ref="root" class="assessment-editor panel" aria-label="평가 기준">
-    <header class="assessment-heading">
+    <header v-if="!embedded" class="assessment-heading">
       <h2>평가 기준</h2>
       <p class="muted">평가 유형을 선택한 뒤 문항을 편집하세요. 정답은 관리자에게만 공개됩니다.</p>
     </header>
     <CompactTabs
+      v-if="!embedded"
       ref="typeTabs"
       class="assessment-type-tabs"
       v-model="activeKind"
@@ -147,7 +155,7 @@ defineExpose({ focusIssue });
     <div
       v-if="activeKind"
       :id="`${uid}-type-panel`"
-      role="tabpanel"
+      :role="embedded ? undefined : 'tabpanel'"
       :aria-labelledby="typeTabs?.tabId(activeKind)"
       class="assessment-type-panel"
     >
@@ -202,6 +210,7 @@ defineExpose({ focusIssue });
             ref="itemTabs"
             class="question-tabs"
             vertical
+            numbered
             v-model="selectedId"
             :items="itemOptions"
             :label="`${kindLabels[activeKind]} 문항`"
@@ -300,8 +309,8 @@ defineExpose({ focusIssue });
       @update:open="pendingDelete = null"
       @closed="restoreQuestionFocus"
       ><p>
-        {{ pendingDelete?.title }}의 작성 내용을 삭제할까요? 초안 저장 전까지 서버의 기준에는
-        반영되지 않습니다.
+        {{ pendingDelete?.title }}의 작성 내용을 삭제할까요? 저장 전까지 서버의 기준에는 반영되지
+        않습니다.
       </p>
       <template #footer
         ><button class="button secondary" @click="pendingDelete = null">취소</button

@@ -51,12 +51,12 @@ const stateLabels: Record<string, string> = {
 const valueLabel = (value?: string) =>
   value === 'pass' ? '충족' : value === 'fail' ? '미충족' : '미판정';
 const actionLabels: Record<string, string> = {
-  'course.delete': '인증Set 초안 삭제',
+  'course.delete': '인증Set 삭제',
   'course.retire': '인증Set 운영 종료',
   'course.reactivate': '인증Set 운영 재개',
-  'catalog.create': '기준 초안 생성',
-  'catalog.save': '기준 초안 저장',
-  'catalog.publish': '기준 사용 등록',
+  'catalog.create': '기준 생성',
+  'catalog.save': '기준 저장',
+  'catalog.publish': '과거 기준 사용 등록',
   'catalog.clone': '기준 새 버전 생성',
   'assignment.create': '자격 배정',
   'assignment.exclude': '검증 제외 설정',
@@ -185,8 +185,8 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ q.title || '이름 없는 초안' }} · v{{ q.version }}
-        <StatusBadge :status="q.status === 'draft' ? 'catalogDraft' : q.status" />
+        {{ q.title || '이름 없는 기준' }} · v{{ q.version }}
+        <StatusBadge :status="q.lifecycleStatus || 'Active'" />
       </summary>
       <p class="muted">{{ rootName(q.lv1OrganizationId) }} · {{ q.englishName }}</p>
       <p>{{ q.description || '설명 미정' }}</p>
@@ -215,16 +215,8 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ c.title || '이름 없는 초안' }} · v{{ c.version }}
-        <StatusBadge
-          :status="
-            c.operationalStatus === 'retired'
-              ? 'retired'
-              : c.status === 'draft'
-                ? 'catalogDraft'
-                : c.status
-          "
-        />
+        {{ c.title || '이름 없는 기준' }} · v{{ c.version }}
+        <StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'" />
       </summary>
       <p class="muted">{{ rootName(c.lv1OrganizationId) }}</p>
       <CourseMaterials :materials="c.materials" />

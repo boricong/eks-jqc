@@ -91,7 +91,7 @@ defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssu
         <span
           v-if="!m.title.trim() || (m.type === 'text' ? !m.content.trim() : !m.url)"
           class="small-label"
-          >사용 등록 전 보완</span
+          >신규 운영 전 보완</span
         >
         <p>{{ m.description || (m.type === 'text' ? m.content.slice(0, 100) : m.url) }}</p>
         <div v-if="!disabled" class="actions">
@@ -151,8 +151,7 @@ defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssu
         </button>
       </div>
       <p class="muted">
-        인증Set 초안 저장 시 서버에 반영됩니다. 미완성 자료는 초안에 보관하고 사용 등록 전에 보완할
-        수 있습니다.
+        인증Set 저장 시 서버에 반영됩니다. 미완성 자료도 보관하고 신규 운영 전에 보완할 수 있습니다.
       </p>
     </fieldset>
   </section>

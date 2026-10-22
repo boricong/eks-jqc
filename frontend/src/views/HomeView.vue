@@ -41,8 +41,10 @@ const upcoming = computed(() =>
 const attention = computed(() => [
   {
     label: '기준 준비',
-    detail: '미완성 기준을 보완하고 사용 등록하세요.',
-    count: store.data.qualifications.filter((q) => q.status === 'draft').length,
+    detail: '미완성 기준을 보완하고 저장하세요.',
+    count: store.data.qualifications.filter(
+      (q) => !q.deletedAt && store.qualificationErrors(q).length > 0,
+    ).length,
     to: '/admin/qualifications',
   },
   {
@@ -109,14 +111,16 @@ const stats = computed(() =>
         ]
       : [
           {
-            label: '자격 초안',
-            value: store.data.qualifications.filter((q) => q.status === 'draft').length,
+            label: '자격 설정 필요',
+            value: store.data.qualifications.filter(
+              (q) => !q.deletedAt && store.qualificationErrors(q).length > 0,
+            ).length,
             icon: 'file',
             to: '/admin/qualifications',
           },
           {
-            label: '인증Set 초안',
-            value: store.data.courses.filter((c) => c.status === 'draft').length,
+            label: '인증Set 설정 필요',
+            value: store.data.courses.filter((c) => store.courseErrors(c).length > 0).length,
             icon: 'book',
             to: '/admin/courses',
           },

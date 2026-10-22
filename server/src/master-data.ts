@@ -100,7 +100,7 @@ export function masterCandidate(
   );
   const state = validateState(
     {
-      schemaVersion: 10,
+      schemaVersion: 11,
       revision: stateRevision,
       ...arrays,
       users: structuredClone(p.users),
@@ -119,8 +119,8 @@ export function exportMaster(
   const payload = masterPayload(s, org);
   return {
     format: "eks-master",
-    formatVersion: 1,
-    stateSchemaVersion: 10,
+    formatVersion: 2,
+    stateSchemaVersion: 11,
     organizationSchemaVersion: 2,
     createdAt: at,
     counts: masterCounts(payload),
@@ -158,16 +158,35 @@ const payloadSchema = z
   .strict();
 export function readMaster(input: unknown): MasterFile {
   try {
+    const legacy =
+      (input as any)?.formatVersion === 1 &&
+      (input as any)?.stateSchemaVersion === 10;
+    const selectedSchema = legacy
+      ? payloadSchema.extend({
+          qualifications: z.array(
+            QualificationSchema.extend({
+              status: z.enum(["draft", "published"]),
+              publishedAt: z.iso.datetime().optional(),
+            }),
+          ),
+          courses: z.array(
+            CourseSchema.extend({
+              status: z.enum(["draft", "published"]),
+              publishedAt: z.iso.datetime().optional(),
+            }),
+          ),
+        })
+      : payloadSchema;
     const result = z
       .object({
         format: z.literal("eks-master"),
-        formatVersion: z.literal(1),
-        stateSchemaVersion: z.literal(10),
+        formatVersion: z.literal(legacy ? 1 : 2),
+        stateSchemaVersion: z.literal(legacy ? 10 : 11),
         organizationSchemaVersion: z.literal(2),
         createdAt: z.iso.datetime(),
         counts: z.record(z.string(), z.number().int().nonnegative()),
         sha256: z.string().regex(/^[a-f0-9]{64}$/),
-        payload: payloadSchema,
+        payload: selectedSchema,
       })
       .strict()
       .parse(input);
@@ -178,7 +197,8 @@ export function readMaster(input: unknown): MasterFile {
       "파일 내용 검증값이 일치하지 않습니다. 원래 파일을 다시 내보내 주세요.",
       "MASTER_FILE_INVALID",
     );
-    masterCandidate(result.payload, 0, 0);
+    const payload = payloadSchema.parse(result.payload);
+    masterCandidate(payload, 0, 0);
     const counts = masterCounts(result.payload);
     demand(
       contentHash(counts) === contentHash(result.counts),
@@ -186,12 +206,19 @@ export function readMaster(input: unknown): MasterFile {
       "파일의 항목별 건수가 실제 내용과 다릅니다.",
       "MASTER_FILE_INVALID",
     );
-    return { ...result, counts };
+    return {
+      ...result,
+      formatVersion: 2,
+      stateSchemaVersion: 11,
+      payload,
+      sha256: contentHash(payload),
+      counts,
+    };
   } catch (e) {
     if (e instanceof DomainError) throw e;
     throw new DomainError(
       422,
-      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v1(업무10·조직2)입니다. ${e instanceof Error ? e.message : ""}`,
+      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v2(업무11·조직2), 호환 형식 v1(업무10·조직2)입니다. ${e instanceof Error ? e.message : ""}`,
       "MASTER_FILE_INVALID",
     );
   }

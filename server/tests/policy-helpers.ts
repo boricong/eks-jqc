@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { organizationEntries } from "@eks/contracts";
+import {
+  organizationEntries,
+  qualificationReadinessErrors,
+} from "@eks/contracts";
 import { nodeFor } from "../src/organizations.ts";
 import type { JsonStore } from "../src/storage.ts";
 // Explicit test setup only: production installation never selects a pool.
@@ -13,7 +16,8 @@ export async function configureTestPolicies(
     selected = state.qualifications.filter(
       (q) =>
         q.lv1OrganizationId === root &&
-        q.status === "published" &&
+        !q.deletedAt &&
+        !qualificationReadinessErrors(q, state.courses).length &&
         (!qualificationIds || qualificationIds.includes(q.id)),
     );
   const versions = [

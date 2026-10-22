@@ -178,6 +178,7 @@ export class FileStore<T extends Document> {
     options: {
       preserveBackup?: boolean;
       backupPurpose?:
+        | "qualification-delete"
         | "course-delete"
         | "photo-setup"
         | "catalog-import"
@@ -576,6 +577,25 @@ export class JsonStore extends FileStore<State> {
           JSON.stringify(org) === JSON.stringify(candidate.organizations)
         )
           return candidate.report;
+        const generationChange =
+          raw.schemaVersion !== candidate.state.schemaVersion;
+        const maintenanceBytes = generationChange
+          ? await readFile(this.maintenanceFile).catch((e) => {
+              if (e.code === "ENOENT") return undefined;
+              throw e;
+            })
+          : undefined;
+        const maintenance = generationChange
+          ? maintenanceBytes
+            ? MaintenanceDocumentSchema.parse(
+                JSON.parse(maintenanceBytes.toString("utf8")),
+              )
+            : {
+                schemaVersion: 1 as const,
+                generation: randomUUID(),
+                receipts: [],
+              }
+          : undefined;
         const suffix = randomUUID(),
           stateBackup = path.join(
             this.backupDir,
@@ -589,7 +609,16 @@ export class JsonStore extends FileStore<State> {
         await mkdir(this.organizations.backupDir, { recursive: true });
         await this.writeAtomic(stateBackup, stateBytes);
         await this.writeAtomic(organizationBackup, orgBytes);
+        const maintenanceBackup = maintenanceBytes
+          ? path.join(
+              this.backupDir,
+              `before-${purpose}-maintenance-${suffix}.json`,
+            )
+          : undefined;
+        if (maintenanceBackup)
+          await this.writeAtomic(maintenanceBackup, maintenanceBytes!);
         await this.writeAtomic(marker, {
+          maintenanceBackup,
           stateBackup,
           organizationBackup,
           expected,
@@ -609,10 +638,18 @@ export class JsonStore extends FileStore<State> {
             );
           await this.beforeReplace?.();
           await this.writeAtomic(this.file, candidate.state);
+          if (maintenance)
+            await this.writeAtomic(this.maintenanceFile, {
+              ...maintenance,
+              generation: randomUUID(),
+            });
         } catch (error) {
           // Preserve the marker if either rollback fails; normal startup refuses mixed pairs.
           await this.writeAtomic(this.organizations.file, orgBytes);
           await this.writeAtomic(this.file, stateBytes);
+          if (maintenanceBytes)
+            await this.writeAtomic(this.maintenanceFile, maintenanceBytes);
+          else if (maintenance) await rm(this.maintenanceFile, { force: true });
           await rm(marker);
           throw error;
         }
@@ -621,6 +658,7 @@ export class JsonStore extends FileStore<State> {
           ...(candidate.report as object),
           stateBackup,
           organizationBackup,
+          maintenanceBackup,
         };
       }),
     );
@@ -782,7 +820,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       demand(
-        raw.schemaVersion === 10,
+        raw.schemaVersion === 11,
         422,
         "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
       );

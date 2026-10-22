@@ -6,6 +6,7 @@ const props = defineProps<{
   label: string;
   panelId: string;
   vertical?: boolean;
+  numbered?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
 const host = ref<HTMLElement>();
@@ -57,7 +58,7 @@ defineExpose({ tabId });
   <div
     ref="host"
     class="compact-tabs"
-    :class="{ 'number-tabs': vertical }"
+    :class="{ 'vertical-tabs': vertical, 'number-tabs': numbered }"
     role="tablist"
     :aria-orientation="vertical ? 'vertical' : 'horizontal'"
     :aria-label="label"
@@ -76,7 +77,7 @@ defineExpose({ tabId });
       :tabindex="modelValue === item.id ? 0 : -1"
       @click="emit('update:modelValue', item.id)"
     >
-      <span>{{ vertical ? index + 1 : item.label }}</span
+      <span>{{ numbered ? index + 1 : item.label }}</span
       ><span v-if="item.invalid" class="tab-warning" aria-hidden="true">!</span>
     </button>
   </div>

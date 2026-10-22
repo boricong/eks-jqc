@@ -41,7 +41,10 @@ const poolDirty = computed(() => poolValue() !== baselinePool.value);
 const groups = computed(() => {
   const map = new Map<string, typeof store.data.qualifications>();
   for (const q of store.data.qualifications.filter(
-    (q) => q.lv1OrganizationId === store.managementLv1 && q.status === 'published',
+    (q) =>
+      q.lv1OrganizationId === store.managementLv1 &&
+      !q.deletedAt &&
+      !store.qualificationErrors(q).length,
   ))
     map.set(q.entityId, [...(map.get(q.entityId) || []), q]);
   return [...map.entries()]

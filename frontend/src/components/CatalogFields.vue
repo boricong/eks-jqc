@@ -98,7 +98,7 @@ const choiceErrors = computed(() =>
             type="number"
             min="0"
             max="100"
-            placeholder="사용 등록 전 입력" /><CatalogFieldErrors
+            placeholder="신규 운영 전 입력" /><CatalogFieldErrors
             :issues="issues"
             field="passScore" /></label
         ><label v-if="kinds.includes('practical')" class="field"
@@ -108,7 +108,7 @@ const choiceErrors = computed(() =>
             type="number"
             min="0"
             max="100"
-            placeholder="사용 등록 전 입력" /><CatalogFieldErrors
+            placeholder="신규 운영 전 입력" /><CatalogFieldErrors
             :issues="issues"
             field="practicalPassScore"
         /></label>

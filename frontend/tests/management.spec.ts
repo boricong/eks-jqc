@@ -1,3 +1,4 @@
+import { courseSection, saveCriterion } from './catalog-helpers';
 import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -83,7 +84,7 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   });
   backend.store.beforeReplace = () => gate;
   try {
-    await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+    await saveCriterion(page);
     await expect(page.getByLabel('관리할 Lv1 조직')).toBeDisabled();
     await expect(page.getByLabel('접속 계정')).toBeDisabled();
   } finally {
@@ -134,23 +135,23 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   await other.close();
 });
 
-test('초안 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초안 차단', async ({ page, backend }) => {
+test('인증Set 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초안 차단', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'operator-1');
   await manage(page, 'org-photo');
   const call = await apiFor(page);
   await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
-  await expect(page.getByRole('button', { name: '초안 삭제', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '인증Set 삭제', exact: true })).toBeVisible();
   const id = backend.store.snapshot().courses.at(-1)!.id;
-  await page.getByRole('button', { name: '초안 삭제', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 삭제', exact: true }).click();
   await page.getByLabel('처리 사유').fill('삭제 검증');
   await call('/notices?lv1OrganizationId=org-photo', {
     title: '동시 변경',
     body: '확인 후 변경',
     published: false,
   });
-  await page.getByRole('button', { name: '초안 삭제 실행', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 삭제 실행', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('다시 조회');
   await page.getByRole('button', { name: '영향 다시 조회', exact: true }).click();
   let once = true;
@@ -161,9 +162,9 @@ test('초안 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초
       await route.abort('failed');
     } else await route.continue();
   });
-  await page.getByRole('button', { name: '초안 삭제 실행', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 삭제 실행', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('다시 시도');
-  await page.getByRole('button', { name: '초안 삭제 실행', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 삭제 실행', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '인증Set 관리', exact: true })).toBeVisible();
   expect(
@@ -172,8 +173,8 @@ test('초안 삭제 영향·변경 충돌·응답 유실 재시도와 연결 초
       .audits.filter((a) => a.action === 'course.delete' && a.targetId === id),
   ).toHaveLength(1);
   await page.getByRole('link', { name: 'Recipe 생성', exact: true }).click();
-  await page.getByRole('button', { name: '초안 삭제', exact: true }).click();
+  await page.getByRole('button', { name: '인증Set 삭제', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('연결된 자격');
   await expect(page.getByRole('dialog')).toContainText('Recipe Management');
-  await expect(page.getByRole('button', { name: '초안 삭제 실행', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '인증Set 삭제 실행', exact: true })).toBeDisabled();
 });

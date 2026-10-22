@@ -49,7 +49,6 @@ test("다른 개정 초안이 있어도 무변경 왕복은 허용하고 실제 
     id: "preserved-v2",
     parentId: q.id,
     version: 2,
-    status: "draft",
     revision: 1,
   });
   const data = exportCatalog(state, "org-photo", [q.id]);
@@ -57,11 +56,9 @@ test("다른 개정 초안이 있어도 무변경 왕복은 허용하고 실제 
   assert.equal(unchanged.issues.length, 0);
   assert.equal(unchanged.changes[0]!.kind, "unchanged");
   data.sheets[0]!.title = "실제 변경";
-  assert.ok(
-    prepareCatalog(state, data, "org-photo").issues.some((i) =>
-      i.message.includes("다른 초안"),
-    ),
-  );
+  const revision = prepareCatalog(state, data, "org-photo");
+  assert.equal(revision.issues.length, 0);
+  assert.equal(revision.qualifications[0]!.version, 3);
 });
 test("사용자 양식 v3은 동일한 기준으로 왕복하며 연결 이름 변경은 ID를 유지한다", async () => {
   const s = photo(),
@@ -126,37 +123,31 @@ test("사용자 양식 v3은 동일한 기준으로 왕복하며 연결 이름 �
     ),
   );
 });
-test("부분 등록은 선택 자격만 원자적으로 처리하며 재시도와 최신 revision을 확인한다", () => {
+test("선택 기준 저장은 원자적이며 무변경 재시도와 최신 revision을 확인한다", () => {
   const s = photo(),
     data = workbook(s);
   data.sheets = data.sheets.slice(0, 2);
   data.sheets.forEach((q) => (q.description += " 개정"));
   const saved = saveCatalogBatch(s, data, "org-photo", "admin-1");
   assert.equal(saved.workbook.sheets.length, 2);
-  assert.ok(saved.workbook.sheets.every((q) => q.sourceRevision === 1));
-  const [a, b] = saved.qualificationIds;
-  assert.ok(a && b);
-  const result = publishCatalogBatch(s, saved.id, "org-photo", "admin-1", [a]);
-  assert.equal(result.status, "partial");
-  assert.equal(s.qualifications.find((q) => q.id === b)!.status, "draft");
-  const auditCount = s.audits.length;
-  publishCatalogBatch(s, saved.id, "org-photo", "admin-1", [a]);
-  assert.equal(s.audits.length, auditCount);
-  assert.throws(
-    () => publishCatalogBatch(s, saved.id, "org-photo", "admin-1", ["foreign"]),
-    /선택/,
+  assert.equal(s.catalogBatches.at(-1)!.status, "saved");
+  const before = structuredClone(s);
+  assert.equal(
+    saveCatalogBatch(s, saved.workbook, "org-photo", "admin-1").unchanged,
+    true,
   );
-  s.qualifications.find((q) => q.id === b)!.revision++;
+  assert.deepEqual(s, before);
   assert.throws(
-    () => publishCatalogBatch(s, saved.id, "org-photo", "admin-1", [b]),
+    () => saveCatalogBatch(s, data, "org-photo", "admin-1"),
     /변경/,
   );
-  s.qualifications.find((q) => q.id === b)!.revision--;
-  publishCatalogBatch(s, saved.id, "org-photo", "admin-1", [b]);
-  assert.equal(s.catalogBatches.at(-1)!.status, "published");
-  assert.equal(s.catalogBatches.at(-1)!.publicationResults!.length, 2);
+  assert.throws(
+    () => publishCatalogBatch(s, saved.id, "org-photo", "admin-1"),
+    /종료/,
+  );
   validateState(s, org);
 });
+
 test("과정 필터 편집은 숨은 행과 학습·평가를 유지하고 복제는 독립 연결을 만든다", () => {
   const w = decorate(workbook(photo())),
     q = w.sheets[0]!,
@@ -198,7 +189,7 @@ function workbook(s: State) {
     "org-photo",
     s.qualifications
       .filter(
-        (q) => q.lv1OrganizationId === "org-photo" && q.status === "published",
+        (q) => q.lv1OrganizationId === "org-photo" && q.courseIds.length > 0,
       )
       .map((q) => q.id),
   );
@@ -240,7 +231,20 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
     );
   q.tables.objective.splice(0, 1);
   q.title += " 개정";
-  const result = saveCatalogBatch(s, data, "org-photo", "operator-1");
+  const policy = structuredClone(org);
+  policy.qualificationPools = data.sheets.map((sheet) => ({
+    lv1OrganizationId: "org-photo",
+    entityId: s.qualifications.find((q) => q.id === sheet.sourceId)!.entityId,
+    qualificationId: sheet.sourceId!,
+  }));
+  const result = saveCatalogBatch(
+    s,
+    data,
+    "org-photo",
+    "operator-1",
+    undefined,
+    policy,
+  );
   assert.equal(result.qualificationIds.length, 1);
   assert.equal(result.courseIds.length, 1);
   const revised = s.qualifications.find(
@@ -248,7 +252,7 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
   )!;
   assert.equal(revised.version, 2);
   assert.equal(revised.courseIds.length, 4);
-  assert.equal(revised.status, "draft");
+  assert.equal("status" in revised, false);
   assert.deepEqual(
     s.qualifications.filter((v) =>
       before.qualifications.some((q) => q.id === v.id),
@@ -258,11 +262,6 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
   assert.deepEqual(
     s.courses.filter((v) => before.courses.some((c) => c.id === v.id)),
     before.courses,
-  );
-  publishCatalogBatch(s, result.id, "org-photo", "operator-1");
-  assert.equal(
-    s.qualifications.find((q) => q.id === revised.id)?.status,
-    "published",
   );
   validateState(s, org);
   const copy = workbook(before);
@@ -290,7 +289,7 @@ test("초안 준비 부족과 구조 오류 구분, 중복 코드·참조·정�
   const old = structuredClone(s);
   assert.throws(
     () => publishCatalogBatch(s, result.id, "org-photo", "admin-1"),
-    /설명/,
+    /종료/,
   );
   assert.deepEqual(s.qualifications, old.qualifications);
   const broken = workbook(photo());
@@ -452,8 +451,10 @@ test("API 권한·Lv1 필수·구조 검사·중복 재시도·영구 백업·�
     "operator-1",
     `/catalog/batches/${result.id}/publish?lv1OrganizationId=org-photo`,
     {},
+    undefined,
+    410,
   );
-  assert.equal(f.store.snapshot().catalogBatches[0]!.status, "published");
+  assert.equal(f.store.snapshot().catalogBatches[0]!.status, "saved");
   await f.store.transact(
     "operator-1",
     randomUUID(),
@@ -505,7 +506,7 @@ test("백업 실패·동시 변경·게시 실패에서 부분 저장이 없고 
     `/catalog/batches/${result.id}/publish`,
     {},
     undefined,
-    422,
+    410,
   );
   assert.equal(await readFile(f.file, "utf8"), saved);
   assert.equal(await readFile(f.store.organizations.file, "utf8"), orgBefore);
@@ -598,14 +599,21 @@ test("미변경 기존 초안도 버전 추가 없이 일괄 등록하고 개별
   const second = await f.call("admin-1", "/catalog/batches", {
     workbook: draftExport,
   });
-  assert.deepEqual(second.qualificationIds, result.qualificationIds);
+  assert.equal(second.unchanged, true);
+  assert.deepEqual(second.qualificationIds, []);
   assert.equal(
     f.store
       .snapshot()
       .qualifications.filter((q) => q.title === data.sheets[0]!.title).length,
     1,
   );
-  await f.call("admin-1", `/catalog/batches/${second.id}/publish`, {});
+  await f.call(
+    "admin-1",
+    `/catalog/batches/${result.id}/publish`,
+    {},
+    undefined,
+    410,
+  );
   const q = await f.call("admin-1", "/qualifications", {}),
     original = f.store.snapshot().courses[0]!;
   await f.call(

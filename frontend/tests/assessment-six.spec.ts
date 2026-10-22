@@ -1,3 +1,4 @@
+import { courseSection, saveCriterion } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 
 test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초기화 뒤 오래된 저장 차단', async ({
@@ -104,7 +105,6 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
     (s) => {
       const c = structuredClone(s.courses.find((c) => c.id === 'demo-course-1')!);
       c.id = c.entityId = 'vertical-draft';
-      c.status = 'draft';
       c.version = 1;
       c.learningItems = Array.from({ length: 100 }, (_, i) => ({
         ...c.learningItems[0]!,
@@ -130,6 +130,7 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
   await page.goto('/admin/courses/vertical-draft');
   await expect(page.getByRole('checkbox', { name: '주관식', exact: true })).toHaveCount(0);
   await expect(page.getByLabel('문항 분류')).toHaveCount(0);
+  await courseSection(page, '학습 항목');
   const learning = page.getByRole('tablist', { name: '학습 항목', exact: true });
   const knowledge = page.getByRole('tablist', { name: '객관식 · 지식 평가 문항', exact: true });
   await expect(learning).toHaveAttribute('aria-orientation', 'vertical');
@@ -140,6 +141,7 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
       .click();
     await expect(page.getByLabel('학습 항목명')).toHaveValue(`학습 ${n}`);
   }
+  await courseSection(page, '지식 평가');
   for (const n of [1, 10, 30, 500]) {
     await knowledge
       .getByRole('tab')
@@ -154,15 +156,16 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
   await knowledge.getByRole('tab').first().press('End');
   await expect(page.getByLabel('문항', { exact: true })).toHaveValue('500번 수정 내용');
   await page
-    .getByRole('tablist', { name: '평가 유형', exact: true })
-    .getByRole('tab', { name: /실기/ })
+    .getByRole('tablist', { name: '인증Set 편집 항목', exact: true })
+    .getByRole('tab', { name: /상황 대응 평가/ })
     .click();
   await expect(page.getByLabel('상황 설명')).toBeVisible();
+  await courseSection(page, '기본정보');
   await page.getByRole('checkbox', { name: '실기 · 상황 대응 평가', exact: true }).uncheck();
   await page.getByRole('checkbox', { name: '실기 · 상황 대응 평가', exact: true }).check();
   await page
-    .getByRole('tablist', { name: '평가 유형', exact: true })
-    .getByRole('tab', { name: /실기/ })
+    .getByRole('tablist', { name: '인증Set 편집 항목', exact: true })
+    .getByRole('tab', { name: /상황 대응 평가/ })
     .click();
   await expect(
     page.getByRole('tablist', { name: '실기 · 상황 대응 평가 문항', exact: true }).getByRole('tab'),
@@ -175,7 +178,7 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
     await page.getByLabel('상황 설명').scrollIntoViewIfNeeded();
     await page.screenshot({ path: test.info().outputPath(`vertical-${width}.png`) });
   }
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await saveCriterion(page);
   await expect
     .poll(
       () =>
@@ -192,7 +195,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
-  await page.getByRole('button', { name: '새 버전', exact: true }).click();
+  await courseSection(page, '학습자료');
   const material = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: '학습자료', exact: true }) })
@@ -222,18 +225,18 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .getByRole('group', { name: '자료 수정', exact: true })
     .getByLabel('자료명')
     .fill('EDM 수정 자료');
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await saveCriterion(page);
   await expect
     .poll(() =>
       backend.store
         .snapshot()
-        .courses.find((c) => c.entityId === 'demo-course-1' && c.status === 'draft')
+        .courses.find((c) => c.entityId === 'demo-course-1' && c.version > 1)
         ?.materials.some((m) => m.title === 'EDM 수정 자료'),
     )
     .toBe(true);
   const draft = backend.store
     .snapshot()
-    .courses.find((c) => c.entityId === 'demo-course-1' && c.status === 'draft')!;
+    .courses.find((c) => c.entityId === 'demo-course-1' && c.version > 1)!;
   expect(draft.materials.slice(-4).map((m) => m.type)).toEqual([
     'text',
     'edm',
@@ -246,7 +249,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .filter({ hasText: '일반 링크' })
     .getByRole('button', { name: '삭제', exact: true })
     .click();
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await saveCriterion(page);
   await expect
     .poll(() =>
       backend.store
@@ -260,7 +263,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .getByRole('group', { name: '새 자료', exact: true })
     .getByLabel('자료명')
     .fill('작성 중 자료');
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await saveCriterion(page);
   await expect
     .poll(
       () =>
@@ -270,27 +273,28 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
           .materials.at(-1)?.title,
     )
     .toBe('작성 중 자료');
-  await expect(page.getByRole('button', { name: '초안 저장', exact: true })).toBeEnabled();
-  await expect(material.getByText('사용 등록 전 보완', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '사용 등록', exact: true }).click();
+  await expect(page.getByRole('button', { name: '저장', exact: true })).toBeEnabled();
+  await expect(material.getByText('신규 운영 전 보완', { exact: true })).toBeVisible();
+  await saveCriterion(page);
   await expect(page.locator('.editor-errors')).toContainText('학습자료');
+  await page.locator('.editor-errors').getByRole('button').first().click();
   await expect(page.getByLabel('본문', { exact: true })).toBeFocused();
-  expect(backend.store.snapshot().courses.find((c) => c.id === draft.id)!.status).toBe('draft');
+  expect('status' in backend.store.snapshot().courses.find((c) => c.id === draft.id)!).toBe(false);
 });
 
 test('상황 설명 누락의 오류 이동·유형 해제 보존·추가 삭제 취소', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
-  await page.getByRole('button', { name: '새 버전', exact: true }).click();
   await page
-    .getByRole('tablist', { name: '평가 유형', exact: true })
-    .getByRole('tab', { name: /실기/ })
+    .getByRole('tablist', { name: '인증Set 편집 항목', exact: true })
+    .getByRole('tab', { name: /상황 대응 평가/ })
     .click();
   await page.getByLabel('상황 설명').fill('');
-  await page.getByRole('button', { name: '사용 등록', exact: true }).click();
-  await expect(page.getByLabel('상황 설명')).toBeFocused();
+  await saveCriterion(page);
   await expect(page.locator('.editor-errors')).toContainText('상황');
+  await page.locator('.editor-errors').getByRole('button').first().click();
+  await expect(page.getByLabel('상황 설명')).toBeFocused();
   await page.getByLabel('상황 설명').fill('가상 상황의 조건');
   await page.getByRole('button', { name: '문항 삭제', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '취소', exact: true }).click();

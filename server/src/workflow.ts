@@ -184,12 +184,11 @@ export function executeWorkflow(
           templateId,
           lifecycleStatus: "Active",
           renewalLeadMonths: 3,
-          status: "draft",
           courseIds: [],
         }),
       );
       imported.push(id);
-      audit(id, "기본 자격 초안 가져오기", undefined, { templateId });
+      audit(id, "기본 자격 가져오기", undefined, { templateId });
     }
     return { imported, existing };
   }
@@ -276,7 +275,7 @@ export function executeWorkflow(
     demand(
       u.organizationActive &&
         q.lv1OrganizationId === u.lv1OrganizationId &&
-        q.status === "published",
+        !q.deletedAt,
       422,
       "소속 조직의 계획 가능한 자격을 선택해 주세요.",
     );
@@ -436,9 +435,9 @@ export function executeWorkflow(
         ...qualificationUseErrors(q, s.courses),
       ];
       demand(
-        q.status === "published" && !errors.length,
+        !q.deletedAt && !errors.length,
         422,
-        errors.join("\n") || "자격을 먼저 사용 등록해 주세요.",
+        errors.join("\n") || "자격의 미완성 기준을 보완해 주세요.",
       );
       demand(
         !s.assignments.some(

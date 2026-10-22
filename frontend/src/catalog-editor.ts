@@ -25,7 +25,7 @@ export function clean(w: CatalogWorkbook): CatalogWorkbook {
 }
 export const fingerprint = (s: CatalogSheet) =>
   JSON.stringify(
-    clean({ format: 'eks-catalog-v5', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
+    clean({ format: 'eks-catalog-v6', lv1OrganizationId: 'local', sheets: [s] }).sheets[0],
   );
 export function newRow(table: CatalogTable, rows: CatalogRow[], courseCode = ''): CatalogRow {
   const r: CatalogRow = Object.fromEntries(columnsFor(table, rows).map(([k]) => [k, '']));

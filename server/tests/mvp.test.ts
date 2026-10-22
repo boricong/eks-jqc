@@ -40,19 +40,33 @@ async function secondOrganization(f: Fixture) {
   );
   const ft = await createUser(f, "Etch FT", ["learner"], "org-etch");
   const course = await f.call("admin-2", "/courses", {});
-  await f.call("admin-2", `/courses/${course.id}/publish`, {
-    ...f.store.snapshot().courses[0],
-    title: "Etch 과정",
-    revision: 1,
-  });
+  await f.call(
+    "admin-2",
+    `/courses/${course.id}`,
+    {
+      ...f.store.snapshot().courses[0],
+      title: "Etch 과정",
+      revision: 1,
+    },
+    undefined,
+    undefined,
+    "PUT",
+  );
   const qualification = await f.call("admin-2", "/qualifications", {});
-  await f.call("admin-2", `/qualifications/${qualification.id}/publish`, {
-    title: "Etch 자격",
-    description: "Etch 직무 검증",
-    validity: { type: "unlimited", months: null, reminderDays: [] },
-    courseIds: [course.id],
-    revision: 1,
-  });
+  await f.call(
+    "admin-2",
+    `/qualifications/${qualification.id}`,
+    {
+      title: "Etch 자격",
+      description: "Etch 직무 검증",
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      courseIds: [course.id],
+      revision: 1,
+    },
+    undefined,
+    undefined,
+    "PUT",
+  );
   const assignment = await planAssignment(f, "admin-2", {
     qualificationId: qualification.id,
     learnerId: learner,
@@ -259,9 +273,11 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
   const q = await f.call("admin-2", "/qualifications", {});
   await f.call(
     "admin-2",
-    `/qualifications/${q.id}/publish`,
+    `/qualifications/${q.id}`,
     { title: "잘못 연결", courseIds: ["demo-course-1"], revision: 1 },
     422,
+    undefined,
+    "PUT",
   );
   const admin = await createUser(
     f,
@@ -797,8 +813,11 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   const v2 = await f.call("admin-1", "/courses/demo-course-1/versions", {});
   await f.call(
     "admin-1",
-    `/courses/${v2.id}/publish`,
+    `/courses/${v2.id}`,
     f.store.snapshot().courses.find((c) => c.id === v2.id),
+    undefined,
+    undefined,
+    "PUT",
   );
   let orgBefore = await readFile(f.store.organizations.file, "utf8");
   await lifecycle(f, "demo-course-1", "retirement");
@@ -831,11 +850,18 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     "PUT",
   );
   q = f.store.snapshot().qualifications.find((q) => q.id === nextQ.id)!;
-  await f.call("admin-1", `/qualifications/${q.id}/publish`, q, 422);
-  await f.call("admin-1", `/qualifications/${q.id}/publish`, {
-    ...q,
-    courseIds: q.courseIds.map((id) => (id === "demo-course-1" ? v2.id : id)),
-  });
+  await f.call("admin-1", `/qualifications/${q.id}`, q, 200, undefined, "PUT");
+  await f.call(
+    "admin-1",
+    `/qualifications/${q.id}`,
+    {
+      ...q,
+      courseIds: q.courseIds.map((id) => (id === "demo-course-1" ? v2.id : id)),
+    },
+    undefined,
+    undefined,
+    "PUT",
+  );
   await planAssignment(f, "admin-1", {
     qualificationId: q.id,
     learnerId: "dual",
@@ -865,7 +891,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   const clone = await f.call("admin-1", "/courses/demo-course-1/versions", {});
   const cloned = f.store.snapshot().courses.find((c) => c.id === clone.id)!;
   assert.equal(cloned.operationalStatus, "active");
-  assert.equal(cloned.status, "draft");
+  assert.equal("status" in cloned, false);
   assert.equal(cloned.retiredAt, undefined);
   await f.restart();
   assert.equal(
@@ -908,17 +934,24 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   assert.equal(await readFile(f.store.organizations.file, "utf8"), orgBefore);
 });
 
-test("게시된 미배정 과정 삭제 금지와 종료 상태 위조 방지", async (t) => {
+test("미참조 인증Set 삭제와 종료 상태 위조 방지", async (t) => {
   const f = await fixture(t);
   const draft = await f.call("admin-1", "/courses", {});
-  await f.call("admin-1", `/courses/${draft.id}/publish`, {
-    ...f.store.snapshot().courses[0],
-    revision: 1,
-    operationalStatus: "retired",
-    retiredAt: new Date().toISOString(),
-    retiredBy: "operator-1",
-    retirementReason: "위조",
-  });
+  await f.call(
+    "admin-1",
+    `/courses/${draft.id}`,
+    {
+      ...f.store.snapshot().courses[0],
+      revision: 1,
+      operationalStatus: "retired",
+      retiredAt: new Date().toISOString(),
+      retiredBy: "operator-1",
+      retirementReason: "위조",
+    },
+    undefined,
+    undefined,
+    "PUT",
+  );
   assert.equal(
     f.store.snapshot().courses.find((c) => c.id === draft.id)!
       .operationalStatus,
@@ -926,16 +959,16 @@ test("게시된 미배정 과정 삭제 금지와 종료 상태 위조 방지", 
   );
   const usage = await f.call("admin-1", `/courses/${draft.id}/usage`);
   assert.equal(usage.counts.assignments, 0);
-  assert.equal(usage.canDelete, false);
+  assert.equal(usage.canDelete, true);
   await f.call(
     "admin-1",
     `/courses/${draft.id}`,
-    { ...usage, reason: "미배정" },
-    409,
+    { ...usage, reason: "미참조 정리" },
+    200,
     randomUUID(),
     "DELETE",
   );
-  await lifecycle(f, draft.id, "retirement");
+  assert.ok(!f.store.snapshot().courses.some((c) => c.id === draft.id));
 });
 
 test("운영자 관리 요청도 쓰기 대기열에서 변경된 권한을 재검사", async (t) => {
@@ -1252,13 +1285,20 @@ test("기준 버전 계보·사용 등록 검증·고정·공지 영속 저장",
   const recipe = f.store
     .snapshot()
     .courses.find((c) => c.id === "recipe-edit")!;
-  await f.call("admin-1", "/courses/recipe-edit/publish", recipe, 422);
+  await f.call(
+    "admin-1",
+    "/courses/recipe-edit",
+    recipe,
+    200,
+    undefined,
+    "PUT",
+  );
   const original = f.store.snapshot().courses[0]!;
   await f.call(
     "admin-1",
     `/courses/${original.id}`,
     original,
-    409,
+    200,
     randomUUID(),
     "PUT",
   );
@@ -1268,19 +1308,26 @@ test("기준 버전 계보·사용 등록 검증·고정·공지 영속 저장",
   assert.equal(s.courses.find((c) => c.id === v2.id)!.version, 2);
   assert.equal(s.courses.find((c) => c.id === v3.id)!.version, 3);
   const draft = s.courses.find((c) => c.id === v2.id)!;
-  await f.call("admin-1", `/courses/${v2.id}/publish`, {
-    ...draft,
-    materials: [
-      {
-        id: "url",
-        type: "url",
-        title: "매뉴얼",
-        url: "https://example.com/manual",
-        content: "",
-        description: "",
-      },
-    ],
-  });
+  await f.call(
+    "admin-1",
+    `/courses/${v2.id}`,
+    {
+      ...draft,
+      materials: [
+        {
+          id: "url",
+          type: "url",
+          title: "매뉴얼",
+          url: "https://example.com/manual",
+          content: "",
+          description: "",
+        },
+      ],
+    },
+    undefined,
+    undefined,
+    "PUT",
+  );
   assert.equal(f.store.snapshot().enrollments[0]!.courseId, original.id);
   await f.call("admin-1", "/notices", {
     title: "새 공지",
@@ -1511,7 +1558,6 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
         title: "경계 시험",
         version: 1,
         revision: 1,
-        status: "published",
         courseIds: [c.id],
       });
     }
@@ -1720,7 +1766,7 @@ test("저장소 잠금·손상 중단·백업 복구·잘못된 근거 파일 �
   assert.throws(() => validateState(corrupt), /무결성/);
   const malformed = structuredClone(original);
   malformed.courses[0]!.questions[0]!.correct = 99;
-  assert.throws(() => validateState(malformed), /무결성/);
+  assert.throws(() => validateState(malformed), /무결성|정답/);
   assert.ok(
     (await readdir(path.dirname(backup))).some((n) =>
       n.startsWith("before-restore"),

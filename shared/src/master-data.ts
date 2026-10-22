@@ -43,8 +43,8 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 1;
-  stateSchemaVersion: 10;
+  formatVersion: 2;
+  stateSchemaVersion: 11;
   organizationSchemaVersion: 2;
   createdAt: string;
   counts: MasterCounts;
@@ -62,6 +62,7 @@ export interface MasterPreview {
   deleted: ClearedCounts;
   fileHash: string;
   fileCreatedAt?: string;
+  compatibility?: string;
 }
 export interface MaintenanceReceipt {
   operationId: string;

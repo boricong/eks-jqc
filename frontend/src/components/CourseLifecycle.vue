@@ -13,8 +13,9 @@ const open = ref(false),
   usage = ref<CourseUsage | null>(null),
   error = ref(''),
   reason = ref('');
+const deleting = ref(false);
 const action = computed(() =>
-  props.course.status === 'draft'
+  deleting.value
     ? 'delete'
     : props.course.operationalStatus === 'retired'
       ? 'reactivation'
@@ -22,7 +23,7 @@ const action = computed(() =>
 );
 const label = computed(() =>
   action.value === 'delete'
-    ? '초안 삭제'
+    ? '인증Set 삭제'
     : action.value === 'retirement'
       ? '운영 종료'
       : '운영 재개',
@@ -44,7 +45,8 @@ async function load() {
     busy.value = false;
   }
 }
-async function review() {
+async function review(remove = false) {
+  deleting.value = remove;
   open.value = true;
   reason.value = '';
   await load();
@@ -90,9 +92,12 @@ onBeforeRouteUpdate(canLeave);
       <button
         class="button secondary"
         :disabled="disabled || busy || !!store.writing"
-        @click="review"
+        @click="review(false)"
       >
-        {{ label }}
+        {{ course.operationalStatus === 'retired' ? '운영 재개' : '운영 종료' }}
+      </button>
+      <button class="button secondary" :disabled="disabled || busy" @click="review(true)">
+        인증Set 삭제
       </button>
       <p v-if="course.operationalStatus === 'retired'" class="muted">
         운영 종료 · {{ course.retirementReason }}
@@ -115,7 +120,7 @@ onBeforeRouteUpdate(canLeave);
       <p v-else-if="action === 'reactivation'">
         같은 내용과 버전으로 신규 배정을 다시 허용합니다. 기존 결과는 유지됩니다.
       </p>
-      <p v-else>업무 참조가 없는 초안을 삭제합니다. 삭제 이력과 사전 백업은 보존됩니다.</p>
+      <p v-else>업무 참조가 없는 인증Set 버전을 삭제합니다. 삭제 이력과 사전 백업은 보존됩니다.</p>
       <p v-if="busy && !usage" role="status">영향을 확인하는 중입니다.</p>
       <template v-if="usage">
         <p>
@@ -130,8 +135,7 @@ onBeforeRouteUpdate(canLeave);
         <ul v-if="usage.qualifications.length">
           <li v-for="q in usage.qualifications" :key="q.id">
             <RouterLink :to="store.managementLink(`/admin/qualifications/${q.id}`)"
-              >{{ q.title || '이름 없는 자격' }} v{{ q.version }} ·
-              {{ q.status === 'draft' ? '초안' : '사용 중' }}</RouterLink
+              >{{ q.title || '이름 없는 자격' }} v{{ q.version }}</RouterLink
             >
           </li>
         </ul>

@@ -374,7 +374,7 @@ export function renewalAvailability(
     errors.push("기간제 보유 자격만 정기 재인증을 진행합니다.");
   if (opensOn && kstDate(at) < opensOn)
     errors.push(`${opensOn}부터 재인증할 수 있습니다.`);
-  if (!q || q.status !== "published")
+  if (!q || q.deletedAt)
     errors.push(
       "팀 후보 목록에 적용할 게시 기준이 없습니다. 관리자 확인이 필요합니다.",
     );
@@ -512,13 +512,19 @@ export function executeLifecycle(
       .strict()
       .parse(body);
     const q = find(s.qualifications, id);
+    demand(
+      !q.deletedAt,
+      409,
+      "삭제된 기준은 조회만 할 수 있습니다.",
+      "CATALOG_DELETED",
+    );
     checkRevision(q.revision, input.revision);
     checkRevision(s.revision, input.stateRevision);
     checkRevision(doc.revision, input.organizationRevision);
     demand(
       q.lifecycleStatus !== "Revoke",
       409,
-      "폐기한 기준은 새 버전을 만들어 사용 등록해 주세요.",
+      "폐기한 기준은 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.",
     );
     const before = q.lifecycleStatus || "Active";
     demand(before !== input.status, 409, "이미 같은 상태입니다.");

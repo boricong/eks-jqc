@@ -93,7 +93,9 @@ defineExpose({ focusInvalid, focusIssue });
         학습 항목 추가
       </button>
     </div>
-    <p class="muted">필수 항목은 학습자가 완료 기록을 남긴 뒤 평가를 시작합니다.</p>
+    <p class="muted">
+      학습자가 확인해야 할 학습 범위입니다. 별도의 완료 기록 없이 평가를 진행합니다.
+    </p>
     <div class="number-editor">
       <div
         v-if="course.learningItems.length"

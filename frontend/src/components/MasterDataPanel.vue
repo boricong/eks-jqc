@@ -221,6 +221,7 @@ async function apply() {
           </tbody>
         </table>
       </div>
+      <p v-if="importPreview.compatibility" class="info-panel">{{ importPreview.compatibility }}</p>
       <details>
         <summary>삭제될 현재 서버의 진행·공지·이력 보기</summary>
         <dl class="master-counts">

@@ -64,7 +64,6 @@ const workbook = ref<CatalogWorkbook | null>(null),
   error = ref(''),
   fileHash = ref(''),
   compareOpen = ref(false),
-  reviewIntent = ref<'save' | 'publish'>('save'),
   checked = ref(''),
   validationPending = ref(false),
   recoveryStatus = ref(''),
@@ -108,27 +107,13 @@ const currentIssues = computed(
   () => preview.value?.issues.filter((i) => i.code === sheet.value?.code) || [],
 );
 const selectedDirty = computed(() => selectedSheets.value.some(modified));
-const selectedDraftIds = computed(() =>
-  selectedSheets.value.map((s) => s.sourceId).filter((v): v is string => !!v),
-);
-const latestBatch = computed(() =>
-  batches.value.find(
-    (b) =>
-      selectedDraftIds.value.length === selectedSheets.value.length &&
-      selectedDraftIds.value.length > 0 &&
-      selectedDraftIds.value.every(
-        (id) =>
-          b.qualificationIds.includes(id) &&
-          !b.publishedQualificationIds?.includes(id) &&
-          store.data.qualifications.find((q) => q.id === id)?.status === 'draft' &&
-          store.data.qualifications.find((q) => q.id === id)?.revision === b.revisions[id],
-      ),
-  ),
-);
 const eligible = computed(() =>
   store.data.qualifications.filter(
     (q) =>
-      !store.data.qualifications.some((o) => o.entityId === q.entityId && o.version > q.version),
+      !q.deletedAt &&
+      !store.data.qualifications.some(
+        (o) => !o.deletedAt && o.entityId === q.entityId && o.version > q.version,
+      ),
   ),
 );
 function readiness(q: Qualification) {
@@ -146,7 +131,7 @@ const qualifications = computed(() =>
       (q.title || '이름 없는 자격').toLowerCase().includes(search.value.toLowerCase()) &&
       (statusFilter.value === 'all' ||
         (statusFilter.value === 'needs' && readiness(q).length > 0) ||
-        q.status === statusFilter.value),
+        (statusFilter.value === 'ready' && !readiness(q).length)),
   ),
 );
 const selectedChanges = computed(
@@ -161,10 +146,6 @@ const canSave = computed(
     selectedSheets.value.length > 0 &&
     validated.value &&
     !selectedIssues.value.some((i) => i.severity === 'structure'),
-);
-const canPublish = computed(
-  () =>
-    canSave.value && !selectedDirty.value && !selectedIssues.value.length && !!latestBatch.value,
 );
 const scopePath = (p: string) => store.managementPath(p);
 function issueValue(i: CatalogIssue) {
@@ -226,7 +207,7 @@ async function retain() {
   try {
     if (!dirty.value && !pending) {
       await deleteRecovery(workId);
-      if (token === epoch) recoveryStatus.value = '서버 초안 저장됨';
+      if (token === epoch) recoveryStatus.value = '서버 기준 저장됨';
     } else {
       await saveRecovery(record);
       if (token === epoch) recoveryStatus.value = '이 브라우저에 보관됨';
@@ -402,7 +383,11 @@ function downloadRecovery(record: CatalogRecovery) {
   URL.revokeObjectURL(url);
 }
 async function recover(record: CatalogRecovery) {
-  if (!['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5'].includes(record.workbook.format)) {
+  if (
+    !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5', 'eks-catalog-v6'].includes(
+      record.workbook.format,
+    )
+  ) {
     error.value =
       '구형 작성 내용입니다. 원본 보관 파일을 다운로드하고 새 양식 v3에서 기준을 작성해 주세요. 구형 내용은 삭제하지 않았습니다.';
     return;
@@ -545,7 +530,7 @@ function addSheet(copy = false) {
     }
   }
   if (!workbook.value)
-    startWork({ format: 'eks-catalog-v5', lv1OrganizationId: store.managementLv1, sheets: [] });
+    startWork({ format: 'eks-catalog-v6', lv1OrganizationId: store.managementLv1, sheets: [] });
   if (workbook.value!.sheets.length >= 100) {
     error.value = '한 작업은 자격 100개까지 편집할 수 있습니다.';
     return;
@@ -675,18 +660,11 @@ async function jump(i: CatalogIssue) {
       ?.focus();
   } else target.value = { key: rowKey(r), column: i.column };
 }
-async function review(intent: 'save' | 'publish') {
+async function review() {
   await run(async () => {
     clearTimeout(validationTimer);
     await inspect();
-    selected.value = (
-      workbook.value?.sheets.filter(
-        (s) =>
-          modified(s) ||
-          store.data.qualifications.find((q) => q.id === s.sourceId)?.status === 'draft',
-      ) || []
-    ).map((s) => s.code);
-    reviewIntent.value = intent;
+    selected.value = (workbook.value?.sheets.filter((s) => modified(s)) || []).map((s) => s.code);
     compareOpen.value = true;
   });
 }
@@ -737,9 +715,7 @@ async function commit(path: string, body: unknown, token: number) {
     store.notify(
       result.unchanged
         ? '변경된 기준이 없습니다.'
-        : reviewIntent.value === 'publish' && path.endsWith('/publish')
-          ? '선택한 자격과 인증Set을 사용 등록했습니다.'
-          : '선택한 기준을 초안으로 저장했습니다.',
+        : '선택한 기준을 저장했습니다. 팀 적용 버전은 유지됩니다.',
     );
   } catch (e) {
     if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
@@ -759,20 +735,11 @@ async function save() {
       {
         workbook: clean({ ...workbook.value!, sheets: selectedSheets.value }),
         fileHash: fileHash.value,
+        stateRevision: preview.value?.stateRevision,
+        organizationRevision: preview.value?.organizationRevision,
       },
       token,
     );
-  });
-}
-async function publish() {
-  if (!canPublish.value) return;
-  await run(async (token) => {
-    await commit(
-      scopePath(`/catalog/batches/${latestBatch.value!.id}/publish`),
-      { qualificationIds: selectedDraftIds.value },
-      token,
-    );
-    if (token === epoch) compareOpen.value = false;
   });
 }
 async function retryPending() {
@@ -865,7 +832,9 @@ async function backToList() {
         <button
           v-for="r in recoveries.filter(
             (v) =>
-              !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5'].includes(v.workbook.format),
+              !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5', 'eks-catalog-v6'].includes(
+                v.workbook.format,
+              ),
           )"
           :key="r.id + '-download'"
           class="button secondary"
@@ -894,16 +863,15 @@ async function backToList() {
           ><label class="field"
             >상태<select v-model="statusFilter">
               <option value="all">전체</option>
-              <option value="draft">작성 중</option>
-              <option value="published">사용 중</option>
+              <option value="ready">신규 운영 가능</option>
               <option value="needs">보완 필요</option>
             </select></label
           ><button
-            class="button secondary"
+            class="button primary"
             :disabled="busy || !exportIds.length"
             @click="openExisting(exportIds)"
           >
-            선택 자격 편집 ({{ exportIds.length }})
+            선택 자격 편집
           </button>
         </div>
         <div class="catalog-list-scroll">
@@ -933,18 +901,12 @@ async function backToList() {
                 </td>
                 <td>
                   <strong>{{ q.title || '이름 없는 자격' }}</strong
-                  ><small
-                    >v{{ q.version }} · {{ q.status === 'draft' ? '작성 중' : '사용 중' }}</small
-                  >
+                  ><small>v{{ q.version }} · {{ q.lifecycleStatus || 'Active' }}</small>
                 </td>
                 <td>{{ q.courseIds.length }}개</td>
                 <td>
                   <span class="badge" :class="readiness(q).length ? 'warning' : 'success'">{{
-                    readiness(q).length
-                      ? `보완 필요 ${readiness(q).length}개`
-                      : q.status === 'draft'
-                        ? '사용 등록 가능'
-                        : '사용 중'
+                    readiness(q).length ? `보완 필요 ${readiness(q).length}개` : '신규 운영 가능'
                   }}</span>
                 </td>
                 <td>
@@ -953,7 +915,7 @@ async function backToList() {
                     :disabled="busy"
                     @click="openExisting([q.id])"
                   >
-                    {{ q.status === 'draft' ? '이어서 편집' : '내용 수정' }}
+                    내용 편집
                   </button>
                 </td>
               </tr>
@@ -973,7 +935,7 @@ async function backToList() {
               (n, s) => n + s.tables.objective.length + s.tables.practical.length,
               0,
             )
-          }}개 <span>내용 확인 → 적용 대상 확인 → 초안 저장</span>
+          }}개 <span>내용 확인 → 적용 대상 확인 → 기준 저장</span>
         </div>
         <div class="catalog-workspace">
           <aside class="panel catalog-navigation">
@@ -994,15 +956,8 @@ async function backToList() {
               >
                 <strong>{{ s.title || '이름 없는 자격' }}</strong
                 ><small
-                  >{{
-                    modified(s)
-                      ? '저장 전 수정'
-                      : store.data.qualifications.find((q) => q.id === s.sourceId)?.status ===
-                          'draft'
-                        ? '초안 저장됨'
-                        : '사용 중'
-                  }}
-                  · {{ s.tables.courses.length }}인증Set</small
+                  >{{ modified(s) ? '저장 전 수정' : '저장됨' }} ·
+                  {{ s.tables.courses.length }}인증Set</small
                 >
               </button>
               <div v-if="index === sheetIndex" class="catalog-course-tree">
@@ -1033,10 +988,7 @@ async function backToList() {
                   {{
                     sheet.mode === 'new'
                       ? '새 자격 작성'
-                      : store.data.qualifications.find((q) => q.id === sheet?.sourceId)?.status ===
-                          'published'
-                        ? '변경 내용을 저장하면 새 버전으로 작성합니다.'
-                        : '저장한 초안을 이어서 작성합니다.'
+                      : '기존 내용에서 편집합니다. 참조가 있는 기준의 변경은 새 버전으로 보존됩니다.'
                   }}
                 </p>
               </div>
@@ -1205,7 +1157,7 @@ async function backToList() {
               <h3>수정할 항목</h3>
               <button v-for="(i, n) in currentIssues.slice(0, 100)" :key="n" @click="jump(i)">
                 <span class="badge" :class="i.severity === 'structure' ? 'danger' : 'warning'">{{
-                  i.severity === 'structure' ? '연결·입력 확인' : '등록 전 보완'
+                  i.severity === 'structure' ? '연결·입력 확인' : '신규 운영 전 보완'
                 }}</span
                 >{{
                   i.pathLabel ||
@@ -1225,18 +1177,8 @@ async function backToList() {
           </div>
           <button class="button ghost small" :disabled="busy" @click="downloadWork">
             작업 파일 다운로드</button
-          ><button
-            class="button secondary"
-            :disabled="busy || validationPending"
-            @click="review('save')"
-          >
-            초안 저장</button
-          ><button
-            class="button primary"
-            :disabled="busy || validationPending"
-            @click="review('publish')"
-          >
-            검토 후 사용 등록
+          ><button class="button secondary" :disabled="busy || validationPending" @click="review()">
+            변경 검토 후 저장
           </button>
         </div>
         <button v-if="pending" class="button secondary" :disabled="busy" @click="retryPending">
@@ -1261,10 +1203,10 @@ async function backToList() {
             ></span
           ><span class="badge">{{
             b.status === 'published'
-              ? '사용 등록 완료'
+              ? '과거 사용 등록 완료'
               : b.status === 'partial'
                 ? `일부 등록 ${b.publishedQualificationIds?.length} / ${b.qualificationIds.length}`
-                : '초안 저장'
+                : '기준 저장'
           }}</span
           ><button
             class="button ghost small"
@@ -1287,11 +1229,7 @@ async function backToList() {
             v-model="selected"
             type="checkbox"
             :value="s.code"
-            :disabled="
-              busy ||
-              (!modified(s) &&
-                store.data.qualifications.find((q) => q.id === s.sourceId)?.status === 'published')
-            "
+            :disabled="busy || !modified(s)"
           /><strong>{{ s.title || '이름 없는 자격' }}</strong
           ><span>{{
             preview?.changes.find((c) => c.code === s.code)?.kind === 'new'
@@ -1326,27 +1264,22 @@ async function backToList() {
           {{ i.pathLabel || i.sheet }} · {{ i.message }}
         </button>
         <p>
-          등록 전 보완 항목은 초안으로 보관할 수 있습니다. 연결 오류는 수정하거나 해당 자격의 선택을
-          해제하세요.
+          신규 운영 전 보완 항목은 미완성 상태로 저장할 수 있습니다. 연결 오류는 수정하거나 해당
+          자격의 선택을 해제하세요.
         </p>
       </div>
-      <p v-if="!selected.length" class="muted">변경한 자격 또는 저장한 초안을 선택해 주세요.</p>
-      <p v-else-if="reviewIntent === 'publish' && !canPublish" class="muted">
-        선택한 최신 내용을 초안으로 저장하고 확인 사항을 해결한 뒤 사용 등록할 수 있습니다.
+      <p v-if="!selected.length" class="muted">변경한 자격 또는 저장한 기준을 선택해 주세요.</p>
+      <p>
+        팀 적용 버전은 변경되지 않습니다. 저장한 버전은
+        <RouterLink :to="store.managementLink('/admin/policies')">조직별 자격 설정</RouterLink>에서
+        선택할 수 있습니다.
       </p>
       <template #footer
-        ><button class="button secondary" :disabled="busy || !canSave" @click="save">
-          선택 기준 초안 저장</button
-        ><button
-          v-if="reviewIntent === 'publish'"
-          class="button primary"
-          :disabled="busy || !canPublish"
-          @click="publish"
-        >
-          선택 기준 사용 등록
+        ><button class="button primary" :disabled="busy || !canSave" @click="save">
+          선택 기준 저장
         </button></template
-      ></AppDialog
-    >
+      >
+    </AppDialog>
     <AppDialog
       :open="!!detail"
       title="학습·평가 내용 편집"
@@ -1374,7 +1307,7 @@ async function backToList() {
       <p v-if="removeRequest?.childCount">
         연결된 학습·평가 {{ removeRequest.childCount }}개 항목도 함께 제외합니다.
       </p>
-      <p>초안 저장 전 실행 취소할 수 있습니다. 기존 학습과 인증 기록은 유지됩니다.</p>
+      <p>기준 저장 전 실행 취소할 수 있습니다. 기존 학습과 인증 기록은 유지됩니다.</p>
       <template #footer
         ><button class="button secondary" @click="removeRequest = null">취소</button
         ><button class="button primary" @click="removeConfirmed">함께 제외</button></template

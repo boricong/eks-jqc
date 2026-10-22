@@ -356,9 +356,11 @@ test("새 문항 정답·합격 기준은 미정이며 상황 설명 없이는 �
       },
     ],
   };
-  await f.call("admin-1", `/courses/${c.id}/publish`, c, 422);
+  const saved = await f.call("admin-1", `/courses/${c.id}`, c, 200, "PUT");
+  assert.ok(saved.readiness.some((m: string) => m.includes("상황")));
+  c.revision = saved.revision;
   c.practicalQuestions[0]!.scenario = "가상 이상 발생";
-  await f.call("admin-1", `/courses/${c.id}/publish`, c);
+  await f.call("admin-1", `/courses/${c.id}`, c, undefined, "PUT");
 });
 test("유형별 합격 기준을 독립 적용하고 통과한 유형의 추가 응시는 막는다", async (t) => {
   const f = await fixture(t),

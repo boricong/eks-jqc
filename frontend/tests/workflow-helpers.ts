@@ -1,3 +1,4 @@
+import { qualificationUseErrors } from '@eks/contracts';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 
@@ -15,7 +16,7 @@ export async function requestPlan(page: Page, learnerName: string) {
   const versions = [
     ...new Map<string, any>(
       ws.qualifications
-        .filter((q: any) => q.status === 'published')
+        .filter((q: any) => qualificationUseErrors(q, ws.courses).length === 0)
         .sort((a: any, b: any) => a.version - b.version)
         .map((q: any) => [q.entityId, q] as [string, any]),
     ).values(),

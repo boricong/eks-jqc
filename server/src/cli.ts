@@ -1,3 +1,4 @@
+import { migrateCatalogEditing } from "./catalog-editing-migration.ts";
 import { migrateAssessmentFlow } from "./assessment-flow-migration.ts";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,16 +31,19 @@ if (
     "migrate-administration",
     "migrate-lifecycle",
     "migrate-assessment-flow",
+    "migrate-catalog-editing",
   ].includes(command)
 ) {
   const transform =
-    command === "migrate-assessment-flow"
-      ? migrateAssessmentFlow
-      : command === "migrate-lifecycle"
-        ? migrateLifecycle
-        : command === "migrate-administration"
-          ? migrateAdministration
-          : migratePolicies;
+    command === "migrate-catalog-editing"
+      ? migrateCatalogEditing
+      : command === "migrate-assessment-flow"
+        ? migrateAssessmentFlow
+        : command === "migrate-lifecycle"
+          ? migrateLifecycle
+          : command === "migrate-administration"
+            ? migrateAdministration
+            : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -65,13 +69,15 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-assessment-flow"
-            ? "assessment-flow"
-            : command === "migrate-lifecycle"
-              ? "lifecycle"
-              : command === "migrate-administration"
-                ? "administration"
-                : "policies",
+          command === "migrate-catalog-editing"
+            ? "catalog-editing"
+            : command === "migrate-assessment-flow"
+              ? "assessment-flow"
+              : command === "migrate-lifecycle"
+                ? "lifecycle"
+                : command === "migrate-administration"
+                  ? "administration"
+                  : "policies",
         ),
         null,
         2,

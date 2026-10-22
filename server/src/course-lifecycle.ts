@@ -33,11 +33,6 @@ export function courseUsage(
     comparisons: s.comparisons.filter((c) => c.courseId === courseId).length,
   };
   const blockers = [
-    ...(course.status !== "draft"
-      ? [
-          "한 번 사용 등록된 인증Set은 삭제할 수 없습니다. 운영 종료를 사용해 주세요.",
-        ]
-      : []),
     ...qualifications.map(
       (q) => `연결된 자격: ${q.title || "이름 없는 자격"} v${q.version}`,
     ),
@@ -53,11 +48,10 @@ export function courseUsage(
     stateRevision: s.revision,
     canDelete: !blockers.length,
     blockers,
-    qualifications: qualifications.map(({ id, title, version, status }) => ({
+    qualifications: qualifications.map(({ id, title, version }) => ({
       id,
       title,
       version,
-      status,
     })),
     successorVersions,
     counts,
@@ -93,11 +87,6 @@ export function changeCourseLifecycle(
     demand(usage.canDelete, 409, usage.blockers.join("\n"));
     s.courses = s.courses.filter((c) => c.id !== id);
   } else {
-    demand(
-      course.status === "published",
-      409,
-      "사용 등록된 인증Set만 운영 상태를 변경할 수 있습니다.",
-    );
     const retire = action === "course.retire";
     demand(
       course.operationalStatus === (retire ? "active" : "retired"),

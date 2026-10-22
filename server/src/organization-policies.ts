@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   organizationEntries,
   qualificationUseErrors,
+  qualificationReadinessErrors,
   certificationStatus,
   effectiveCredentialStatus,
   type State,
@@ -26,7 +27,8 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
     const q = s.qualifications.find((q) => q.id === p.qualificationId);
     demand(
       entries.some((e) => e.id === p.lv1OrganizationId && e.level === 1) &&
-        q?.status === "published" &&
+        q &&
+        !q.deletedAt &&
         q.lv1OrganizationId === p.lv1OrganizationId &&
         q.entityId === p.entityId,
       422,
@@ -452,9 +454,12 @@ export function changePolicy(
     const next = input.qualificationIds.map((id) => {
       const q = s.qualifications.find((q) => q.id === id);
       demand(
-        q?.status === "published" && q.lv1OrganizationId === scope,
+        q &&
+          !q.deletedAt &&
+          q.lv1OrganizationId === scope &&
+          !qualificationReadinessErrors(q, s.courses).length,
         422,
-        "같은 Lv1의 게시 자격 버전을 선택해 주세요.",
+        "같은 팀의 설정이 완료된 자격 버전을 선택해 주세요.",
       );
       return {
         lv1OrganizationId: scope,

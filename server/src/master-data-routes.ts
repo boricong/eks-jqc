@@ -129,7 +129,16 @@ export function registerMasterDataRoutes(
     { bodyLimit: MASTER_LIMIT },
     async (r) => {
       operator(r);
-      return preview(r, "master-import", readMaster(r.body));
+      const result = await preview(r, "master-import", readMaster(r.body));
+      return {
+        ...result,
+        ...((r.body as any)?.stateSchemaVersion === 10
+          ? {
+              compatibility:
+                "업무10 형식1을 업무11로 변환합니다. 자격·인증Set의 초안/사용 등록 속성만 제거하며 ID·내용·연결·상태를 보존합니다.",
+            }
+          : {}),
+      };
     },
   );
   for (const kind of ["master-reset", "master-import"] as const) {

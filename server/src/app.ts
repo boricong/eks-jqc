@@ -1,3 +1,7 @@
+import {
+  prepareCatalogSave,
+  qualificationDeletionImpact,
+} from "./catalog-editing.ts";
 import { registerMasterDataRoutes } from "./master-data-routes.ts";
 import Fastify, { type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
@@ -404,9 +408,15 @@ export async function buildApp(
         let scope: string | undefined;
         const transactionOptions = {
           preserveBackup:
-            action === "progress.reset" || action === "course.delete",
+            action === "progress.reset" ||
+            action === "course.delete" ||
+            action === "qualification.delete",
           backupPurpose:
-            action === "course.delete" ? ("course-delete" as const) : undefined,
+            action === "qualification.delete"
+              ? ("qualification-delete" as const)
+              : action === "course.delete"
+                ? ("course-delete" as const)
+                : undefined,
           action,
           lv1OrganizationId: undefined as string | undefined,
         };
@@ -439,7 +449,10 @@ export async function buildApp(
               );
               // Deleted drafts no longer exist. Authenticate against the stored original
               // scope before returning the successful response from the request ledger.
-              if (action === "course.delete" && previous.action === action) {
+              if (
+                ["course.delete", "qualification.delete"].includes(action) &&
+                previous.action === action
+              ) {
                 demand(
                   previous.lv1OrganizationId === scope,
                   403,
@@ -704,7 +717,22 @@ export async function buildApp(
         },
       });
   }
-  for (const section of ["courses", "qualifications"]) {
+  for (const section of ["courses", "qualifications"] as const) {
+    app.post(`/api/${section}/:id/save-preview`, async (request) => {
+      const scope = managementScope(
+        actor(request),
+        store.organizations.snapshot(),
+        (request.query as any).lv1OrganizationId,
+      );
+      return prepareCatalogSave(
+        store.snapshot(),
+        store.organizations.snapshot(),
+        section,
+        (request.params as any).id,
+        request.body,
+        scope,
+      );
+    });
     mutation("POST", `/api/${section}`, "catalog.create", () => section);
     mutation("PUT", `/api/${section}/:id`, "catalog.save", () => section);
     mutation(
@@ -734,6 +762,20 @@ export async function buildApp(
       scope,
     );
   });
+  app.get("/api/qualifications/:id/deletion-impact", async (request) => {
+    const scope = managementScope(
+      actor(request),
+      store.organizations.snapshot(),
+      (request.query as any).lv1OrganizationId,
+    );
+    return qualificationDeletionImpact(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      (request.params as any).id,
+      scope,
+    );
+  });
+  mutation("DELETE", "/api/qualifications/:id", "qualification.delete");
   mutation("DELETE", "/api/courses/:id", "course.delete");
   mutation("POST", "/api/courses/:id/retirement", "course.retire");
   mutation("POST", "/api/courses/:id/reactivation", "course.reactivate");

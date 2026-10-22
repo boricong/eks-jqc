@@ -374,7 +374,7 @@ test('Excel 지연 로딩 표와 대화상자는 단일 스타일과 편집 상�
   );
   await input.press('Enter');
   await expect(cell).toHaveText('밝은 표 편집 중 입력');
-  await page.getByRole('button', { name: '초안 저장', exact: true }).click();
+  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   for (const theme of ['single'] as const) {
     await singleStyle(page);

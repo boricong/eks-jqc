@@ -1,3 +1,4 @@
+import { saveCatalogItem, deleteQualification } from "./catalog-editing.ts";
 import {
   requiredQualifications,
   requestProgress,
@@ -144,6 +145,12 @@ export function authorize(
     "FT·주관식 평가 기능은 종료되었습니다.",
     "FEATURE_REMOVED",
   );
+  demand(
+    action !== "catalog.publish",
+    410,
+    "사용 등록 절차는 종료되었습니다. 기준 저장을 사용해 주세요.",
+    "FEATURE_REMOVED",
+  );
   const deprecated = new Set([
     "ftId",
     "verdicts",
@@ -206,6 +213,15 @@ export function authorize(
         403,
         "소속 Lv1의 자격만 배정할 수 있습니다.",
       );
+    return;
+  }
+  if (action === "qualification.delete") {
+    demand(managementLv1, 403, "관리할 팀을 선택해 주세요.");
+    demand(
+      find(s.qualifications, target).lv1OrganizationId === managementLv1,
+      403,
+      "선택한 팀만 관리할 수 있습니다.",
+    );
     return;
   }
   if (action.startsWith("course.")) {
@@ -527,6 +543,18 @@ export function execute(
     audit(s, u, action, target, result.reason, undefined, result.details);
     return result.response;
   }
+  if (action === "qualification.delete") {
+    const result = deleteQualification(
+      s,
+      organizations,
+      target,
+      body,
+      scope,
+      u.id,
+    );
+    audit(s, u, action, target, result.reason, undefined, result.impact);
+    return result;
+  }
   if (action.startsWith("catalog.")) {
     const isCourse = target === "courses",
       list = isCourse ? s.courses : s.qualifications;
@@ -539,7 +567,6 @@ export function execute(
           version: 1,
           revision: 1,
           title: "",
-          status: "draft" as const,
         };
       if (isCourse)
         s.courses.push(
@@ -572,11 +599,14 @@ export function execute(
       body.id,
     );
     if (action === "catalog.clone") {
-      demand(
-        item.status === "published",
-        409,
-        "사용 등록된 기준에서 새 버전을 만드세요.",
-      );
+      demand(!item.deletedAt, 409, "삭제된 기준입니다.");
+      if (body.revision != null)
+        demand(
+          body.revision === item.revision,
+          409,
+          "기준이 변경되었습니다. 최신 내용을 확인해 주세요.",
+          "REVISION_CONFLICT",
+        );
       const clone = {
         ...structuredClone(item),
         id: uid(),
@@ -588,8 +618,7 @@ export function execute(
               .map((x) => x.version),
           ) + 1,
         revision: 1,
-        status: "draft" as const,
-        publishedAt: undefined,
+
         ...(isCourse
           ? {
               operationalStatus: "active",
@@ -606,106 +635,25 @@ export function execute(
       });
       return { id: clone.id };
     }
-    demand(
-      item.status === "draft",
-      409,
-      "사용 등록된 기준은 변경할 수 없습니다.",
-    );
-    expected(item, body.revision);
-    const parsed = (isCourse ? CourseSchema : QualificationSchema).parse({
-      ...body,
-      id: item.id,
-      lv1OrganizationId: item.lv1OrganizationId,
-      entityId: item.entityId,
-      version: item.version,
-      parentId: item.parentId,
-      status: "draft",
-      publishedAt: undefined,
-      revision: item.revision + 1,
-      ...(isCourse
-        ? {
-            operationalStatus: "active",
-            retiredAt: undefined,
-            retiredBy: undefined,
-            retirementReason: undefined,
-          }
-        : {
-            templateId: (item as State["qualifications"][number]).templateId,
-            lifecycleStatus:
-              (item as State["qualifications"][number]).lifecycleStatus ||
-              "Active",
-            renewalNoticeDaysBefore:
-              body.renewalNoticeDaysBefore ??
-              (item as State["qualifications"][number])
-                .renewalNoticeDaysBefore ??
-              7,
-            renewalLeadMonths:
-              body.renewalLeadMonths ??
-              (item as State["qualifications"][number]).renewalLeadMonths ??
-              3,
-          }),
-    });
-    if (!isCourse)
-      demand(
-        (parsed as State["qualifications"][number]).courseIds.every((id) =>
-          s.courses.some((c) => c.id === id && c.lv1OrganizationId === scope),
-        ),
-        422,
-        "인증Set을 찾을 수 없습니다.",
-      );
-    if (!isCourse) {
-      const qualification = parsed as State["qualifications"][number];
-      qualification.courseIds = qualification.courseIds.map((id) => {
-        if (
-          !s.qualifications.some(
-            (q) => q.entityId !== item.entityId && q.courseIds.includes(id),
-          )
-        )
-          return id;
-        const source = find(s.courses, id),
-          copyId = uid();
-        const copy = CourseSchema.parse({
-          ...structuredClone(source),
-          id: copyId,
-          entityId: copyId,
-          parentId: undefined,
-          version: 1,
-          revision: 1,
-          ...(source.status === "published" ? { publishedAt: now() } : {}),
-        });
-        s.courses.push(copy);
-        audit(
-          s,
-          u,
-          "catalog.independent-copy",
-          copyId,
-          "다른 자격에 연결한 인증Set의 독립 사본",
-          undefined,
-          { sourceId: id, qualificationId: item.id },
-        );
-        return copyId;
-      });
-    }
-    if (action === "catalog.publish") {
-      const errors = isCourse
-        ? courseUseErrors(parsed as State["courses"][number])
-        : qualificationUseErrors(
-            parsed as State["qualifications"][number],
-            s.courses,
-          );
-      demand(!errors.length, 422, errors.join("\n"));
-      parsed.status = "published";
-      parsed.publishedAt = now();
-    }
-    Object.assign(item, parsed);
-    audit(
+    const result = saveCatalogItem(
       s,
-      u,
-      action,
+      organizations,
+      isCourse ? "courses" : "qualifications",
       item.id,
-      action === "catalog.publish" ? "기준 사용 등록" : "초안 저장",
+      body,
+      scope,
     );
-    return { id: item.id, revision: item.revision };
+    if (!result.unchanged)
+      audit(
+        s,
+        u,
+        action,
+        result.id,
+        result.newVersion ? "기존 기준을 보존하고 새 버전 저장" : "기준 저장",
+        undefined,
+        { sourceId: item.id },
+      );
+    return result;
   }
   if (action === "assignment.create") {
     demand(
