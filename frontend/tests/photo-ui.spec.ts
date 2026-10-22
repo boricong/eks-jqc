@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { courseSection, saveCriterion } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 import { requestPlan } from './workflow-helpers';
@@ -30,8 +31,8 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
     'aria-selected',
     'true',
   );
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '이 항목 삭제' }).click();
+  await answerConfirmation(page, true);
   await expect(tabs.getByRole('tab')).toHaveCount(2);
   await expect(tabs.getByRole('tab', { name: /3번 결과 기록/ })).toHaveCount(0);
   await expect(tabs.getByRole('tab', { name: /2번 결과 기록/ })).toHaveAttribute(

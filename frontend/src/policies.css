@@ -1,11 +1,12 @@
 .process-guide {
-  margin-top: 32px;
-  margin-bottom: 32px;
   padding: 0;
-  background: var(--canvas-soft, #f6f5f4);
-  border: 1px dashed var(--ink-muted);
-  border-radius: 8px;
+  border-radius: 0;
   overflow-wrap: anywhere;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 .process-guide-toggle {
   width: 100%;
@@ -13,41 +14,43 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 20px 24px;
-  min-height: 64px;
   text-align: left;
   color: var(--ink-secondary);
   border: 0;
   background: transparent;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 0;
+  padding: 12px 0;
+  min-height: 44px;
+  font-size: var(--text-caption);
 }
 .process-guide-toggle > span:first-child {
-  display: grid;
-  gap: 8px;
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 .process-guide-toggle > span:last-child {
-  font-size: 14px;
+  font-size: var(--text-caption);
   flex-shrink: 0;
 }
 .process-guide-content {
-  padding: 0 24px 24px;
-  border-top: 1px dashed var(--line);
   line-height: 1.6;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
 }
 .process-guide-content > .small-label {
   margin-top: 20px;
 }
 .process-guide h2 {
-  font-size: 22px;
+  font-size: var(--text-section);
 }
 .process-guide h3 {
-  font-size: 18px;
+  font-size: var(--text-section);
   margin: 16px 0 8px;
 }
 .process-guide h4 {
-  font-size: 16px;
+  font-size: var(--text-body);
   margin: 0 0 8px;
 }
 .process-guide p + h4 {
@@ -64,14 +67,14 @@
 .process-steps li {
   padding: 4px 8px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-input);
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .process-steps li[aria-current] {
   color: var(--ink);
   border-color: var(--control-border);
-  font-weight: 700;
+  font-weight: var(--weight-heading);
   background: var(--surface-tint);
 }
 .process-guide-columns {
@@ -85,7 +88,7 @@
   padding-left: 24px;
 }
 .process-review .muted {
-  font-size: 14px;
+  font-size: var(--text-caption);
   margin-bottom: 16px;
 }
 .process-review ul {
@@ -109,8 +112,9 @@
 .policy-pool-list {
   max-height: 360px;
   overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 .policy-pool-row {
   display: grid;
@@ -134,32 +138,37 @@
   max-height: min(65vh, 640px);
   overflow-y: auto;
   align-content: start;
-  gap: 4px;
+  gap: 0;
 }
 .policy-org-row {
   display: block;
   flex: 0 0 auto;
   text-align: left;
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
   min-height: 38px;
-  font-size: 15px;
+  font-size: var(--text-table);
   line-height: 20px;
   width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.policy-org-row[aria-selected='true'] {
-  border-color: var(--control-border);
+.policy-org-row:hover {
   background: var(--surface-tint);
+}
+.policy-org-row[aria-selected='true'] {
+  border-left-color: var(--primary);
+  background: var(--tint);
 }
 .policy-workspace fieldset {
   margin: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
   min-width: 0;
-  padding: 12px;
+  padding: 16px 0;
 }
 .policy-workspace .choice {
   padding: 8px 0;
@@ -207,6 +216,7 @@
 .notice-body,
 .preserve-lines {
   white-space: pre-wrap;
+  line-height: var(--leading-reading);
 }
 .information-grid {
   display: grid;
@@ -222,7 +232,7 @@
 }
 .information-grid dt {
   color: var(--ink-muted);
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .information-grid dd {
   margin: 0;
@@ -260,15 +270,16 @@
   min-width: 0;
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 0 16px 0 0;
+  border-right: 1px solid var(--line);
   position: sticky;
-  top: 96px;
+  top: 24px;
 }
 .policy-tree-panel .section-heading {
   margin: 0;
 }
 .policy-tree-panel h2 {
-  font-size: 18px;
+  font-size: var(--text-section);
 }
 .policy-tree-browser {
   display: grid;
@@ -315,7 +326,7 @@
   padding: 0;
   margin: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
 }
 .administrator-candidates li + li {
   border-top: 1px solid var(--line);
@@ -339,7 +350,7 @@
   overflow-wrap: anywhere;
 }
 .administrator-hint {
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .administrator-selection {
   display: grid;
@@ -347,7 +358,7 @@
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface-tint);
 }
 .administrator-selection .section-heading {
@@ -371,7 +382,7 @@
   margin: 0;
   padding: 2px 4px 2px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface);
 }
 .administrator-selected-list li > span {
@@ -386,7 +397,7 @@
   min-height: 32px;
   flex-shrink: 0;
   color: var(--ink-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-input);
 }
 .administrator-remove:hover {
   color: var(--ink);
@@ -395,24 +406,24 @@
 .policy-pool-management > summary {
   cursor: pointer;
   padding: 8px 0;
-  font-weight: 500;
+  font-weight: var(--weight-control);
 }
 .policy-pool-management > summary > span {
   display: block;
   margin: 8px 0 0 16px;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .policy-pool-management[open] > :not(summary) {
   margin-top: 16px;
 }
 .notice-audience {
-  font-size: 14px;
+  font-size: var(--text-caption);
   margin: 8px 0;
   overflow-wrap: anywhere;
 }
 .learning-guide h3 {
-  font-size: 18px;
+  font-size: var(--text-section);
 }
 .learning-scope {
   padding-left: 24px;
@@ -423,7 +434,7 @@
 .learning-scope span {
   display: block;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .learning-guide p {
   overflow-wrap: anywhere;
@@ -432,7 +443,7 @@
   margin-bottom: 24px;
 }
 .required-qualifications .organization-path {
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .required-list {
   display: grid;
@@ -446,7 +457,7 @@
   align-items: center;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   min-width: 0;
 }
 .required-row > div {
@@ -455,7 +466,7 @@
 }
 .required-row p {
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .required-row .button {
   flex-shrink: 0;
@@ -471,6 +482,9 @@
   }
   .policy-tree-panel {
     position: static;
+    padding: 0 0 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
   .policy-tree-toggle {
     display: flex;
@@ -481,6 +495,11 @@
     gap: 12px;
     text-align: left;
     white-space: normal;
+    border: 0;
+    border-left: 2px solid var(--primary);
+    border-radius: 0;
+    background: var(--tint);
+    color: var(--primary);
   }
   .policy-tree-toggle > span:first-child {
     min-width: 0;
@@ -488,7 +507,7 @@
   }
   .policy-tree-toggle > span:last-child {
     flex-shrink: 0;
-    font-size: 14px;
+    font-size: var(--text-caption);
   }
   .policy-tree-panel .policy-org-list {
     max-height: 320px;
@@ -509,10 +528,6 @@
   .process-guide-toggle {
     flex-direction: column;
     align-items: flex-start;
-    padding: 16px;
-  }
-  .process-guide-content {
-    padding: 0 16px 16px;
   }
   .information-grid {
     grid-template-columns: 1fr;

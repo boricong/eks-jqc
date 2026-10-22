@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { ref, computed, watch, nextTick } from 'vue';
 import { materialTypeLabels, type Course, type LearningMaterial } from '@eks/contracts';
 import type { CourseIssue } from '../course-editor';
@@ -12,8 +13,12 @@ watch(
     error.value = '';
   },
 );
-function add() {
-  if (editing.value && !window.confirm('편집 중인 자료를 취소하고 새 자료를 추가할까요?')) return;
+async function add() {
+  if (
+    editing.value &&
+    !(await confirmAction('편집 중인 자료를 취소하고 새 자료를 추가할까요?', '새 자료 작성'))
+  )
+    return;
   editing.value = {
     id: crypto.randomUUID(),
     type: 'text',
@@ -47,8 +52,9 @@ function save(requireComplete = false) {
   editing.value = null;
   return true;
 }
-function edit(m: LearningMaterial) {
-  if (editing.value && !window.confirm('편집 중인 자료를 취소할까요?')) return;
+async function edit(m: LearningMaterial) {
+  if (editing.value && !(await confirmAction('편집 중인 자료를 취소할까요?', '자료 편집 전환')))
+    return;
   editing.value = { ...m };
   error.value = '';
 }
@@ -57,8 +63,8 @@ function move(i: number, d: number) {
   if (i + d < 0 || i + d >= a.length || props.disabled) return;
   [a[i], a[i + d]] = [a[i + d]!, a[i]!];
 }
-function remove(i: number) {
-  if (!props.disabled && window.confirm('이 학습자료를 삭제할까요?'))
+async function remove(i: number) {
+  if (!props.disabled && (await confirmAction('이 학습자료를 삭제할까요?', '학습자료 삭제')))
     props.course.materials.splice(i, 1);
 }
 async function focusIssue(issue: CourseIssue) {

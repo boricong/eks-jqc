@@ -3,7 +3,8 @@
 조직별 필수 자격 선정 → 관리자 요청 → 개인 계획 → 자격 상세·학습자료 확인 → 지식·상황 대응 평가 → 인증Set 수료 → 자격 인증·유효기간 조회를 연결하는 로컬 MVP입니다. 지식 평가를 통과한 뒤 상황 대응 평가에 응시하며, 두 평가는 학습자가 직접 응시하고 서버가 자동 채점합니다. 실제 장비 작업의 관찰·시연을 자동 확인하는 기능은 아닙니다. Vue 3·Fastify·JSON으로 구현하며 Lv1별 기준과 진행을 분리합니다.
 
 - [인수인계·검증 결과](handover.md)
-- [디자인 정책](docs/DESIGN.md), [화면 안내](frontend/README.md)
+- [현재 작업 인수인계](docs/HANDOVER.md)
+- [디자인 정책](DESIGN.md), [화면 안내](frontend/README.md)
 - [Excel v6·기준 일괄 관리](docs/CATALOG_WORKBOOK.md)
 - [설정·기준 보존 초기화와 서버 이전](docs/MASTER_DATA.md)
 - [UX 설계 이력과 현재 정책](docs/EKS_프런트엔드_UX_설계안.md)

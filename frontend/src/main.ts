@@ -1,10 +1,10 @@
-import './master-data.css';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import '@fontsource-variable/inter/wght.css';
 import 'pretendard/dist/web/variable/pretendardvariable.css';
 import './design-tokens.css';
+import './base.css';
 import './style.css';
+import './master-data.css';
 import './course-editor.css';
 import './policies.css';
 import './qualification-detail.css';

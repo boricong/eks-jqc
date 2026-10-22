@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch } from 'vue';
 import type { OrganizationAdministratorsView } from '@eks/contracts';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ organizationId: string; canManage: boolean }>();
-const confirm = (message: string) => window.confirm(message);
 const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean] }>();
 const store = useDemo(),
   view = ref<OrganizationAdministratorsView>(),
@@ -43,14 +43,22 @@ async function load() {
     if (key === context() && seq === generation) error.value = (e as Error).message;
   }
 }
+async function reload() {
+  if (
+    !dirty.value ||
+    (await confirmAction('지정 변경을 취소하고 다시 불러올까요?', '다시 불러오기'))
+  )
+    await load();
+}
 async function save() {
   if (
     !view.value ||
     !props.canManage ||
     busy.value ||
-    !confirm(
+    !(await confirmAction(
       '선택한 구성원의 세부 조직 관리자 지정을 저장할까요? 다른 역할과 진행 내역은 유지됩니다.',
-    )
+      '관리자 지정 저장',
+    ))
   )
     return;
   const key = context();
@@ -91,12 +99,7 @@ watch(
   <section class="organization-administrators text-stack" aria-label="세부 조직 관리자 지정">
     <div class="section-heading">
       <h3>세부 조직 관리자</h3>
-      <button
-        v-if="canManage"
-        class="button secondary small"
-        :disabled="busy"
-        @click="(!dirty || confirm('지정 변경을 취소하고 다시 불러올까요?')) && load()"
-      >
+      <button v-if="canManage" class="button secondary small" :disabled="busy" @click="reload">
         지정 현황 새로고침
       </button>
     </div>

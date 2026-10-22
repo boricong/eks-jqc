@@ -1,42 +1,74 @@
-/* Single source palette: docs/DESIGN.md — application mapping is documented there. */
+/* DESIGN.md brand + approved EKS work UI: compact Pretendard, flat light surfaces. */
 :root {
-  --canvas: #f6f5f4;
+  /* Typography */
+  --font-ui: 'Pretendard Variable', Pretendard, sans-serif;
+  --text-display: 24px;
+  --text-display-compact: 24px;
+  --text-heading: 18px;
+  --text-section: 18px;
+  --text-title: 16px;
+  --text-body: 14px;
+  --text-reading: 15px;
+  --text-table: 14px;
+  --text-caption: 13px;
+  --text-badge: 12px;
+  --weight-body: 400;
+  --weight-control: 500;
+  --weight-title: 500;
+  --weight-heading: 600;
+  --leading-body: 1.45;
+  --leading-reading: 1.65;
+  /* Geometry */
+  --radius-input: 6px;
+  --radius-button: 9999px;
+  --radius-panel: 0px;
+  --radius-notice: 6px;
+  --radius-dialog: 12px;
+  --space-field: 16px;
+  --space-section: 24px;
+  --space-page: 24px;
+  --control-height: 40px;
+  --row-compact: 40px;
+  --row-roomy: 48px;
+  /* Surfaces and text */
+  --canvas: #ffffff;
   --surface: #ffffff;
-  --surface-tint: #f6f5f4;
-  --table-header: #f6f5f4;
-  --ink: #000000;
-  --ink-secondary: #615d59;
-  --primary: #0075de;
-  --primary-hover: #005bab;
+  --surface-tint: #f6f9fc;
+  --table-header: #f6f9fc;
+  --ink: #0d253d;
+  --ink-secondary: #273951;
+  --ink-muted: #61718a;
+  --primary: #533afd;
+  --primary-hover: #4434d4;
+  --primary-press: #2e2b8c;
   --on-primary: #ffffff;
-  --link: #005bab;
-  --link-hover: #005bab;
-  --line: #e6e6e6;
-  --control-border: #615d59;
-  --tint: #f6f5f4;
-  --progress: #0075de;
-  --progress-track: #e6e6e6;
-  --success: #31302e;
-  --success-bg: #f6f5f4;
-  --warning: #31302e;
-  --warning-bg: #f6f5f4;
-  --danger: #31302e;
-  --danger-bg: #f6f5f4;
-  --certified: #31302e;
-  --certified-bg: #f6f5f4;
-  --info: #31302e;
-  --info-bg: #f6f5f4;
+  --link: #533afd;
+  --link-hover: #4434d4;
+  --line: #e3e8ee;
+  --control-border: #78889e; /* ≥3:1 on white and selected surfaces */
+  --tint: #f0edff;
+  --progress: #533afd;
+  --progress-track: #e3e8ee;
+  /* Product states: use with a label/icon, never colour alone. */
+  --success: #147d57;
+  --success-bg: #edf8f1;
+  --warning: #8b5e12;
+  --warning-bg: #fef6e6;
+  --danger: #b4233d;
+  --danger-bg: #fff1f3;
+  --certified: #147d57;
+  --certified-bg: #edf8f1;
+  --info: #4434d4;
+  --info-bg: #f0edff;
   --toast-bg: #ffffff;
-  --toast-ink: #000000;
-  --toast-line: #e6e6e6;
-  --shadow-soft: rgba(0, 0, 0, 0.04);
-  --shadow: rgba(0, 0, 0, 0.05);
-  --backdrop: rgba(0, 0, 0, 0.4);
-  --selection: #e6e6e6;
-  --selection-border: #0075de;
-  --elevation-soft:
-    0 0.175px 1.041px rgba(0, 0, 0, 0.01), 0 0.8px 2.925px rgba(0, 0, 0, 0.02),
-    0 2.025px 7.847px rgba(0, 0, 0, 0.027), 0 4px 18px rgba(0, 0, 0, 0.04);
-  --elevation-modal:
-    0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03), 0 23px 52px rgba(0, 0, 0, 0.05);
+  --toast-ink: #0d253d;
+  --toast-line: #e3e8ee;
+  --selection: #f0edff;
+  --selection-border: #533afd;
+  /* Elevation only for floating UI. */
+  --shadow-soft: rgba(0, 55, 112, 0.08);
+  --shadow: rgba(0, 55, 112, 0.08);
+  --backdrop: rgba(13, 37, 61, 0.4);
+  --elevation-soft: 0 2px 8px rgba(0, 55, 112, 0.08);
+  --elevation-modal: 0 8px 24px rgba(0, 55, 112, 0.12);
 }

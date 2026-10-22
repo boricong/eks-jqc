@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
@@ -77,12 +78,15 @@ async function perform() {
     busy.value = false;
   }
 }
-const canLeave = () =>
+const canLeave = async () =>
   !store.managementAccess ||
   (!store.writing &&
     (!open.value ||
       !reason.value ||
-      window.confirm('작성 중인 처리 사유가 있습니다. 변경을 취소하고 나갈까요?')));
+      (await confirmAction(
+        '작성 중인 처리 사유가 있습니다. 변경을 취소하고 나갈까요?',
+        '변경 버리고 이동',
+      ))));
 onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 </script>

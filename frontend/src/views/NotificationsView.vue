@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { type Notification } from '@eks/contracts';
@@ -28,10 +29,10 @@ async function view(n: Notification) {
 </script>
 <template>
   <div class="container page">
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>내 알림</h1>
       <span class="muted">읽음 처리와 업무 완료는 별도로 관리됩니다.</span>
-    </div>
+    </PageHeading>
     <label class="checkbox-label"
       ><input v-model="unreadOnly" type="checkbox" />읽지 않은 알림만</label
     >

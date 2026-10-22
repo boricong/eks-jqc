@@ -10,7 +10,7 @@
 }
 .master-data-panel h3,
 .maintenance-result h3 {
-  font-size: 18px;
+  font-size: var(--text-section);
   margin: 0 0 12px;
 }
 .master-data-panel .button {
@@ -19,9 +19,9 @@
 }
 .master-preservation-note {
   padding: 16px;
-  border: 1px solid var(--border, #dedbd7);
-  border-radius: 8px;
-  background: #f6f5f4;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--canvas);
   line-height: 1.6;
 }
 .master-preview-columns,
@@ -36,8 +36,8 @@
 }
 .master-transfer-grid > section {
   padding: 20px;
-  border: 1px solid #dedbd7;
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -53,15 +53,15 @@
   align-items: baseline;
   gap: 16px;
   padding: 8px 0;
-  border-bottom: 1px solid #e8e6e3;
-  font-size: 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-caption);
 }
 .master-counts dt {
-  color: #615d59;
+  color: var(--ink-secondary);
 }
 .master-counts dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   white-space: nowrap;
 }
 .master-preview-actions {
@@ -75,29 +75,29 @@
 .master-import-review {
   display: grid;
   gap: 16px;
-  border-top: 1px solid #dedbd7;
+  border-top: 1px solid var(--line);
   padding-top: 24px;
 }
 .master-comparison {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .master-comparison th,
 .master-comparison td {
   text-align: left;
-  border-bottom: 1px solid #dedbd7;
+  border-bottom: 1px solid var(--line);
   padding: 8px 12px;
 }
 .master-comparison thead {
-  background: #f6f5f4;
+  background: var(--canvas);
 }
 .master-comparison tbody th {
-  font-weight: 400;
+  font-weight: var(--weight-body);
 }
 .master-file-name {
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .master-data-panel summary,
 .maintenance-result summary {

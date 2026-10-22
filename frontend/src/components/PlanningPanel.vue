@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { kstDate, defaultPlanningDueOn, type Enrollment } from '@eks/contracts';
@@ -94,12 +95,12 @@ async function send() {
     busy.value = false;
   }
 }
-function leave() {
+async function leave() {
   return (
     !busy.value &&
     (!open.value ||
       !form.value.learnerIds.length ||
-      confirm('작성 중인 요청을 취소하고 이동할까요?'))
+      (await confirmAction('작성 중인 요청을 취소하고 이동할까요?', '변경 버리고 이동')))
   );
 }
 onBeforeRouteLeave(leave);

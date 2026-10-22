@@ -1,3 +1,4 @@
+import { confirmAction } from './useConfirmation';
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue';
 import { ApiError } from '../api';
 
@@ -92,7 +93,10 @@ export function useSavedDraft<T>(
       await flush();
       return true;
     } catch {
-      const discard = window.confirm('저장하지 못한 입력이 있습니다. 변경 내용을 버리고 나갈까요?');
+      const discard = await confirmAction(
+        '저장하지 못한 입력이 있습니다. 변경 내용을 버리고 나갈까요?',
+        '변경 버리고 이동',
+      );
       if (discard) clear();
       return discard;
     }

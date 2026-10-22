@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
@@ -39,12 +40,12 @@ async function save() {
     busy.value = false;
   }
 }
-function leave() {
+async function leave() {
   return (
     !busy.value &&
     (!open.value ||
       !chosen.value.length ||
-      window.confirm('선택한 자격 가져오기를 취소하고 이동할까요?'))
+      (await confirmAction('선택한 자격 가져오기를 취소하고 이동할까요?', '변경 버리고 이동')))
   );
 }
 onBeforeRouteLeave(leave);

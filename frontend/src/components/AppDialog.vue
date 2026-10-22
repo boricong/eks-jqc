@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, useId } from 'vue';
 import AppIcon from './AppIcon.vue';
-const props = defineProps<{ open: boolean; title: string }>();
+const props = defineProps<{ open: boolean; title: string; descriptionId?: string }>();
 const emit = defineEmits<{ 'update:open': [value: boolean]; closed: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const titleId = useId();
@@ -23,6 +23,7 @@ function close() {
     ref="dialog"
     class="dialog"
     :aria-labelledby="titleId"
+    :aria-describedby="descriptionId"
     @close="emit('closed')"
     @cancel.prevent="close"
     @click="

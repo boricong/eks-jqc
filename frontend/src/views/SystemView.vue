@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
@@ -9,6 +9,13 @@ import MasterDataPanel from '../components/MasterDataPanel.vue';
 import TestProgressPanel from '../components/TestProgressPanel.vue';
 const route = useRoute();
 const section = computed(() => String(route.params.section));
+const menuOpen = ref(false);
+watch(
+  () => route.fullPath,
+  () => {
+    menuOpen.value = false;
+  },
+);
 const sections = [
   { id: 'organizations', name: '조직 관리' },
   { id: 'users', name: '사용자 관리' },
@@ -18,20 +25,29 @@ const sections = [
 ];
 </script>
 <template>
-  <div class="container page admin-shell system-shell">
+  <div class="container page admin-shell system-shell management-layout">
     <aside class="admin-sidebar">
       <h2>시스템 운영</h2>
-      <nav aria-label="시스템 운영 메뉴">
+      <button
+        class="button ghost management-menu-toggle"
+        :aria-expanded="menuOpen"
+        aria-controls="system-navigation"
+        @click="menuOpen = !menuOpen"
+      >
+        {{ sections.find((s) => s.id === section)?.name }} · 메뉴 {{ menuOpen ? '접기' : '열기' }}
+      </button>
+      <nav id="system-navigation" aria-label="시스템 운영 메뉴" :class="{ 'is-open': menuOpen }">
         <RouterLink
           v-for="item in sections"
           :key="item.id"
           :to="`/system/${item.id}`"
           :class="{ active: section === item.id }"
+          :aria-current="section === item.id ? 'page' : undefined"
           >{{ item.name }}</RouterLink
         >
       </nav>
     </aside>
-    <div class="admin-content">
+    <div class="admin-content management-content">
       <OrganizationPanel v-if="section === 'organizations'" /><UserManagementPanel
         v-else-if="section === 'users'"
       /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices

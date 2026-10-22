@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
 import { computed, ref } from 'vue';
 import {
   kstDate,
@@ -52,10 +53,10 @@ const list = computed(() =>
     <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
       취득 대상자 Hold · 새 취득·평가·재인증은 중단됩니다. 기록과 자료는 확인할 수 있습니다.
     </p>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>자격 취득</h1>
       <span class="muted">{{ store.actor.name }}</span>
-    </div>
+    </PageHeading>
     <div class="list-toolbar">
       <div class="tabs" aria-label="자격 상태">
         <button
@@ -134,6 +135,11 @@ const list = computed(() =>
             >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification)!) }} · 상태와 이력
             보기</span
           ></span
+        ><span v-if="a.planId" class="qualification-target"
+          ><span class="small-label">목표일</span
+          ><time>{{
+            store.data.plans.find((p) => p.id === a.planId)?.targetOn || '미설정'
+          }}</time></span
         ><span class="qualification-progress"
           ><span class="progress-label"
             ><span>인증Set 수료</span

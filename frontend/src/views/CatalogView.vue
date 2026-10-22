@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import { getDataGeneration } from '../data-generation';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
@@ -303,8 +305,9 @@ async function leave() {
   if (busy.value) return false;
   if (!dirty.value && !pending) return true;
   await retain();
-  return window.confirm(
+  return await confirmAction(
     '서버에 저장하지 않은 입력이 있습니다. 브라우저 보관 상태를 확인하고 이동하시겠습니까?',
+    '변경 버리고 이동',
   );
 }
 onBeforeRouteLeave(leave);
@@ -476,7 +479,7 @@ async function upload(event: Event) {
   await run(async (token) => {
     if (
       (dirty.value || pending) &&
-      !window.confirm('현재 입력은 브라우저에 보관하고 새 파일을 열까요?')
+      !(await confirmAction('현재 입력은 브라우저에 보관하고 새 파일을 열까요?', '새 파일 열기'))
     )
       return;
     await retain();
@@ -769,16 +772,14 @@ async function backToList() {
 </script>
 <template>
   <div class="catalog-page" :class="{ 'has-catalog-draft': workbook && sheet }">
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <div>
-        <span class="eyebrow">인증 업무 관리</span>
         <h1>기준 일괄 관리</h1>
-        <p class="muted">자격과 인증Set을 선택하고 학습·평가 내용을 작성하세요.</p>
       </div>
       <RouterLink :to="store.managementLink('/admin/qualifications')" class="button secondary"
         >개별 기준 관리</RouterLink
       >
-    </div>
+    </PageHeading>
     <template v-if="store.managementReady">
       <div class="panel catalog-top-actions">
         <button class="button primary" :disabled="busy" @click="addSheet()">새 자격 만들기</button

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ActionBar from './ActionBar.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import { kindLabels } from '@eks/contracts';
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -132,7 +134,11 @@ async function correct() {
   }
 }
 async function reload() {
-  if (dirty.value && !window.confirm('저장하지 않은 내용을 버리고 다시 불러올까요?')) return;
+  if (
+    dirty.value &&
+    !(await confirmAction('저장하지 않은 내용을 버리고 다시 불러올까요?', '다시 불러오기'))
+  )
+    return;
   try {
     await store.refresh();
     load();
@@ -140,13 +146,14 @@ async function reload() {
     error.value = (e as Error).message;
   }
 }
-const canLeave = () =>
+const canLeave = async () =>
   !store.writing &&
   (!store.managementAccess ||
     !dirty.value ||
-    window.confirm(
+    (await confirmAction(
       '저장하지 않은 비교 기록이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
-    ));
+      '변경 버리고 이동',
+    )));
 onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 function beforeUnload(e: BeforeUnloadEvent) {
@@ -193,77 +200,79 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
           >원본 보기</RouterLink
         >
       </p>
-      <fieldset class="panel editor-panel comparison-fields" :disabled="readOnly || busy">
-        <legend>비교할 평가</legend>
-        <div class="form-grid">
-          <label v-for="kind in store.requiredKinds(selected.c)" :key="kind" class="field"
-            ><span>{{ kindLabels[kind] }} 회차</span>
-            <select
-              :value="
-                draft.attemptIds.find(
-                  (id) => selected!.e.history.find((t) => t.id === id)?.kind === kind,
-                ) || ''
-              "
-              @change="selectAttempt(kind, $event)"
-            >
-              <option value="">선택</option>
-              <option
-                v-for="t in selected.e.history.filter((t) => t.kind === kind)"
-                :key="t.id"
-                :value="t.id"
+      <div class="comparison-columns">
+        <fieldset class="panel editor-panel comparison-fields" :disabled="readOnly || busy">
+          <legend>비교할 평가</legend>
+          <div class="form-grid">
+            <label v-for="kind in store.requiredKinds(selected.c)" :key="kind" class="field"
+              ><span>{{ kindLabels[kind] }} 회차</span>
+              <select
+                :value="
+                  draft.attemptIds.find(
+                    (id) => selected!.e.history.find((t) => t.id === id)?.kind === kind,
+                  ) || ''
+                "
+                @change="selectAttempt(kind, $event)"
               >
-                {{ t.round }}회 · {{ t.result === 'passed' ? '통과' : '미통과' }} ·
-                {{ new Date(t.date).toLocaleDateString('ko-KR') }}
-              </option>
-            </select>
+                <option value="">선택</option>
+                <option
+                  v-for="t in selected.e.history.filter((t) => t.kind === kind)"
+                  :key="t.id"
+                  :value="t.id"
+                >
+                  {{ t.round }}회 · {{ t.result === 'passed' ? '통과' : '미통과' }} ·
+                  {{ new Date(t.date).toLocaleDateString('ko-KR') }}
+                </option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset class="panel editor-panel comparison-fields" :disabled="readOnly || busy">
+          <legend>실제 수행 근거</legend>
+          <div class="form-grid">
+            <label class="field"
+              ><span>관찰일</span><input v-model="draft.observedAt" type="date" /></label
+            ><label class="field"><span>관찰자</span><input v-model="draft.observer" /></label>
+          </div>
+          <label class="field"
+            ><span>수행 작업</span><textarea v-model="draft.task" rows="2" />
           </label>
-        </div>
-      </fieldset>
-      <fieldset class="panel editor-panel comparison-fields" :disabled="readOnly || busy">
-        <legend>실제 수행 근거</legend>
-        <div class="form-grid">
           <label class="field"
-            ><span>관찰일</span><input v-model="draft.observedAt" type="date" /></label
-          ><label class="field"><span>관찰자</span><input v-model="draft.observer" /></label>
-        </div>
-        <label class="field"
-          ><span>수행 작업</span><textarea v-model="draft.task" rows="2" />
-        </label>
-        <label class="field"
-          ><span>실제 수행 판정 기준</span><textarea v-model="draft.criterion" rows="2" />
-        </label>
-        <label class="field"
-          ><span>근거 요약</span><textarea v-model="draft.evidence" rows="3" />
-        </label>
-        <label class="field"
-          ><span>근거 URL</span
-          ><input v-model="draft.evidenceUrl" type="url" placeholder="https://"
-        /></label>
-        <div class="form-grid">
+            ><span>실제 수행 판정 기준</span><textarea v-model="draft.criterion" rows="2" />
+          </label>
           <label class="field"
-            ><span>근거 구분</span
-            ><select v-model="draft.independence">
-              <option value="unknown">독립 여부 미확인</option>
-              <option value="independent">평가와 독립된 수행 근거</option>
-              <option value="same_assessment">동일 평가의 결과</option>
-            </select></label
-          ><label class="field"
-            ><span>실제 수행 판정</span
-            ><select v-model="draft.performance" aria-label="실제 수행 판정">
-              <option value="unknown">판정 불가</option>
-              <option value="met">최소 요건 충족</option>
-              <option value="unmet">미충족</option>
-            </select></label
-          >
-        </div>
-      </fieldset>
+            ><span>근거 요약</span><textarea v-model="draft.evidence" rows="3" />
+          </label>
+          <label class="field"
+            ><span>근거 URL</span
+            ><input v-model="draft.evidenceUrl" type="url" placeholder="https://"
+          /></label>
+          <div class="form-grid">
+            <label class="field"
+              ><span>근거 구분</span
+              ><select v-model="draft.independence">
+                <option value="unknown">독립 여부 미확인</option>
+                <option value="independent">평가와 독립된 수행 근거</option>
+                <option value="same_assessment">동일 평가의 결과</option>
+              </select></label
+            ><label class="field"
+              ><span>실제 수행 판정</span
+              ><select v-model="draft.performance" aria-label="실제 수행 판정">
+                <option value="unknown">판정 불가</option>
+                <option value="met">최소 요건 충족</option>
+                <option value="unmet">미충족</option>
+              </select></label
+            >
+          </div>
+        </fieldset>
+      </div>
       <p
         v-if="draft.independence !== 'independent' || draft.performance === 'unknown'"
         class="muted"
       >
         독립된 근거나 수행 판정이 없으면 비교 보류로 기록됩니다.
       </p>
-      <div class="actionbar">
+      <ActionBar class="actionbar">
         <span class="small-label">{{
           draft.status === 'draft'
             ? '초안'
@@ -297,7 +306,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
             </button></template
           >
         </div>
-      </div>
+      </ActionBar>
       <AppDialog v-model:open="correctionOpen" title="비교 기록 정정"
         ><p v-if="error" class="error-message" role="alert">{{ error }}</p>
         <label class="field"><span>정정 사유</span><textarea v-model="reason" rows="3" /></label

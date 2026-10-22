@@ -37,6 +37,13 @@ export const test = base.extend<{ backend: { store: JsonStore; restart: () => Pr
   ],
 });
 export { expect };
+export async function answerConfirmation(page: Page, accept: boolean) {
+  const dialog = page.getByTestId('app-confirmation');
+  await expect(dialog).toBeVisible();
+  if (accept) await dialog.locator('.dialog-footer .primary').click();
+  else await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+}
 export async function actor(page: Page, id: string) {
   const label = await page.locator(`#actor option[value="${id}"]`).textContent();
   const name = label!.split('·')[0]!.trim();

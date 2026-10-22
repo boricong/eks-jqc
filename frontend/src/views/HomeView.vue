@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
 import HomeNotices from '../components/HomeNotices.vue';
 import { computed } from 'vue';
 import { useDemo } from '../stores/demo';
@@ -41,7 +42,6 @@ const upcoming = computed(() =>
 const attention = computed(() => [
   {
     label: '기준 준비',
-    detail: '미완성 기준을 보완하고 저장하세요.',
     count: store.data.qualifications.filter(
       (q) => !q.deletedAt && store.qualificationErrors(q).length > 0,
     ).length,
@@ -49,7 +49,6 @@ const attention = computed(() => [
   },
   {
     label: '계획 기한',
-    detail: '기한이 지난 계획 요청을 확인하세요.',
     count: store.data.planningRequests.filter(
       (r) =>
         r.dueOn < new Date().toISOString().slice(0, 10) &&
@@ -137,11 +136,8 @@ const stats = computed(() =>
 </script>
 <template>
   <div class="container home-page">
-    <div class="page-heading home-heading">
+    <PageHeading class="page-heading home-heading">
       <div>
-        <span class="eyebrow">{{
-          store.actor.role === 'learner' ? 'MY CERTIFICATION' : 'OPERATIONS WORKSPACE'
-        }}</span>
         <h1>{{ store.actor.name }} 님</h1>
         <p class="muted organization-path">
           {{ store.actor.organizationPath.map((p) => p.name).join(' › ') }}
@@ -155,7 +151,7 @@ const stats = computed(() =>
           weekday: 'long',
         }).format(new Date())
       }}</span>
-    </div>
+    </PageHeading>
     <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
       취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은 별도로
       유지됩니다.
@@ -175,10 +171,24 @@ const stats = computed(() =>
           ><AppIcon :name="stat.icon" />
         </div>
         <div class="stat-bottom">
-          <span class="stat-value">{{ stat.value.toString().padStart(2, '0') }}</span
+          <span class="stat-value">{{ stat.value }}</span
           ><AppIcon name="diagonal" :size="18" /></div
       ></RouterLink>
     </section>
+    <nav class="home-shortcuts" aria-label="업무 바로가기">
+      <RouterLink v-if="store.hasRole('learner')" to="/plans" class="text-link"
+        >내 계획<AppIcon name="chevron" :size="16"
+      /></RouterLink>
+      <RouterLink
+        v-if="store.fullManagement"
+        :to="store.managementLink('/admin/catalog')"
+        class="text-link"
+        >기준 일괄 관리<AppIcon name="chevron" :size="16"
+      /></RouterLink>
+      <RouterLink v-if="store.hasRole('organization_admin')" to="/admin/policies" class="text-link"
+        >조직별 자격 설정<AppIcon name="chevron" :size="16"
+      /></RouterLink>
+    </nav>
     <div class="home-columns">
       <div class="home-primary">
         <RequiredQualifications v-if="store.hasRole('learner')" />
@@ -209,7 +219,13 @@ const stats = computed(() =>
               }}
             </h2>
             <RouterLink
-              :to="store.actor.role === 'learner' ? '/qualifications' : '/admin/qualifications'"
+              :to="
+                store.actor.role === 'learner'
+                  ? '/qualifications'
+                  : store.actor.role === 'system_operator'
+                    ? '/system/overview'
+                    : '/admin/qualifications'
+              "
               class="text-link"
               >전체 보기<AppIcon name="chevron" :size="16"
             /></RouterLink>
@@ -290,50 +306,26 @@ const stats = computed(() =>
               ><span
                 ><strong
                   >{{ item.label }} <span class="home-count">{{ item.count }}</span></strong
-                ><small>{{ item.detail }}</small></span
+                ></span
               ><AppIcon name="chevron" /></RouterLink
           ></template>
         </section>
-        <div class="home-journey" aria-label="자격 인증 절차">
-          <span><b>01</b> 개인 계획</span><i>→</i><span><b>02</b> 학습·평가</span><i>→</i
-          ><span><b>03</b> 수료·인증</span><i>→</i><span><b>04</b> 유효성 확인</span>
-        </div>
       </div>
       <aside class="home-secondary">
-        <section v-if="store.hasRole('organization_admin')" class="home-card text-stack">
-          <h2>내 조직 자격 설정</h2>
-          <p class="muted">{{ store.actor.organizationPath.at(-1)?.name }} · 세부 조직 관리자</p>
-          <p>팀 후보 목록에서 실제 소속 조직의 필수 자격을 설정합니다.</p>
-          <RouterLink to="/admin/policies" class="button secondary">조직별 자격 설정</RouterLink>
-        </section>
-        <section v-if="store.actor.role === 'learner'" class="home-card focus-card">
-          <span class="eyebrow">YOUR NEXT MILESTONE</span>
-          <h2>나의 인증 일정</h2>
-          <template v-if="upcoming.length"
-            ><RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row"
-              ><span
-                ><strong>{{ store.qualification(p.qualificationId).title }}</strong
-                ><small
-                  >목표 인증일 {{ p.targetOn }} ·
-                  {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small
-                ></span
-              ><AppIcon name="chevron" :size="16" /></RouterLink></template
-          ><template v-else
-            ><p>목표를 정하면 다음 단계가 보입니다.</p>
-            <RouterLink to="/plans" class="text-link"
-              >개인 인증 계획 살펴보기 →</RouterLink
-            ></template
-          >
-        </section>
-        <section v-else class="home-card focus-card">
-          <span class="eyebrow">CATALOG WORKSPACE</span>
-          <h2>기준을 한눈에 관리</h2>
-          <p>자격·인증Set·문항을 Excel 또는 웹 표에서 함께 준비하세요.</p>
-          <RouterLink :to="store.managementLink('/admin/catalog')" class="text-link"
-            >기준 일괄 관리 열기 →</RouterLink
-          >
-        </section>
         <HomeNotices />
+        <section v-if="upcoming.length" class="home-card">
+          <h2>나의 인증 일정</h2>
+          <RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row">
+            <span
+              ><strong>{{ store.qualification(p.qualificationId).title }}</strong
+              ><small
+                >목표 인증일 {{ p.targetOn }} ·
+                {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small
+              ></span
+            >
+            <AppIcon name="chevron" :size="16" />
+          </RouterLink>
+        </section>
       </aside>
     </div>
   </div>

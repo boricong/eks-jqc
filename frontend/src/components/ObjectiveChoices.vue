@@ -50,6 +50,7 @@ function update(index: number, value: string) {
           :data-field="index === 0 ? 'correct' : undefined"
           :aria-label="`${index + 1}번 선택지를 정답으로 지정`"
           :aria-invalid="!!errors?.correct"
+          :aria-describedby="errors?.correct ? `${name}-correct-error` : undefined"
           @change="emit('update:correct', index)"
         /><span>{{ index + 1 }}<small v-if="correct === index">정답</small></span></label
       >
@@ -60,9 +61,16 @@ function update(index: number, value: string) {
           :data-field="`choice${index + 1}`"
           rows="2"
           :aria-invalid="!!errors?.[`choice${index + 1}`]"
+          :aria-describedby="
+            errors?.[`choice${index + 1}`] ? `${name}-choice-${index}-error` : undefined
+          "
           @input="update(index, ($event.target as HTMLTextAreaElement).value)"
         />
-        <p v-if="errors?.[`choice${index + 1}`]" class="field-error">
+        <p
+          v-if="errors?.[`choice${index + 1}`]"
+          :id="`${name}-choice-${index}-error`"
+          class="field-error"
+        >
           {{ errors[`choice${index + 1}`] }}
         </p>
       </div>
@@ -76,14 +84,19 @@ function update(index: number, value: string) {
         ×
       </button>
     </div>
-    <p v-if="errors?.correct" class="field-error">{{ errors.correct }}</p>
-    <p v-if="errors?.choices" class="field-error">{{ errors.choices }}</p>
+    <p v-if="errors?.correct" :id="`${name}-correct-error`" class="field-error">
+      {{ errors.correct }}
+    </p>
+    <p v-if="errors?.choices" :id="`${name}-choices-error`" class="field-error">
+      {{ errors.choices }}
+    </p>
     <button
       v-if="!disabled"
       type="button"
       class="text-link"
       :disabled="choices.length >= 50"
       data-field="choices"
+      :aria-describedby="errors?.choices ? `${name}-choices-error` : undefined"
       @click="emit('update:choices', [...choices, ''])"
     >
       선택지 추가

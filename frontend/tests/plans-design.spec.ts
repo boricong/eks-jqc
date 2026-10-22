@@ -18,7 +18,7 @@ async function singleStyle(page: Page) {
   await expect(page.getByLabel('화면 테마')).toHaveCount(0);
   expect(await page.locator('html').evaluate((e) => getComputedStyle(e).colorScheme)).toBe('light');
   expect(await page.locator('body').evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(
-    'rgb(246, 245, 244)',
+    'rgb(255, 255, 255)',
   );
 }
 async function noOverflow(page: Page) {
@@ -101,7 +101,7 @@ test('내 계획 삭제·재작성과 다른 탭의 자동 저장 중단', async
   await expect(
     stale.getByRole('heading', { name: '삭제된 계획입니다', exact: true }),
   ).toBeVisible();
-  await expect(stale.getByRole('button', { name: '저장 다시 시도' })).toHaveCount(0);
+  await expect(stale.getByRole('button', { name: '저장 재시도' })).toHaveCount(0);
   await stale.getByRole('link', { name: '내 계획으로 이동' }).click();
   expect(backend.store.snapshot().plans[0]!.revision).toBe(deletedRevision);
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');

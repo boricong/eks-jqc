@@ -178,7 +178,8 @@ defineExpose({ focusIssue });
             max="100"
             placeholder="미정"
             :aria-invalid="!!typeErrors.passScore"
-          /><span v-if="typeErrors.passScore" class="field-error">{{
+            :aria-describedby="typeErrors.passScore ? uid + '-pass-error' : undefined"
+          /><span v-if="typeErrors.passScore" :id="uid + '-pass-error'" class="field-error">{{
             typeErrors.passScore
           }}</span></label
         >
@@ -198,7 +199,9 @@ defineExpose({ focusIssue });
             min="1"
             max="100"
             placeholder="미정"
-          /><span v-if="typeErrors.passScore" class="field-error">{{
+            :aria-invalid="!!typeErrors.passScore"
+            :aria-describedby="typeErrors.passScore ? uid + '-pass-error' : undefined"
+          /><span v-if="typeErrors.passScore" :id="uid + '-pass-error'" class="field-error">{{
             typeErrors.passScore
           }}</span></label
         >
@@ -268,7 +271,11 @@ defineExpose({ focusIssue });
               data-field="scenario"
               rows="3"
               aria-label="상황 설명"
-            /><span v-if="errors.scenario" class="field-error">{{ errors.scenario }}</span></label
+              :aria-invalid="!!errors.scenario"
+              :aria-describedby="errors.scenario ? uid + '-scenario-error' : undefined"
+            /><span v-if="errors.scenario" :id="uid + '-scenario-error'" class="field-error">{{
+              errors.scenario
+            }}</span></label
           >
           <label v-if="'prompt' in current" class="field"
             ><span>문항</span

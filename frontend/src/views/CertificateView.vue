@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDemo } from '../stores/demo';
@@ -28,10 +29,10 @@ const back = computed(() =>
 <template>
   <div v-if="a" class="container page">
     <RouterLink :to="back" class="back-link"><AppIcon name="back" :size="16" />목록으로</RouterLink>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>자격 인증서 · 검증용</h1>
       <StatusBadge :status="a.excludedReason ? 'excluded' : 'certified'" />
-    </div>
+    </PageHeading>
     <div class="cert-header">
       <span class="result-symbol"><AppIcon name="award" :size="36" /></span>
       <div>

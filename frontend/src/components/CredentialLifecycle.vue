@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PropertyList from './PropertyList.vue';
 import { ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '../api';
@@ -165,7 +166,7 @@ const eventLabels: Record<string, string> = {
           lifecycleLabels[data.effectiveStatus]
         }}</span>
       </div>
-      <dl class="lifecycle-facts">
+      <PropertyList class="lifecycle-facts">
         <div>
           <dt>최초 취득일</dt>
           <dd>{{ dates(certification.date) }}</dd>
@@ -187,7 +188,7 @@ const eventLabels: Record<string, string> = {
           <dt>재인증 사전 알림 · 1회</dt>
           <dd>{{ renewalNoticeOn(data.periods.at(-1)!) }}</dd>
         </div>
-      </dl>
+      </PropertyList>
       <p>
         최초 취득 근거는 보존되며 갱신은 기존 만료일부터 새 기간을 이어 갑니다. Hold 중에도 만료일은
         연장되지 않습니다.
@@ -228,7 +229,7 @@ const eventLabels: Record<string, string> = {
             <strong>{{ eventLabels[e.action] || e.action }}</strong>
             <p>{{ e.reason }}</p>
             <p>변경 전 {{ stateText(e.before) }} → 변경 후 {{ stateText(e.after) }}</p>
-            <dl class="lifecycle-facts">
+            <PropertyList class="lifecycle-facts">
               <div>
                 <dt>효력 발생</dt>
                 <dd>{{ dates(e.effectiveAt) }}</dd>
@@ -243,7 +244,7 @@ const eventLabels: Record<string, string> = {
                   {{ e.actorId === 'system' ? '시스템 자동 처리' : store.username(e.actorId) }}
                 </dd>
               </div>
-            </dl>
+            </PropertyList>
           </li>
         </ol>
       </details>
@@ -285,7 +286,7 @@ const eventLabels: Record<string, string> = {
             data.renewal.appliedQualification?.version
           }}
         </h3>
-        <dl class="lifecycle-facts">
+        <PropertyList class="lifecycle-facts">
           <div>
             <dt>기존 만료일</dt>
             <dd>{{ data.current.expiresOn }}</dd>
@@ -294,7 +295,7 @@ const eventLabels: Record<string, string> = {
             <dt>갱신 후 만료일</dt>
             <dd>{{ data.renewal.nextExpiresOn || '무기한' }}</dd>
           </div>
-        </dl>
+        </PropertyList>
         <p>
           이번 MVP는 종합평가 문항 없이 완료 버튼으로 재인증 절차를 검증합니다. 실제 능력 평가를
           완료했다는 의미가 아니며 처리 방식이 이력에 남습니다.

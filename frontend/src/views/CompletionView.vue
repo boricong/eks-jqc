@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { kindLabels } from '@eks/contracts';
@@ -27,10 +28,10 @@ const back = computed(() =>
 <template>
   <div v-if="a && e && record" class="container page">
     <RouterLink :to="back" class="back-link">목록으로</RouterLink>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>검증용 인증Set 수료증</h1>
       <span>인증Set 수료</span>
-    </div>
+    </PageHeading>
     <section class="panel award-document">
       <p>{{ record.snapshot?.learnerName || store.username(a.learnerId) }}</p>
       <h2>{{ record.snapshot?.title || store.course(record.courseId).title }}</h2>

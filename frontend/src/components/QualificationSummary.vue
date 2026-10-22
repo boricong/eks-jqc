@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PropertyList from './PropertyList.vue';
 import { credentialCurrent } from '@eks/contracts';
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount, useId } from 'vue';
 import { kstDate, type Assignment, type Qualification } from '@eks/contracts';
@@ -92,7 +93,7 @@ watch(
       <h3>취득 조건</h3>
       <p>필수 인증Set 전체 수료 · 각 인증Set에 설정된 평가 유형별 통과</p>
     </div>
-    <dl class="qualification-facts">
+    <PropertyList class="qualification-facts">
       <div>
         <dt>수료 인증Set</dt>
         <dd>{{ completed }} / {{ assignment.enrollments.length }}</dd>
@@ -112,7 +113,7 @@ watch(
         <dt>취득 후 인증기간</dt>
         <dd>{{ validity }}</dd>
       </div>
-    </dl>
+    </PropertyList>
     <div
       class="qualification-progress"
       role="progressbar"

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
+import PropertyList from '../components/PropertyList.vue';
+import ActionBar from '../components/ActionBar.vue';
+import SaveFeedback from '../components/SaveFeedback.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, nextTick, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { planErrors, kstDate, type PersonalPlan } from '@eks/contracts';
@@ -288,14 +293,15 @@ async function saveRevision() {
   }
 }
 async function reload() {
-  if (!window.confirm('현재 입력을 버리고 서버의 계획을 다시 불러올까요?')) return;
+  if (!(await confirmAction('현재 입력을 버리고 서버의 계획을 다시 불러올까요?', '다시 불러오기')))
+    return;
   await store.refresh();
   load();
 }
 async function leave() {
   if (busy.value || initializing.value) return false;
   if (current.value?.status === 'completed' && draft.dirty.value)
-    return window.confirm('저장하지 않은 계획 변경을 버리고 이동할까요?');
+    return await confirmAction('저장하지 않은 계획 변경을 버리고 이동할까요?', '변경 버리고 이동');
   return draft.canLeave();
 }
 onBeforeRouteLeave(leave);
@@ -308,17 +314,13 @@ onBeforeRouteUpdate(leave);
     <div v-if="current && policyErrors.length" class="error-message" role="alert">
       {{ policyErrors.join(' · ') }}<RouterLink to="/plans">내 계획에서 현재 요청 확인</RouterLink>
     </div>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>{{ current ? '개인 인증 계획' : '내 계획' }}</h1>
       <span>{{ store.actor.name }}</span>
-    </div>
-    <p v-if="error || draft.error.value" class="error-message preserve-lines" role="alert">
-      {{ error || draft.error.value }}
+    </PageHeading>
+    <p v-if="error" class="error-message preserve-lines" role="alert">
+      {{ error }}
     </p>
-    <div v-if="!draft.terminal.value && (draft.error.value || (error && form))" class="actions">
-      <button class="button secondary" @click="draft.flush().catch(() => {})">저장 다시 시도</button
-      ><button class="button secondary" @click="reload">다시 불러오기</button>
-    </div>
     <section v-if="draft.terminal.value" class="panel empty-state" role="alert">
       <h2>삭제된 계획입니다</h2>
       <p>{{ draft.terminal.value }}</p>
@@ -337,8 +339,7 @@ onBeforeRouteUpdate(leave);
         <h2>{{ store.qualification(current.qualificationId).title }}</h2>
         <p class="muted">
           v{{ store.qualification(current.qualificationId).version }} · 계획 작성 기한
-          {{ requests.find((r) => r.id === current!.requestId)?.dueOn }} ·
-          {{ current.status === 'completed' ? '계획 완료' : draft.status.value }}
+          {{ requests.find((r) => r.id === current!.requestId)?.dueOn }}
         </p>
         <p>{{ store.qualification(current.qualificationId).description }}</p>
       </div>
@@ -371,10 +372,15 @@ onBeforeRouteUpdate(leave);
             type="date"
             :disabled="busy"
             :aria-invalid="!!fieldErrors.targetOn"
+            :aria-describedby="fieldErrors.targetOn ? 'plan-target-error' : undefined"
             @input="clearField('targetOn')"
-          /><small v-if="fieldErrors.targetOn" class="field-error" role="alert">{{
-            fieldErrors.targetOn
-          }}</small></label
+          /><small
+            v-if="fieldErrors.targetOn"
+            id="plan-target-error"
+            class="field-error"
+            role="alert"
+            >{{ fieldErrors.targetOn }}</small
+          ></label
         >
         <div class="schedule-table">
           <div class="schedule-header" aria-hidden="true">
@@ -394,9 +400,15 @@ onBeforeRouteUpdate(leave);
                 type="date"
                 :disabled="busy"
                 :aria-invalid="!!fieldErrors[`${s.courseId}.learningStart`]"
+                :aria-describedby="
+                  fieldErrors[`${s.courseId}.learningStart`]
+                    ? `plan-${s.courseId}-learningStart-error`
+                    : undefined
+                "
                 @input="clearField(`${s.courseId}.learningStart`)"
               /><small
                 v-if="fieldErrors[`${s.courseId}.learningStart`]"
+                :id="`plan-${s.courseId}-learningStart-error`"
                 class="field-error"
                 role="alert"
                 >{{ fieldErrors[`${s.courseId}.learningStart`] }}</small
@@ -409,9 +421,15 @@ onBeforeRouteUpdate(leave);
                 type="date"
                 :disabled="busy"
                 :aria-invalid="!!fieldErrors[`${s.courseId}.learningEnd`]"
+                :aria-describedby="
+                  fieldErrors[`${s.courseId}.learningEnd`]
+                    ? `plan-${s.courseId}-learningEnd-error`
+                    : undefined
+                "
                 @input="clearField(`${s.courseId}.learningEnd`)"
               /><small
                 v-if="fieldErrors[`${s.courseId}.learningEnd`]"
+                :id="`plan-${s.courseId}-learningEnd-error`"
                 class="field-error"
                 role="alert"
                 >{{ fieldErrors[`${s.courseId}.learningEnd`] }}</small
@@ -424,9 +442,15 @@ onBeforeRouteUpdate(leave);
                 type="date"
                 :disabled="busy"
                 :aria-invalid="!!fieldErrors[`${s.courseId}.assessmentOn`]"
+                :aria-describedby="
+                  fieldErrors[`${s.courseId}.assessmentOn`]
+                    ? `plan-${s.courseId}-assessmentOn-error`
+                    : undefined
+                "
                 @input="clearField(`${s.courseId}.assessmentOn`)"
               /><small
                 v-if="fieldErrors[`${s.courseId}.assessmentOn`]"
+                :id="`plan-${s.courseId}-assessmentOn-error`"
                 class="field-error"
                 role="alert"
                 >{{ fieldErrors[`${s.courseId}.assessmentOn`] }}</small
@@ -452,10 +476,17 @@ onBeforeRouteUpdate(leave);
             :disabled="busy"
             placeholder="교육을 통해 혼자 수행할 수 있어야 하는 내용을 작성해 주세요."
             :aria-invalid="!!fieldErrors[`${s.courseId}.goal`]"
+            :aria-describedby="
+              fieldErrors[`${s.courseId}.goal`] ? `plan-${s.courseId}-goal-error` : undefined
+            "
             @input="clearField(`${s.courseId}.goal`)"
-          /><small v-if="fieldErrors[`${s.courseId}.goal`]" class="field-error" role="alert">{{
-            fieldErrors[`${s.courseId}.goal`]
-          }}</small></label
+          /><small
+            v-if="fieldErrors[`${s.courseId}.goal`]"
+            :id="`plan-${s.courseId}-goal-error`"
+            class="field-error"
+            role="alert"
+            >{{ fieldErrors[`${s.courseId}.goal`] }}</small
+          ></label
         ><button class="button primary" @click="moveTo(4)">최종 확인</button>
       </section>
       <section v-else class="panel editor-panel">
@@ -491,13 +522,28 @@ onBeforeRouteUpdate(leave);
             }}
           </p>
         </div>
-        <p>목표 인증일 {{ form.targetOn || '미정' }}</p>
+        <PropertyList class="plan-review-dates">
+          <div>
+            <dt>목표 인증일</dt>
+            <dd>{{ form.targetOn || '미정' }}</dd>
+          </div>
+        </PropertyList>
         <div v-for="s in form.schedules" :key="s.courseId" class="plan-course">
           <h3>{{ store.course(s.courseId).title }}</h3>
-          <p>
-            학습 {{ s.learningStart || '미정' }} ~ {{ s.learningEnd || '미정' }} · 평가
-            {{ s.assessmentOn || '미정' }}
-          </p>
+          <PropertyList class="plan-review-dates">
+            <div>
+              <dt>학습 시작 예정일</dt>
+              <dd>{{ s.learningStart || '미정' }}</dd>
+            </div>
+            <div>
+              <dt>학습 완료 예정일</dt>
+              <dd>{{ s.learningEnd || '미정' }}</dd>
+            </div>
+            <div>
+              <dt>평가 예정일</dt>
+              <dd>{{ s.assessmentOn || '미정' }}</dd>
+            </div>
+          </PropertyList>
           <p class="preserve-lines">{{ s.goal || '학습 목표를 입력해 주세요.' }}</p>
         </div>
         <p class="muted">현재 운영정책에 따라 결재를 생략하고 계획을 완료합니다.</p>
@@ -529,6 +575,22 @@ onBeforeRouteUpdate(leave);
           일정·목표 변경 저장
         </button>
       </section>
+      <ActionBar class="actionbar">
+        <SaveFeedback
+          :status="
+            busy
+              ? '저장 중'
+              : current.status === 'completed' && !draft.dirty.value
+                ? '계획 완료'
+                : draft.status.value
+          "
+          :error="draft.error.value"
+          :conflict="draft.conflict.value"
+          :busy="busy"
+          @retry="draft.flush().catch(() => {})"
+          @reload="reload"
+        />
+      </ActionBar>
     </template>
     <p v-else-if="route.params.id" class="panel empty-state">계획을 찾을 수 없습니다.</p>
     <template v-else>

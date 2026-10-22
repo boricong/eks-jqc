@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import { exportCatalog } from '../../server/src/catalog';
 import { writeCatalogWorkbook, readCatalogWorkbook } from '../../server/src/catalog-workbook';
@@ -31,7 +32,7 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
   await actor(page, 'learner-1');
   await expect(page.locator('.home-columns')).toBeVisible();
   expect(await page.locator('body').evaluate((e) => getComputedStyle(e).backgroundColor)).toBe(
-    'rgb(246, 245, 244)',
+    'rgb(255, 255, 255)',
   );
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -184,7 +185,7 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await cell.click();
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.evaluate(() => navigator.clipboard.writeText('붙여넣은 인증Set명'));
-  await page.keyboard.press('Control+V');
+  await page.keyboard.press('ControlOrMeta+V');
   await expect(cell).toContainText('붙여넣은 인증Set명');
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
   await expect(cell).toContainText('자료 확인');
@@ -196,8 +197,8 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await expect(page.getByRole('tab', { name: '지식 평가 2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
   await expect(page.getByRole('tab', { name: '지식 평가 4', exact: true })).toBeVisible();
-  page.once('dialog', (d) => d.dismiss());
   await page.getByRole('link', { name: '개별 기준 관리', exact: true }).click();
+  await answerConfirmation(page, false);
   await expect(page).toHaveURL(/admin\/catalog/);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });

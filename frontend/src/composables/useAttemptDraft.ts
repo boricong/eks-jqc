@@ -1,3 +1,4 @@
+import { confirmAction } from './useConfirmation';
 import { computed, ref, onBeforeUnmount } from 'vue';
 import type { AssessmentAttempt, Draft } from '@eks/contracts';
 import { mutate, ApiError } from '../api';
@@ -86,7 +87,7 @@ export function useAttemptDraft(actorId: () => string) {
       await flush();
       return true;
     } catch {
-      return window.confirm('저장하지 못한 입력이 있습니다. 나갈까요?');
+      return await confirmAction('저장하지 못한 입력이 있습니다. 나갈까요?', '변경 버리고 이동');
     }
   }
   function beforeUnload(event: BeforeUnloadEvent) {

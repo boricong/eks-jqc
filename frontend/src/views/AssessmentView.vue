@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
+import PropertyList from '../components/PropertyList.vue';
+import ActionBar from '../components/ActionBar.vue';
+import SaveFeedback from '../components/SaveFeedback.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, ref, watch, nextTick, useId } from 'vue';
 import { useRoute, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -201,7 +206,8 @@ async function retrySave() {
   } catch {}
 }
 async function reload() {
-  if (!window.confirm('현재 입력을 서버에 저장된 답안으로 바꿀까요?')) return;
+  if (!(await confirmAction('현재 입력을 서버에 저장된 답안으로 바꿀까요?', '답안 다시 불러오기')))
+    return;
   await store.refresh();
   await prepare();
 }
@@ -240,7 +246,7 @@ onBeforeRouteUpdate(canLeave);
     :class="{ 'is-assessment-result': isResult }"
   >
     <RouterLink :to="returnPath" class="back-link">← 자격 상세 · {{ c.title }}</RouterLink>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <div>
         <h1>{{ isResult ? '평가 결과' : kindLabels[kind] }}</h1>
         <p>
@@ -255,7 +261,7 @@ onBeforeRouteUpdate(canLeave);
       <button v-if="c.materials.length" class="button secondary" @click="materialOpen = true">
         학습자료
       </button>
-    </div>
+    </PageHeading>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <section
       v-if="isResult"
@@ -280,7 +286,7 @@ onBeforeRouteUpdate(canLeave);
               : '합격 기준에 도달하지 못했습니다. 학습자료를 확인한 뒤 다시 응시할 수 있습니다.'
           }}
         </p>
-        <dl class="outcome-facts">
+        <PropertyList class="outcome-facts">
           <div>
             <dt>평가 점수</dt>
             <dd>
@@ -295,7 +301,7 @@ onBeforeRouteUpdate(canLeave);
             <dt>확정 일시 · KST</dt>
             <dd>{{ new Date(last.date).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }}</dd>
           </div>
-        </dl>
+        </PropertyList>
         <div class="result-assessments">
           <span v-for="k in c.assessmentKinds" :key="k"
             >{{ kindLabels[k] }} <StatusBadge :status="e[k]"
@@ -359,11 +365,6 @@ onBeforeRouteUpdate(canLeave);
           <RouterLink :to="knowledgePath" class="button primary">지식 평가로 이동</RouterLink>
         </div>
       </section>
-      <div v-if="saveError" class="error-message save-error" role="alert">
-        <span>{{ saveError }}</span
-        ><button v-if="!conflict" class="button secondary" @click="retrySave">저장 재시도</button
-        ><button class="button secondary" @click="reload">다시 불러오기</button>
-      </div>
       <p class="assessment-progress">
         {{ answered }} / {{ questions.length }} 응답 · 합격 기준
         {{ kind === 'objective' ? c.passScore : c.practicalPassScore }}%
@@ -471,10 +472,19 @@ onBeforeRouteUpdate(canLeave);
           </button>
         </nav>
       </section>
-      <div class="actionbar assessment-submitbar">
-        <span class="save-status" role="status">{{
-          { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[saveStatus]
-        }}</span>
+      <ActionBar class="actionbar assessment-submitbar">
+        <SaveFeedback
+          :status="
+            { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[
+              saveStatus
+            ]
+          "
+          :error="saveError"
+          :conflict="conflict"
+          :busy="busy"
+          @retry="retrySave"
+          @reload="reload"
+        />
         <div class="assessment-submit-actions">
           <p v-if="stage === 'review'" class="submission-warning">
             <AppIcon name="lock" :size="16" />최종 제출 후에는 답안을 수정할 수 없습니다.
@@ -497,7 +507,7 @@ onBeforeRouteUpdate(canLeave);
             </button>
           </div>
         </div>
-      </div>
+      </ActionBar>
     </template>
     <AppDialog v-model:open="materialOpen" :title="`${c.title} · 학습자료`"
       ><CourseMaterials :materials="c.materials" :context-key="`${store.actorId}:${a.id}:${c.id}`"

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PageHeading from './PageHeading.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
@@ -42,14 +44,23 @@ function edit(n?: Notice) {
   baseline.value = JSON.stringify(draft.value);
   error.value = '';
 }
-function close() {
-  if (busy.value || (dirty.value && !confirm('저장하지 않은 공지 내용을 취소할까요?'))) return;
+async function close() {
+  if (
+    busy.value ||
+    (dirty.value &&
+      !(await confirmAction('저장하지 않은 공지 내용을 취소할까요?', '공지 편집 취소')))
+  )
+    return;
   draft.value = undefined;
 }
-function leave() {
+async function leave() {
   return (
     !busy.value &&
-    (!dirty.value || confirm('공지를 저장하지 않았습니다. 변경을 취소하고 이동할까요?'))
+    (!dirty.value ||
+      (await confirmAction(
+        '공지를 저장하지 않았습니다. 변경을 취소하고 이동할까요?',
+        '변경 버리고 이동',
+      )))
   );
 }
 onBeforeRouteLeave(leave);
@@ -83,13 +94,13 @@ watch(
 </script>
 <template>
   <div class="text-stack">
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <div>
         <h1>시스템 공지 관리</h1>
         <p class="muted">게시 대상: 전 조직의 모든 사용자</p>
       </div>
       <button class="button primary" @click="edit()">시스템 공지 작성</button>
-    </div>
+    </PageHeading>
     <label class="field">공지 검색<input v-model="query" /></label>
     <p v-if="error && !draft" class="error-message" role="alert">{{ error }}</p>
     <div class="table-panel">

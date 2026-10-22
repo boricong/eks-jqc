@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { confirmAction } from '../composables/useConfirmation';
+import { ref, watch, nextTick } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import type { Qualification } from '@eks/contracts';
 import AppDialog from './AppDialog.vue';
-const props = defineProps<{ qualification: Qualification; disabled?: boolean }>();
+import RowActions from './RowActions.vue';
+const props = defineProps<{
+  qualification: Qualification;
+  disabled?: boolean;
+  compact?: boolean;
+}>();
 const emit = defineEmits<{ deleted: [] }>();
+const rowActions = ref<InstanceType<typeof RowActions>>();
+async function restoreFocus() {
+  await nextTick();
+  rowActions.value?.focus();
+}
 const store = useDemo(),
   open = ref(false),
   busy = ref(false),
@@ -31,10 +42,12 @@ watch(
     error.value = '';
   },
 );
-const canLeave = () =>
+const canLeave = async () =>
   !store.managementAccess ||
   (!busy.value &&
-    (!open.value || !reason.value || window.confirm('작성 중인 삭제 사유를 취소하고 이동할까요?')));
+    (!open.value ||
+      !reason.value ||
+      (await confirmAction('작성 중인 삭제 사유를 취소하고 이동할까요?', '변경 버리고 이동'))));
 onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 const labels: Record<string, string> = {
@@ -86,8 +99,16 @@ async function remove() {
 }
 </script>
 <template>
+  <RowActions
+    v-if="compact && !qualification.deletedAt"
+    ref="rowActions"
+    :label="`${qualification.title} 더보기`"
+    :disabled="disabled || busy"
+    :actions="[{ id: 'delete', label: '자격 삭제' }]"
+    @action="review"
+  />
   <button
-    v-if="!qualification.deletedAt"
+    v-else-if="!qualification.deletedAt"
     class="button secondary"
     :disabled="disabled || busy"
     @click="review"
@@ -97,6 +118,7 @@ async function remove() {
   <AppDialog
     :open="open"
     title="자격 삭제 확인"
+    @closed="restoreFocus"
     @update:open="
       (v) => {
         if (!busy) open = v;

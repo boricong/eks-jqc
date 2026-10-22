@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import { exportCatalog } from '../../server/src/catalog';
 import { writeCatalogWorkbook } from '../../server/src/catalog-workbook';
@@ -67,8 +68,8 @@ test('여러 탭의 자동 보관은 별개이며 다른 계정에 노출되지 
     '두 번째 탭 수정',
     '첫 탭 수정',
   ]);
-  second.once('dialog', (d) => d.accept());
   await second.getByLabel('접속 계정').selectOption('learner-1');
+  await answerConfirmation(second, true);
   await expect(second.getByRole('heading', { name: '김민서 님', exact: true })).toBeVisible();
   await expect(second.getByText('두 번째 탭 수정', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('첫 탭 수정');

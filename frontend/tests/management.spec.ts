@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { courseSection, saveCriterion } from './catalog-helpers';
 import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
@@ -74,8 +75,8 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
   await page.getByLabel('인증Set명', { exact: true }).fill('Etch 탭 초안');
-  page.once('dialog', (d) => d.dismiss());
   await page.getByLabel('관리할 Lv1 조직').selectOption('org-photo');
+  await answerConfirmation(page, false);
   await expect(page.getByLabel('관리할 Lv1 조직')).toHaveValue('org-etch');
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('Etch 탭 초안');
   let release!: () => void;

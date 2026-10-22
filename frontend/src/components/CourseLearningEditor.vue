@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { CourseIssue } from '../course-editor';
 import { learningTypeLabels, type Course } from '@eks/contracts';
@@ -39,9 +40,13 @@ function add() {
   activeId.value = id;
   nextTick(() => document.getElementById(`learning-title-${id}`)?.focus());
 }
-function remove() {
+async function remove() {
   if (props.disabled || index.value < 0) return;
-  if (item.value?.title.trim() && !window.confirm('이 학습 항목을 삭제할까요?')) return;
+  if (
+    item.value?.title.trim() &&
+    !(await confirmAction('이 학습 항목을 삭제할까요?', '학습 항목 삭제'))
+  )
+    return;
   const next =
     props.course.learningItems[index.value + 1] || props.course.learningItems[index.value - 1];
   props.course.learningItems.splice(index.value, 1);

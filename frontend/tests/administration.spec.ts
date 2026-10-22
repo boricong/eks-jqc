@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import { requestPlan, completePlan } from './workflow-helpers';
 import { nodeFor } from '../../server/src/organizations';
@@ -25,13 +26,13 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   const admins = page.getByRole('region', { name: '세부 조직 관리자 지정' });
   await admins.getByRole('checkbox', { name: '정하린', exact: true }).check();
   await admins.getByRole('checkbox', { name: '박준호', exact: true }).check();
-  page.on('dialog', (dialog) => dialog.accept());
   await admins.getByRole('button', { name: '관리자 지정 저장', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect
     .poll(() => backend.store.snapshot().users.filter((u) => u.organizationAdministration).length)
     .toBe(2);
   await actor(page, 'learner-2');
-  await expect(page.getByRole('heading', { name: '내 조직 자격 설정', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '조직별 자격 설정', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/policies/);
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
@@ -167,8 +168,8 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
   await page.getByLabel('자격명', { exact: true }).fill('보존할 기준 입력');
-  page.once('dialog', (d) => d.dismiss());
   await sidebar.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await answerConfirmation(page, false);
   await expect(page).toHaveURL(/\/admin\/catalog/);
   await expect(page.getByLabel('자격명', { exact: true })).toHaveValue('보존할 기준 입력');
 });
@@ -191,7 +192,7 @@ test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', a
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
-    await expect(overview).toHaveCSS('row-gap', '20px');
+    await expect(overview).toHaveCSS('row-gap', '16px');
     await page.screenshot({
       path: test.info().outputPath(`learning-overview-${width}.png`),
       fullPage: true,

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
+import PropertyList from '../components/PropertyList.vue';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
@@ -118,12 +120,12 @@ function chooseCourse(id: string) {
       ><RouterLink to="/qualifications">자격 취득</RouterLink><span aria-hidden="true">›</span
       ><span aria-current="page">자격 상세</span>
     </nav>
-    <div class="page-heading">
+    <PageHeading class="page-heading">
       <h1>자격 상세</h1>
       <RouterLink v-if="assignment.planId" :to="`/plans/${assignment.planId}`" class="text-link"
         >인증 계획 · 일정·목표 확인<AppIcon name="chevron" :size="16"
       /></RouterLink>
-    </div>
+    </PageHeading>
     <QualificationSummary
       :key="assignment.id"
       :qualification="qualification"
@@ -170,7 +172,7 @@ function chooseCourse(id: string) {
               <h3>내 학습 목표</h3>
               <p class="prose-text">{{ schedule?.goal || '작성된 학습 목표가 없습니다.' }}</p>
             </div>
-            <dl class="information-grid">
+            <PropertyList class="information-grid">
               <div>
                 <dt>학습 시작 예정일</dt>
                 <dd>{{ schedule?.learningStart || '미설정' }}</dd>
@@ -183,7 +185,7 @@ function chooseCourse(id: string) {
                 <dt>평가 예정일</dt>
                 <dd>{{ schedule?.assessmentOn || '미설정' }}</dd>
               </div>
-            </dl>
+            </PropertyList>
           </section>
           <section
             class="qualification-learning-scope text-stack"

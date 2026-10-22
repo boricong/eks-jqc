@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import { completePlan, requestPlan } from './workflow-helpers';
 import type { Page } from '@playwright/test';
@@ -49,7 +50,7 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   });
   await page.getByLabel('목표 인증일').fill('2027-01-31');
   await expect(page.getByRole('alert')).toContainText('다시 시도');
-  await page.getByRole('button', { name: '저장 다시 시도', exact: true }).click();
+  await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.reload();
   await expect(page.getByLabel('목표 인증일')).toHaveValue('2027-01-31');
@@ -66,8 +67,8 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   );
   await page.getByLabel('목표 인증일').fill('2027-03-31');
   await expect(page.getByRole('alert')).toContainText('다른 창');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByLabel('목표 인증일')).toHaveValue('2027-02-28');
   await page.setViewportSize({ width: 390, height: 900 });
   await noOverflow(page);

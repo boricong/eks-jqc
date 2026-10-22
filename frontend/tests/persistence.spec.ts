@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 
 for (const failure of ['response', 'refresh'] as const) {
@@ -118,8 +119,8 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
   await expect(page.locator('.save-error')).toContainText('다른 창에서 변경');
   await expect(page.getByRole('button', { name: '제출', exact: true })).toBeDisabled();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: '다시 불러오기' }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByLabel('파일 색상', { exact: true })).toBeChecked();
 });
 

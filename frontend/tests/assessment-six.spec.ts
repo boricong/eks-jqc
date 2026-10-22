@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { courseSection, saveCriterion } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 
@@ -243,12 +244,12 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     'url',
     'confluence',
   ]);
-  page.once('dialog', (d) => d.accept());
   await material
     .locator('li')
     .filter({ hasText: '일반 링크' })
     .getByRole('button', { name: '삭제', exact: true })
     .click();
+  await answerConfirmation(page, true);
   await saveCriterion(page);
   await expect
     .poll(() =>

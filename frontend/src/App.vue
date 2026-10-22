@@ -5,12 +5,16 @@ import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
 import MaintenanceResult from './components/MaintenanceResult.vue';
 import ProcessGuide from './components/ProcessGuide.vue';
+import ConfirmationHost from './components/ConfirmationHost.vue';
 import { roleLabels, type Role } from '@eks/contracts';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
 const menuOpen = ref(false);
 const isHome = computed(() => route.name === 'home');
+const isWide = computed(
+  () => route.path.startsWith('/system') || (route.path.startsWith('/admin') && !route.params.id),
+);
 const roles = roleLabels;
 
 watch(
@@ -88,7 +92,7 @@ onMounted(() => {
 onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
 </script>
 <template>
-  <div class="app" :class="{ 'home-page-shell': isHome }">
+  <div class="app" :class="{ 'home-page-shell': isHome, 'app-wide': isWide }">
     <a class="skip-link" href="#main">본문으로 이동</a>
     <header class="topbar">
       <div class="topbar-inner">
@@ -198,6 +202,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
     <footer class="site-footer">
       <div class="footer-inner"><span>EKS · 직무자격인증</span><span>검증용</span></div>
     </footer>
+    <ConfirmationHost />
     <div v-if="store.toast" class="toast" role="status">
       <AppIcon name="check" :size="18" />{{ store.toast }}
     </div>

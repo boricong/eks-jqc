@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
@@ -55,10 +56,11 @@ watch(
   { immediate: true },
 );
 onBeforeUnmount(() => generation++);
-function guard() {
+async function guard() {
   return (
     !busy.value &&
-    (!selected.value.length || window.confirm('저장하지 않은 대상자 선택을 취소하고 이동할까요?'))
+    (!selected.value.length ||
+      (await confirmAction('저장하지 않은 대상자 선택을 취소하고 이동할까요?', '변경 버리고 이동')))
   );
 }
 onBeforeRouteLeave(guard);

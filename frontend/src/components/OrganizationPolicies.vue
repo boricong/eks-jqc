@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
@@ -15,7 +16,6 @@ const store = useDemo(),
   search = ref('');
 const administratorsDirty = ref(false),
   administratorsBusy = ref(false);
-const confirm = (message: string) => window.confirm(message);
 const selectedVersions = ref<Record<string, string>>({}),
   chosen = ref<string[]>([]),
   baselinePool = ref(''),
@@ -82,15 +82,25 @@ function readPool() {
   );
   baselinePool.value = poolValue();
 }
-function select(id: string) {
+async function select(id: string) {
   if (id === orgId.value || busy.value || administratorsBusy.value) return;
   if (
     (metaDirty.value || administratorsDirty.value) &&
-    !confirm('조직 입력을 저장하지 않았습니다. 변경을 취소하고 이동할까요?')
+    !(await confirmAction(
+      '조직 입력을 저장하지 않았습니다. 변경을 취소하고 이동할까요?',
+      '변경 버리고 이동',
+    ))
   )
     return;
   orgId.value = id;
   readMeta();
+}
+async function reload() {
+  if (
+    !(poolDirty.value || metaDirty.value || administratorsDirty.value) ||
+    (await confirmAction('입력을 버리고 다시 불러올까요?', '다시 불러오기'))
+  )
+    await load();
 }
 async function load() {
   const seq = ++generation,
@@ -156,12 +166,15 @@ async function save() {
     busy.value = false;
   }
 }
-function leave() {
+async function leave() {
   return (
     !busy.value &&
     !administratorsBusy.value &&
     (!(poolDirty.value || metaDirty.value || administratorsDirty.value) ||
-      confirm('저장하지 않은 조직 설정이 있습니다. 변경을 취소하고 이동할까요?'))
+      (await confirmAction(
+        '저장하지 않은 조직 설정이 있습니다. 변경을 취소하고 이동할까요?',
+        '변경 버리고 이동',
+      )))
   );
 }
 onBeforeRouteLeave(leave);
@@ -187,11 +200,7 @@ watch(
     <button
       class="button secondary small policy-reload"
       :disabled="busy || administratorsBusy"
-      @click="
-        (!(poolDirty || metaDirty || administratorsDirty) ||
-          confirm('입력을 버리고 다시 불러올까요?')) &&
-        load()
-      "
+      @click="reload"
     >
       다시 불러오기
     </button>
@@ -207,7 +216,9 @@ watch(
       <div class="policy-detail-stack">
         <section v-if="selected" class="panel editor-panel">
           <h2>{{ selected.name }}</h2>
-          <p class="organization-path">{{ selected.path.map((p) => p.name).join(' › ') }}</p>
+          <p v-if="selected.path.length > 1" class="organization-path">
+            {{ selected.path.map((p) => p.name).join(' › ') }}
+          </p>
           <p>
             {{ selected.userCount }}명 직속 ·
             {{ selected.effectiveActive ? '사용 중' : '사용 중지' }} ·

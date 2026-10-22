@@ -1,3 +1,4 @@
+import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import type { JsonStore } from '../../server/src/storage';
 import { nodeFor } from '../../server/src/organizations';
@@ -85,6 +86,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
     } else {
       const toggle = panel.getByRole('button', { name: /조직 선택 열기/ });
       await expect(toggle).toContainText(longName);
+      await expect(toggle).toHaveCSS('border-radius', '0px');
       await expect(tree).toBeHidden();
       await toggle.focus();
       await page.keyboard.press('Enter');
@@ -97,7 +99,9 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       await panel.getByRole('button', { name: /조직 선택 접기/ }).click();
       await expect(tree).toBeHidden();
     }
-    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('font-size', '15px');
+    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('font-size', '14px');
+    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-radius', '0px');
+    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-left-color', 'rgb(83, 58, 253)');
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
@@ -176,21 +180,21 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
       await route.fulfill({ status: 503, json: { message: '시험 저장 실패' } });
     else await route.continue();
   });
-  page.once('dialog', (d) => d.accept());
   await save.click();
+  await answerConfirmation(page, true);
   await expect(admins.getByRole('alert')).toContainText('시험 저장 실패');
   await expect(selected).toContainText('선택한 관리자 2명');
   await page.unroute(url);
-  page.once('dialog', (d) => d.accept());
   await save.click();
+  await answerConfirmation(page, true);
   await expect(selected).toContainText('저장된 지정');
   await page.reload();
   await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
   await expect(selected).toContainText('선택한 관리자 2명');
   await expect(admins.getByRole('checkbox', { name: '정하린', exact: true })).toBeChecked();
   await admins.getByRole('checkbox', { name: '박준호', exact: true }).uncheck();
-  page.once('dialog', (d) => d.dismiss());
   await tree.locator('[data-id="org-photo-pyeongtaek-2"]').click();
+  await answerConfirmation(page, false);
   await expect(tree.locator(`[data-id="${own}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(selected).toContainText('선택한 관리자 1명');
   let release!: () => void, started!: () => void;
@@ -207,8 +211,8 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
     }
     await route.continue();
   });
-  page.once('dialog', (d) => d.accept());
   await save.click();
+  await answerConfirmation(page, true);
   await saving;
   await expect(tree.locator('[data-id="org-photo-pyeongtaek-2"]')).toBeDisabled();
   await expect(page.getByRole('button', { name: '다시 불러오기', exact: true })).toBeDisabled();
@@ -227,13 +231,13 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
       return {};
     },
   );
-  page.once('dialog', (d) => d.accept());
   await save.click();
+  await answerConfirmation(page, true);
   await expect(admins.getByRole('alert')).toContainText('다시 불러온 뒤');
   await expect(selected).toContainText('박준호');
   await expect(selected).toContainText('선택한 관리자 2명');
-  page.once('dialog', (d) => d.accept());
   await admins.getByRole('button', { name: '지정 현황 새로고침' }).click();
+  await answerConfirmation(page, true);
   await expect(admins.getByRole('checkbox', { name: '박준호', exact: true })).toHaveCount(0);
   await expect(selected).toContainText('선택한 관리자 1명');
 });

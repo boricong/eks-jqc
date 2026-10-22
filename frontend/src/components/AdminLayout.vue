@@ -39,10 +39,9 @@ watch(
   >
     <ManagementContext />
     <aside class="admin-sidebar" aria-label="인증 업무 관리 탐색">
-      <p class="organization-context">{{ store.managementOrganization?.name }}</p>
       <h2 class="small-heading">인증 업무 관리</h2>
       <button
-        class="button secondary management-menu-toggle"
+        class="button ghost management-menu-toggle"
         :aria-expanded="menuOpen"
         aria-controls="management-navigation"
         @click="menuOpen = !menuOpen"

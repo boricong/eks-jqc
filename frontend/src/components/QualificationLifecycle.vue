@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PropertyList from './PropertyList.vue';
 import { ref, watch } from 'vue';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
@@ -103,7 +104,7 @@ async function createVersion() {
   <section class="panel editor-panel lifecycle-panel">
     <div class="section-heading">
       <h2>자격 기준 운영 상태</h2>
-      <span class="lifecycle-badge">{{
+      <span class="lifecycle-badge" :data-status="qualification.lifecycleStatus || 'Active'">{{
         criterionLifecycleLabels[qualification.lifecycleStatus || 'Active']
       }}</span>
     </div>
@@ -150,12 +151,12 @@ async function createVersion() {
   <AppDialog v-model:open="open" title="자격 기준 상태 변경">
     <template v-if="impact">
       <h3>{{ qualification.title }} · v{{ qualification.version }}</h3>
-      <dl class="lifecycle-facts">
+      <PropertyList class="lifecycle-facts">
         <div v-for="(count, key) in impact.counts" :key="key">
           <dt>{{ countLabels[key] }}</dt>
           <dd>{{ count }}건</dd>
         </div>
-      </dl>
+      </PropertyList>
       <label v-if="qualification.lifecycleStatus !== 'Revoke'" class="field"
         >변경할 운영 상태<select v-model="status" :disabled="busy">
           <option

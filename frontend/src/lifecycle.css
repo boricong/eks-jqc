@@ -19,13 +19,13 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  padding: 4px 8px;
-  border: 1px solid var(--control-border);
-  border-radius: 4px;
   color: var(--ink);
   background: var(--surface-tint);
-  font-size: 14px;
   line-height: 1.5;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: var(--text-badge);
 }
 .lifecycle-facts {
   display: grid;
@@ -39,7 +39,7 @@
 }
 .lifecycle-facts dt {
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
   margin-bottom: 8px;
 }
 .lifecycle-facts dd {
@@ -76,16 +76,17 @@
 .lifecycle-history summary {
   cursor: pointer;
   padding: 8px 0;
-  font-weight: 500;
+  font-weight: var(--weight-control);
 }
 .lifecycle-history ol {
   padding: 0 0 0 24px;
 }
 .lifecycle-history li {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--surface-tint);
-  border-radius: 8px;
+  border-radius: 0;
+  background: transparent;
+  border-left: 2px solid var(--line);
+  padding: 4px 16px;
+  margin-top: 12px;
 }
 .lifecycle-renewal-link {
   display: flex;
@@ -96,7 +97,7 @@
   color: var(--ink);
 }
 .lifecycle-renewal-link > span {
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 @media (max-width: 767px) {
   .lifecycle-target-table table {
@@ -109,4 +110,16 @@
   .lifecycle-facts {
     grid-template-columns: 1fr;
   }
+}
+.lifecycle-badge[data-status='Active'] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.lifecycle-badge[data-status='Hold'] {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.lifecycle-badge[data-status='Revoke'] {
+  background: var(--danger-bg);
+  color: var(--danger);
 }

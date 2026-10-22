@@ -2,13 +2,13 @@
 .assessment-page .assessment-progress {
   margin: 0 0 16px;
   color: var(--ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-caption);
   line-height: 1.6;
 }
 .assessment-page .assessment-review {
-  padding: 24px;
   display: grid;
   gap: 24px;
+  padding: 0;
 }
 .review-heading {
   display: flex;
@@ -19,7 +19,7 @@
   padding-bottom: 24px;
 }
 .review-heading h2 {
-  font-size: 22px;
+  font-size: var(--text-section);
   line-height: 1.4;
   margin: 8px 0;
 }
@@ -30,12 +30,12 @@
 }
 .review-eyebrow,
 .review-count {
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .review-count {
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   white-space: nowrap;
 }
 .review-list {
@@ -47,20 +47,21 @@
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   background: var(--surface);
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
 }
 .review-number {
   display: grid;
   place-items: center;
   width: 36px;
   height: 36px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-control);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface-tint);
 }
 .review-question-body {
@@ -69,34 +70,34 @@
   min-width: 0;
 }
 .assessment-page .review-question h3 {
-  font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--weight-control);
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0;
+  font-size: var(--text-title);
 }
 .assessment-page .review-question p {
-  font-size: 16px;
-  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0;
   color: var(--ink);
+  font-size: var(--text-reading);
+  line-height: var(--leading-reading);
 }
 .review-selected {
   padding: 16px;
   background: var(--surface-tint);
   border-left: 3px solid var(--primary);
-  border-radius: 4px;
+  border-radius: var(--radius-input);
   display: grid;
   gap: 8px;
 }
 .review-selected > span,
 .review-scenario h4 {
-  font-size: 14px;
+  font-size: var(--text-caption);
   color: var(--ink-secondary);
-  font-weight: 500;
+  font-weight: var(--weight-control);
   margin: 0;
 }
 .review-scenario {
@@ -104,7 +105,7 @@
   gap: 8px;
 }
 .assessment-page .review-scenario p {
-  font-size: 15px;
+  font-size: var(--text-table);
   color: var(--ink-secondary);
 }
 .review-edit {
@@ -118,14 +119,14 @@
   gap: 16px;
   border-top: 1px solid var(--line);
   padding-top: 24px;
-  font-size: 14px;
+  font-size: var(--text-caption);
 }
 .assessment-page .assessment-submitbar {
   align-items: center;
   gap: 16px;
-  padding: 16px 24px;
   background: var(--surface);
-  box-shadow: 0 2px 10px #00000008;
+  padding: 12px 0;
+  box-shadow: none;
 }
 .assessment-submit-actions {
   display: grid;
@@ -136,7 +137,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--text-caption);
   line-height: 1.6;
   color: var(--ink-secondary);
   margin: 0;
@@ -147,7 +148,7 @@
 .assessment-locked {
   display: grid;
   gap: 12px;
-  font-size: 14px;
+  font-size: var(--text-caption);
   line-height: 1.6;
 }
 .assessment-locked p {
@@ -161,7 +162,7 @@
   margin-bottom: 24px;
 }
 .assessment-prerequisite h2 {
-  font-size: 22px;
+  font-size: var(--text-section);
   margin-bottom: 12px;
 }
 .assessment-prerequisite p {
@@ -172,10 +173,12 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  padding: 40px;
   border-color: #c7dccd;
-  background: #edf8f0;
   text-align: left;
+  padding: 24px;
+  border: 0;
+  border-left: 3px solid var(--success);
+  background: var(--success-bg);
 }
 .assessment-outcome:before {
   content: '';
@@ -188,33 +191,33 @@
   pointer-events: none;
 }
 .assessment-page .outcome-failed {
-  background: #fff1ed;
-  border-color: #ebcfc5;
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 .outcome-content {
   width: 100%;
-  max-width: 960px;
   margin: auto;
   display: grid;
-  gap: 24px;
   min-width: 0;
+  gap: 16px;
+  max-width: none;
 }
 .outcome-icon {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
   border-radius: 50%;
-  background: white;
-  color: #236139;
-  border: 1px solid #b9d1c1;
+  width: 40px;
+  height: 40px;
+  color: var(--success);
+  background: transparent;
+  border: 0;
 }
 .outcome-failed .outcome-icon {
-  color: #943c2b;
   border-color: #e0baae;
+  color: var(--danger);
 }
 .outcome-eyebrow {
-  font-size: 14px;
+  font-size: var(--text-caption);
   line-height: 1.6;
   color: #41544a;
 }
@@ -222,16 +225,16 @@
   color: #6b4a40;
 }
 .assessment-page .assessment-outcome h2 {
-  font-size: 26px;
+  font-size: var(--text-heading);
   line-height: 1.4;
   margin: 0;
-  color: #19492a;
+  color: var(--success);
 }
 .assessment-page .outcome-failed h2 {
-  color: #813122;
+  color: var(--danger);
 }
 .outcome-description {
-  font-size: 16px;
+  font-size: var(--text-body);
   line-height: 1.6;
   max-width: 65ch;
   color: #263b2e;
@@ -243,12 +246,13 @@
 .outcome-facts {
   display: grid;
   grid-template-columns: 1fr 1fr 1.4fr;
-  gap: 24px;
-  padding: 24px;
-  background: #ffffffed;
-  border: 1px solid #00000014;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   margin: 0;
+  padding: 16px 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  gap: 16px;
 }
 .outcome-facts > div {
   display: grid;
@@ -256,19 +260,19 @@
   min-width: 0;
 }
 .outcome-facts dt {
-  font-size: 14px;
+  font-size: var(--text-caption);
   color: var(--ink-secondary);
 }
 .outcome-facts dd {
-  font-size: 16px;
+  font-size: var(--text-body);
   line-height: 1.6;
   margin: 0;
   overflow-wrap: anywhere;
 }
 .outcome-facts strong {
-  font-size: 32px;
-  font-weight: 700;
+  font-weight: var(--weight-heading);
   color: var(--ink);
+  font-size: var(--text-display);
 }
 .assessment-page .outcome-actions {
   justify-content: flex-start;
@@ -277,7 +281,7 @@
   flex-wrap: wrap;
 }
 .assessment-page .outcome-credit {
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1.6;
   color: #4d554f;
 }
@@ -347,7 +351,7 @@
     min-height: 44px;
   }
   .submission-warning {
-    font-size: 14px;
+    font-size: var(--text-caption);
     align-items: flex-start;
   }
   .assessment-page .assessment-outcome {
@@ -370,7 +374,7 @@
 }
 
 .renewal-phase-label {
-  font-size: 14px;
+  font-size: var(--text-caption);
   line-height: 1.6;
   color: var(--ink-secondary);
   overflow-wrap: anywhere;

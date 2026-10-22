@@ -180,14 +180,7 @@ onMounted(async () => {
       </select></label
     >
   </div>
-  <ListControls
-    :count="list.count"
-    :pages="list.pages"
-    v-model:page="list.page"
-    v-model:size="list.size"
-    v-model:density="list.density"
-    v-model:sort="list.sort"
-  />
+
   <div class="table-wrap" :data-density="list.density">
     <table>
       <thead>
@@ -227,5 +220,13 @@ onMounted(async () => {
       </tbody>
     </table>
   </div>
+  <ListControls
+    :count="list.count"
+    :pages="list.pages"
+    v-model:page="list.page"
+    v-model:size="list.size"
+    v-model:density="list.density"
+    v-model:sort="list.sort"
+  />
   <p v-if="!listed.length" class="empty-state">해당하는 사용자가 없습니다.</p>
 </template>

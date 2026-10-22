@@ -18,7 +18,7 @@ async function change(event: Event) {
 }
 </script>
 <template>
-  <section class="management-context panel" aria-label="인증 업무 관리 대상">
+  <section class="management-context" aria-label="인증 업무 관리 대상">
     <label v-if="store.hasRole('system_operator')" class="field">
       <span>관리할 Lv1 조직</span>
       <select

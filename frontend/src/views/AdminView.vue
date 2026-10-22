@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import PageHeading from '../components/PageHeading.vue';
+import ActionBar from '../components/ActionBar.vue';
+import { confirmAction } from '../composables/useConfirmation';
 import CourseEditor from '../components/CourseEditor.vue';
 import QualificationDelete from '../components/QualificationDelete.vue';
 import { api } from '../api';
@@ -257,7 +260,8 @@ async function focusIssue(issue: CourseIssue) {
   await courseEditor.value?.focusIssue(issue);
 }
 async function reloadCatalog() {
-  if (!window.confirm('저장하지 않은 내용을 버리고 다시 불러올까요?')) return;
+  if (!(await confirmAction('저장하지 않은 내용을 버리고 다시 불러올까요?', '다시 불러오기')))
+    return;
   try {
     await store.refresh();
     if (courseDraft.value) courseDraft.value = plain(store.course(courseDraft.value.id));
@@ -334,7 +338,7 @@ const auditLabels: Record<string, string> = {
   'comparison.finalize': '비교 확정',
   'comparison.correct': '비교 정정',
 };
-function canLeave() {
+async function canLeave() {
   if (!store.managementAccess) return true;
   const source = courseDraft.value
     ? organizationData.value.courses.find((c) => c.id === courseDraft.value!.id)
@@ -347,9 +351,10 @@ function canLeave() {
   }
   if (
     (noticeDraft.value || selectedAssignment.value) &&
-    !window.confirm(
+    !(await confirmAction(
       '작성 중인 입력이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
-    )
+      '변경 버리고 이동',
+    ))
   )
     return false;
   return (
@@ -357,9 +362,10 @@ function canLeave() {
     !editor.value ||
     readOnly.value ||
     (!courseEditor.value?.pending && JSON.stringify(source) === JSON.stringify(editor.value)) ||
-    window.confirm(
+    (await confirmAction(
       '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
-    )
+      '변경 버리고 이동',
+    ))
   );
 }
 onBeforeRouteLeave(canLeave);
@@ -386,7 +392,7 @@ onBeforeRouteUpdate(canLeave);
         <RouterLink :to="store.managementLink(`/admin/${section}`)" class="back-link"
           ><AppIcon name="back" :size="16" />{{ title }}</RouterLink
         >
-        <div class="page-heading">
+        <PageHeading class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
             <span class="small-label">v{{ editor.version }}</span>
@@ -407,7 +413,7 @@ onBeforeRouteUpdate(canLeave);
               "
             />
           </div>
-        </div>
+        </PageHeading>
         <div v-if="errors.length" class="error-message editor-errors" role="alert" tabindex="-1">
           <AppIcon name="alert" :size="18" />
           <ul>
@@ -541,10 +547,10 @@ onBeforeRouteUpdate(canLeave);
             >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
           >
         </div>
-        <div v-if="!readOnly" class="actionbar">
+        <ActionBar v-if="!readOnly" class="actionbar">
           <span class="muted">전체 기준을 저장합니다. 팀 적용 버전은 유지됩니다.</span
           ><button class="button primary" :disabled="busy" @click="saveCatalog()">저장</button>
-        </div>
+        </ActionBar>
         <AppDialog
           :open="!!savePreview"
           title="기준 저장 확인"
@@ -604,7 +610,7 @@ onBeforeRouteUpdate(canLeave);
         </AppDialog>
       </template>
       <template v-else>
-        <div class="page-heading">
+        <PageHeading class="page-heading">
           <h1>{{ title }}</h1>
           <TemplateImport v-if="section === 'qualifications'" />
           <button
@@ -624,7 +630,7 @@ onBeforeRouteUpdate(canLeave);
           >
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
-        </div>
+        </PageHeading>
         <div
           v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
           class="list-toolbar"
@@ -665,15 +671,7 @@ onBeforeRouteUpdate(canLeave);
             </select>
           </div>
         </div>
-        <ListControls
-          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
-          :count="list.count"
-          :pages="list.pages"
-          v-model:page="list.page"
-          v-model:size="list.size"
-          v-model:density="list.density"
-          v-model:sort="list.sort"
-        />
+
         <CredentialManagement v-if="section === 'credentials'" />
         <CertificationTargets
           v-else-if="section === 'targets'"
@@ -726,10 +724,12 @@ onBeforeRouteUpdate(canLeave);
                 </td>
                 <td>v{{ q.version }}</td>
                 <td>
-                  <span class="lifecycle-badge">{{ q.lifecycleStatus || 'Active' }}</span>
+                  <span class="lifecycle-badge" :data-status="q.lifecycleStatus || 'Active'">{{
+                    q.lifecycleStatus || 'Active'
+                  }}</span>
                 </td>
                 <td>
-                  <QualificationDelete :qualification="q" :disabled="busy" />
+                  <QualificationDelete :qualification="q" :disabled="busy" compact />
                   <RouterLink
                     :to="store.managementLink(`/admin/qualifications/${q.id}`)"
                     class="icon-button"
@@ -978,6 +978,15 @@ onBeforeRouteUpdate(canLeave);
           </table>
           <p v-if="!notices.length" class="empty-state">등록된 공지가 없습니다.</p>
         </div>
+        <ListControls
+          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
+          :count="list.count"
+          :pages="list.pages"
+          v-model:page="list.page"
+          v-model:size="list.size"
+          v-model:density="list.density"
+          v-model:sort="list.sort"
+        />
       </template>
       <AppDialog
         :open="!!selectedAssignment"
