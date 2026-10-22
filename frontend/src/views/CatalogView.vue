@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getDataGeneration } from '../data-generation';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -78,6 +79,7 @@ let epoch = 0,
   validationSequence = 0,
   localTimer: ReturnType<typeof setTimeout> | undefined,
   validationTimer: ReturnType<typeof setTimeout> | undefined;
+const editorGeneration = getDataGeneration();
 let workId: string = crypto.randomUUID(),
   owner = { actorId: '', lv1: '' },
   pending: CatalogRecovery['pending'];
@@ -204,6 +206,7 @@ function localSnapshot(): CatalogRecovery | undefined {
   if (!workbook.value || !owner.actorId) return;
   return {
     id: workId,
+    generation: editorGeneration,
     ...owner,
     updatedAt: new Date().toISOString(),
     workbook: clone(workbook.value),

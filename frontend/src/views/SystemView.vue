@@ -5,6 +5,7 @@ import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
 import SystemNotices from '../components/SystemNotices.vue';
+import MasterDataPanel from '../components/MasterDataPanel.vue';
 import TestProgressPanel from '../components/TestProgressPanel.vue';
 const route = useRoute();
 const section = computed(() => String(route.params.section));
@@ -37,7 +38,8 @@ const sections = [
         v-else-if="section === 'notices'"
       /><template v-else
         ><h1>테스트 관리</h1>
-        <TestProgressPanel
+        <TestProgressPanel />
+        <MasterDataPanel
       /></template>
     </div>
   </div>

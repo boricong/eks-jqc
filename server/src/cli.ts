@@ -233,6 +233,8 @@ if (
       await store.close();
     }
   }
+} else if (command === "recover-master") {
+  console.log(JSON.stringify(await store.recoverMasterReplacement(), null, 2));
 } else if (command === "migrate") {
   await store.migrate(migrateState);
   console.log("현행 업무 스키마 8 확인 완료");

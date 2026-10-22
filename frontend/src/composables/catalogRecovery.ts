@@ -1,6 +1,8 @@
+import { getDataGeneration, DATASET_EVENT } from '../data-generation';
 import type { CatalogWorkbook, CatalogIssue } from '@eks/contracts';
 export interface CatalogRecovery {
   id: string;
+  generation?: string;
   actorId: string;
   lv1: string;
   updatedAt: string;
@@ -27,7 +29,16 @@ async function transact<T>(
   const db = await database();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('works', mode),
-      request = action(tx.objectStore('works'));
+      store = tx.objectStore('works');
+    let request: IDBRequest<T>;
+    try {
+      request = action(store);
+    } catch (error) {
+      tx.abort();
+      db.close();
+      reject(error);
+      return;
+    }
     let result: T;
     request.onsuccess = () => (result = request.result);
     tx.oncomplete = () => {
@@ -40,8 +51,23 @@ async function transact<T>(
     };
   });
 }
-export const saveRecovery = (v: CatalogRecovery) =>
-  transact('readwrite', (s) => s.put(JSON.parse(JSON.stringify(v))));
+export const saveRecovery = (v: CatalogRecovery) => {
+  if (v.generation !== getDataGeneration())
+    return Promise.reject(new Error('이전 데이터의 복구 초안은 보관하지 않습니다.'));
+  return transact('readwrite', (s) => {
+    if (v.generation !== getDataGeneration()) throw new Error('이전 데이터의 초안입니다.');
+    return s.put(JSON.parse(JSON.stringify(v)));
+  });
+};
+window.addEventListener(DATASET_EVENT, () => {
+  // Clear only this application's old drafts; late saves carry their old generation.
+  void transact('readwrite', (s) => s.getAll())
+    .then(async (records) => {
+      for (const record of records as CatalogRecovery[])
+        if (record.generation !== getDataGeneration()) await deleteRecovery(record.id);
+    })
+    .catch(() => {});
+});
 export const deleteRecovery = (id: string) => transact('readwrite', (s) => s.delete(id));
 // Keep simultaneous editors from sharing a mutable recovery record.
 const releases = new Map<string, () => void>();
@@ -68,7 +94,10 @@ export function releaseRecovery(id: string) {
   releases.get(id)?.();
 }
 export async function listRecovery(actorId: string, lv1: string) {
-  return ((await transact('readonly', (s) => s.getAll())) as CatalogRecovery[])
-    .filter((v) => v.actorId === actorId && v.lv1 === lv1)
+  const records = (await transact('readonly', (s) => s.getAll())) as CatalogRecovery[];
+  for (const record of records)
+    if (record.generation !== getDataGeneration()) await deleteRecovery(record.id);
+  return records
+    .filter((v) => v.actorId === actorId && v.lv1 === lv1 && v.generation === getDataGeneration())
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

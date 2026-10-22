@@ -9,7 +9,18 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import type { State, OrganizationDocument } from "@eks/contracts";
+import type {
+  State,
+  OrganizationDocument,
+  MaintenanceReceipt,
+} from "@eks/contracts";
+import {
+  MaintenanceDocumentSchema,
+  contentHash,
+  clearedCounts,
+  masterCounts,
+  masterPayload,
+} from "./master-data.ts";
 import { seedOrganizations, validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
 export { demand, DomainError } from "./errors.ts";
@@ -18,8 +29,21 @@ import { reconcileNotifications } from "./notifications.ts";
 
 export class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
+  private epoch = 0;
+  invalidate() {
+    this.epoch++;
+  }
   run<T>(operation: () => Promise<T>): Promise<T> {
-    const next = this.tail.then(operation);
+    const epoch = this.epoch;
+    const next = this.tail.then(() => {
+      demand(
+        epoch === this.epoch,
+        409,
+        "데이터가 초기화 또는 교체되었습니다. 계정을 다시 선택해 주세요.",
+        "DATASET_CHANGED",
+      );
+      return operation();
+    });
     this.tail = next.catch(() => {});
     return next;
   }
@@ -106,6 +130,13 @@ export class FileStore<T extends Document> {
   snapshot(): T {
     if (this.closed) throw new DomainError(503, "저장소가 닫혔습니다.");
     return structuredClone(this.state);
+  }
+  // Publish only after a coordinated replacement has made every file durable.
+  publishSnapshot(value: T) {
+    this.state = this.validate(value);
+  }
+  block() {
+    this.closed = true;
   }
   protected async writeAtomic(file: string, state: unknown) {
     const temp = `${file}.${randomUUID()}.tmp`;
@@ -288,6 +319,221 @@ export class FileStore<T extends Document> {
 }
 
 export class JsonStore extends FileStore<State> {
+  async recoverMasterReplacement() {
+    return this.withMaintenanceLock(() =>
+      this.organizations.withMaintenanceLock(async () => {
+        const marker = JSON.parse(
+          await readFile(this.replacementMarker, "utf8"),
+        );
+        const metadata = MaintenanceDocumentSchema.parse(
+          marker.maintenanceBefore,
+        );
+        for (const [source, dir] of [
+          [marker.backups?.state, this.backupDir],
+          [marker.backups?.organizations, this.organizations.backupDir],
+        ])
+          demand(
+            typeof source === "string" &&
+              path.dirname(path.resolve(source)).toLowerCase() ===
+                path.resolve(dir!).toLowerCase() &&
+              /^before-master-(reset|import)-/.test(path.basename(source)),
+            422,
+            "중단 표식의 백업 경로를 확인해 주세요.",
+          );
+        const state = await readFile(marker.backups.state),
+          org = await readFile(marker.backups.organizations);
+        validateState(
+          JSON.parse(state.toString("utf8")),
+          validateOrganizations(JSON.parse(org.toString("utf8"))),
+        );
+        // Preserve the interrupted files before recovery; the original pair remains intact.
+        const suffix = randomUUID();
+        for (const [source, dir, label] of [
+          [this.file, this.backupDir, "state"],
+          [
+            this.organizations.file,
+            this.organizations.backupDir,
+            "organizations",
+          ],
+          [this.maintenanceFile, this.backupDir, "maintenance"],
+          [this.replacementMarker, this.backupDir, "marker"],
+        ]) {
+          try {
+            await this.writeAtomic(
+              path.join(dir!, `before-master-recovery-${label}-${suffix}.json`),
+              await readFile(source!),
+            );
+          } catch (e) {
+            if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+          }
+        }
+        await this.writeAtomic(this.organizations.file, org);
+        await this.writeAtomic(this.file, state);
+        await this.writeAtomic(this.maintenanceFile, metadata);
+        await rm(this.replacementMarker);
+        return {
+          recovered: true,
+          generation: metadata.generation,
+          backups: marker.backups,
+        };
+      }),
+    );
+  }
+  private maintenance = {
+    schemaVersion: 1 as const,
+    generation: randomUUID() as string,
+    receipts: [] as MaintenanceReceipt[],
+  };
+  get generation() {
+    return this.maintenance.generation;
+  }
+  maintenanceReceipt(key: string) {
+    return structuredClone(
+      this.maintenance.receipts.find((r) => r.key === key) || null,
+    );
+  }
+  get maintenanceFile() {
+    return `${this.file}.maintenance.json`;
+  }
+  get replacementMarker() {
+    return `${this.file}.replacement.json`;
+  }
+  consistent<R>(
+    read: (state: State, organizations: OrganizationDocument) => R,
+  ): Promise<R> {
+    return this.enqueue(() =>
+      Promise.resolve(read(this.snapshot(), this.organizations.snapshot())),
+    );
+  }
+  async replaceMaster(
+    actorId: string,
+    key: string,
+    fingerprint: string,
+    kind: MaintenanceReceipt["kind"],
+    at: string,
+    authorize: (state: State) => void,
+    prepare: (
+      state: State,
+      organizations: OrganizationDocument,
+    ) => { state: State; organizations: OrganizationDocument },
+  ): Promise<MaintenanceReceipt> {
+    return this.enqueue(async () => {
+      authorize(this.snapshot());
+      const previous = this.maintenance.receipts.find((r) => r.key === key);
+      if (previous) {
+        demand(
+          previous.fingerprint === fingerprint && previous.kind === kind,
+          409,
+          "같은 실행 식별자로 다른 내용을 보냈습니다.",
+          "IDEMPOTENCY_CONFLICT",
+        );
+        return structuredClone(previous);
+      }
+      const org = this.organizations.snapshot(),
+        current = this.snapshot();
+      const candidate = prepare(current, org);
+      demand(
+        candidate.state.revision === current.revision + 1 &&
+          candidate.organizations.revision === org.revision + 1,
+        422,
+        "저장소 revision 증가가 필요합니다.",
+      );
+      validateState(
+        candidate.state,
+        validateOrganizations(candidate.organizations),
+      );
+      const stateBytes = await readFile(this.file),
+        orgBytes = await readFile(this.organizations.file);
+      demand(
+        contentHash(this.validate(JSON.parse(stateBytes.toString("utf8")))) ===
+          contentHash(current) &&
+          contentHash(
+            validateOrganizations(JSON.parse(orgBytes.toString("utf8"))),
+          ) === contentHash(org),
+        409,
+        "저장소 파일이 변경되었습니다. 다시 확인해 주세요.",
+        "REVISION_CONFLICT",
+      );
+      const suffix = randomUUID(),
+        generation = randomUUID();
+      const backups = {
+        state: path.join(
+          this.backupDir,
+          `before-${kind}-${current.revision}-${suffix}.json`,
+        ),
+        organizations: path.join(
+          this.organizations.backupDir,
+          `before-${kind}-${org.revision}-${suffix}.json`,
+        ),
+      };
+      await mkdir(this.backupDir, { recursive: true });
+      await mkdir(this.organizations.backupDir, { recursive: true });
+      await this.writeAtomic(backups.state, stateBytes);
+      await this.writeAtomic(backups.organizations, orgBytes);
+      const before = structuredClone(this.maintenance);
+      const receipt: MaintenanceReceipt = {
+        operationId: suffix,
+        key,
+        fingerprint,
+        actorId,
+        kind,
+        completedAt: at,
+        generation,
+        previousGeneration: this.generation,
+        stateRevision: candidate.state.revision,
+        organizationRevision: candidate.organizations.revision,
+        preserved: masterCounts(
+          masterPayload(candidate.state, candidate.organizations),
+        ),
+        deleted: clearedCounts(current, org),
+        backups,
+      };
+      const next = {
+        schemaVersion: 1 as const,
+        generation,
+        receipts: [...before.receipts, receipt],
+      };
+      try {
+        await this.writeAtomic(this.replacementMarker, {
+          backups,
+          maintenanceBefore: before,
+          receipt,
+        });
+        await this.organizations.beforeReplace?.();
+        await this.writeAtomic(
+          this.organizations.file,
+          candidate.organizations,
+        );
+        await this.beforeReplace?.();
+        await this.writeAtomic(this.file, candidate.state);
+        await this.writeAtomic(this.maintenanceFile, next);
+        await rm(this.replacementMarker);
+      } catch (error) {
+        try {
+          await this.writeAtomic(this.organizations.file, orgBytes);
+          await this.writeAtomic(this.file, stateBytes);
+          await this.writeAtomic(this.maintenanceFile, before);
+          await rm(this.replacementMarker);
+        } catch {
+          this.block();
+          this.organizations.block();
+          throw new DomainError(
+            503,
+            "파일 교체와 복구를 완료하지 못했습니다. 서버를 중지하고 표시 파일의 백업 쌍으로 복구해 주세요.",
+            "MAINTENANCE_RECOVERY_REQUIRED",
+          );
+        }
+        throw error;
+      }
+      // No awaits: readers see either the old pair or the complete new pair.
+      this.organizations.publishSnapshot(candidate.organizations);
+      this.state = candidate.state;
+      this.maintenance = next;
+      this.queue.invalidate();
+      return structuredClone(receipt);
+    });
+  }
+
   async migratePolicies(
     expected: { revision: number; stateHash: string; organizationHash: string },
     transform: (
@@ -444,6 +690,14 @@ export class JsonStore extends FileStore<State> {
   }
   override async load() {
     try {
+      await readFile(this.replacementMarker);
+      throw new Error(
+        "설정·기준 교체가 중단되었습니다. 서버를 중지한 채 교체 표시 파일의 백업 쌍과 관리 정보를 복구해 주세요.",
+      );
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    }
+    try {
       await readFile(`${this.file}.policy-migration.json`);
       throw new Error(
         "조직 정책 이관이 중단되었습니다. 이관 표시 파일의 백업 쌍으로 복구해 주세요.",
@@ -452,10 +706,22 @@ export class JsonStore extends FileStore<State> {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
     }
     await this.organizations.load();
+    let loaded = false;
     try {
       await super.load();
+      loaded = true;
+      try {
+        this.maintenance = MaintenanceDocumentSchema.parse(
+          JSON.parse(await readFile(this.maintenanceFile, "utf8")),
+        ) as typeof this.maintenance;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT")
+          await this.writeAtomic(this.maintenanceFile, this.maintenance);
+        else throw e;
+      }
       return this;
     } catch (error) {
+      if (loaded) await super.close();
       await this.organizations.close();
       throw error;
     }

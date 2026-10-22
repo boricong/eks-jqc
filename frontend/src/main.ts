@@ -1,3 +1,4 @@
+import './master-data.css';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import '@fontsource-variable/inter/wght.css';

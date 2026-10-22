@@ -1,3 +1,5 @@
+import { pendingMaintenance, clearMaintenance } from '../maintenance-operation';
+import { DATASET_EVENT } from '../data-generation';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { api, mutate, ApiError } from '../api';
@@ -12,6 +14,7 @@ import {
   type Kind,
   type UserView as User,
   type Workspace,
+  type MaintenanceReceipt,
   type Notice,
 } from '@eks/contracts';
 
@@ -116,6 +119,7 @@ export const useDemo = defineStore('workspace', () => {
   function rememberManagement(lv1: string) {
     sessionStorage.setItem(`eks-management-${actorId.value}`, lv1);
   }
+  const maintenanceResult = ref<MaintenanceReceipt | null>(null);
   const toast = ref('');
   let toastTimer: ReturnType<typeof setTimeout>;
   function notify(message: string) {
@@ -191,6 +195,15 @@ export const useDemo = defineStore('workspace', () => {
       workspaceScope.value = '';
       await refresh();
       toast.value = '';
+      maintenanceResult.value = null;
+      const operationKey = pendingMaintenance();
+      if (operationKey && result.actor.roles.includes('system_operator')) {
+        const status = await api<{ receipt: MaintenanceReceipt | null }>(
+          `/system/master-data/operations/${encodeURIComponent(operationKey)}`,
+        );
+        maintenanceResult.value = status.receipt;
+        clearMaintenance();
+      }
     } catch (error) {
       connectionError.value = (error as Error).message;
       throw error;
@@ -227,6 +240,21 @@ export const useDemo = defineStore('workspace', () => {
     result?: 'passed' | 'failed';
   };
   const pendingCommands = new Map<string, { key: string; result?: CommandResult }>();
+  window.addEventListener(DATASET_EVENT, () => {
+    refreshVersion++;
+    pendingCommands.clear();
+    sessionActor.value = null;
+    data.value = empty();
+    workspaceScope.value = '';
+    maintenanceResult.value = null;
+    connectionError.value =
+      '설정·기준 초기화 또는 교체로 세션이 종료되었습니다. 계정을 다시 선택해 주세요.';
+    void api<User[]>('/actors')
+      .then((v) => {
+        actors.value = v;
+      })
+      .catch(() => {});
+  });
   async function command(path: string, body: unknown = {}, method = 'POST') {
     const managed =
       /^\/(courses|qualifications|assignments|notices|comparisons|qualification-templates|planning-requests)(\/|$)/.test(
@@ -291,6 +319,7 @@ export const useDemo = defineStore('workspace', () => {
   }
   return {
     data,
+    maintenanceResult,
     actors,
     actor,
     actorId,

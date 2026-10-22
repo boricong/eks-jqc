@@ -3,6 +3,7 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
 import AppIcon from './components/AppIcon.vue';
+import MaintenanceResult from './components/MaintenanceResult.vue';
 import ProcessGuide from './components/ProcessGuide.vue';
 import { roleLabels, type Role } from '@eks/contracts';
 const store = useDemo(),
@@ -175,8 +176,14 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
       >
         불러오는 중
       </div>
-      <RouterView v-else-if="store.signedIn" />
+      <template v-else-if="store.signedIn">
+        <div v-if="store.maintenanceResult" class="container">
+          <MaintenanceResult :result="store.maintenanceResult" authenticated />
+        </div>
+        <RouterView />
+      </template>
       <div v-else class="container page empty-state spacious">
+        <MaintenanceResult v-if="store.maintenanceResult" :result="store.maintenanceResult" />
         <h1>접속 계정 선택</h1>
         <p class="muted">상단에서 검증에 사용할 계정을 선택해 주세요.</p>
         <p v-if="store.connectionError" class="error-message" role="alert">

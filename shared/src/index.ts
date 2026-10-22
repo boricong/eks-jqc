@@ -579,3 +579,5 @@ export function assessmentQuestions(
 export function assessmentPassScore(course: Course, kind: Kind) {
   return kind === "objective" ? course.passScore : course.practicalPassScore;
 }
+
+export * from './master-data.ts';

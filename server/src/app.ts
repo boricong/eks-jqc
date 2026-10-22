@@ -1,3 +1,4 @@
+import { registerMasterDataRoutes } from "./master-data-routes.ts";
 import Fastify, { type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
@@ -67,7 +68,10 @@ export async function buildApp(
     );
   }, 60000);
   notificationTimer.unref();
-  const sessions = new Map<string, { actorId: string; expires: number }>();
+  const sessions = new Map<
+    string,
+    { actorId: string; expires: number; generation: string }
+  >();
   const origins = options.origins || [
     "http://127.0.0.1:5186",
     "http://127.0.0.1:5187",
@@ -90,11 +94,22 @@ export async function buildApp(
       "접속 계정을 선택해 주세요.",
       "SESSION_REQUIRED",
     );
+    demand(
+      session.generation === store.generation &&
+        (!request.headers["x-eks-data-generation"] ||
+          request.headers["x-eks-data-generation"] === store.generation),
+      409,
+      "데이터가 초기화 또는 교체되었습니다. 계정을 다시 선택해 주세요.",
+      "DATASET_CHANGED",
+    );
     const u = state.users.find((u) => u.id === session.actorId);
     demand(u, 401, "접속 계정을 선택해 주세요.");
     return userView(u, store.organizations.snapshot());
   };
-  app.addHook("onRequest", async (request) => {
+  const requestGenerations = new WeakMap<FastifyRequest, string>();
+  app.addHook("onRequest", async (request, reply) => {
+    requestGenerations.set(request, store.generation);
+    reply.header("X-EKS-Data-Generation", store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
       request.headers.origin
@@ -106,19 +121,33 @@ export async function buildApp(
       );
   });
   app.addHook("onSend", async (_request, reply, payload) => {
+    if (requestGenerations.get(_request) !== store.generation) {
+      reply.header("X-EKS-Data-Generation", store.generation);
+      if (
+        ![
+          "/api/testing/master-reset",
+          "/api/system/master-data/import",
+        ].includes(_request.url)
+      ) {
+        reply.code(409).type("application/json");
+        payload = JSON.stringify({
+          code: "DATASET_CHANGED",
+          message:
+            "데이터가 초기화 또는 교체되었습니다. 계정을 다시 선택해 주세요.",
+        });
+      }
+    }
     reply.header("Cache-Control", "no-store");
     reply.header("X-Content-Type-Options", "nosniff");
     return payload;
   });
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof DomainError)
-      return reply
-        .status(error.status)
-        .send({
-          code: error.code,
-          message: error.message,
-          ...(error.details ? { details: error.details } : {}),
-        });
+      return reply.status(error.status).send({
+        code: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      });
     if (error instanceof z.ZodError)
       return reply.status(422).send({
         code: "VALIDATION_ERROR",
@@ -161,7 +190,11 @@ export async function buildApp(
     for (const [key, session] of sessions)
       if (session.expires < Date.now()) sessions.delete(key);
     const token = randomBytes(32).toString("hex");
-    sessions.set(token, { actorId, expires: Date.now() + 8 * 60 * 60 * 1000 });
+    sessions.set(token, {
+      actorId,
+      expires: Date.now() + 8 * 60 * 60 * 1000,
+      generation: store.generation,
+    });
     reply.setCookie(cookieName, token, {
       httpOnly: true,
       sameSite: "strict",
@@ -336,6 +369,7 @@ export async function buildApp(
       completions: a.enrollments.map((e) => e.completion),
     };
   });
+  registerMasterDataRoutes(app, store, actor, clock, () => sessions.clear());
   registerCatalogRoutes(app, store, actor);
   registerLifecycleRoutes(app, store, actor, clock);
   const mutation = (

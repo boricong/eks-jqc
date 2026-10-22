@@ -27,6 +27,7 @@
     "data:setup-photo": "node --import tsx server/src/cli.ts setup-photo",
     "data:organizations:restore": "node --import tsx server/src/cli.ts organizations:restore",
     "data:backup": "node --import tsx server/src/cli.ts backup",
+    "data:recover-master": "node --import tsx server/src/cli.ts recover-master",
     "data:restore": "node --import tsx server/src/cli.ts restore",
     "data:unlock": "node --import tsx server/src/cli.ts unlock",
     "start": "node --import tsx server/src/index.ts"
