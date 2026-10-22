@@ -21,7 +21,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await actor(page, 'admin-1');
   await page.goto('/admin/policies');
   await page.getByLabel('조직 검색').fill('RE A조');
-  await page.getByRole('treeitem', { name: /Lv4 · RE A조/ }).click();
+  await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
   const admins = page.getByRole('region', { name: '세부 조직 관리자 지정' });
   await admins.getByRole('checkbox', { name: '정하린', exact: true }).check();
   await admins.getByRole('checkbox', { name: '박준호', exact: true }).check();
@@ -180,18 +180,18 @@ test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', a
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await completePlan(page, '평가 흐름 체험', false);
-  const overview = page.getByRole('region', { name: '자격 개요와 학습 목표', exact: true });
+  const overview = page.getByRole('region', { name: '자격 요약', exact: true });
+  const goals = page.getByRole('region', { name: '내 학습 목표와 일정', exact: true });
   await expect(overview.getByRole('heading', { name: '자격 설명', exact: true })).toBeVisible();
-  await expect(
-    overview.getByRole('heading', { name: '개인 학습 목표', exact: true }),
-  ).toBeVisible();
+  await expect(goals.getByRole('heading', { name: '내 학습 목표', exact: true })).toBeVisible();
   await expect(overview.locator('dl > div')).toHaveCount(4);
+  await expect(goals.locator('dl > div')).toHaveCount(3);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
-    await expect(overview).toHaveCSS('row-gap', '24px');
+    await expect(overview).toHaveCSS('row-gap', '20px');
     await page.screenshot({
       path: test.info().outputPath(`learning-overview-${width}.png`),
       fullPage: true,

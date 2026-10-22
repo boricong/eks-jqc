@@ -180,6 +180,47 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   );
 });
 
+test("관리자 후보와 저장은 정확한 소속만 사용하고 부모·자식·형제 구성원을 제외", async (t) => {
+  const { store, call, grant } = await fixture(t);
+  const child = await call("operator-1", "/system/organizations", {
+    revision: store.organizations.snapshot().revision,
+    parentId: own,
+    name: "하위 검증 조직",
+  });
+  const outsiders: string[] = [];
+  for (const organizationId of [
+    "org-photo-pyeongtaek",
+    child.id,
+    "org-photo-pyeongtaek-2",
+    "org-etch",
+  ]) {
+    const user = await call("operator-1", "/system/users", {
+      name: `외부 소속 ${organizationId}`,
+      roles: ["learner"],
+      organizationId,
+    });
+    outsiders.push(user.id);
+  }
+  const candidates = await call(
+    "admin-1",
+    `/organization-policies/${own}/administrators`,
+  );
+  assert.deepEqual(candidates.candidates.map((u: any) => u.id).sort(), [
+    "ft-1",
+    "learner-2",
+  ]);
+  const before = store.snapshot();
+  for (const id of outsiders) {
+    await grant(["learner-2", id], 422);
+    assert.deepEqual(store.snapshot(), before);
+  }
+  await grant(["learner-2", "ft-1"]);
+  assert.equal(
+    store.snapshot().users.filter((u) => u.organizationAdministration).length,
+    2,
+  );
+});
+
 test("지정 대상·revision·중복 요청·권한 회수·백업 실패를 원자적으로 검사", async (t) => {
   const { store, call, grant, grantBody, policy } = await fixture(t);
   await grant(["learner-1"], 422);

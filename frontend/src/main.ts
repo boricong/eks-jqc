@@ -6,6 +6,7 @@ import './design-tokens.css';
 import './style.css';
 import './course-editor.css';
 import './policies.css';
+import './qualification-detail.css';
 import App from './App.vue';
 import { router } from './router';
 

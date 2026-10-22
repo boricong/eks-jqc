@@ -3,16 +3,26 @@ import { computed, ref, watch } from 'vue';
 import type { OrganizationAdministratorsView } from '@eks/contracts';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
+import AppIcon from './AppIcon.vue';
 const props = defineProps<{ organizationId: string; canManage: boolean }>();
 const confirm = (message: string) => window.confirm(message);
 const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean] }>();
 const store = useDemo(),
   view = ref<OrganizationAdministratorsView>(),
   chosen = ref<string[]>([]),
+  query = ref(''),
   baseline = ref('[]'),
   error = ref(''),
   busy = ref(false);
 const dirty = computed(() => JSON.stringify([...chosen.value].sort()) !== baseline.value);
+const candidates = computed(() =>
+  (view.value?.candidates || []).filter((user) =>
+    user.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()),
+  ),
+);
+const selected = computed(() =>
+  (view.value?.candidates || []).filter((user) => chosen.value.includes(user.id)),
+);
 const context = () => `${store.actorId}:${store.managementLv1}:${props.organizationId}`;
 let generation = 0;
 watch(dirty, (value) => emit('dirty', value));
@@ -36,6 +46,7 @@ async function load() {
 async function save() {
   if (
     !view.value ||
+    !props.canManage ||
     busy.value ||
     !confirm(
       '선택한 구성원의 세부 조직 관리자 지정을 저장할까요? 다른 역할과 진행 내역은 유지됩니다.',
@@ -69,6 +80,7 @@ watch(
   () => {
     view.value = undefined;
     chosen.value = [];
+    query.value = '';
     baseline.value = '[]';
     void load();
   },
@@ -93,23 +105,56 @@ watch(
     </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <template v-if="view">
-      <p v-if="!view.candidates.some((u) => u.assigned)" class="muted">
-        세부 조직 관리자 미지정 · 팀 관리자 관리
-      </p>
-      <div class="administrator-candidates">
-        <label v-for="user in view.candidates" :key="user.id" class="checkbox-field"
-          ><input
-            v-if="canManage"
-            type="checkbox"
-            v-model="chosen"
-            :value="user.id"
-            :disabled="busy"
-          />{{ user.name }}<span v-if="user.assigned" class="small-label">지정됨</span></label
-        >
-      </div>
-      <p v-if="canManage && !view.candidates.length" class="muted">
-        이 조직에 직접 소속된 구성원이 없습니다.
-      </p>
+      <template v-if="canManage">
+        <label class="field"
+          >구성원 검색<input v-model="query" placeholder="이름으로 검색"
+        /></label>
+        <p class="muted administrator-hint">이 조직에 직접 소속된 구성원만 표시합니다.</p>
+        <ul v-if="candidates.length" class="administrator-candidates" aria-label="관리자 후보">
+          <li v-for="user in candidates" :key="user.id">
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                v-model="chosen"
+                :value="user.id"
+                :aria-label="user.name"
+                :disabled="busy"
+              /><span>{{ user.name }}</span
+              ><span v-if="user.assigned" class="small-label">지정됨</span>
+            </label>
+          </li>
+        </ul>
+        <p v-else class="muted administrator-empty">
+          {{
+            view.candidates.length
+              ? '검색에 맞는 구성원이 없습니다'
+              : '이 조직에 소속된 구성원이 없습니다'
+          }}
+        </p>
+      </template>
+      <section class="administrator-selection" aria-label="선택한 관리자">
+        <div class="section-heading">
+          <h4 aria-live="polite" aria-atomic="true">선택한 관리자 {{ selected.length }}명</h4>
+          <span v-if="canManage" class="small-label">{{
+            dirty ? '저장 전 변경' : '저장된 지정'
+          }}</span>
+        </div>
+        <ul v-if="selected.length" class="administrator-selected-list">
+          <li v-for="user in selected" :key="user.id">
+            <span>{{ user.name }}</span>
+            <button
+              v-if="canManage"
+              class="administrator-remove"
+              :aria-label="`${user.name} 선택 해제`"
+              :disabled="busy"
+              @click="chosen = chosen.filter((id) => id !== user.id)"
+            >
+              <AppIcon name="close" :size="16" />
+            </button>
+          </li>
+        </ul>
+        <p v-else class="muted">선택한 관리자가 없습니다</p>
+      </section>
       <button v-if="canManage" class="button secondary" :disabled="busy || !dirty" @click="save">
         관리자 지정 저장
       </button>

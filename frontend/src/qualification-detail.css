@@ -1,0 +1,526 @@
+.qualification-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--ink-secondary);
+}
+.qualification-breadcrumb a {
+  color: var(--link);
+}
+.qualification-detail > .page-heading {
+  align-items: center;
+  gap: 16px;
+}
+.qualification-summary {
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  min-width: 0;
+}
+.qualification-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.qualification-summary-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.qualification-summary-heading h2 {
+  font-size: 26px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.qualification-summary-heading .heading-meta {
+  margin: 0;
+}
+.qualification-summary-heading > .status {
+  flex-shrink: 0;
+}
+.qualification-summary-heading p {
+  overflow-wrap: anywhere;
+}
+.qualification-description {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.qualification-summary h3 {
+  font-size: 16px;
+}
+.qualification-description .prose-text {
+  line-height: 1.6;
+}
+.qualification-description .is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.qualification-description > button {
+  justify-self: start;
+  font-size: 14px;
+}
+.qualification-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-tint);
+}
+.qualification-conditions p {
+  line-height: 1.6;
+  font-size: 15px;
+}
+.qualification-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.qualification-facts > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.qualification-facts dt {
+  color: var(--ink-secondary);
+  font-size: 14px;
+}
+.qualification-facts dd {
+  margin: 0;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.qualification-progress {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--surface-tint);
+  overflow: hidden;
+}
+.qualification-progress > span {
+  height: 100%;
+  display: block;
+  background: var(--link);
+}
+.qualification-award {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.qualification-award > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.qualification-context-note {
+  margin-top: 16px;
+}
+.qualification-workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  margin-top: 24px;
+}
+.qualification-course-nav {
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 96px;
+}
+.qualification-course-nav .section-heading {
+  margin: 0;
+}
+.qualification-course-nav h2 {
+  font-size: 18px;
+}
+.qualification-course-nav nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(560px, calc(100dvh - 200px));
+  overflow-y: auto;
+  min-width: 0;
+}
+.qualification-course-item {
+  display: flex;
+  width: 100%;
+  padding: 12px 8px;
+  text-align: left;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.qualification-course-item[aria-current='step'] {
+  background: var(--surface-tint);
+  border-color: var(--control-border);
+}
+.qualification-course-item:hover {
+  background: var(--surface-tint);
+}
+.qualification-course-item > span:last-child {
+  min-width: 0;
+}
+.qualification-course-item strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.qualification-course-item small {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.qualification-course-toggle {
+  display: none;
+}
+.qualification-course-content {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.qualification-course-content .section-heading {
+  margin: 0;
+}
+.qualification-course-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.qualification-course-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.qualification-course-heading h2 {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.qualification-course-content .notice-body {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.qualification-learning {
+  margin: 0;
+  gap: 24px;
+  min-width: 0;
+}
+.qualification-learning h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.course-goals {
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.course-goals .information-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.qualification-learning-scope {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.qualification-learning-scope .learning-scope {
+  margin: 0;
+  gap: 12px;
+}
+.course-material-collection {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.course-material-collection > .section-heading {
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.course-material-collection h3 {
+  font-size: 18px;
+}
+.course-material-collection h3 > span {
+  font-size: 14px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+.material-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.material-controls button {
+  font-size: 14px;
+  min-height: 32px;
+}
+.material-accordions {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.material-accordion {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.material-accordion > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 16px;
+  align-items: start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface-tint);
+  border-radius: 8px;
+  min-height: 44px;
+}
+.material-type {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  line-height: 1.4;
+}
+.material-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.6;
+}
+.material-summary strong {
+  font-size: 15px;
+}
+.material-description-preview {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.material-accordion > summary > svg {
+  margin-top: 4px;
+}
+.material-accordion[open] > summary {
+  border-bottom: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
+}
+.material-accordion[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.material-accordion-body {
+  padding: 16px;
+  min-width: 0;
+}
+.material-accordion-body .material-content {
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.material-accordion-body .button {
+  justify-self: start;
+  white-space: normal;
+}
+.material-external-note,
+.material-empty {
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  font-size: 14px;
+}
+.qualification-assessment-summary {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.qualification-assessment-summary > ul {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.qualification-assessment-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.qualification-assessment-summary li > div {
+  min-width: 0;
+}
+.qualification-assessment-summary strong {
+  font-size: 15px;
+}
+.qualification-assessment-summary small {
+  display: block;
+  font-size: 14px;
+  color: var(--ink-secondary);
+  margin-top: 4px;
+}
+.qualification-assessment-summary .status {
+  flex-shrink: 0;
+}
+.qualification-assessment-summary > .button {
+  justify-self: start;
+}
+.qualification-assessment-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.qualification-completion {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+}
+.qualification-completion > div {
+  display: grid;
+  gap: 8px;
+}
+.qualification-history {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.qualification-history > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.qualification-history > summary > svg {
+  margin-left: auto;
+}
+.qualification-history ol {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.qualification-history .history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding: 12px 0;
+  min-width: 0;
+}
+.qualification-history .history-row > span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1023px) {
+  .qualification-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qualification-course-nav {
+    position: static;
+  }
+  .qualification-course-toggle {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    min-height: 44px;
+    text-align: left;
+    white-space: normal;
+  }
+  .qualification-course-toggle > span:first-child {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .qualification-course-toggle > span:last-child {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+  .qualification-course-toggle strong {
+    font-size: 15px;
+    overflow-wrap: anywhere;
+  }
+  .qualification-course-toggle small {
+    color: var(--ink-secondary);
+    font-size: 14px;
+  }
+  .qualification-course-nav nav {
+    max-height: 360px;
+  }
+  .qualification-course-item {
+    min-height: 44px;
+  }
+}
+@media (max-width: 767px) {
+  .qualification-detail > .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .qualification-summary,
+  .qualification-learning {
+    padding: 16px;
+  }
+  .qualification-summary-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .qualification-summary-heading h2 {
+    font-size: 22px;
+  }
+  .qualification-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .course-goals .information-grid {
+    grid-template-columns: 1fr;
+  }
+  .qualification-award {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .qualification-breadcrumb a,
+  .material-controls button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .material-accordion > summary {
+    gap: 8px;
+    padding: 12px;
+  }
+  .material-type {
+    max-width: 92px;
+  }
+  .qualification-assessment-summary li {
+    align-items: flex-start;
+  }
+  .qualification-history .history-row {
+    grid-template-columns: 1fr;
+  }
+  .qualification-history .history-row > .status {
+    justify-self: start;
+  }
+}

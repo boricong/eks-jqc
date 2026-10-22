@@ -48,7 +48,7 @@ export const router = createRouter({
       path: '/qualifications/:id',
       name: 'qualification',
       component: QualificationView,
-      meta: { role: 'learner' },
+      meta: { role: 'learner', title: '자격 상세' },
     },
     {
       path: '/qualifications/:id/courses/:courseId/:kind(objective|practical)',
@@ -170,8 +170,10 @@ router.beforeResolve(async (to) => {
       return false;
     }
 });
-router.afterEach((to, from) => {
+router.afterEach((to, from, failure) => {
   useDemo().contextLoading = false;
+  if (failure) return;
+  document.title = to.meta.title ? `${to.meta.title} · EKS 직무자격인증` : 'EKS 직무자격인증';
   if (to.path === from.path) return;
   requestAnimationFrame(() => {
     const main = document.querySelector<HTMLElement>('#main');

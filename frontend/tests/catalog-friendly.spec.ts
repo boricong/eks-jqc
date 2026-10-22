@@ -173,7 +173,11 @@ test('일부 초안 저장·등록은 다른 자격의 입력을 유지하고 �
   await review.getByRole('button', { name: '선택 기준 초안 저장', exact: true }).click();
   await expect(page.locator('.catalog-nav-item')).toHaveCount(2);
   await expect(page.getByText('서버 저장 전 수정 내용이 있습니다.', { exact: true })).toBeVisible();
+  await expect(
+    review.getByRole('button', { name: '선택 기준 초안 저장', exact: true }),
+  ).toBeEnabled();
   await review.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(review).not.toBeVisible();
   await page.getByRole('button', { name: '검토 후 사용 등록', exact: true }).click();
   await page
     .getByRole('dialog')

@@ -133,7 +133,7 @@ onBeforeRouteUpdate(canLeave);
 </script>
 <template>
   <div v-if="valid && a && e && c" class="container page assessment-page">
-    <RouterLink :to="returnPath" class="back-link">← {{ c.title }}</RouterLink>
+    <RouterLink :to="returnPath" class="back-link">← 자격 상세 · {{ c.title }}</RouterLink>
     <div class="page-heading">
       <div>
         <h1>{{ isResult ? '평가 결과' : kindLabels[kind] }}</h1>
@@ -175,7 +175,7 @@ onBeforeRouteUpdate(canLeave);
         /></span>
       </div>
       <div class="actions">
-        <RouterLink :to="returnPath" class="button secondary">과정으로</RouterLink
+        <RouterLink :to="returnPath" class="button secondary">자격 상세로</RouterLink
         ><button v-if="result === 'failed'" class="button primary" @click="prepare">
           다시 응시</button
         ><RouterLink v-if="a.certifiedAt" :to="`/certifications/${a.id}`" class="button primary"
@@ -270,7 +270,7 @@ onBeforeRouteUpdate(canLeave);
           { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[saveStatus]
         }}</span>
         <div class="actions">
-          <RouterLink :to="returnPath" class="button secondary">과정으로</RouterLink
+          <RouterLink :to="returnPath" class="button secondary">자격 상세로</RouterLink
           ><button
             v-if="stage === 'review'"
             class="button primary"
@@ -289,7 +289,7 @@ onBeforeRouteUpdate(canLeave);
         </div>
       </div></template
     ><AppDialog v-model:open="materialOpen" :title="`${c.title} · 학습자료`"
-      ><CourseMaterials :materials="c.materials"
+      ><CourseMaterials :materials="c.materials" :context-key="`${store.actorId}:${a.id}:${c.id}`"
     /></AppDialog>
   </div>
   <div v-else class="container page empty-state">
