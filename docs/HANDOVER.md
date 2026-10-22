@@ -4,11 +4,11 @@
 
 전체 구현 범위, 사용자 결정, 실행 환경, 변경 이력과 기록 형식은 [루트 인수인계](../handover.md)를 따른다. 과거 이력은 원본에 보존하고, 이 문서는 현재 작업의 요약과 진입점을 제공한다.
 
-## 검증 완료 — 누적 변경 전체 커밋·푸시 준비
+## 완료 — 누적 변경 전체 커밋·푸시
 
 - 2026-10-23: 사용자가 현재 작업 폴더의 누적 변경 전체를 커밋·푸시하도록 명시했다. 기본자격/팀 적용·개인 계획 요청·홈·팀 자격 상세·알림·계획 최종 확인·조직 이력 등 코드, 회귀 시험과 문서를 함께 포함한다. 대시보드 항목은 설계 제안 기록만 포함하며 구현 완료로 취급하지 않는다.
 - 기존 HEAD `899d080`, 대상 `origin/main`, 총125개 파일. Node24.22.0 임시 JSON 전체 서버 **153/153**, 전체 Playwright **140/140**(3.2분), TypeScript/Vite 빌드, 변경 프런트67개 파일 Prettier·diff 검사 통과. 검증 중 소스 변경 없음 확인. 기존 Zod 주석·590.59kB 번들 권고 경고 유지.
-- 로그 `/private/tmp/eks-publish-{server,browser,build,format}.log`, 캡처 `/private/tmp/eks-publish-browser/`. 실행 데이터·로컬 시험 산출물은 제외하고 소스·시험·문서만 커밋한다. 실제 커밋·푸시 결과는 완료 후 아래 기록에 추가한다.
+- 로그 `/private/tmp/eks-publish-{server,browser,build,format}.log`, 캡처 `/private/tmp/eks-publish-browser/`. 실행 데이터·로컬 시험 산출물은 제외하고 소스·시험·문서만 커밋한다. `661befa`(`feat: expand qualification planning and refine management UI`)를 생성하고 `git push origin main` 성공을 확인했다(`899d080..661befa`). 후속 인수인계 기록 커밋은 `git log -1`을 따른다.
 
 ## 설계 제안 — 팀·세부조직 인증 현황 대시보드
 
