@@ -68,6 +68,17 @@ const validationShown = ref(false);
 const courseEditor = ref<InstanceType<typeof CourseEditor>>();
 const savePreview = ref<any>(null);
 const savedLinks = ref<{ id: string; title: string; version: number }[]>([]);
+const listHeading = ref<HTMLElement>();
+const courseSaveResult = ref<{
+  actor: string;
+  organization: string;
+  id: string;
+  title: string;
+  version: number;
+  readiness: string[];
+  links: { id: string; title: string; version: number }[];
+  newVersion: boolean;
+} | null>(null);
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
 );
@@ -99,6 +110,19 @@ function plain<T>(item: T): T {
 watch(
   () => [route.fullPath, store.actorId, store.managementLv1],
   () => {
+    const reviewSavedCourse =
+      !!courseSaveResult.value &&
+      courseSaveResult.value.id === route.params.id &&
+      courseSaveResult.value.actor === store.actorId &&
+      courseSaveResult.value.organization === store.managementLv1;
+    if (
+      courseSaveResult.value &&
+      (section.value !== 'courses' ||
+        route.params.id ||
+        courseSaveResult.value.actor !== store.actorId ||
+        courseSaveResult.value.organization !== store.managementLv1)
+    )
+      courseSaveResult.value = null;
     if (
       editingContext.value === `${store.actorId}:${store.managementLv1}` &&
       editor.value &&
@@ -117,11 +141,12 @@ watch(
       ? 'all'
       : remembered.filter || (section.value === 'courses' ? 'active' : 'all');
     savePreview.value = null;
+    savedLinks.value = [];
     selectedAssignment.value = null;
     noticeDraft.value = null;
     reason.value = '';
     errors.value = [];
-    validationShown.value = false;
+    validationShown.value = reviewSavedCourse;
     courseDraft.value = null;
     qualificationDraft.value = null;
     if (route.params.id && section.value === 'courses') {
@@ -245,8 +270,33 @@ async function saveCatalog(confirm = false) {
     if (context !== `${store.actorId}:${store.managementLv1}:${editor.value?.id}`) return;
     savePreview.value = null;
     savedLinks.value = result.linkedQualifications || [];
-    if (courseDraft.value) courseDraft.value = plain(store.course(result.id));
-    else qualificationDraft.value = plain(store.qualification(result.id));
+    if (courseDraft.value) {
+      const saved = store.course(result.id);
+      courseDraft.value = plain(saved);
+      courseSaveResult.value = {
+        actor: store.actorId,
+        organization: store.managementLv1,
+        id: saved.id,
+        title: saved.title || '이름 없는 인증Set',
+        version: saved.version,
+        readiness: result.readiness || [],
+        links: result.linkedQualifications || [],
+        newVersion: !!result.newVersion,
+      };
+      await router.replace(store.managementLink('/admin/courses'));
+      await nextTick();
+      // Apply the contextual destination after the router's general main focus.
+      requestAnimationFrame(() => {
+        if (
+          section.value === 'courses' &&
+          !route.params.id &&
+          courseSaveResult.value?.id === saved.id
+        )
+          listHeading.value?.focus();
+      });
+      return;
+    }
+    qualificationDraft.value = plain(store.qualification(result.id));
     await router.replace(store.managementLink(`/admin/${section.value}/${result.id}`));
     validationShown.value = true;
     errors.value = result.readiness || [];
@@ -431,17 +481,32 @@ onBeforeRouteUpdate(canLeave);
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
           다시 불러오기
         </button>
-        <details class="criterion-versions">
-          <summary>버전 이력 · {{ relatedVersions.length }}개</summary>
-          <ul>
-            <li v-for="version in relatedVersions" :key="version.id">
-              <RouterLink :to="store.managementLink(`/admin/${section}/${version.id}`)"
-                >v{{ version.version }} · {{ version.title || '이름 없는 기준'
-                }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
-              >
-            </li>
-          </ul>
-        </details>
+        <div :class="{ 'course-editor-meta': !!courseDraft }">
+          <details class="criterion-versions">
+            <summary>버전 이력 · {{ relatedVersions.length }}개</summary>
+            <ul>
+              <li v-for="version in relatedVersions" :key="version.id">
+                <RouterLink :to="store.managementLink(`/admin/${section}/${version.id}`)"
+                  >v{{ version.version }} · {{ version.title || '이름 없는 기준'
+                  }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
+                >
+              </li>
+            </ul>
+          </details>
+          <CourseLifecycle
+            v-if="courseDraft"
+            :key="courseDraft.id"
+            :course="store.course(courseDraft.id) || courseDraft"
+            :disabled="
+              busy || JSON.stringify(courseDraft) !== JSON.stringify(store.course(courseDraft.id))
+            "
+            @changed="courseDraft = plain(store.course(courseDraft.id))"
+            @deleted="
+              courseDraft = null;
+              router.push(store.managementLink('/admin/courses'));
+            "
+          />
+        </div>
         <QualificationLifecycle
           v-if="qualificationDraft && !readOnly"
           :qualification="store.qualification(qualificationDraft.id)"
@@ -454,19 +519,6 @@ onBeforeRouteUpdate(canLeave);
           @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
           @version-created="
             (id) => router.push(store.managementLink(`/admin/qualifications/${id}`))
-          "
-        />
-        <CourseLifecycle
-          v-if="courseDraft"
-          :key="courseDraft.id"
-          :course="store.course(courseDraft.id) || courseDraft"
-          :disabled="
-            busy || JSON.stringify(courseDraft) !== JSON.stringify(store.course(courseDraft.id))
-          "
-          @changed="courseDraft = plain(store.course(courseDraft.id))"
-          @deleted="
-            courseDraft = null;
-            router.push(store.managementLink('/admin/courses'));
           "
         />
         <p
@@ -611,7 +663,7 @@ onBeforeRouteUpdate(canLeave);
       </template>
       <template v-else>
         <PageHeading class="page-heading">
-          <h1>{{ title }}</h1>
+          <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
           <TemplateImport v-if="section === 'qualifications'" />
           <button
             v-if="section === 'qualifications' || section === 'courses'"
@@ -631,6 +683,42 @@ onBeforeRouteUpdate(canLeave);
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </PageHeading>
+        <section
+          v-if="section === 'courses' && courseSaveResult"
+          class="course-save-result"
+          aria-label="인증Set 저장 결과"
+        >
+          <p role="status">
+            <strong>저장 완료</strong> · {{ courseSaveResult.title }} · v{{
+              courseSaveResult.version
+            }}
+          </p>
+          <RouterLink
+            class="text-link"
+            data-testid="saved-course-link"
+            :to="store.managementLink(`/admin/courses/${courseSaveResult.id}`)"
+            >저장한 인증Set 확인<AppIcon name="chevron" :size="16"
+          /></RouterLink>
+          <details v-if="courseSaveResult.readiness.length">
+            <summary>신규 운영 전 보완 {{ courseSaveResult.readiness.length }}건</summary>
+            <ul>
+              <li v-for="message in courseSaveResult.readiness" :key="message">{{ message }}</li>
+            </ul>
+          </details>
+          <div
+            v-if="courseSaveResult.newVersion && courseSaveResult.links.length"
+            class="course-save-result-links"
+          >
+            <p>새 인증Set 버전은 기존 자격 구성에 자동 반영되지 않습니다.</p>
+            <RouterLink
+              v-for="q in courseSaveResult.links"
+              :key="q.id"
+              class="text-link"
+              :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+              >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
+            >
+          </div>
+        </section>
         <div
           v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
           class="list-toolbar"

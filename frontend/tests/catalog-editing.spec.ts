@@ -60,16 +60,16 @@ test('미참조 삭제 실패 입력 보존과 재시도·완전 제거', async 
     .toBe(false);
 });
 
-test('연결된 세로 편집 영역·키보드와 반응형에서 이름/번호 탐색을 구분한다', async ({
+test('상단 편집 탭·키보드와 반응형에서 구역/세로 번호 탐색을 구분한다', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
   const tabs = page.getByRole('tablist', { name: '인증Set 편집 항목', exact: true });
-  await expect(tabs).toHaveAttribute('aria-orientation', 'vertical');
+  await expect(tabs).toHaveAttribute('aria-orientation', 'horizontal');
   await tabs.getByRole('tab', { name: '기본정보', exact: true }).focus();
-  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: '학습자료', exact: true })).toBeFocused();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });

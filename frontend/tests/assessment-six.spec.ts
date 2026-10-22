@@ -1,5 +1,5 @@
 import { answerConfirmation } from './fixtures';
-import { courseSection, saveCriterion } from './catalog-helpers';
+import { courseSection, saveCriterion, openSavedCourse } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 
 test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초기화 뒤 오래된 저장 차단', async ({
@@ -199,7 +199,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
   await courseSection(page, '학습자료');
   const material = page
     .locator('section')
-    .filter({ has: page.getByRole('heading', { name: '학습자료', exact: true }) })
+    .filter({ has: page.getByRole('heading', { name: /^학습자료/ }) })
     .last();
   for (const [type, title] of [
     ['text', '직접 자료'],
@@ -227,6 +227,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .getByLabel('자료명')
     .fill('EDM 수정 자료');
   await saveCriterion(page);
+  await openSavedCourse(page, '학습자료');
   await expect
     .poll(() =>
       backend.store
@@ -251,6 +252,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .click();
   await answerConfirmation(page, true);
   await saveCriterion(page);
+  await openSavedCourse(page, '학습자료');
   await expect
     .poll(() =>
       backend.store
@@ -265,6 +267,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
     .getByLabel('자료명')
     .fill('작성 중 자료');
   await saveCriterion(page);
+  await openSavedCourse(page, '학습자료');
   await expect
     .poll(
       () =>
@@ -277,6 +280,7 @@ test('네 자료 유형의 추가·순서·수정·삭제와 인증Set 저장 �
   await expect(page.getByRole('button', { name: '저장', exact: true })).toBeEnabled();
   await expect(material.getByText('신규 운영 전 보완', { exact: true })).toBeVisible();
   await saveCriterion(page);
+  await openSavedCourse(page, '학습자료');
   await expect(page.locator('.editor-errors')).toContainText('학습자료');
   await page.locator('.editor-errors').getByRole('button').first().click();
   await expect(page.getByLabel('본문', { exact: true })).toBeFocused();
@@ -293,6 +297,7 @@ test('상황 설명 누락의 오류 이동·유형 해제 보존·추가 삭제
     .click();
   await page.getByLabel('상황 설명').fill('');
   await saveCriterion(page);
+  await openSavedCourse(page, '상황 대응 평가');
   await expect(page.locator('.editor-errors')).toContainText('상황');
   await page.locator('.editor-errors').getByRole('button').first().click();
   await expect(page.getByLabel('상황 설명')).toBeFocused();

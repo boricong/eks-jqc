@@ -13,8 +13,7 @@ const props = defineProps<{
   showErrors: boolean;
 }>();
 const uid = useId(),
-  section = ref('basic'),
-  expanded = ref(false);
+  section = ref('basic');
 const tabs = ref<InstanceType<typeof CompactTabs>>(),
   materials = ref<InstanceType<typeof CourseMaterialsEditor>>(),
   learning = ref<InstanceType<typeof CourseLearningEditor>>(),
@@ -33,10 +32,8 @@ const sections = computed(() =>
       : []),
   ].map((s) => ({ ...s, invalid: props.issues.some((i) => i.kind === s.id) })),
 );
-const currentLabel = computed(() => sections.value.find((s) => s.id === section.value)?.label);
 watch(section, (value) => {
   if (value === 'objective' || value === 'practical') kind.value = value;
-  expanded.value = false;
 });
 watch(sections, (list) => {
   if (!list.some((s) => s.id === section.value)) section.value = 'basic';
@@ -59,21 +56,12 @@ defineExpose({
 </script>
 <template>
   <section ref="root" class="course-editor-shell">
-    <nav class="course-editor-navigation" aria-label="인증Set 편집 항목" :class="{ expanded }">
-      <button
-        class="course-editor-menu-toggle"
-        type="button"
-        :aria-expanded="expanded"
-        @click="expanded = !expanded"
-      >
-        {{ currentLabel }} · 편집 항목 {{ expanded ? '접기' : '선택' }}
-      </button>
+    <nav class="course-editor-navigation" aria-label="인증Set 편집 항목">
       <CompactTabs
         ref="tabs"
         v-model="section"
         :items="sections"
         label="인증Set 편집 항목"
-        vertical
         :panel-id="`${uid}-content`"
       />
     </nav>

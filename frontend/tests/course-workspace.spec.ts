@@ -1,0 +1,257 @@
+import { test, expect, actor, answerConfirmation } from './fixtures';
+import { courseSection, openSavedCourse, saveCriterion } from './catalog-helpers';
+
+test('자료 목록·상단 탭·세로 번호의 네 화면 폭과 실제 정렬·글자 크기', async ({
+  page,
+  backend,
+}, info) => {
+  await backend.store.transact(
+    'admin-1',
+    crypto.randomUUID(),
+    'layout-fixture',
+    () => {},
+    (state) => {
+      const course = state.courses.find((c) => c.id === 'demo-course-1')!;
+      course.materials = [
+        {
+          id: 'long-text',
+          type: 'text',
+          title: '긴 학습자료 제목 · '.repeat(10),
+          content: '학습자료 본문과 확인할 내용입니다.\n'.repeat(20),
+          description: '',
+          url: '',
+        },
+        {
+          id: 'long-link',
+          type: 'edm',
+          title: 'EDM 작업 표준',
+          description: '자료 설명과 링크를 각각 확인합니다. '.repeat(12),
+          content: '',
+          url: `https://example.com/${'long-path/'.repeat(20)}`,
+        },
+        { id: 'unfinished', type: 'confluence', title: '', description: '', content: '', url: '' },
+      ];
+      return {};
+    },
+  );
+  await page.goto('/');
+  await actor(page, 'admin-1');
+  await page.goto('/admin/courses/demo-course-1');
+  const tabs = page.getByRole('tablist', { name: '인증Set 편집 항목', exact: true });
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await courseSection(page, '학습자료');
+    await expect(tabs).toHaveAttribute('aria-orientation', 'horizontal');
+    await expect(tabs.getByRole('tab').first()).toHaveCSS('font-size', '14px');
+    await expect(tabs.getByRole('tab').first()).toHaveCSS('min-height', '44px');
+    const row = page.locator('.editor-material-row').nth(1);
+    await expect(row.locator('h3')).toHaveCSS('font-size', '16px');
+    await expect(row.locator('h3')).toHaveCSS('font-weight', '500');
+    await expect(row.locator('.editor-material-info > p').first()).toHaveCSS('font-size', '14px');
+    await expect(row.locator('.editor-material-url')).toHaveCSS('font-size', '13px');
+    await expect(row.locator('.editor-material-url')).toContainText('https://example.com/');
+    const title = await row.locator('h3').boundingBox();
+    const description = await row.locator('.editor-material-info > p').first().boundingBox();
+    const url = await row.locator('.editor-material-url').boundingBox();
+    expect(title!.x).toBeCloseTo(description!.x, 0);
+    expect(url!.x).toBeCloseTo(title!.x, 0);
+    expect(url!.y).toBeGreaterThanOrEqual(description!.y + description!.height);
+    const actions = await row.locator('.editor-material-actions').boundingBox();
+    if (width < 1024) expect(actions!.y).toBeGreaterThanOrEqual(url!.y + url!.height);
+    else expect(actions!.x).toBeGreaterThan(title!.x + title!.width);
+    await expect(page.locator('.editor-material-row').last()).toContainText('신규 운영 전 보완');
+    await page.screenshot({ path: info.outputPath(`materials-${width}.png`), fullPage: true });
+    await row.getByRole('button', { name: '수정', exact: true }).click();
+    const form = page.getByRole('group', { name: '자료 수정', exact: true });
+    await expect(form.getByLabel('자료명')).toHaveCSS('font-size', width <= 768 ? '16px' : '14px');
+    await form.getByRole('button', { name: '취소', exact: true }).click();
+    for (const name of ['학습 항목', '지식 평가', '상황 대응 평가']) {
+      await courseSection(page, name);
+      const rail = page.locator('.course-editor-content .number-tabs:visible');
+      await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
+      const selected = rail.locator('[aria-selected="true"]');
+      await expect(selected).toHaveCSS('border-bottom-width', '0px');
+      await expect(selected).toHaveCSS('border-left-width', '3px');
+      await expect(selected).toHaveCSS('border-radius', '0px');
+      await expect(selected).toHaveCSS('color', 'rgb(68, 52, 212)');
+      const panel = page.locator('.course-editor-content [role="tabpanel"]:visible');
+      await expect(panel.locator('h3')).toHaveCSS('font-size', '16px');
+      const add = page.getByRole('button', {
+        name: name === '학습 항목' ? '학습 항목 추가' : '문항 추가',
+        exact: true,
+      });
+      const addBox = await add.boundingBox();
+      const railBox = await rail.boundingBox();
+      expect(addBox!.y + addBox!.height).toBeLessThanOrEqual(railBox!.y);
+      expect(addBox!.width).toBeGreaterThan(70);
+      await expect(page.locator('.course-editor-content h2:visible')).toHaveCSS(
+        'font-size',
+        '18px',
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+      ).toBe(true);
+      if (width <= 768) {
+        const heights = await page
+          .locator('.course-editor-shell button:visible')
+          .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+        expect(Math.min(...heights)).toBeGreaterThanOrEqual(44);
+      }
+      await page.screenshot({ path: info.outputPath(`${name}-${width}.png`), fullPage: true });
+      const lastInput = page
+        .locator(
+          '.course-editor-content input:visible:not([type="checkbox"]), .course-editor-content textarea:visible',
+        )
+        .last();
+      await lastInput.focus();
+      const inputBox = await lastInput.boundingBox();
+      const saveBox = await page.locator('.actionbar').boundingBox();
+      expect(inputBox!.y + inputBox!.height).toBeLessThanOrEqual(saveBox!.y + 1);
+    }
+    await tabs.getByRole('tab').last().press('Home');
+    await expect(tabs.getByRole('tab').first()).toBeFocused();
+    await tabs.getByRole('tab').first().press('End');
+    await expect(tabs.getByRole('tab').last()).toBeFocused();
+    const selectedBox = await tabs.getByRole('tab').last().boundingBox();
+    const tabsBox = await tabs.boundingBox();
+    expect(selectedBox!.x + selectedBox!.width).toBeLessThanOrEqual(
+      tabsBox!.x + tabsBox!.width + 1,
+    );
+  }
+  expect(errors).toEqual([]);
+});
+
+test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복귀·유형 전환 보존', async ({
+  page,
+  backend,
+}) => {
+  await backend.store.transact(
+    'admin-1',
+    crypto.randomUUID(),
+    'empty-fixture',
+    () => {},
+    (state) => {
+      const course = structuredClone(state.courses.find((c) => c.id === 'demo-course-1')!);
+      course.id = course.entityId = 'empty-course';
+      course.learningItems = [];
+      course.questions = [];
+      course.practicalQuestions = [];
+      state.courses.push(course);
+      return {};
+    },
+  );
+  await page.goto('/');
+  await actor(page, 'admin-1');
+  await page.goto('/admin/courses/empty-course');
+  await courseSection(page, '학습 항목');
+  await expect(page.locator('.course-editor-content .number-tabs:visible')).toHaveCount(0);
+  const empty = page.locator('.number-editor.is-empty:visible');
+  expect(
+    await empty.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+  ).toBe(1);
+  await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
+  await expect(page.getByLabel('학습 항목명')).toBeFocused();
+  await page.getByLabel('학습 항목명').fill('독립 수행');
+  await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
+  await page.getByLabel('학습 항목명').fill('작업 확인');
+  const rail = page.getByRole('tablist', { name: '학습 항목', exact: true });
+  await rail.getByRole('tab').last().press('ArrowUp');
+  await expect(page.getByLabel('학습 항목명')).toHaveValue('독립 수행');
+  await page.getByRole('button', { name: '이 항목 삭제', exact: true }).click();
+  await answerConfirmation(page, false);
+  await expect(rail.getByRole('tab')).toHaveCount(2);
+  await page.getByRole('button', { name: '이 항목 삭제', exact: true }).click();
+  await answerConfirmation(page, true);
+  await expect(rail.getByRole('tab').first()).toBeFocused();
+  for (const kind of ['지식 평가', '상황 대응 평가']) {
+    await courseSection(page, kind);
+    await expect(page.locator('.number-editor.is-empty:visible')).toBeVisible();
+    await page.getByRole('button', { name: '문항 추가', exact: true }).click();
+    await expect(
+      page.getByLabel(kind === '지식 평가' ? '문항' : '상황 설명', { exact: true }),
+    ).toBeFocused();
+    await page.getByLabel('문항', { exact: true }).fill(`${kind} 입력 보존`);
+    await courseSection(page, '학습 항목');
+    await courseSection(page, kind);
+    await expect(page.getByLabel('문항', { exact: true })).toHaveValue(`${kind} 입력 보존`);
+  }
+});
+
+test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·정렬·결과 안내를 보존한다', async ({
+  page,
+  backend,
+}) => {
+  await page.goto('/');
+  await actor(page, 'admin-1');
+  await page.goto('/admin/courses');
+  await page.getByLabel('인증Set 관리 검색').fill('필터에 없는 이름');
+  await page.getByLabel('상태 필터').selectOption('all');
+  await page.getByLabel('목록 정렬').selectOption('desc');
+  await page.getByLabel('페이지 크기').selectOption('50');
+  const count = backend.store.snapshot().courses.length;
+  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await page.getByLabel('인증Set명', { exact: true }).fill('새 인증Set 저장 확인');
+  await saveCriterion(page);
+  await expect(page).toHaveURL(/\/admin\/courses\?lv1OrganizationId=org-photo$/);
+  await expect(page.getByRole('heading', { name: '인증Set 관리', exact: true })).toBeFocused();
+  await expect(page.getByLabel('인증Set 관리 검색')).toHaveValue('필터에 없는 이름');
+  await expect(page.getByLabel('상태 필터')).toHaveValue('all');
+  await expect(page.getByLabel('목록 정렬')).toHaveValue('desc');
+  await expect(page.getByLabel('페이지 크기')).toHaveValue('50');
+  const receipt = page.getByRole('region', { name: '인증Set 저장 결과' });
+  await expect(receipt).toContainText('새 인증Set 저장 확인 · v1');
+  await expect(receipt.locator('details')).not.toHaveAttribute('open', '');
+  await receipt.locator('summary').click();
+  await expect(receipt.locator('li').first()).toBeVisible();
+  expect(backend.store.snapshot().courses).toHaveLength(count + 1);
+  await openSavedCourse(page);
+  await expect(receipt).toHaveCount(0);
+  await saveCriterion(page);
+  await expect(receipt).toContainText('새 인증Set 저장 확인 · v1');
+  expect(backend.store.snapshot().courses).toHaveLength(count + 1);
+  await page
+    .locator('.admin-sidebar')
+    .getByRole('link', { name: '자격 관리', exact: true })
+    .click();
+  await page
+    .locator('.admin-sidebar')
+    .getByRole('link', { name: '인증Set 관리', exact: true })
+    .click();
+  await expect(receipt).toHaveCount(0);
+});
+
+test('새 버전 저장 뒤 최신 조회 실패는 입력을 유지하고 재시도는 중복 생성 없이 목록과 연결 근거를 표시한다', async ({
+  page,
+  backend,
+}) => {
+  await page.goto('/');
+  await actor(page, 'admin-1');
+  await page.goto('/admin/courses/demo-course-1');
+  await page.getByLabel('인증Set명', { exact: true }).fill('조회 실패 후 복구');
+  let saved = false;
+  page.on('response', (res) => {
+    if (res.request().method() === 'PUT' && res.url().includes('/api/courses/')) saved = res.ok();
+  });
+  await page.route('**/api/workspace*', (route) => (saved ? route.abort() : route.continue()));
+  await saveCriterion(page);
+  const dialog = page.getByRole('dialog', { name: '기준 저장 확인' });
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/courses\/demo-course-1(?:\?|$)/);
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('조회 실패 후 복구');
+  expect(
+    backend.store.snapshot().courses.filter((c) => c.entityId === 'demo-course-1' && c.version > 1),
+  ).toHaveLength(1);
+  await page.unroute('**/api/workspace*');
+  await dialog.getByRole('button', { name: '저장 확인', exact: true }).click();
+  const receipt = page.getByRole('region', { name: '인증Set 저장 결과' });
+  await expect(receipt).toContainText('조회 실패 후 복구 · v2');
+  await expect(receipt).toContainText('기존 자격 구성에 자동 반영되지 않습니다');
+  await expect(receipt.getByRole('link', { name: /자격 구성에 반영/ })).toBeVisible();
+  expect(
+    backend.store.snapshot().courses.filter((c) => c.entityId === 'demo-course-1' && c.version > 1),
+  ).toHaveLength(1);
+  await openSavedCourse(page);
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('조회 실패 후 복구');
+});

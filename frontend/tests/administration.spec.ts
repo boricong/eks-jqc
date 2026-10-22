@@ -145,7 +145,11 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
   const guide = page.getByTestId('process-guide'),
     toggle = guide.getByRole('button');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(guide.getByText('AI 검수 항목', { exact: true })).toHaveCount(0);
+  await expect(
+    guide.getByRole('heading', { name: 'AI 검수 항목', exact: true, includeHidden: true }),
+  ).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-controls', 'process-guide-content');
+  await expect(page.locator('#process-guide-content')).toBeHidden();
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(guide).toContainText('정적 설명');

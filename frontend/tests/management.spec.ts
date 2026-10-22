@@ -1,5 +1,5 @@
 import { answerConfirmation } from './fixtures';
-import { courseSection, saveCriterion } from './catalog-helpers';
+import { courseSection, saveCriterion, openSavedCourse } from './catalog-helpers';
 import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -93,6 +93,7 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
     backend.store.beforeReplace = undefined;
   }
   await expect(page.getByLabel('관리할 Lv1 조직')).toBeEnabled();
+  await openSavedCourse(page);
   await page.reload();
   await expect(page.getByLabel('관리할 Lv1 조직')).toHaveValue('org-etch');
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('Etch 탭 초안');

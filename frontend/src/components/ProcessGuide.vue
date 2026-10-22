@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import AppIcon from './AppIcon.vue';
 import { useRoute } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import { processContext } from '../composables/useProcessContext';
@@ -319,49 +320,64 @@ watch(
     aria-labelledby="process-guide-title"
     data-testid="process-guide"
   >
-    <button
-      id="process-guide-title"
-      class="process-guide-toggle"
-      :aria-expanded="expanded"
-      aria-controls="process-guide-content"
-      @click="expanded = !expanded"
-    >
-      <span
-        ><strong>MVP 프로세스 검토</strong
-        ><span class="muted">현재 단계 · {{ guide.title }}</span></span
+    <h2 class="process-guide-heading">
+      <button
+        id="process-guide-title"
+        class="process-guide-toggle"
+        :aria-expanded="expanded"
+        aria-controls="process-guide-content"
+        @click="expanded = !expanded"
       >
-      <span>{{ expanded ? '설명 접기 −' : '프로세스 설명과 AI 검수 보기 ＋' }}</span>
-    </button>
-    <div v-if="expanded" id="process-guide-content" class="process-guide-content">
-      <p class="small-label">업무 처리와 별도의 검토 안내 · 검토 기준 v11 · 2026-10-22</p>
+        <span class="process-guide-label">MVP 프로세스 검토</span>
+        <span class="process-guide-context">현재 단계 · {{ guide.title }}</span>
+        <span class="process-guide-action"
+          >{{ expanded ? '접기' : '검토 내용 펼치기' }}
+          <AppIcon name="down" :size="16" />
+        </span>
+      </button>
+    </h2>
+    <div v-show="expanded" id="process-guide-content" class="process-guide-content">
       <ol class="process-steps" aria-label="전체 인증 절차">
         <li v-for="(s, i) in steps" :key="s" :aria-current="i === guide.step ? 'step' : undefined">
-          {{ i + 1 }}. {{ s }}
+          <span class="process-step-number">{{ i + 1 }}</span>
+          <span>{{ s }}</span
+          ><span v-if="i === guide.step" class="process-step-current">현재</span>
         </li>
       </ol>
-      <h3>현재 단계 · {{ guide.title }}</h3>
-      <p>{{ guide.purpose }}</p>
+      <div class="process-current">
+        <h3>현재 단계 · {{ guide.title }}</h3>
+        <p>{{ guide.purpose }}</p>
+      </div>
       <div class="process-guide-columns">
-        <section>
-          <h4>이 화면에서 할 일</h4>
-          <p>{{ guide.action }}</p>
-          <h4>이후 흐름</h4>
-          <p>{{ guide.next }}</p>
+        <section class="process-work" aria-label="업무 안내">
+          <div>
+            <h4>이 화면에서 할 일</h4>
+            <p>{{ guide.action }}</p>
+          </div>
+          <div>
+            <h4>이후 흐름</h4>
+            <p>{{ guide.next }}</p>
+          </div>
         </section>
-        <section class="process-review">
+        <section class="process-review" aria-label="AI 검수 항목">
           <h4>AI 검수 항목</h4>
-          <p class="muted">
+          <p class="process-review-note">
             코드·업무 규칙을 검토해 작성한 정적 설명입니다. 현재 데이터를 실시간 AI로 검수한 결과가
             아닙니다.
           </p>
-          <strong>설계상 제약·확인 사항</strong>
-          <ul>
-            <li v-for="text in guide.limits" :key="text">{{ text }}</li>
-          </ul>
-          <strong>개선 제안</strong>
-          <p>{{ guide.suggestion }}</p>
+          <div class="process-review-group">
+            <h5>설계상 제약·확인 사항</h5>
+            <ul>
+              <li v-for="text in guide.limits" :key="text">{{ text }}</li>
+            </ul>
+          </div>
+          <div class="process-review-group">
+            <h5>개선 제안</h5>
+            <p>{{ guide.suggestion }}</p>
+          </div>
         </section>
       </div>
+      <p class="process-guide-meta">업무 처리와 별도의 검토 안내 · 검토 기준 v11 · 2026-10-22</p>
     </div>
   </aside>
 </template>

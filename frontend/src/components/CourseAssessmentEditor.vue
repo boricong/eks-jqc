@@ -31,9 +31,10 @@ async function restoreQuestionFocus() {
   if (!restoreAfterDelete) return;
   restoreAfterDelete = false;
   await nextTick();
-  root.value
-    ?.querySelector<HTMLElement>('.question-tabs [aria-selected="true"], [data-field="add"]')
-    ?.focus();
+  (
+    root.value?.querySelector<HTMLElement>('.question-tabs [aria-selected="true"]') ||
+    root.value?.querySelector<HTMLElement>('[data-field="add"]')
+  )?.focus();
 }
 const kinds = computed(() =>
   (['objective', 'practical'] as Kind[]).filter((k) => props.course.assessmentKinds.includes(k)),
@@ -205,10 +206,20 @@ defineExpose({ focusIssue });
             typeErrors.passScore
           }}</span></label
         >
+        <span class="editor-count">{{ items.length }}문항</span>
+        <button
+          v-if="!disabled"
+          class="button secondary"
+          type="button"
+          data-field="add"
+          @click="add"
+        >
+          문항 추가
+        </button>
       </div>
       <p v-if="typeErrors.add" class="field-error">{{ typeErrors.add }}</p>
-      <div class="number-editor">
-        <div class="question-navigation">
+      <div class="number-editor" :class="{ 'is-empty': !current }">
+        <div v-if="items.length" class="question-navigation">
           <CompactTabs
             ref="itemTabs"
             class="question-tabs"
@@ -219,15 +230,6 @@ defineExpose({ focusIssue });
             :label="`${kindLabels[activeKind]} 문항`"
             :panel-id="`${uid}-item-panel`"
           />
-          <button
-            v-if="!disabled"
-            class="button secondary"
-            type="button"
-            data-field="add"
-            @click="add"
-          >
-            문항 추가
-          </button>
         </div>
         <div
           v-if="current"
@@ -299,8 +301,8 @@ defineExpose({ focusIssue });
             :errors="errors"
           />
         </div>
-        <p v-else class="empty-state">
-          등록된 {{ activeKind === 'practical' ? '실기 항목' : '문항' }}이 없습니다.{{
+        <p v-else class="editor-empty">
+          등록된 {{ activeKind === 'practical' ? '상황 대응 문항' : '지식 문항' }}이 없습니다.{{
             disabled ? '' : ' 추가 버튼으로 작성을 시작하세요.'
           }}
         </p>

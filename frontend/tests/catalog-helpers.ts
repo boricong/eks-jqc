@@ -1,9 +1,14 @@
 import { expect, type Page } from '@playwright/test';
 export async function courseSection(page: Page, name: string) {
-  const toggle = page.locator('.course-editor-menu-toggle');
   const tabs = page.getByRole('tablist', { name: '인증Set 편집 항목', exact: true });
-  if ((await toggle.isVisible()) && !(await tabs.isVisible())) await toggle.click();
-  await tabs.getByRole('tab', { name, exact: true }).click();
+  await tabs.getByRole('tab', { name: new RegExp(`^${name}( · 보완 필요)?$`) }).click();
+}
+export async function openSavedCourse(page: Page, section?: string) {
+  await expect(page).toHaveURL(/\/admin\/courses(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: '인증Set 관리', exact: true })).toBeVisible();
+  await page.getByTestId('saved-course-link').click();
+  await expect(page.getByLabel('인증Set명', { exact: true })).toBeEnabled();
+  if (section) await courseSection(page, section);
 }
 export async function saveCriterion(page: Page) {
   const dialog = page.getByRole('dialog', { name: '기준 저장 확인', exact: true });

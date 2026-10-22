@@ -242,13 +242,6 @@ input[type='radio'] {
 .personal-tasks .muted {
   color: var(--ink-secondary);
 }
-.stat-bottom > svg {
-  color: var(--ink-secondary);
-  margin-bottom: 8px;
-}
-.stat-item:hover .stat-bottom > svg {
-  color: var(--ink);
-}
 .home-current .progress-label {
   color: var(--ink-secondary);
 }
@@ -1315,15 +1308,6 @@ input[type='radio'] {
   .home-card-bottom .button {
     align-self: flex-end;
   }
-  .home-date {
-    font-size: var(--text-caption);
-  }
-  .home-heading h1 {
-    font-size: var(--text-display-compact);
-  }
-  .stat-item {
-    padding: 0 24px;
-  }
   .workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -1482,37 +1466,8 @@ input[type='radio'] {
     padding-top: 32px;
     padding-bottom: 40px;
   }
-  .home-heading {
-    display: block;
-  }
-  .home-heading h1 {
-    font-size: var(--text-display-compact);
-  }
-  .home-date {
-    display: block;
-    margin-top: 16px;
-  }
   .eyebrow {
     font-size: var(--text-badge);
-  }
-  .stats-panel {
-    padding: 20px 0;
-    margin-bottom: 20px;
-  }
-  .stat-item {
-    padding: 0 16px;
-  }
-  .stat-top {
-    font-size: var(--text-caption);
-    line-height: 1.4;
-    min-height: 32px;
-  }
-  .stat-top svg,
-  .stat-bottom > svg {
-    display: none;
-  }
-  .stat-bottom {
-    margin-top: 12px;
   }
   .home-columns {
     grid-template-columns: 1fr;
@@ -1537,9 +1492,6 @@ input[type='radio'] {
   }
   .home-card-bottom .button {
     padding-inline: 16px;
-  }
-  .home-date {
-    font-size: var(--text-caption);
   }
   .button,
   .icon-button,
@@ -2347,56 +2299,6 @@ input[type='radio'] {
   display: block;
   margin-top: 4px;
 }
-.learning-tabs {
-  display: flex;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  padding: 8px 2px 0;
-  gap: 4px;
-}
-.learning-tabs button {
-  text-align: left;
-  color: var(--ink);
-  background: var(--surface-tint);
-  flex-shrink: 0;
-  min-width: 72px;
-  max-width: 180px;
-  min-height: 36px;
-  padding: 6px 10px;
-  font-size: var(--text-caption);
-  line-height: 1.4;
-  border: 1px solid var(--line);
-  border-radius: 4px 4px 0 0;
-}
-.learning-tabs button.active {
-  border-bottom: 3px solid var(--primary);
-  border-color: var(--primary);
-  background: var(--surface);
-}
-.learning-tabs button.invalid:not(.active) {
-  border-color: var(--danger);
-}
-.learning-tabs button span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.learning-tab-panel {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 0 8px 8px 8px;
-}
-.learning-tab-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.learning-tab-panel .form-grid > .field {
-  margin-bottom: 8px;
-}
 .plan-context p,
 .validity-panel p {
   margin: 12px 0;
@@ -2710,88 +2612,6 @@ input[type='radio'] {
   padding-top: 28px;
   padding-bottom: 16px;
   max-width: 1280px;
-}
-.home-heading {
-  margin-bottom: 16px;
-  align-items: center;
-}
-.home-heading h1 {
-  line-height: 1.15;
-  font-size: var(--text-display);
-  letter-spacing: -0.3px;
-}
-.home-heading .organization-path {
-  max-width: 760px;
-  margin-top: 8px;
-  font-size: var(--text-caption);
-}
-.home-date {
-  padding-bottom: 4px;
-  font-size: var(--text-caption);
-}
-.stats-panel {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: var(--surface);
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  box-shadow: none;
-  padding: 16px 0;
-  margin-bottom: 8px;
-}
-.stat-item {
-  display: block;
-  position: relative;
-  padding: 0 24px;
-}
-.stat-item + .stat-item {
-  border-left: 1px solid var(--line);
-}
-.stat-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-caption);
-  color: var(--ink-secondary);
-  font-weight: var(--weight-title);
-}
-.stat-top svg {
-  color: var(--link);
-  box-sizing: content-box;
-  opacity: 1;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-  width: 18px;
-  height: 18px;
-}
-.stat-item:nth-child(2) .stat-top svg {
-  color: var(--success);
-  background: var(--success-bg);
-}
-.stat-item:nth-child(3) .stat-top svg {
-  color: var(--certified);
-  background: var(--certified-bg);
-}
-.stat-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-}
-.stat-value {
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  font-size: var(--text-display);
-  font-weight: var(--weight-control);
-  letter-spacing: 0;
-}
-.stat-bottom > svg,
-.stat-item:hover .stat-bottom > svg {
-  color: var(--link);
-  margin-bottom: 0;
 }
 .home-columns {
   display: grid;
@@ -3633,21 +3453,6 @@ input[type='radio'] {
   .home-secondary {
     gap: 16px;
   }
-  .stats-panel {
-    padding: 16px 0;
-  }
-  .stat-item {
-    padding: 0 16px;
-  }
-  .stat-top {
-    font-size: var(--text-caption);
-  }
-  .home-heading h1 {
-    font-size: var(--text-display-compact);
-  }
-  .home-date {
-    font-size: var(--text-caption);
-  }
   .admin-shell {
     grid-template-columns: 1fr;
     gap: 18px;
@@ -3701,28 +3506,8 @@ input[type='radio'] {
   }
 }
 @media (max-width: 480px) {
-  .home-heading {
-    gap: 10px;
-    align-items: start;
-  }
-  .home-date {
-    display: none;
-  }
   .home-page {
     padding-top: 24px;
-  }
-  .stat-item {
-    padding: 0 10px;
-  }
-  .stat-top {
-    display: block;
-    font-size: var(--text-caption);
-  }
-  .stat-top svg {
-    display: none;
-  }
-  .stat-bottom > svg {
-    width: 14px;
   }
   .home-current {
     padding-left: 12px;
@@ -3980,8 +3765,7 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
   }
 }
 @media (max-width: 768px) {
-  h1,
-  .home-heading h1 {
+  h1 {
     font-size: var(--text-display-compact);
   }
   .account {
@@ -4060,7 +3844,6 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
 }
 @media (max-width: 768px) {
   .admin-content h1,
-  .home-heading h1,
   h1 {
     font-size: var(--text-display-compact);
   }
@@ -4068,7 +3851,6 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
   .button.small,
   .icon-button,
   .text-link,
-  .learning-tabs button,
   .bulk-tabs button,
   .list-controls select,
   .pagination .icon-button {

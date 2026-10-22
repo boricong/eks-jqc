@@ -1,4 +1,4 @@
-import { courseSection, saveCriterion } from './catalog-helpers';
+import { courseSection, saveCriterion, openSavedCourse } from './catalog-helpers';
 import { test, expect, actor } from './fixtures';
 import type { Page } from '@playwright/test';
 
@@ -28,6 +28,7 @@ test('정답 선택지 인덱스·추가 선택지·미정 정답·저장 재조
   await page.getByRole('button', { name: '1번 선택지 삭제', exact: true }).click();
   await expect(page.getByLabel(`${n - 1}번 선택지를 정답으로 지정`, { exact: true })).toBeChecked();
   await saveCriterion(page);
+  await openSavedCourse(page, '지식 평가');
   await expect
     .poll(
       () =>
@@ -45,6 +46,7 @@ test('정답 선택지 인덱스·추가 선택지·미정 정답·저장 재조
   await page.getByRole('button', { name: `${n - 1}번 선택지 삭제`, exact: true }).click();
   await expect(page.locator('.objective-choice input:checked')).toHaveCount(0);
   await saveCriterion(page);
+  await openSavedCourse(page, '지식 평가');
   await expect(page.locator('.editor-errors')).toContainText('정답을 선택');
   await page
     .locator('.editor-errors')
@@ -55,6 +57,7 @@ test('정답 선택지 인덱스·추가 선택지·미정 정답·저장 재조
   expect(box!.y).toBeGreaterThan(0);
   expect(box!.y + box!.height).toBeLessThan(800);
   await saveCriterion(page);
+  await openSavedCourse(page, '지식 평가');
   await expect
     .poll(
       () =>

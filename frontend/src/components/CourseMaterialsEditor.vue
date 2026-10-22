@@ -3,6 +3,7 @@ import { confirmAction } from '../composables/useConfirmation';
 import { ref, computed, watch, nextTick } from 'vue';
 import { materialTypeLabels, type Course, type LearningMaterial } from '@eks/contracts';
 import type { CourseIssue } from '../course-editor';
+import AppIcon from './AppIcon.vue';
 const props = defineProps<{ course: Course; disabled: boolean }>();
 const editing = ref<LearningMaterial | null>(null),
   error = ref('');
@@ -80,9 +81,11 @@ async function focusIssue(issue: CourseIssue) {
 defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssue });
 </script>
 <template>
-  <section class="panel editor-panel">
+  <section class="panel editor-panel materials-editor">
     <div class="section-heading">
-      <h2>학습자료</h2>
+      <h2>
+        학습자료 <span class="editor-count">{{ course.materials.length }}개</span>
+      </h2>
       <button v-if="!disabled" type="button" class="button secondary" @click="add">
         자료 추가
       </button>
@@ -90,17 +93,32 @@ defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssu
     <p class="muted">
       학습 안내에 표시할 자료입니다. 열람 여부를 기록하거나 평가 조건으로 사용하지 않습니다.
     </p>
-    <ol class="materials-list">
-      <li v-for="(m, i) in course.materials" :key="m.id" class="material-card">
-        <span class="small-label">{{ materialTypeLabels[m.type] }}</span
-        ><strong>{{ m.title || '이름 없는 자료' }}</strong>
-        <span
-          v-if="!m.title.trim() || (m.type === 'text' ? !m.content.trim() : !m.url)"
-          class="small-label"
-          >신규 운영 전 보완</span
+    <ol class="editor-materials-list">
+      <li v-for="(m, i) in course.materials" :key="m.id" class="editor-material-row">
+        <span class="editor-material-type"
+          ><AppIcon :name="m.type === 'text' ? 'clipboard' : 'diagonal'" :size="16" />{{
+            materialTypeLabels[m.type]
+          }}</span
         >
-        <p>{{ m.description || (m.type === 'text' ? m.content.slice(0, 100) : m.url) }}</p>
-        <div v-if="!disabled" class="actions">
+        <div class="editor-material-info">
+          <h3>{{ m.title || '이름 없는 자료' }}</h3>
+          <span
+            v-if="!m.title.trim() || (m.type === 'text' ? !m.content.trim() : !m.url)"
+            class="editor-material-warning"
+            ><AppIcon name="alert" :size="14" />신규 운영 전 보완</span
+          >
+          <p v-if="m.description">{{ m.description }}</p>
+          <p v-if="m.type === 'text' && m.content" class="editor-material-excerpt">
+            {{ m.content.slice(0, 160) }}{{ m.content.length > 160 ? '…' : '' }}
+          </p>
+          <p v-else-if="m.url" class="editor-material-url">{{ m.url }}</p>
+        </div>
+        <div
+          v-if="!disabled"
+          class="editor-material-actions"
+          :aria-label="`${m.title || '이름 없는 자료'} 작업`"
+          role="group"
+        >
           <button type="button" class="text-link" @click="edit(m)">수정</button
           ><button
             type="button"
@@ -122,32 +140,38 @@ defineExpose({ pending: computed(() => !!editing.value), commit: save, focusIssu
         </div>
       </li>
     </ol>
-    <p v-if="!course.materials.length && !editing" class="muted">자료를 추가할 수 있습니다.</p>
-    <fieldset v-if="editing" class="material-card" :disabled="disabled">
+    <p v-if="!course.materials.length && !editing" class="editor-empty">
+      등록된 학습자료가 없습니다. 자료 추가로 작성을 시작하세요.
+    </p>
+    <fieldset v-if="editing" class="editor-material-form" :disabled="disabled">
       <legend>
         {{ course.materials.some((m) => m.id === editing?.id) ? '자료 수정' : '새 자료' }}
       </legend>
-      <div class="form-grid">
+      <div class="form-grid material-fields">
         <label class="field"
-          >유형<select v-model="editing.type">
+          ><span>유형</span
+          ><select v-model="editing.type">
             <option v-for="(label, key) in materialTypeLabels" :key="key" :value="key">
               {{ label }}
             </option>
           </select></label
         ><label class="field"
-          >자료명<input v-model="editing.title" data-material-field="title"
+          ><span>자료명</span><input v-model="editing.title" data-material-field="title"
         /></label>
       </div>
       <label v-if="editing.type === 'text'" class="field"
-        >본문<textarea rows="5" v-model="editing.content" data-material-field="content" /></label
+        ><span>본문</span
+        ><textarea rows="5" v-model="editing.content" data-material-field="content" /></label
       ><template v-else
         ><label class="field"
-          >URL<input
+          ><span>URL</span
+          ><input
             type="url"
             v-model="editing.url"
             placeholder="https://"
             data-material-field="url" /></label
-        ><label class="field">설명 · 선택<textarea v-model="editing.description" rows="2" /></label
+        ><label class="field"
+          ><span>설명 · 선택</span><textarea v-model="editing.description" rows="2" /></label
       ></template>
       <p v-if="error" class="field-error" role="alert">{{ error }}</p>
       <div class="actions">

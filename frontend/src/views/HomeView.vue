@@ -136,45 +136,48 @@ const stats = computed(() =>
 </script>
 <template>
   <div class="container home-page">
-    <PageHeading class="page-heading home-heading">
-      <div>
-        <h1>{{ store.actor.name }} 님</h1>
-        <p class="muted organization-path">
-          {{ store.actor.organizationPath.map((p) => p.name).join(' › ') }}
-        </p>
-      </div>
-      <span class="muted home-date">{{
-        new Intl.DateTimeFormat('ko-KR', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          weekday: 'long',
-        }).format(new Date())
-      }}</span>
-    </PageHeading>
+    <section class="home-hero" aria-labelledby="home-person-title">
+      <PageHeading class="page-heading home-heading">
+        <div>
+          <h1 id="home-person-title">{{ store.actor.name }} 님</h1>
+          <p class="muted organization-path">
+            {{ store.actor.organizationPath.map((p) => p.name).join(' › ') }}
+          </p>
+        </div>
+        <span class="muted home-date">{{
+          new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long',
+            timeZone: 'Asia/Seoul',
+          }).format(new Date())
+        }}</span>
+      </PageHeading>
+      <p v-if="store.fullManagement" class="hero-eligibility">
+        {{
+          store.data.eligibilitySummary.eligible
+            ? `취득 대상 ${store.data.eligibilitySummary.eligible}명`
+            : '취득 대상 없음'
+        }}
+        · Hold 제외 {{ store.data.eligibilitySummary.held }}명
+      </p>
+      <section class="stats-panel" aria-label="내 현황">
+        <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
+          ><div class="stat-top">
+            <span>{{ stat.label }}</span
+            ><AppIcon :name="stat.icon" />
+          </div>
+          <div class="stat-bottom">
+            <span class="stat-value">{{ stat.value }}</span
+            ><AppIcon name="diagonal" :size="18" /></div
+        ></RouterLink>
+      </section>
+    </section>
     <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
       취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은 별도로
       유지됩니다.
     </p>
-    <p v-if="store.fullManagement" class="muted">
-      {{
-        store.data.eligibilitySummary.eligible
-          ? `취득 대상 ${store.data.eligibilitySummary.eligible}명`
-          : '취득 대상 없음'
-      }}
-      · Hold 제외 {{ store.data.eligibilitySummary.held }}명
-    </p>
-    <section class="stats-panel" aria-label="내 현황">
-      <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
-        ><div class="stat-top">
-          <span>{{ stat.label }}</span
-          ><AppIcon :name="stat.icon" />
-        </div>
-        <div class="stat-bottom">
-          <span class="stat-value">{{ stat.value }}</span
-          ><AppIcon name="diagonal" :size="18" /></div
-      ></RouterLink>
-    </section>
     <nav class="home-shortcuts" aria-label="업무 바로가기">
       <RouterLink v-if="store.hasRole('learner')" to="/plans" class="text-link"
         >내 계획<AppIcon name="chevron" :size="16"

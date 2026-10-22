@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 240" preserveAspectRatio="none">
+  <defs>
+    <filter id="blur" x="-60%" y="-180%" width="220%" height="460%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="55"/>
+    </filter>
+  </defs>
+  <path fill="#f4f1ff" d="M0 0h1280v240H0z"/>
+  <g filter="url(#blur)">
+    <ellipse fill="#f5e9d4" cx="100" cy="100" rx="340" ry="160"/>
+    <ellipse fill="#f96bee" opacity=".48" cx="670" cy="-90" rx="300" ry="130"/>
+    <ellipse fill="#533afd" opacity=".55" cx="1170" cy="-70" rx="320" ry="160"/>
+    <ellipse fill="#ea2261" opacity=".42" cx="1300" cy="275" rx="270" ry="150"/>
+    <ellipse fill="#665efd" opacity=".32" cx="530" cy="300" rx="350" ry="130"/>
+  </g>
+  <path fill="#fff" opacity=".32" d="M0 0h1280v240H0z"/>
+</svg>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { confirmAction } from '../composables/useConfirmation';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, useId, watch } from 'vue';
+import CompactTabs from './CompactTabs.vue';
 import type { CourseIssue } from '../course-editor';
 import { learningTypeLabels, type Course } from '@eks/contracts';
 
@@ -12,18 +13,17 @@ const item = computed(() =>
 const index = computed(() =>
   props.course.learningItems.findIndex((value) => value.id === activeId.value),
 );
-const tablist = ref<HTMLElement | null>(null);
+const uid = useId();
+const tabs = ref<InstanceType<typeof CompactTabs>>();
+const root = ref<HTMLElement>();
+const options = computed(() =>
+  props.course.learningItems.map((value, index) => ({
+    id: value.id,
+    label: `${index + 1}번 ${value.title.trim() || '새 학습 항목'}`,
+    invalid: !value.title.trim(),
+  })),
+);
 const newId = () => crypto.randomUUID();
-watch(activeId, async () => {
-  await nextTick();
-  const host = tablist.value,
-    tab = host?.querySelector<HTMLElement>('[aria-selected="true"]');
-  if (!host || !tab) return;
-  const offset = tab.offsetTop - host.offsetTop;
-  if (offset < host.scrollTop) host.scrollTop = offset;
-  else if (offset + tab.offsetHeight > host.scrollTop + host.clientHeight)
-    host.scrollTop = offset + tab.offsetHeight - host.clientHeight;
-});
 
 watch(
   () => [props.course.id, ...props.course.learningItems.map((value) => value.id)],
@@ -51,25 +51,12 @@ async function remove() {
     props.course.learningItems[index.value + 1] || props.course.learningItems[index.value - 1];
   props.course.learningItems.splice(index.value, 1);
   activeId.value = next?.id || '';
-  nextTick(() => tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
-}
-function onTabsKeydown(event: KeyboardEvent) {
-  const key = event.key;
-  if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(key)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const ids = props.course.learningItems.map((value) => value.id);
-  if (!ids.length) return;
-  const position = ids.indexOf(activeId.value);
-  activeId.value =
-    ids[
-      key === 'Home'
-        ? 0
-        : key === 'End'
-          ? ids.length - 1
-          : (position + (key === 'ArrowDown' ? 1 : -1) + ids.length) % ids.length
-    ]!;
-  nextTick(() => tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+  nextTick(() =>
+    (
+      root.value?.querySelector<HTMLElement>('[aria-selected="true"]') ||
+      root.value?.querySelector<HTMLElement>('.learning-add')
+    )?.focus(),
+  );
 }
 function focusInvalid() {
   const invalid = props.course.learningItems.find((value) => !value.title.trim());
@@ -91,9 +78,11 @@ async function focusIssue(issue: CourseIssue) {
 defineExpose({ focusInvalid, focusIssue });
 </script>
 <template>
-  <section class="panel editor-panel">
+  <section ref="root" class="panel editor-panel learning-editor">
     <div class="section-heading">
-      <h2>학습 항목</h2>
+      <h2>
+        학습 항목 <span class="editor-count">{{ course.learningItems.length }}개</span>
+      </h2>
       <button v-if="!disabled" class="button secondary learning-add" type="button" @click="add">
         학습 항목 추가
       </button>
@@ -101,38 +90,22 @@ defineExpose({ focusInvalid, focusIssue });
     <p class="muted">
       학습자가 확인해야 할 학습 범위입니다. 별도의 완료 기록 없이 평가를 진행합니다.
     </p>
-    <div class="number-editor">
-      <div
+    <div class="number-editor" :class="{ 'is-empty': !item }">
+      <CompactTabs
         v-if="course.learningItems.length"
-        class="learning-tabs number-tabs"
-        aria-orientation="vertical"
-        role="tablist"
-        aria-label="학습 항목"
-        ref="tablist"
-        @keydown="onTabsKeydown"
-      >
-        <button
-          v-for="(value, i) in course.learningItems"
-          :key="value.id"
-          type="button"
-          role="tab"
-          :id="`learning-tab-${value.id}`"
-          :title="`${i + 1}. ${value.title.trim() || '새 학습 항목'}`"
-          :aria-label="`${i + 1}번 ${value.title || '새 학습 항목'}${!value.title.trim() ? ' · 보완 필요' : ''}`"
-          :aria-controls="activeId === value.id ? `learning-panel-${value.id}` : undefined"
-          :aria-selected="activeId === value.id"
-          :tabindex="activeId === value.id ? 0 : -1"
-          :class="{ active: activeId === value.id, invalid: !value.title.trim() }"
-          @click="activeId = value.id"
-        >
-          <span>{{ i + 1 }}</span>
-        </button>
-      </div>
+        ref="tabs"
+        v-model="activeId"
+        :items="options"
+        label="학습 항목"
+        :panel-id="`${uid}-item-panel`"
+        vertical
+        numbered
+      />
       <div
         v-if="item"
-        :id="`learning-panel-${item.id}`"
+        :id="`${uid}-item-panel`"
         role="tabpanel"
-        :aria-labelledby="`learning-tab-${item.id}`"
+        :aria-labelledby="tabs?.tabId(item.id)"
         class="learning-tab-panel"
       >
         <p
@@ -144,7 +117,13 @@ defineExpose({ focusInvalid, focusIssue });
         >
           {{ issue.message }}
         </p>
-        <div class="form-grid">
+        <div class="question-toolbar">
+          <h3>학습 항목 {{ index + 1 }}번</h3>
+          <button v-if="!disabled" class="text-link" type="button" @click="remove">
+            이 항목 삭제
+          </button>
+        </div>
+        <div class="form-grid learning-fields">
           <label class="field"
             ><span>교육 종류</span>
             <select aria-label="교육 종류" v-model="item.type" :disabled="disabled">
@@ -168,12 +147,9 @@ defineExpose({ focusInvalid, focusIssue });
             ><input v-model="item.required" :disabled="disabled" type="checkbox" />필수 학습
             항목</label
           >
-          <button v-if="!disabled" class="text-link" type="button" @click="remove">
-            이 항목 삭제
-          </button>
         </div>
       </div>
-      <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
+      <p v-else class="editor-empty">등록된 학습 항목이 없습니다.</p>
     </div>
     <p v-if="!item && issues?.some((i) => i.kind === 'learning')" class="field-error">
       필수 학습 항목을 하나 이상 설정해 주세요.

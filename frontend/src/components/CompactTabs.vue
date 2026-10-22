@@ -20,10 +20,17 @@ watch(
     if (!tab || !host.value) return;
     const parent = host.value;
     if (props.vertical) {
-      const offset = tab.offsetTop - parent.offsetTop;
+      const offset =
+        tab.getBoundingClientRect().top - parent.getBoundingClientRect().top + parent.scrollTop;
       if (offset < parent.scrollTop) parent.scrollTop = offset;
       else if (offset + tab.offsetHeight > parent.scrollTop + parent.clientHeight)
         parent.scrollTop = offset + tab.offsetHeight - parent.clientHeight;
+    } else {
+      const offset =
+        tab.getBoundingClientRect().left - parent.getBoundingClientRect().left + parent.scrollLeft;
+      if (offset < parent.scrollLeft) parent.scrollLeft = offset;
+      else if (offset + tab.offsetWidth > parent.scrollLeft + parent.clientWidth)
+        parent.scrollLeft = offset + tab.offsetWidth - parent.clientWidth;
     }
   },
 );
