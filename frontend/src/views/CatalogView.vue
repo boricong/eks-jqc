@@ -26,7 +26,6 @@ import {
   decorate,
   clean,
   fingerprint,
-  newSheet,
   newRow,
   rowKey,
   mergeVisible,
@@ -387,9 +386,13 @@ function downloadRecovery(record: CatalogRecovery) {
 }
 async function recover(record: CatalogRecovery) {
   if (
-    !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5', 'eks-catalog-v6'].includes(
-      record.workbook.format,
-    )
+    ![
+      'eks-catalog-v3',
+      'eks-catalog-v4',
+      'eks-catalog-v5',
+      'eks-catalog-v6',
+      'eks-catalog-v7',
+    ].includes(record.workbook.format)
   ) {
     error.value =
       '구형 작성 내용입니다. 원본 보관 파일을 다운로드하고 새 양식 v3에서 기준을 작성해 주세요. 구형 내용은 삭제하지 않았습니다.';
@@ -498,55 +501,7 @@ async function upload(event: Event) {
   });
   input.value = '';
 }
-function addSheet(copy = false) {
-  if (busy.value) return;
-  checkpoint();
-  const s = copy && sheet.value ? clone(sheet.value) : newSheet();
-  if (copy) {
-    s.mode = 'new';
-    s.code = crypto.randomUUID();
-    delete s.sourceId;
-    delete s.sourceRevision;
-    s.title = `${s.title || '자격'} 사본`;
-    const old = clone(s.tables);
-    s.tables = { courses: [], learning: [], objective: [], materials: [], practical: [] };
-    for (const c of old.courses) {
-      const next = {
-        ...c,
-        code: crypto.randomUUID(),
-        __row: crypto.randomUUID(),
-        sourceId: '',
-        sourceRevision: null,
-      };
-      s.tables.courses.push(next);
-      for (const t of catalogTables.filter((t) => t !== 'courses'))
-        s.tables[t].push(
-          ...old[t]
-            .filter((r) => r.courseCode === c.code)
-            .map((r) => ({
-              ...r,
-              code: crypto.randomUUID(),
-              __row: crypto.randomUUID(),
-              courseCode: next.code,
-            })),
-        );
-    }
-  }
-  if (!workbook.value)
-    startWork({ format: 'eks-catalog-v6', lv1OrganizationId: store.managementLv1, sheets: [] });
-  if (workbook.value!.sheets.length >= 100) {
-    error.value = '한 작업은 자격 100개까지 편집할 수 있습니다.';
-    return;
-  }
-  workbook.value!.sheets.push(s);
-  sheetIndex.value = workbook.value!.sheets.length - 1;
-  baselines.value[s.code] = '';
-  metadataOpen.value = true;
-  courseCode.value = String(s.tables.courses[0]?.code || '');
-  table.value = 'courses';
-  allCourses.value = false;
-  changed();
-}
+
 function chooseSheet(index: number) {
   sheetIndex.value = index;
   courseCode.value = String(sheet.value?.tables.courses[0]?.code || '');
@@ -662,6 +617,29 @@ async function jump(i: CatalogIssue) {
       .querySelector<HTMLElement>(`.catalog-course-fields [data-field="${i.column}"]`)
       ?.focus();
   } else target.value = { key: rowKey(r), column: i.column };
+}
+async function refreshCommon() {
+  if (!workbook.value || busy.value || pending) return;
+  await run(async (token) => {
+    await store.refresh();
+    if (token !== epoch || !workbook.value) return;
+    checkpoint();
+    for (const s of workbook.value.sheets) {
+      const latest = store.data.qualifications.find(
+        (q) => q.id === s.sourceId && (!s.templateId || q.templateId === s.templateId),
+      );
+      if (latest)
+        Object.assign(s, {
+          title: latest.title,
+          englishName: latest.englishName,
+          description: latest.description,
+          templateRevision: latest.templateRevision,
+        });
+    }
+    compareOpen.value = false;
+    changed();
+    store.notify('최신 공통 정보를 반영했습니다. 작성 중인 팀 설정은 유지했습니다.');
+  });
 }
 async function review() {
   await run(async () => {
@@ -782,7 +760,8 @@ async function backToList() {
     </PageHeading>
     <template v-if="store.managementReady">
       <div class="panel catalog-top-actions">
-        <button class="button primary" :disabled="busy" @click="addSheet()">새 자격 만들기</button
+        <RouterLink class="button secondary" :to="store.managementLink('/admin/qualifications')"
+          >팀 자격 등록·선택</RouterLink
         ><label class="button secondary upload-button"
           >Excel 가져오기<input
             aria-label="Excel 가져오기"
@@ -795,16 +774,6 @@ async function backToList() {
           <summary>Excel 작업</summary>
           <div>
             <button
-              class="button ghost small"
-              :disabled="busy"
-              @click="
-                run(async () => {
-                  await downloadWorkbook(scopePath('/catalog/workbook-template'));
-                })
-              "
-            >
-              양식 다운로드</button
-            ><button
               v-if="!workbook"
               class="button ghost small"
               :disabled="busy || !exportIds.length"
@@ -833,9 +802,13 @@ async function backToList() {
         <button
           v-for="r in recoveries.filter(
             (v) =>
-              !['eks-catalog-v3', 'eks-catalog-v4', 'eks-catalog-v5', 'eks-catalog-v6'].includes(
-                v.workbook.format,
-              ),
+              ![
+                'eks-catalog-v3',
+                'eks-catalog-v4',
+                'eks-catalog-v5',
+                'eks-catalog-v6',
+                'eks-catalog-v7',
+              ].includes(v.workbook.format),
           )"
           :key="r.id + '-download'"
           class="button secondary"
@@ -923,7 +896,7 @@ async function backToList() {
             </tbody>
           </table>
           <p v-if="!qualifications.length" class="empty-state">
-            표시할 자격이 없습니다. 새 자격을 만들거나 Excel을 가져오세요.
+            팀 자격 관리에서 기본자격을 등록한 뒤 선택하세요.
           </p>
         </div>
       </section>
@@ -988,7 +961,7 @@ async function backToList() {
                 <p class="muted">
                   {{
                     sheet.mode === 'new'
-                      ? '새 자격 작성'
+                      ? '새 자격은 기본자격에서 먼저 등록해 주세요.'
                       : '기존 내용에서 편집합니다. 참조가 있는 기준의 변경은 새 버전으로 보존됩니다.'
                   }}
                 </p>
@@ -1001,6 +974,14 @@ async function backToList() {
                 기본정보 수정
               </button>
             </div>
+            <button
+              v-if="metadataOpen"
+              class="button ghost small"
+              :disabled="busy || !!pending"
+              @click="refreshCommon"
+            >
+              최신 공통 정보 확인
+            </button>
             <CatalogQualificationFields
               v-if="metadataOpen"
               :sheet="sheet"
@@ -1019,9 +1000,7 @@ async function backToList() {
                       ? '무기한'
                       : '설정 필요'
                 }}</span
-              ><button class="text-link" :disabled="busy" @click="addSheet(true)">
-                독립 사본 만들기
-              </button>
+              >
               <details>
                 <summary>연결 정보</summary>
                 <p>

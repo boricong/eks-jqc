@@ -1,3 +1,4 @@
+import { QualificationMetadataSchema } from "./qualification-templates.ts";
 import { renewalOpensOn } from "./lifecycle.ts";
 import { z } from "zod";
 import { OrganizationPathSchema } from "./organizations.ts";
@@ -7,6 +8,12 @@ const id = z
   .min(1)
   .max(160)
   .refine((v) => !["__proto__", "constructor", "prototype"].includes(v));
+export const PlanStartInputSchema = z.object({
+  requestId: id,
+  requestRevision: z.number().int().positive(),
+  qualificationId: id,
+});
+export type PlanStartInput = z.infer<typeof PlanStartInputSchema>;
 const dateOrEmpty = z.union([z.literal(""), z.iso.date()]);
 export const WORKFLOW_VERSION = "personal-certification-v5";
 export const workflowSteps = [
@@ -64,6 +71,13 @@ export const AwardSnapshotSchema = z.object({
   version: z.number().int().positive(),
   source: z.enum(["issued", "migration"]),
 });
+export const PlanningTargetSchema = z.object({
+  entityId: id,
+  qualificationId: id,
+  title: z.string(),
+  version: z.number().int().positive(),
+  previousCertificationId: id.optional(),
+});
 export const PlanningRequestSchema = z.object({
   id,
   lv1OrganizationId: id,
@@ -75,16 +89,22 @@ export const PlanningRequestSchema = z.object({
   revision: z.number().int().positive(),
   organizationId: id.optional(),
   organizationPath: OrganizationPathSchema.optional(),
-  targets: z
-    .array(
-      z.object({
-        entityId: id,
-        qualificationId: id,
-        title: z.string(),
-        version: z.number().int().positive(),
-        previousCertificationId: id.optional(),
-      }),
-    )
+  mode: z.enum(["fixed", "learner_choice"]).default("fixed"),
+  targets: z.array(PlanningTargetSchema).optional(),
+  selections: z.array(PlanningTargetSchema).default([]),
+  completion: z
+    .object({
+      date: z.iso.datetime(),
+      reason: z.enum(["planned", "no_additional"]),
+      evidence: z.array(
+        z.object({
+          entityId: id,
+          planId: id.optional(),
+          assignmentId: id.optional(),
+          certificationId: id.optional(),
+        }),
+      ),
+    })
     .optional(),
   source: z.enum(["requested", "migration"]).optional(),
 });
@@ -97,6 +117,7 @@ export const PlanScheduleSchema = z.object({
   goal: z.string().max(2000),
 });
 export const PersonalPlanSchema = z.object({
+  qualificationMetadata: QualificationMetadataSchema.optional(),
   id,
   acquisitionCycleId: id.optional(),
   previousCertificationId: id.optional(),

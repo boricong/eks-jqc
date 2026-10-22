@@ -1,3 +1,4 @@
+import { registerFixtureQualification } from "./template-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
@@ -66,11 +67,11 @@ async function fixture(t: TestContext) {
 test("직접 저장은 미완성을 허용하고 참조된 기준만 새 버전으로 보존하며 재시도는 한 번이다", async (t) => {
   const f = await fixture(t),
     original = f.store.snapshot();
-  const created = await f.call("/qualifications", {});
+  const created = await registerFixtureQualification(f.store);
   const q = f.store.snapshot().qualifications.find((q) => q.id === created.id)!;
   const incomplete = await f.call(
     `/qualifications/${q.id}`,
-    { ...q, title: "작성 중 기준" },
+    { ...q, renewalLeadMonths: 4 },
     "PUT",
   );
   assert.equal(incomplete.id, q.id);
@@ -143,7 +144,7 @@ test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후
   );
   const saved = await f.call(
     `/qualifications/${q.id}`,
-    { ...q, title: "새 자격 기준" },
+    { ...q, renewalLeadMonths: 4 },
     "PUT",
   );
   assert.equal(
@@ -200,9 +201,9 @@ test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후
     ),
   );
 });
-test("미참조 자격 실제 제거·권한·최신 참조·백업 실패와 응답 유실 재시도를 보호한다", async (t) => {
+test("미참조 팀 등록도 계보 보존 삭제·권한·최신 참조·백업 실패와 응답 유실 재시도를 보호한다", async (t) => {
   const f = await fixture(t),
-    q = await f.call("/qualifications", {});
+    q = await registerFixtureQualification(f.store);
   await f.call(
     `/qualifications/${q.id}/deletion-impact`,
     undefined,
@@ -211,7 +212,7 @@ test("미참조 자격 실제 제거·권한·최신 참조·백업 실패와 �
     "learner-1",
   );
   let impact = await f.call(`/qualifications/${q.id}/deletion-impact`);
-  assert.equal(impact.mode, "remove");
+  assert.equal(impact.mode, "archive");
   const snapshot = await readFile(f.file, "utf8");
   f.store.beforeReplace = () => {
     throw new Error("disk failure");
@@ -224,7 +225,7 @@ test("미참조 자격 실제 제거·권한·최신 참조·백업 실패와 �
   );
   assert.equal(await readFile(f.file, "utf8"), snapshot);
   f.store.beforeReplace = undefined;
-  await f.call("/qualifications", {});
+  await registerFixtureQualification(f.store);
   await f.call(
     `/qualifications/${q.id}`,
     { ...impact, reason: "이전 확인" },
@@ -236,7 +237,9 @@ test("미참조 자격 실제 제거·권한·최신 참조·백업 실패와 �
     body = { ...impact, reason: "미사용 기준 정리" };
   await f.call(`/qualifications/${q.id}`, body, "DELETE", 200, "admin-1", key);
   await f.call(`/qualifications/${q.id}`, body, "DELETE", 200, "admin-1", key);
-  assert.ok(!f.store.snapshot().qualifications.some((x) => x.id === q.id));
+  assert.ok(
+    f.store.snapshot().qualifications.find((x) => x.id === q.id)!.deletedAt,
+  );
 });
 test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저장과 Excel 무변경은 보존된다", () => {
   const s = seedState(true),
@@ -251,7 +254,7 @@ test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저�
   ];
   const before = structuredClone(s),
     book = exportCatalog(s, "org-photo", [q.id]);
-  book.sheets[0]!.description = "";
+  book.sheets[0]!.validityType = "unknown";
   const p = prepareCatalog(s, book, "org-photo", org);
   assert.ok(p.issues.some((i) => i.severity === "readiness"));
   assert.equal(p.qualifications[0]!.version, 2);
@@ -283,7 +286,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 11);
+  assert.equal(next.state.schemaVersion, 13);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -305,9 +308,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.status = "draft";
   }
   legacy.sha256 = contentHash(legacy.payload);
-  const converted = readMaster(legacy);
-  assert.equal(converted.stateSchemaVersion, 11);
-  assert.deepEqual(converted.payload, file.payload);
+  assert.throws(() => readMaster(legacy), /허용되지 않는 항목|파일/); // New-only template payload cannot masquerade as a legacy file.
 });
 
 test("스키마11 이관의 중간 실패는 파일 쌍·세대를 복구하고 성공 시 한 번만 세대를 바꾼다", async (t) => {
@@ -353,7 +354,11 @@ test("스키마11 이관의 중간 실패는 파일 쌍·세대를 복구하고 
   );
   assert.deepEqual(await readFile(f.store.organizations.file), org);
   await new JsonStore(f.file).migratePolicies(
-    { ...expected, revision: raw.revision + 1, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateCatalogEditing,
     "catalog-editing",
   );
@@ -423,6 +428,6 @@ test("보존 삭제 후 확정 배정은 원래 평가로 수료·인증하며 �
   assert.ok(next.certifications.some((c) => c.qualificationId === q.id));
   assert.deepEqual(next.courses, original.courses);
   const legacyAwards = next.certifications;
-  await f.call("/qualifications", {});
+  await registerFixtureQualification(f.store);
   assert.deepEqual(f.store.snapshot().certifications, legacyAwards);
 });

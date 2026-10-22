@@ -1884,12 +1884,6 @@ input[type='radio'] {
   .dialog-footer {
     padding: 16px 24px;
   }
-  .toast {
-    width: max-content;
-    font-size: var(--text-caption);
-    top: 84px;
-    bottom: auto;
-  }
   .site-footer {
     min-height: 40px;
     font-size: var(--text-caption);
@@ -2304,13 +2298,11 @@ input[type='radio'] {
   margin: 12px 0;
   line-height: 1.7;
 }
-.plan-course,
 .learning-form {
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid var(--line);
 }
-.plan-course h3,
 .learning-form h3 {
   margin-bottom: 12px;
 }
@@ -2389,23 +2381,6 @@ input[type='radio'] {
 }
 .learning-panel .field {
   min-width: 0;
-}
-.notification-row {
-  padding: 20px;
-  margin-bottom: 12px;
-}
-.notification-row.unread {
-  border-left: 3px solid var(--primary);
-  background: var(--tint);
-}
-.notification-row:not(.unread) {
-  border-left: 3px solid var(--ink-secondary);
-}
-.notification-row .muted {
-  color: var(--ink);
-}
-.notification-row p {
-  margin: 12px 0;
 }
 @media (max-width: 700px) {
   .plan-steps {
@@ -2806,6 +2781,14 @@ input[type='radio'] {
   background: var(--toast-bg);
   color: var(--toast-ink);
   border: 1px solid var(--toast-line);
+}
+@media (max-width: 767px) {
+  .toast {
+    top: 84px;
+    bottom: auto;
+    width: max-content;
+    pointer-events: none;
+  }
 }
 .notification-count {
   display: inline-block;
@@ -3611,24 +3594,6 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
 
 .plan-schedule-panel > .field {
   max-width: 300px;
-}
-.plan-review-dates {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  gap: 16px;
-  margin: 16px 0;
-}
-.plan-review-dates > div {
-  display: grid;
-  gap: 8px;
-}
-.plan-review-dates dt {
-  color: var(--ink-secondary);
-  font-size: var(--text-caption);
-}
-.plan-review-dates dd {
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 .schedule-table {
   overflow: hidden;

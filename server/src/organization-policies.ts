@@ -1,3 +1,5 @@
+import { candidate, planningView, planRequestErrors } from "./planning.ts";
+import { currentQualification } from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -61,7 +63,10 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
     if (r.targets)
       demand(
         new Set(r.targets.map((t) => t.entityId)).size === r.targets.length &&
-          r.targets.every((t) =>
+          new Set([...r.targets, ...r.selections].map((t) => t.entityId))
+            .size ===
+            r.targets.length + r.selections.length &&
+          [...r.targets, ...r.selections].every((t) =>
             s.qualifications.some(
               (q) =>
                 q.id === t.qualificationId &&
@@ -100,7 +105,10 @@ export function requiredQualifications(
         p.lv1OrganizationId === org.lv1OrganizationId &&
         p.entityId === entityId,
     )!;
-    const q = s.qualifications.find((q) => q.id === pool.qualificationId)!;
+    const q = currentQualification(
+      s,
+      s.qualifications.find((q) => q.id === pool.qualificationId)!,
+    );
     const all = s.assignments.filter(
       (a) =>
         a.learnerId === u.id &&
@@ -135,7 +143,8 @@ export function requiredQualifications(
         (r) =>
           r.learnerId === u.id &&
           r.organizationId === org.id &&
-          r.targets?.some(
+          !r.completion &&
+          [...(r.targets || []), ...(r.selections || [])].some(
             (t) =>
               t.entityId === entityId &&
               t.previousCertificationId === previous?.id,
@@ -156,9 +165,10 @@ export function requiredQualifications(
       ...(request
         ? {
             requestId: request.id,
-            requestedVersion: request.targets!.find(
-              (t) => t.entityId === entityId,
-            )!.version,
+            requestedVersion: [
+              ...(request.targets || []),
+              ...request.selections,
+            ].find((t) => t.entityId === entityId)!.version,
           }
         : {}),
       ...(plan ? { planId: plan.id } : {}),
@@ -230,49 +240,7 @@ export function planPolicyErrors(
   p: Pick<PersonalPlan, "qualificationId" | "requestId" | "organizationId">,
   at = new Date().toISOString(),
 ): string[] {
-  if (u.certificationEligibility === "hold")
-    return ["취득 대상자 Hold 상태입니다."];
-  const q = s.qualifications.find((q) => q.id === p.qualificationId);
-  const r = s.planningRequests.find((r) => r.id === p.requestId);
-  const org = organization(doc, u.organizationId);
-  if (
-    !q ||
-    !r ||
-    r.learnerId !== u.id ||
-    r.organizationId !== org.id ||
-    (p.organizationId && p.organizationId !== org.id)
-  )
-    return [
-      "계획 요청 이후 소속이 달라졌거나 이전 요청입니다. 현재 소속의 새 요청을 확인해 주세요.",
-    ];
-  if (!org.effectiveActive)
-    return ["사용 중인 소속 조직에서 계획을 확정해 주세요."];
-  if (!org.requiredQualifications?.includes(q.entityId))
-    return [
-      "현재 소속 조직의 필수 자격이 아닙니다. 작성 내용은 보존되며 새 기준으로 재작성하거나 삭제할 수 있습니다.",
-    ];
-  if (!r.targets?.some((t) => t.entityId === q.entityId))
-    return [
-      "이 요청의 대상 자격이 아닙니다. 추가된 필수 자격은 별도 요청이 필요합니다.",
-    ];
-  if (
-    !doc.qualificationPools.some(
-      (v) =>
-        v.lv1OrganizationId === org.lv1OrganizationId &&
-        v.entityId === q.entityId &&
-        v.qualificationId === q.id,
-    )
-  )
-    return [
-      "팀 적용 버전이 변경되었습니다. 현재 버전으로 계획을 다시 작성해 주세요.",
-    ];
-  const previous = lastRevoked(s, u.id, q.entityId, at);
-  if (
-    r.targets?.find((t) => t.entityId === q.entityId)
-      ?.previousCertificationId !== previous?.id
-  )
-    return ["폐기 후 재취득에는 관리자의 새 계획 요청이 필요합니다."];
-  return qualificationUseErrors(q, s.courses);
+  return planRequestErrors(s, doc, u, p, at);
 }
 
 export function planningReadiness(
@@ -281,27 +249,30 @@ export function planningReadiness(
   u: UserView,
   at: string,
 ) {
-  const view = requiredQualifications(s, doc, u, at);
-  const ready = view.items.filter((i) =>
-    ["ready", "waiting"].includes(i.status),
-  );
+  const org = organization(doc, u.organizationId);
+  const rows = doc.qualificationPools
+    .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
+    .map((p) => candidate(s, doc, u, p.entityId, at));
   return {
     learnerId: u.id,
     canRequest:
-      u.roles.includes("learner") && u.organizationActive && ready.length > 0,
-    count: ready.length,
+      u.roles.includes("learner") &&
+      u.organizationActive &&
+      u.certificationEligibility !== "hold",
+    count: rows.filter((c) => c.status === "available").length,
+    requiredCount: (org.requiredQualifications || []).length,
+    draftCount: s.plans.filter(
+      (p) =>
+        p.learnerId === u.id &&
+        p.lv1OrganizationId === u.lv1OrganizationId &&
+        p.status === "draft" &&
+        !p.deletedAt,
+    ).length,
     reason: !u.organizationActive
       ? "사용 중지된 소속"
-      : !view.configured
-        ? "소속 조직 필수 자격 미설정"
-        : !view.items.length
-          ? "필수 자격 없음"
-          : ready.length
-            ? "계획 요청 가능"
-            : view.items
-                .map((i) => i.reason)
-                .filter((x, i, a) => a.indexOf(x) === i)
-                .join(" · "),
+      : u.certificationEligibility === "hold"
+        ? "취득 대상자 Hold"
+        : "계획 요청 가능",
   };
 }
 
@@ -316,58 +287,25 @@ export function requestProgress(
     s.users.find((u) => u.id === r.learnerId)!,
     doc,
   );
-  const own = requiredQualifications(s, doc, u, at),
-    targets = r.targets || [];
-  let planned = 0,
-    valid = 0,
-    excluded = 0,
-    drafts = 0,
-    covered = 0;
-  for (const t of targets) {
-    const item = own.items.find((i) => i.entityId === t.entityId);
-    if (r.organizationId !== u.organizationId || !item) {
-      excluded++;
-      continue;
-    }
-    if (u.certificationEligibility === "hold") {
-      excluded++;
-      continue;
-    }
-    if (item.status === "fulfilled") valid++;
-    const p = s.plans.find(
-      (p) =>
-        !p.deletedAt &&
-        p.learnerId === u.id &&
-        p.previousCertificationId === t.previousCertificationId &&
-        s.qualifications.find((q) => q.id === p.qualificationId)?.entityId ===
-          t.entityId &&
-        (!p.assignmentId ||
-          (!s.assignments.find((a) => a.id === p.assignmentId)
-            ?.excludedReason &&
-            !s.assignments.find((a) => a.id === p.assignmentId)
-              ?.acquisitionClosedAt)),
-    );
-    if (p?.status === "completed") planned++;
-    if (p?.status === "completed" || item.status === "fulfilled") covered++;
-    if (p?.status === "draft") drafts++;
-  }
-  const active = targets.length - excluded;
+  const v = planningView(s, doc, u, r, at);
+  const rows = v.candidates.filter((c) => c.selected);
+  const evidence = r.completion?.evidence;
   return {
     id: r.id,
     learnerId: r.learnerId,
-    total: targets.length,
-    planned,
-    valid,
-    excluded,
-    stage: !r.targets
-      ? "이전 요청 · 기준 확인 필요"
-      : !active
-        ? "현재 대상 없음"
-        : covered >= active
-          ? "계획 완료"
-          : planned || drafts
-            ? "작성 중"
-            : "미착수",
+    total: evidence ? evidence.length : rows.length,
+    planned: evidence
+      ? evidence.filter(
+          (e) => e.planId || (e.assignmentId && !e.certificationId),
+        ).length
+      : rows.filter((c) =>
+          s.plans.some((p) => p.id === c.planId && p.status === "completed"),
+        ).length,
+    valid: evidence
+      ? evidence.filter((e) => e.certificationId).length
+      : rows.filter((c) => c.status === "valid").length,
+    excluded: 0,
+    stage: v.stage,
   };
 }
 
@@ -402,7 +340,10 @@ export function policiesView(
     pool: doc.qualificationPools
       .filter((p) => p.lv1OrganizationId === scope)
       .map((p) => {
-        const q = s.qualifications.find((q) => q.id === p.qualificationId)!;
+        const q = currentQualification(
+          s,
+          s.qualifications.find((q) => q.id === p.qualificationId)!,
+        );
         return {
           ...p,
           title: q.title,
@@ -457,7 +398,8 @@ export function changePolicy(
         q &&
           !q.deletedAt &&
           q.lv1OrganizationId === scope &&
-          !qualificationReadinessErrors(q, s.courses).length,
+          !qualificationReadinessErrors(currentQualification(s, q), s.courses)
+            .length,
         422,
         "같은 팀의 설정이 완료된 자격 버전을 선택해 주세요.",
       );

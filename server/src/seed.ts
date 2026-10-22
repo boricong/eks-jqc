@@ -1,3 +1,4 @@
+import { initialTemplates, metadata } from "./qualification-templates.ts";
 import {
   convertCourseFields,
   scenarioQuestions,
@@ -29,7 +30,8 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 11,
+    schemaVersion: 13,
+    qualificationTemplates: initialTemplates(),
     renewals: [],
     lifecycleEvents: [],
     catalogBatches: [],
@@ -82,6 +84,8 @@ export function seedState(testFixture = false): State {
     qualifications: (testFixture ? source.qualifications : []).map(
       (q: any) => ({
         ...q,
+        templateId: `fixture-${q.id}`,
+        templateRevision: 1,
         englishName: "",
         description:
           q.status === "published"
@@ -125,6 +129,16 @@ export function seedState(testFixture = false): State {
     learningRecords: [],
     notifications: [],
   };
+  for (const q of state.qualifications)
+    state.qualificationTemplates.push({
+      id: q.templateId,
+      revision: 1,
+      title: q.title,
+      englishName: q.englishName,
+      description: q.description,
+      updatedAt: "2026-10-15T00:00:00.000Z",
+      updatedBy: "operator-1",
+    });
   state.users.push({
     id: "operator-1",
     name: "시스템 운영자",
@@ -136,6 +150,9 @@ export function seedState(testFixture = false): State {
     state.assignments.push({
       id: a.id,
       qualificationId: a.qualificationId,
+      qualificationMetadata: metadata(
+        state.qualifications.find((q) => q.id === a.qualificationId)!,
+      ),
       learnerId: a.learnerId,
       ownerAdminId: "admin-1",
       lv1OrganizationId: PHOTO_ID,

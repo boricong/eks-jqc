@@ -1,3 +1,5 @@
+import { migratePlanning } from "./planning-migration.ts";
+import { migrateTemplates } from "./template-migration.ts";
 import { migrateCatalogEditing } from "./catalog-editing-migration.ts";
 import { migrateAssessmentFlow } from "./assessment-flow-migration.ts";
 import path from "node:path";
@@ -32,18 +34,36 @@ if (
     "migrate-lifecycle",
     "migrate-assessment-flow",
     "migrate-catalog-editing",
+    "migrate-templates",
+    "migrate-planning",
   ].includes(command)
 ) {
+  const mappingFile = optionsMapping();
+  function optionsMapping() {
+    return optionsRaw()
+      .find((v) => v.startsWith("--mapping="))
+      ?.slice(10);
+  }
+  function optionsRaw() {
+    return process.argv.slice(3);
+  }
+  const mapping = mappingFile
+    ? JSON.parse(await readFile(path.resolve(mappingFile), "utf8"))
+    : {};
   const transform =
-    command === "migrate-catalog-editing"
-      ? migrateCatalogEditing
-      : command === "migrate-assessment-flow"
-        ? migrateAssessmentFlow
-        : command === "migrate-lifecycle"
-          ? migrateLifecycle
-          : command === "migrate-administration"
-            ? migrateAdministration
-            : migratePolicies;
+    command === "migrate-planning"
+      ? migratePlanning
+      : command === "migrate-templates"
+        ? (a: unknown, b: unknown) => migrateTemplates(a, b, undefined, mapping)
+        : command === "migrate-catalog-editing"
+          ? migrateCatalogEditing
+          : command === "migrate-assessment-flow"
+            ? migrateAssessmentFlow
+            : command === "migrate-lifecycle"
+              ? migrateLifecycle
+              : command === "migrate-administration"
+                ? migrateAdministration
+                : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -69,22 +89,26 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-catalog-editing"
-            ? "catalog-editing"
-            : command === "migrate-assessment-flow"
-              ? "assessment-flow"
-              : command === "migrate-lifecycle"
-                ? "lifecycle"
-                : command === "migrate-administration"
-                  ? "administration"
-                  : "policies",
+          command === "migrate-planning"
+            ? "planning"
+            : command === "migrate-templates"
+              ? "qualification-templates"
+              : command === "migrate-catalog-editing"
+                ? "catalog-editing"
+                : command === "migrate-assessment-flow"
+                  ? "assessment-flow"
+                  : command === "migrate-lifecycle"
+                    ? "lifecycle"
+                    : command === "migrate-administration"
+                      ? "administration"
+                      : "policies",
         ),
         null,
         2,
       ),
     );
   } else {
-    if (options.some((v) => v !== "--dry-run"))
+    if (options.some((v) => v !== "--dry-run" && !v.startsWith("--mapping=")))
       throw new Error("미리보기는 --dry-run을 사용하세요.");
     console.log(
       JSON.stringify(

@@ -70,7 +70,7 @@ const actionLabels: Record<string, string> = {
   'progress.reset': '테스트 진행 내역 초기화',
   'user.create': '사용자 등록',
   'user.update': '사용자 소속·역할 수정',
-  'template.import': '기본 자격 가져오기',
+  'template.import': '기본자격에서 팀 등록',
   'planning.request': '계획 수립 요청',
   'plan.create': '개인 계획 시작',
   'plan.save': '개인 계획 저장',
@@ -112,7 +112,8 @@ const actionLabels: Record<string, string> = {
     <p v-if="!assignments.length" class="empty-state">배정된 자격이 없습니다.</p>
     <details v-for="a in assignments" :key="a.id" class="panel record-detail">
       <summary>
-        {{ store.username(a.learnerId) }} · {{ store.qualification(a.qualificationId).title }}
+        {{ store.username(a.learnerId) }} ·
+        {{ store.qualification(a.qualificationId, a.qualificationMetadata).title }}
         <span class="small-label">{{
           a.excludedReason ? '검증 제외' : a.certifiedAt ? '인증 완료' : '진행 중'
         }}</span>

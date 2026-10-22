@@ -195,7 +195,7 @@ test("예상 밖의 자격이 삭제할 과정에 연결되어 있으면 전체 
       id: "unexpected-reference",
       entityId: "unexpected-reference",
       title: "예상 밖 참조",
-      templateId: undefined,
+      templateId: "fixture-unexpected",
       courseIds: ["recipe-create"],
     }),
   );
@@ -281,6 +281,9 @@ test("Photo 5과정 계획·학습·지식·상황 대응 완료 후 36개월 �
     message: "Photo 시험 계획",
   });
   const plan = await call("learner-1", "/plans", {
+    requestRevision: store
+      .snapshot()
+      .planningRequests.find((r) => r.id === request.ids[0])!.revision,
     requestId: request.ids[0],
     qualificationId: qualification.id,
   });

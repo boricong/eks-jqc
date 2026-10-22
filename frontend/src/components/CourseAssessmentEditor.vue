@@ -252,10 +252,7 @@ defineExpose({ focusIssue });
                 type="number"
                 min="1"
                 :aria-invalid="!!errors.points"
-              /><span v-if="errors.points" :id="uid + '-points-error'" class="field-error">{{
-                errors.points
-              }}</span></label
-            >
+            /></label>
             <button
               v-if="!disabled"
               class="text-link question-delete"
@@ -264,6 +261,9 @@ defineExpose({ focusIssue });
             >
               문항 삭제
             </button>
+            <p v-if="errors.points" :id="uid + '-points-error'" class="field-error">
+              {{ errors.points }}
+            </p>
           </div>
           <label v-if="'scenario' in current" class="field"
             ><span>상황 설명</span

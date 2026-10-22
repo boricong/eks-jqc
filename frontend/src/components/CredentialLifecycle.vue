@@ -195,7 +195,7 @@ const eventLabels: Record<string, string> = {
       </p>
       <template v-if="data.canRenew">
         <p v-if="data.effectiveStatus === 'Revoke'" class="error-message">
-          폐기된 자격입니다. 현재 필수 자격과 관리자의 새 요청을 확인하여 인증Set 평가부터 다시
+          폐기된 자격입니다. 현재 팀 적용 자격과 관리자의 새 요청을 확인하여 인증Set 평가부터 다시
           취득해 주세요.
         </p>
         <p v-else-if="!data.renewal.canStart" class="muted">

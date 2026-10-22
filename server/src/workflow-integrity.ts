@@ -6,6 +6,51 @@ export function validateWorkflow(s: State) {
   const user = (id: string) => s.users.some((u) => u.id === id);
   for (const r of s.planningRequests)
     check(user(r.learnerId) && user(r.requestedBy), "계획 요청 사용자");
+  for (const r of s.planningRequests) {
+    if (r.completion) {
+      check(
+        new Set(r.completion.evidence.map((e) => e.entityId)).size ===
+          r.completion.evidence.length,
+        "요청 완료 근거 중복",
+      );
+      check(r.completion.evidence.length > 0, "요청 완료 근거 누락");
+      for (const e of r.completion.evidence) {
+        check(
+          e.planId ? !e.certificationId && !e.assignmentId : !!e.assignmentId,
+          "요청 완료 근거 종류",
+        );
+        const p = s.plans.find((p) => p.id === e.planId);
+        const c = s.certifications.find((c) => c.id === e.certificationId);
+        const a = s.assignments.find((a) => a.id === e.assignmentId);
+        // Progress reset removes certifications but retains assignments and the request's original proof IDs.
+        if (c)
+          check(
+            c.assignmentId === e.assignmentId,
+            "요청 인증과 배정 근거 연결",
+          );
+        const q = s.qualifications.find(
+          (q) =>
+            q.id ===
+            (p?.qualificationId || c?.qualificationId || a?.qualificationId),
+        );
+        check(
+          q?.entityId === e.entityId &&
+            (p
+              ? p.learnerId === r.learnerId && p.status === "completed"
+              : c
+                ? c.learnerId === r.learnerId
+                : a?.learnerId === r.learnerId),
+          "요청 완료 근거 참조",
+        );
+      }
+      check(
+        [...(r.targets || []), ...r.selections].every((t) =>
+          r.completion!.evidence.some((e) => e.entityId === t.entityId),
+        ),
+        "필수 및 선택 완료 근거 누락",
+      );
+    }
+  }
   for (const p of s.plans) {
     check(Boolean(p.deletedAt) === Boolean(p.deletedBy), "계획 삭제 정보");
     if (p.deletedAt)

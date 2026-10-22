@@ -1,3 +1,8 @@
+import {
+  QualificationTemplateSchema,
+  QualificationMetadataSchema,
+} from "./qualification-templates.ts";
+export * from "./qualification-templates.ts";
 import { z } from "zod";
 import { CatalogBatchSchema } from "./catalog.ts";
 import {
@@ -166,7 +171,8 @@ export const QualificationSchema = z.object({
   englishName: z.string().max(300).default(""),
   description: text.default(""),
   validity: ValiditySchema.default(unknownValidity),
-  templateId: id.optional(),
+  templateId: id,
+  templateRevision: z.number().int().positive(),
 });
 export type Qualification = z.infer<typeof QualificationSchema>;
 export const DraftSchema = z.object({
@@ -207,6 +213,7 @@ export const EnrollmentSchema = z.object({
   courseId: id,
 });
 export const AssignmentSchema = z.object({
+  qualificationMetadata: QualificationMetadataSchema.optional(),
   id,
   acquisitionCycleId: id.optional(),
   previousCertificationId: id.optional(),
@@ -237,6 +244,7 @@ export const CompletionSchema = z.object({
 });
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
+  qualificationMetadata: QualificationMetadataSchema.optional(),
   id,
   lifecycleStatus: LifecycleStatusSchema.optional(),
   revision: z.number().int().positive().optional(),
@@ -321,7 +329,8 @@ export const comparisonLabels = {
   pending: "비교 보류",
 };
 export const StateSchema = z.object({
-  schemaVersion: z.literal(11),
+  schemaVersion: z.literal(13),
+  qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
   courses: z.array(CourseSchema),
@@ -342,6 +351,16 @@ export const StateSchema = z.object({
   catalogBatches: z.array(CatalogBatchSchema).default([]),
   renewals: z.array(RenewalSchema).default([]),
   lifecycleEvents: z.array(LifecycleEventSchema).default([]),
+});
+export const LegacyStateSchema = StateSchema.extend({
+  schemaVersion: z.literal(11),
+  qualificationTemplates: z.array(QualificationTemplateSchema).optional(),
+  qualifications: z.array(
+    QualificationSchema.extend({
+      templateId: id.optional(),
+      templateRevision: z.number().int().positive().optional(),
+    }),
+  ),
 });
 export type State = z.infer<typeof StateSchema>;
 export interface ProgressSummary {
@@ -388,14 +407,18 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
+  qualificationPool: import("./organizations.ts").OrganizationDocument["qualificationPools"];
   requiredQualifications:
     import("./organizations.ts").RequiredQualificationsView | null;
   requestProgress: import("./organizations.ts").RequestProgress[];
+  planningOptions: import("./organizations.ts").PlanningRequestView[];
   planningReadiness: {
     learnerId: string;
     canRequest: boolean;
     reason: string;
     count: number;
+    requiredCount: number;
+    draftCount: number;
   }[];
   planEligibility: { planId: string; reasons: string[] }[];
   actor: UserView;

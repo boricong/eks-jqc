@@ -65,9 +65,9 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   await page.getByLabel('조직 검색').fill('');
   await tree.locator(`[data-id="${own}"]`).click();
   await expect(page.locator('.policy-detail-stack > section > h2')).toHaveText(longName);
-  await expect(page.locator('.policy-detail-stack .policy-pool-management')).toContainText(
-    '팀 전체 공통 설정',
-  );
+  await expect(
+    page.getByRole('link', { name: '팀 자격 등록·적용 관리', exact: true }),
+  ).toBeVisible();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const panel = page.locator('.policy-tree-panel'),
@@ -101,7 +101,10 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
     }
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('font-size', '14px');
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-radius', '0px');
-    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-left-color', 'rgb(83, 58, 253)');
+    await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS(
+      'border-left-color',
+      'rgb(83, 58, 253)',
+    );
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();

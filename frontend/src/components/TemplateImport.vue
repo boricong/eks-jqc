@@ -10,7 +10,9 @@ const store = useDemo(),
   busy = ref(false),
   error = ref(''),
   chosen = ref<string[]>([]);
-const templates = ref<{ id: string; title: string; englishName: string; imported: boolean }[]>([]);
+const templates = ref<
+  { id: string; title: string; englishName: string; description: string; imported: boolean }[]
+>([]);
 async function show() {
   const scope = store.managementLv1,
     actor = store.actorId;
@@ -33,7 +35,7 @@ async function save() {
   try {
     await store.command('/qualification-templates/import', { templateIds: chosen.value });
     open.value = false;
-    store.notify('선택한 자격을 조직의 독립 기준으로 저장했습니다.');
+    store.notify('선택한 자격을 팀 자격으로 저장했습니다.');
   } catch (err) {
     error.value = (err as Error).message;
   } finally {
@@ -53,11 +55,11 @@ onBeforeRouteUpdate(leave);
 </script>
 <template>
   <button class="button secondary" :disabled="!store.managementReady || busy" @click="show">
-    기본 자격 가져오기
+    기본자격에서 등록
   </button>
-  <AppDialog v-model:open="open" title="기본 자격 가져오기">
+  <AppDialog v-model:open="open" title="기본자격에서 등록">
     <p>{{ store.managementOrganization?.name }}</p>
-    <p class="muted">필요한 자격을 선택한 뒤 설명·기간·인증Set 기준을 준비해 주세요.</p>
+    <p class="muted">필요한 자격을 선택한 뒤 기간·인증Set 기준을 준비해 주세요.</p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <div class="template-list">
       <label v-for="t in templates" :key="t.id" class="choice"
@@ -77,7 +79,7 @@ onBeforeRouteUpdate(leave);
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button
       ><button class="button primary" :disabled="busy || !chosen.length" @click="save">
-        선택 자격 가져오기
+        팀 자격 등록
       </button></template
     >
   </AppDialog>

@@ -1,3 +1,4 @@
+import { currentQualification } from "./qualification-templates.ts";
 import {
   referencedCatalog,
   validateCatalogStructure,
@@ -60,10 +61,11 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v6",
+    format: "eks-catalog-v7",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
-      const q = s.qualifications.find((q) => q.id === id);
+      const original = s.qualifications.find((q) => q.id === id);
+      const q = original ? currentQualification(s, original) : undefined;
       demand(
         q && q.lv1OrganizationId === scope,
         403,
@@ -147,6 +149,8 @@ export function exportCatalog(
         code: codeOf(q),
         sourceId: q.id,
         sourceRevision: q.revision,
+        templateId: q.templateId,
+        templateRevision: q.templateRevision,
         title: q.title,
         englishName: q.englishName,
         description: q.description,
@@ -163,7 +167,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v6",
+    format: "eks-catalog-v7",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -252,6 +256,7 @@ export function prepareCatalog(
         "eks-catalog-v4",
         "eks-catalog-v5",
         "eks-catalog-v6",
+        "eks-catalog-v7",
       ].includes(raw?.format) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
@@ -367,6 +372,15 @@ export function prepareCatalog(
       );
     qCodes.add(sheet.code);
     let original: Qualification | undefined;
+    if (sheet.mode !== "revise") {
+      issue(
+        "metadata",
+        0,
+        "mode",
+        "기본자격에서 팀 자격을 먼저 등록한 뒤 다시 내보내 주세요.",
+      );
+      return;
+    }
     if (sheet.mode === "revise") {
       original = s.qualifications.find((q) => q.id === sheet.sourceId);
       sheet.renewalLeadMonths ??= original?.renewalLeadMonths ?? 3;
@@ -377,14 +391,43 @@ export function prepareCatalog(
         !original ||
         original.deletedAt ||
         original.lv1OrganizationId !== scope
-      )
+      ) {
         issue(
           "metadata",
           0,
           "sourceId",
           "이 조직의 원본 자격을 다시 내보내 주세요.",
         );
-      else {
+        return;
+      } else {
+        const common = currentQualification(s, original);
+        if (sheet.templateId && sheet.templateId !== original.templateId)
+          issue(
+            "metadata",
+            0,
+            "templateId",
+            "기본자격 연결은 변경할 수 없습니다.",
+          );
+        if (
+          sheet.templateRevision &&
+          sheet.templateRevision !== common.templateRevision
+        )
+          issue(
+            "metadata",
+            0,
+            "templateRevision",
+            "기본자격 정보가 변경되었습니다. 다시 내보내 주세요.",
+          );
+        for (const key of ["title", "englishName", "description"] as const)
+          if (sheet[key] !== common[key])
+            issue(
+              "metadata",
+              0,
+              key,
+              "공통 정보는 기본자격 관리에서만 변경합니다. 최신 파일을 다시 내보내 주세요.",
+            );
+        sheet.templateId ??= original.templateId;
+        sheet.templateRevision ??= common.templateRevision;
         if (original.revision !== sheet.sourceRevision)
           issue(
             "metadata",
@@ -752,6 +795,8 @@ export function prepareCatalog(
       version: original?.version || 1,
       revision: original?.revision || 1,
       catalogCode: sheet.code,
+      templateId: original!.templateId,
+      templateRevision: sheet.templateRevision,
       title: sheet.title,
       englishName: sheet.englishName,
       description: sheet.description,
@@ -768,9 +813,6 @@ export function prepareCatalog(
       courseIds: builtCourses.map((c) => c.id),
     });
     const qContent = (v: Qualification) => ({
-      title: v.title,
-      englishName: v.englishName,
-      description: v.description,
       validity: v.validity,
       renewalLeadMonths: v.renewalLeadMonths ?? 3,
       renewalNoticeDaysBefore: v.renewalNoticeDaysBefore ?? 7,

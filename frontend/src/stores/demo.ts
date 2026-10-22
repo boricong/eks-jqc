@@ -35,6 +35,7 @@ export const useDemo = defineStore('workspace', () => {
     requiredQualifications: null,
     requestProgress: [],
     planningReadiness: [],
+    planningOptions: [],
     planEligibility: [],
     serverDate: new Date().toISOString().slice(0, 10),
     management: {
@@ -48,6 +49,7 @@ export const useDemo = defineStore('workspace', () => {
     users: [],
     courses: [],
     qualifications: [],
+    qualificationPool: [],
     assignments: [],
     notices: [],
     homeNotices: [],
@@ -211,7 +213,10 @@ export const useDemo = defineStore('workspace', () => {
       loading.value = false;
     }
   }
-  const qualification = (id: string) => data.value.qualifications.find((q) => q.id === id)!;
+  const qualification = (id: string, snapshot?: Partial<Qualification>) => ({
+    ...data.value.qualifications.find((q) => q.id === id)!,
+    ...snapshot,
+  });
   const course = (id: string) => data.value.courses.find((c) => c.id === id)!;
   const assignment = (id: string) => data.value.assignments.find((a) => a.id === id);
   const enrollmentFor = (aid: string, cid: string) =>
@@ -261,9 +266,11 @@ export const useDemo = defineStore('workspace', () => {
   });
   async function command(path: string, body: unknown = {}, method = 'POST') {
     const managed =
-      /^\/(courses|qualifications|assignments|notices|comparisons|qualification-templates|planning-requests)(\/|$)/.test(
+      /^\/(courses|qualifications|assignments|notices|comparisons|qualification-templates)(\/|$)/.test(
         path,
-      ) || /^\/enrollments\/[^/]+\/comparisons$/.test(path);
+      ) ||
+      (path === '/planning-requests' && method === 'POST') ||
+      /^\/enrollments\/[^/]+\/comparisons$/.test(path);
     if (managed) path = managementPath(path);
     const scope = actorId.value;
     const signature = JSON.stringify({ path, body, method, scope });
@@ -308,7 +315,10 @@ export const useDemo = defineStore('workspace', () => {
     return result;
   }
   async function cloneCatalog(section: string, id: string) {
-    return command(`/${section}/${id}/versions`);
+    return command(
+      `/${section}/${id}/versions`,
+      section === 'qualifications' ? { templateRevision: qualification(id).templateRevision } : {},
+    );
   }
   async function changeAssignment(a: Assignment, action: 'exclude', reason: string) {
     await command(`/assignments/${a.id}/exclusion`, {

@@ -170,12 +170,12 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
     });
   }
   await page.setViewportSize({ width: 1920, height: 900 });
-  await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
-  await page.getByLabel('자격명', { exact: true }).fill('보존할 기준 입력');
+  await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
+  await page.getByLabel('인증Set명', { exact: true }).fill('보존할 기준 입력');
   await sidebar.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await answerConfirmation(page, false);
   await expect(page).toHaveURL(/\/admin\/catalog/);
-  await expect(page.getByLabel('자격명', { exact: true })).toHaveValue('보존할 기준 입력');
+  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 기준 입력');
 });
 
 test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', async ({ page }) => {

@@ -1,4 +1,8 @@
-﻿import test, { type TestContext } from "node:test";
+import {
+  linkFixtureTemplates,
+  registerFixtureQualification,
+} from "./template-helpers.ts";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
   mkdtemp,
@@ -36,7 +40,7 @@ async function fixture(t: TestContext) {
     entityId: q2,
     title: "추가 필수 자격",
   });
-  await new JsonStore(file).initialize(seed);
+  await new JsonStore(file).initialize(linkFixtureTemplates(seed));
   const store = await new JsonStore(file).load();
   let at = "2026-10-21T03:00:00Z";
   const app = await buildApp(store, { clock: () => at }),
@@ -113,6 +117,9 @@ async function fixture(t: TestContext) {
     ).ids?.[0];
   const plan = async (requestId: string, q = q1, learner = "learner-2") => {
     const { id } = await call(learner, "/plans", {
+      requestRevision: store
+        .snapshot()
+        .planningRequests.find((r) => r.id === requestId)!.revision,
       requestId,
       qualificationId: q,
     });
@@ -269,7 +276,7 @@ test("Lv5·Lv10·100단계 조직의 생성·소속·경로·직속 및 순환 �
   assert.throws(() => validateOrganizations(doc), /순환/);
 });
 
-test("필수 자격은 실제 소속만 적용하고 미설정·명시적 빈 목록·요청 전 차단을 구분", async (t) => {
+test("필수 자격은 실제 소속만 적용하고 빈 목록에도 요청을 허용하며 요청 전 접근은 차단", async (t) => {
   const f = await fixture(t);
   await f.setup();
   const child = "org-photo-pyeongtaek-1";
@@ -283,7 +290,7 @@ test("필수 자격은 실제 소속만 적용하고 미설정·명시적 빈 �
   let view = await f.call("learner-2", "/me/required-qualifications");
   assert.equal(view.configured, false);
   assert.equal(view.items.length, 0);
-  await f.invite("learner-2", 422);
+  await f.invite("learner-2");
   await f.required(child, []);
   view = await f.call("learner-2", "/me/required-qualifications");
   assert.equal(view.configured, true);
@@ -294,7 +301,7 @@ test("필수 자격은 실제 소속만 적용하고 미설정·명시적 빈 �
   await f.call(
     "learner-2",
     "/plans",
-    { requestId: "fake", qualificationId: q1 },
+    { requestRevision: 1, requestId: "fake", qualificationId: q1 },
     404,
   );
   await f.invite();
@@ -308,7 +315,7 @@ test("팀 목록은 게시·같은 Lv1만, 참조 중 제거 차단·revision·�
   const doc = f.store.organizations.snapshot();
   await f.required(root, ["not-in-pool"], 422);
   await f.pool([], 409);
-  const d = await f.call("admin-1", "/qualifications", {});
+  const d = await registerFixtureQualification(f.store);
   await f.pool([d.id], 422);
   await f.call(
     "admin-1",
@@ -416,7 +423,7 @@ test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재�
   assert.equal(master.requests.at(-1)?.lv1OrganizationId, "org-etch");
 });
 
-test("요청 대상 고정·추가 자격 별도 요청·일부 계획은 전체 완료 아님", async (t) => {
+test("요청 필수 대상 고정·새 팀 자격 직접 시작·일부 계획은 전체 완료 아님", async (t) => {
   const f = await fixture(t);
   await f.setup();
   const first = await f.invite();
@@ -424,8 +431,14 @@ test("요청 대상 고정·추가 자격 별도 요청·일부 계획은 전체
   await f.call(
     "learner-2",
     "/plans",
-    { requestId: first, qualificationId: q2 },
-    409,
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((r) => r.id === first)!.revision,
+      requestId: first,
+      qualificationId: q2,
+    },
+    200,
   );
   const request = await f.invite(),
     p = await f.plan(request);
@@ -447,7 +460,7 @@ test("요청 대상 고정·추가 자격 별도 요청·일부 계획은 전체
   summary = ws.requestProgress.find((r: any) => r.id === request);
   assert.deepEqual(
     [summary.planned, summary.excluded, summary.stage],
-    [1, 1, "계획 완료"],
+    [1, 0, "작성 중"],
   );
   assert.equal(
     f.store.snapshot().planningRequests.find((r) => r.id === first)!.targets!
@@ -554,7 +567,13 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
   await f.call(
     "learner-2",
     "/plans",
-    { requestId: request, qualificationId: v.id },
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((r) => r.id === request)!.revision,
+      requestId: request,
+      qualificationId: v.id,
+    },
     409,
   );
   // Replace only policy for an expiry test, preserving original assessment evidence.
@@ -589,13 +608,12 @@ test("조직 정책 변경과 계획 확정의 공통 대기열·기존 배정�
   const f = await fixture(t);
   await f.setup();
   const p = await f.plan(await f.invite());
-  await Promise.all([f.required(root, []), f.complete(p.id, "learner-2", 409)]);
+  await Promise.all([f.required(root, []), f.complete(p.id)]);
   assert.equal(
     f.store.snapshot().assignments.some((a) => a.planId === p.id),
-    false,
+    true,
   );
   await f.required(root, f.entities([q1]));
-  await f.complete(p.id);
   const snapshot = f.store.snapshot();
   await f.required(root, []);
   assert.deepEqual(f.store.snapshot().assignments, snapshot.assignments);
@@ -629,7 +647,7 @@ test("운영 종료는 새 계획을 막고 설정과 확정 진행·복구 참�
       organizationId: root,
       roles: ["learner"],
     })
-    .then((u) => f.invite(u.id, 422));
+    .then((u) => f.invite(u.id));
   assert.equal(f.store.organizations.snapshot().qualificationPools.length, 1);
   const wrong = f.store.snapshot();
   wrong.qualifications = wrong.qualifications.filter((q) => q.id !== q1);
@@ -719,7 +737,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 11);
+  assert.equal(migrated.schemaVersion, 13);
   assert.equal(master.schemaVersion, 2);
   for (const key of [
     "users",

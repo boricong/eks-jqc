@@ -18,7 +18,11 @@ import ComparisonPanel from '../components/ComparisonPanel.vue';
 import CertificationTargets from '../components/CertificationTargets.vue';
 import QualificationLifecycle from '../components/QualificationLifecycle.vue';
 import QualificationFields from '../components/QualificationFields.vue';
+import CollapsibleSection from '../components/CollapsibleSection.vue';
+import CoursePreviewDialog from '../components/CoursePreviewDialog.vue';
+import '../team-qualification.css';
 import { courseIssues, type CourseIssue } from '../course-editor';
+import TeamQualificationPool from '../components/TeamQualificationPool.vue';
 import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
 import { useListView } from '../composables/useListView';
@@ -45,10 +49,10 @@ const organizationData = computed(() => {
   };
 });
 const sections = [
-  { id: 'credentials', name: '개인 자격 관리', icon: 'award' },
+  { id: 'credentials', name: '개인 팀 자격 관리', icon: 'award' },
   { id: 'targets', name: '인증 대상자 관리', icon: 'users' },
   { id: 'policies', name: '조직별 자격 설정', icon: 'users' },
-  { id: 'qualifications', name: '자격 관리', icon: 'award' },
+  { id: 'qualifications', name: '팀 자격 관리', icon: 'award' },
   { id: 'courses', name: '인증Set 관리', icon: 'book' },
   { id: 'assignments', name: '대상자·계획', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },
@@ -84,6 +88,23 @@ const locatedIssues = computed(() =>
 );
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
+const previewCourseId = ref('');
+const previewCourse = computed(
+  () =>
+    organizationData.value.courses.find((course) => course.id === previewCourseId.value) || null,
+);
+const qualificationContext = computed(
+  () => `${store.actorId}:${store.managementLv1}:${qualificationDraft.value?.id || ''}`,
+);
+watch(qualificationContext, () => {
+  previewCourseId.value = '';
+});
+const validitySummary = computed(() => {
+  const policy = qualificationDraft.value?.validity;
+  if (policy?.type === 'unlimited') return '무기한';
+  if (policy?.type === 'months' && policy.months) return `취득 후 ${policy.months}개월`;
+  return '인증기간 미정';
+});
 watch(locatedIssues, (issues) => {
   if (validationShown.value && courseDraft.value)
     errors.value = [
@@ -202,7 +223,11 @@ const selectableCourses = computed(() => {
 const assignments = computed(() =>
   organizationData.value.assignments.filter(
     (a) =>
-      matches(store.qualification(a.qualificationId).title + ' ' + store.username(a.learnerId)) &&
+      matches(
+        store.qualification(a.qualificationId, a.qualificationMetadata).title +
+          ' ' +
+          store.username(a.learnerId),
+      ) &&
       (filter.value === 'all' ||
         (filter.value === 'excluded' && !!a.excludedReason) ||
         (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
@@ -388,6 +413,33 @@ const auditLabels: Record<string, string> = {
   'comparison.finalize': '비교 확정',
   'comparison.correct': '비교 정정',
 };
+async function refreshCommon() {
+  if (!qualificationDraft.value) return;
+  const id = qualificationDraft.value.id,
+    actor = store.actorId,
+    scope = store.managementLv1;
+  try {
+    await store.refresh();
+    if (
+      actor !== store.actorId ||
+      scope !== store.managementLv1 ||
+      qualificationDraft.value?.id !== id
+    )
+      return;
+    const q = store.qualification(id);
+    Object.assign(qualificationDraft.value, {
+      title: q.title,
+      englishName: q.englishName,
+      description: q.description,
+      templateId: q.templateId,
+      templateRevision: q.templateRevision,
+    });
+    savePreview.value = null;
+    errors.value = [];
+  } catch (e) {
+    errors.value = [(e as Error).message];
+  }
+}
 async function canLeave() {
   if (!store.managementAccess) return true;
   const source = courseDraft.value
@@ -507,57 +559,82 @@ onBeforeRouteUpdate(canLeave);
             "
           />
         </div>
-        <QualificationLifecycle
-          v-if="qualificationDraft && !readOnly"
-          :qualification="store.qualification(qualificationDraft.id)"
-          :disabled="
-            busy ||
-            (!readOnly &&
-              JSON.stringify(qualificationDraft) !==
-                JSON.stringify(store.qualification(qualificationDraft.id)))
-          "
-          @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
-          @version-created="
-            (id) => router.push(store.managementLink(`/admin/qualifications/${id}`))
-          "
-        />
-        <p
-          v-if="qualificationDraft && store.retiredCourses(qualificationDraft).length"
-          class="error-message"
+        <div
+          v-if="qualificationDraft"
+          :key="qualificationContext"
+          class="team-qualification-detail"
         >
-          신규 배정 불가 ·
-          {{
-            store
-              .retiredCourses(qualificationDraft)
-              .map((c) => `${c.title} v${c.version}`)
-              .join(', ')
-          }}
-          운영 종료.
-          {{
-            readOnly
-              ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
-              : '신규 운영 전에 종료 인증Set을 제거하거나 대체해 주세요.'
-          }}
-        </p>
-        <div v-if="qualificationDraft" class="panel editor-panel">
-          <label class="field"
-            ><span>{{ courseDraft ? '인증Set명' : '자격명' }}</span
-            ><input
-              v-model="editor.title"
-              data-course-field="title"
-              :aria-invalid="locatedIssues.some((i) => i.kind === 'basic' && i.field === 'title')"
-              :disabled="readOnly || busy"
-          /></label>
+          <QualificationLifecycle
+            v-if="qualificationDraft && !readOnly"
+            :qualification="store.qualification(qualificationDraft.id)"
+            :disabled="
+              busy ||
+              (!readOnly &&
+                JSON.stringify(qualificationDraft) !==
+                  JSON.stringify(store.qualification(qualificationDraft.id)))
+            "
+            @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
+            @version-created="
+              (id) => router.push(store.managementLink(`/admin/qualifications/${id}`))
+            "
+          />
           <p
-            v-if="locatedIssues.some((i) => i.kind === 'basic' && i.field === 'title')"
-            class="field-error"
+            v-if="qualificationDraft && store.retiredCourses(qualificationDraft).length"
+            class="error-message"
           >
-            인증Set명을 입력해 주세요.
+            신규 배정 불가 ·
+            {{
+              store
+                .retiredCourses(qualificationDraft)
+                .map((c) => `${c.title} v${c.version}`)
+                .join(', ')
+            }}
+            운영 종료.
+            {{
+              readOnly
+                ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
+                : '신규 운영 전에 종료 인증Set을 제거하거나 대체해 주세요.'
+            }}
           </p>
-          <template v-if="qualificationDraft">
+          <CollapsibleSection title="공통 정보" class="editor-panel">
+            <template #summary>수정 번호 {{ qualificationDraft.templateRevision }}</template>
+            <dl class="property-list team-qualification-facts">
+              <div>
+                <dt>자격명</dt>
+                <dd>{{ qualificationDraft.title }}</dd>
+              </div>
+              <div>
+                <dt>영문명</dt>
+                <dd>{{ qualificationDraft.englishName || '—' }}</dd>
+              </div>
+              <div>
+                <dt>공통 정보 수정 번호</dt>
+                <dd>{{ qualificationDraft.templateRevision }}</dd>
+              </div>
+              <div class="team-qualification-description">
+                <dt>공통 설명</dt>
+                <dd>
+                  {{ qualificationDraft.description || '시스템 관리자의 설명 보완이 필요합니다.' }}
+                </dd>
+              </div>
+            </dl>
+            <button
+              v-if="errors.length"
+              class="button secondary"
+              :disabled="busy"
+              @click="refreshCommon"
+            >
+              공통 정보 다시 확인
+            </button>
+          </CollapsibleSection>
+          <CollapsibleSection title="팀 설정">
+            <template #summary>{{ validitySummary }}</template>
             <QualificationFields :qualification="qualificationDraft" :disabled="readOnly || busy" />
+          </CollapsibleSection>
+          <CollapsibleSection title="필수 인증Set">
+            <template #summary>{{ qualificationDraft.courseIds.length }}개 선택</template>
             <fieldset class="course-selection">
-              <legend>필수 인증Set</legend>
+              <legend class="sr-only">필수 인증Set 선택</legend>
               <label class="field course-selection-search"
                 ><span>인증Set 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
                 <input
@@ -568,20 +645,50 @@ onBeforeRouteUpdate(canLeave);
                 />
               </label>
               <div class="course-selection-list">
-                <label v-for="c in selectableCourses" :key="c.id" class="choice"
-                  ><input
-                    v-model="qualificationDraft.courseIds"
-                    type="checkbox"
-                    :value="c.id"
-                    :disabled="readOnly || busy" /><span>{{ c.title || '이름 없음' }}</span
-                  ><span class="muted">v{{ c.version }}</span
-                  ><StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
-                /></label>
+                <div
+                  v-for="c in selectableCourses"
+                  :key="c.id"
+                  class="qualification-course-row"
+                  :data-course-id="c.id"
+                >
+                  <label class="qualification-course-choice"
+                    ><input
+                      v-model="qualificationDraft.courseIds"
+                      type="checkbox"
+                      :value="c.id"
+                      :disabled="readOnly || busy"
+                    /><span>{{ c.title || '이름 없음' }}</span></label
+                  >
+                  <div class="qualification-course-meta">
+                    <span class="muted">v{{ c.version }}</span>
+                    <StatusBadge
+                      :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
+                    />
+                    <span v-if="c.deletedAt" class="muted">삭제됨</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="button secondary"
+                    :aria-label="`${c.title || '이름 없는 인증Set'} v${c.version} 내용 조회`"
+                    @click="previewCourseId = c.id"
+                  >
+                    내용 조회
+                  </button>
+                </div>
                 <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
               </div>
-            </fieldset></template
-          >
+            </fieldset>
+          </CollapsibleSection>
         </div>
+        <CoursePreviewDialog
+          :open="!!previewCourseId"
+          :course="previewCourse"
+          @update:open="
+            (open) => {
+              if (!open) previewCourseId = '';
+            }
+          "
+        />
         <CourseEditor
           v-if="courseDraft"
           ref="courseEditor"
@@ -664,16 +771,16 @@ onBeforeRouteUpdate(canLeave);
       <template v-else>
         <PageHeading class="page-heading">
           <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
-          <TemplateImport v-if="section === 'qualifications'" />
+          <TemplateImport v-if="section === 'qualifications'" /><TeamQualificationPool
+            v-if="section === 'qualifications'"
+          />
           <button
-            v-if="section === 'qualifications' || section === 'courses'"
+            v-if="section === 'courses'"
             class="button primary"
             :disabled="busy"
             @click="createCatalog"
           >
-            <AppIcon name="plus" :size="18" />{{
-              section === 'courses' ? '인증Set 추가' : '새 자격 만들기'
-            }}</button
+            <AppIcon name="plus" :size="18" />인증Set 추가</button
           ><button
             v-else-if="section === 'notices'"
             class="button primary"
@@ -773,6 +880,7 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>자격명</th>
                 <th>버전</th>
+                <th>팀 적용</th>
                 <th>상태</th>
                 <th><span class="sr-only">상세</span></th>
               </tr>
@@ -811,6 +919,13 @@ onBeforeRouteUpdate(canLeave);
                   >
                 </td>
                 <td>v{{ q.version }}</td>
+                <td>
+                  {{
+                    store.data.qualificationPool.some((p) => p.qualificationId === q.id)
+                      ? '적용 중'
+                      : '미적용'
+                  }}
+                </td>
                 <td>
                   <span class="lifecycle-badge" :data-status="q.lifecycleStatus || 'Active'">{{
                     q.lifecycleStatus || 'Active'
@@ -883,9 +998,11 @@ onBeforeRouteUpdate(canLeave);
               <tr v-for="a in pageAssignments" :key="a.id">
                 <td>{{ store.username(a.learnerId) }}</td>
                 <td>
-                  {{ store.qualification(a.qualificationId).title
+                  {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
                   }}<small class="table-subtext"
-                    >v{{ store.qualification(a.qualificationId).version }}</small
+                    >v{{
+                      store.qualification(a.qualificationId, a.qualificationMetadata).version
+                    }}</small
                   >
                 </td>
                 <td>{{ store.completedCount(a) }} / {{ a.enrollments.length }}</td>
@@ -915,8 +1032,8 @@ onBeforeRouteUpdate(canLeave);
               <span
                 ><strong>{{ store.username(a.learnerId) }}</strong
                 ><small
-                  >{{ store.qualification(a.qualificationId).title }} · v{{
-                    store.qualification(a.qualificationId).version
+                  >{{ store.qualification(a.qualificationId, a.qualificationMetadata).title }} · v{{
+                    store.qualification(a.qualificationId, a.qualificationMetadata).version
                   }}</small
                 ></span
               ><span class="muted"
@@ -1082,7 +1199,13 @@ onBeforeRouteUpdate(canLeave);
         @update:open="selectedAssignment = null"
         ><p>
           {{ selectedAssignment && store.username(selectedAssignment.learnerId) }} ·
-          {{ selectedAssignment && store.qualification(selectedAssignment.qualificationId).title }}
+          {{
+            selectedAssignment &&
+            store.qualification(
+              selectedAssignment.qualificationId,
+              selectedAssignment.qualificationMetadata,
+            ).title
+          }}
         </p>
         <div v-if="errors.length" class="error-message" role="alert">{{ errors[0] }}</div>
         <p class="muted">기존 기록은 보존되며, 이후 평가를 진행할 수 없습니다.</p>

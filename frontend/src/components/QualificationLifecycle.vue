@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PropertyList from './PropertyList.vue';
+import CollapsibleSection from './CollapsibleSection.vue';
 import { ref, watch } from 'vue';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
@@ -101,44 +102,51 @@ async function createVersion() {
 }
 </script>
 <template>
-  <section class="panel editor-panel lifecycle-panel">
-    <div class="section-heading">
-      <h2>자격 기준 운영 상태</h2>
+  <CollapsibleSection title="자격 기준 운영 상태">
+    <template #summary>
       <span class="lifecycle-badge" :data-status="qualification.lifecycleStatus || 'Active'">{{
         criterionLifecycleLabels[qualification.lifecycleStatus || 'Active']
       }}</span>
+    </template>
+    <div class="qualification-lifecycle-content">
+      <div class="qualification-lifecycle-description">
+        <p>
+          Hold·Revoke는 신규 계획과 재인증을 중단합니다. 기존 확정 배정과 개인 보유 자격은
+          유지됩니다.
+        </p>
+        <p v-if="qualification.lifecycleStatus === 'Revoke'" class="muted">
+          폐기한 버전은 재개할 수 없습니다. 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.
+        </p>
+      </div>
+      <div class="qualification-lifecycle-actions">
+        <button
+          v-if="qualification.lifecycleStatus !== 'Revoke'"
+          class="button secondary"
+          :disabled="disabled || busy"
+          @click="review"
+        >
+          운영 상태 변경
+        </button>
+        <button v-else class="button secondary" :disabled="busy" @click="review">
+          운영 상태 이력 보기
+        </button>
+        <button
+          v-if="qualification.lifecycleStatus === 'Revoke'"
+          class="button secondary"
+          :disabled="disabled || busy"
+          @click="createOpen = true"
+        >
+          새 버전 작성
+        </button>
+      </div>
     </div>
-    <p>
-      Hold·Revoke는 신규 계획과 재인증을 중단합니다. 기존 확정 배정과 개인 보유 자격은 유지됩니다.
-    </p>
-    <button
-      v-if="qualification.lifecycleStatus !== 'Revoke'"
-      class="button secondary"
-      :disabled="disabled || busy"
-      @click="review"
-    >
-      운영 상태 변경
-    </button>
-    <button v-else class="button secondary" :disabled="busy" @click="review">
-      운영 상태 이력 보기
-    </button>
-    <p v-if="qualification.lifecycleStatus === 'Revoke'" class="muted">
-      폐기한 버전은 재개할 수 없습니다. 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.
-    </p>
-    <button
-      v-if="qualification.lifecycleStatus === 'Revoke'"
-      class="button secondary"
-      :disabled="disabled || busy"
-      @click="createOpen = true"
-    >
-      새 버전 작성
-    </button>
     <p v-if="error && !open" role="alert" class="error-message">{{ error }}</p>
-  </section>
+  </CollapsibleSection>
   <AppDialog v-model:open="createOpen" title="폐기 기준의 새 버전 작성">
     <p>
       기존 Revoke 버전과 취득 근거는 그대로 보존하고 동일한 내용의 새 Active 버전을 만듭니다. 기준을
-      보완한 뒤 조직별 자격 설정에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지 않습니다.
+      보완한 뒤 팀 자격 관리의 팀 적용에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지
+      않습니다.
     </p>
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>
     <template #footer

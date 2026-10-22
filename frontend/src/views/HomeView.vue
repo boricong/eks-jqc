@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import PageHeading from '../components/PageHeading.vue';
 import HomeNotices from '../components/HomeNotices.vue';
+import HomeQualificationCarousel from '../components/HomeQualificationCarousel.vue';
 import { computed } from 'vue';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import PersonalTasks from '../components/PersonalTasks.vue';
-import RequiredQualifications from '../components/RequiredQualifications.vue';
 import {
   certificationStatus,
-  kindLabels,
   latestPeriod,
   renewalOpensOn,
   credentialCurrent,
@@ -17,6 +16,24 @@ const store = useDemo();
 const active = computed(() =>
   store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt),
 );
+const planningRequests = computed(() => {
+  const actor = store.actor;
+  if (
+    actor.role !== 'learner' ||
+    actor.certificationEligibility === 'hold' ||
+    !actor.organizationActive
+  )
+    return [];
+  return store.data.planningRequests
+    .filter(
+      (request) =>
+        request.learnerId === actor.id &&
+        request.organizationId === actor.organizationId &&
+        request.lv1OrganizationId === actor.lv1OrganizationId &&
+        !request.completion,
+    )
+    .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+});
 const renewables = computed(() =>
   store.actor.certificationEligibility === 'hold'
     ? []
@@ -52,7 +69,7 @@ const attention = computed(() => [
     count: store.data.planningRequests.filter(
       (r) =>
         r.dueOn < new Date().toISOString().slice(0, 10) &&
-        !['계획 완료', '현재 대상 없음'].includes(
+        !['계획 완료', '추가 계획 대상 없음'].includes(
           store.data.requestProgress.find((p) => p.id === r.id)?.stage || '',
         ),
     ).length,
@@ -194,7 +211,12 @@ const stats = computed(() =>
     </nav>
     <div class="home-columns">
       <div class="home-primary">
-        <RequiredQualifications v-if="store.hasRole('learner')" />
+        <HomeQualificationCarousel
+          v-if="store.actor.role === 'learner'"
+          :key="store.actorId"
+          :assignments="active"
+          :planning-requests="planningRequests"
+        />
         <PersonalTasks />
         <section v-if="renewables.length" class="home-card lifecycle-panel">
           <div class="section-heading"><h2>보유 자격 · 재인증</h2></div>
@@ -203,75 +225,31 @@ const stats = computed(() =>
             :key="a.id"
             class="lifecycle-renewal-link"
             :to="`/certifications/${a.id}`"
-            ><strong>{{ store.qualification(a.qualificationId).title }}</strong
+            ><strong>{{
+              store.qualification(a.qualificationId, a.qualificationMetadata).title
+            }}</strong
             ><span
               >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification!)!) }} · 만료
               {{ credentialCurrent(a.certification!).expiresOn }}</span
             ><span class="text-link">상태·재인증 확인 →</span></RouterLink
           >
         </section>
-        <section class="home-card">
+        <section v-if="store.actor.role !== 'learner'" class="home-card">
           <div class="section-heading">
             <h2>
-              {{
-                store.actor.role === 'learner'
-                  ? '진행 중인 자격'
-                  : store.actor.role === 'system_operator'
-                    ? '시스템 운영'
-                    : '기준 관리'
-              }}
+              {{ store.actor.role === 'system_operator' ? '시스템 운영' : '기준 관리' }}
             </h2>
             <RouterLink
               :to="
-                store.actor.role === 'learner'
-                  ? '/qualifications'
-                  : store.actor.role === 'system_operator'
-                    ? '/system/overview'
-                    : '/admin/qualifications'
+                store.actor.role === 'system_operator'
+                  ? '/system/overview'
+                  : '/admin/qualifications'
               "
               class="text-link"
               >전체 보기<AppIcon name="chevron" :size="16"
             /></RouterLink>
           </div>
-          <template v-if="store.actor.role === 'learner' && active.length">
-            <div class="home-current">
-              <span class="small-label">필수 인증Set {{ active[0]!.enrollments.length }}개</span>
-              <h3>{{ store.qualification(active[0]!.qualificationId).title }}</h3>
-              <div class="progress-label">
-                <span>인증Set 수료</span
-                ><span
-                  >{{ store.completedCount(active[0]!) }} /
-                  {{ active[0]!.enrollments.length }}</span
-                >
-              </div>
-              <div class="progress-track">
-                <span
-                  :style="{
-                    width: `${(store.completedCount(active[0]!) / active[0]!.enrollments.length) * 100}%`,
-                  }"
-                ></span>
-              </div>
-              <div class="home-card-bottom">
-                <span class="muted"
-                  >평가 {{ store.passedCount(active[0]!) }} /
-                  {{ store.assessmentCount(active[0]!) }} 통과</span
-                ><RouterLink :to="`/qualifications/${active[0]!.id}`" class="button primary"
-                  >이어서 진행<AppIcon name="arrow" :size="18"
-                /></RouterLink>
-              </div>
-            </div>
-          </template>
-          <div v-else-if="store.actor.role === 'learner'" class="empty-state">
-            <AppIcon name="book" :size="28" /><span>진행 중인 자격이 없습니다.</span
-            ><RouterLink
-              v-if="store.myAssignments.some((a) => a.certifiedAt)"
-              class="button secondary"
-              to="/qualifications?filter=certified"
-              >인증 보기</RouterLink
-            >
-            <RouterLink to="/plans" class="button primary">내 계획 확인</RouterLink>
-          </div>
-          <template v-else-if="store.actor.role === 'system_operator'"
+          <template v-if="store.actor.role === 'system_operator'"
             ><label class="field home-org-select"
               >관리할 Lv1 조직<select
                 aria-label="홈 관리할 Lv1 조직"
@@ -320,7 +298,9 @@ const stats = computed(() =>
           <h2>나의 인증 일정</h2>
           <RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row">
             <span
-              ><strong>{{ store.qualification(p.qualificationId).title }}</strong
+              ><strong>{{
+                store.qualification(p.qualificationId, p.qualificationMetadata).title
+              }}</strong
               ><small
                 >목표 인증일 {{ p.targetOn }} ·
                 {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small

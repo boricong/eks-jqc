@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import QualificationTemplates from '../components/QualificationTemplates.vue';
 import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
@@ -17,6 +18,7 @@ watch(
   },
 );
 const sections = [
+  { id: 'qualification-templates', name: '기본자격 관리' },
   { id: 'organizations', name: '조직 관리' },
   { id: 'users', name: '사용자 관리' },
   { id: 'overview', name: '전체 업무 조회' },
@@ -48,11 +50,11 @@ const sections = [
       </nav>
     </aside>
     <div class="admin-content management-content">
-      <OrganizationPanel v-if="section === 'organizations'" /><UserManagementPanel
-        v-else-if="section === 'users'"
-      /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
-        v-else-if="section === 'notices'"
-      /><template v-else
+      <QualificationTemplates v-if="section === 'qualification-templates'" /><OrganizationPanel
+        v-else-if="section === 'organizations'"
+      /><UserManagementPanel v-else-if="section === 'users'" /><SystemOverview
+        v-else-if="section === 'overview'"
+      /><SystemNotices v-else-if="section === 'notices'" /><template v-else
         ><h1>테스트 관리</h1>
         <TestProgressPanel />
         <MasterDataPanel

@@ -336,12 +336,18 @@ export function preparePhotoSetup(
       validity: { type: "months", months: 36, reminderDays: [90, 30, 7] },
       courseIds: courses.map((course) => course.id),
       templateId: template.id,
+      templateRevision: 1,
       revision: draft ? draft.revision + 1 : 1,
     });
     requirement(
       !qualificationUseErrors(qualification, state.courses).length,
       `${template.title} 신규 운영 기준이 부족합니다.`,
     );
+    const common = state.qualificationTemplates.find(
+      (t) => t.id === template.id,
+    )!;
+    // This is the explicitly requested fictional Photo fixture setup, never normal startup.
+    common.description = qualification.description;
     if (draft) Object.assign(draft, qualification);
     else state.qualifications.push(qualification);
     publishedQualificationIds.push(id);

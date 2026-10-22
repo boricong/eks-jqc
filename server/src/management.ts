@@ -11,7 +11,7 @@ export const isManagementAction = (action: string) =>
     "comparison.",
     "notice.",
     "template.",
-    "planning.",
+    "planning.request",
   ].some((prefix) => action.startsWith(prefix));
 
 // A management context never changes the actor's affiliation or roles.

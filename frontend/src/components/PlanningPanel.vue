@@ -45,7 +45,7 @@ const rows = computed(() =>
         requests.some(
           (r) =>
             r.dueOn < kstDate() &&
-            !['계획 완료', '현재 대상 없음'].includes(
+            !['계획 완료', '추가 계획 대상 없음'].includes(
               summaries.find((p) => p.id === r.id)?.stage || '',
             ),
         ) ||
@@ -88,7 +88,7 @@ async function send() {
       ...(dueEdited.value ? {} : { dueOn: undefined }),
     });
     open.value = false;
-    store.notify('대상자별 필수 자격 목록과 계획 요청을 저장했습니다.');
+    store.notify('대상자별 계획 수립 요청을 저장했습니다.');
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -115,9 +115,7 @@ onBeforeRouteUpdate(leave);
       </button>
     </div>
     <p v-if="!ready" class="notice-body">
-      요청할 대상이 없습니다.
-      <RouterLink :to="store.managementLink('/admin/policies')">조직별 자격 설정</RouterLink>과 아래
-      대상자의 준비 상태를 확인해 주세요.
+      요청할 대상이 없습니다. 아래 대상자의 소속·취득 대상자 상태를 확인해 주세요.
     </p>
     <label class="field compact-field"
       >계획·진행 필터<select v-model="filter">
@@ -126,6 +124,9 @@ onBeforeRouteUpdate(leave);
           v-for="state in [
             '미발송',
             '미착수',
+            '자격 준비 대기',
+            '확인 필요',
+            '추가 계획 대상 없음',
             '작성 중',
             '계획 완료',
             '평가 전',
@@ -156,7 +157,14 @@ onBeforeRouteUpdate(leave);
               {{ row.user.name
               }}<small class="table-subtext">{{ row.user.organizationPath.at(-1)?.name }}</small>
             </td>
-            <td>{{ readiness(row.user.id)?.reason }}</td>
+            <td>
+              {{ readiness(row.user.id)?.reason
+              }}<small class="table-subtext"
+                >필수 {{ readiness(row.user.id)?.requiredCount || 0 }} · 신규 가능
+                {{ readiness(row.user.id)?.count || 0 }} · 작성 중
+                {{ readiness(row.user.id)?.draftCount || 0 }}</small
+              >
+            </td>
             <td>
               <span>{{ row.stage }}</span>
               <details v-for="r in row.requests" :key="r.id">
@@ -165,7 +173,6 @@ onBeforeRouteUpdate(leave);
                 </summary>
                 <p v-for="s in row.summaries.filter((s) => s.id === r.id)" :key="s.id">
                   대상 {{ s.total }}개 · 계획 확정 {{ s.planned }}개 · 유효 인증 {{ s.valid }}개 ·
-                  현재 기준 제외 {{ s.excluded }}개
                 </p>
                 <p>{{ r.message }}</p>
                 <p v-if="r.source === 'migration'" class="muted">
@@ -173,7 +180,10 @@ onBeforeRouteUpdate(leave);
                   않았습니다.
                 </p>
                 <ul>
-                  <li v-for="target in r.targets" :key="target.entityId">
+                  <li
+                    v-for="target in [...(r.targets || []), ...r.selections]"
+                    :key="target.entityId"
+                  >
                     {{ target.title }} · 요청 당시 v{{ target.version }}
                   </li>
                 </ul>
@@ -181,7 +191,9 @@ onBeforeRouteUpdate(leave);
               <details v-if="row.plans.length">
                 <summary>개인 계획 {{ row.plans.length }}건</summary>
                 <div v-for="p in row.plans" :key="p.id">
-                  <strong>{{ store.qualification(p.qualificationId).title }}</strong>
+                  <strong>{{
+                    store.qualification(p.qualificationId, p.qualificationMetadata).title
+                  }}</strong>
                   <p>목표 인증일 {{ p.targetOn || '미정' }}</p>
                   <p v-for="s in p.schedules" :key="s.courseId">
                     {{ store.course(s.courseId).title }} · {{ s.goal || '목표 미정' }} · 평가 예정
@@ -192,7 +204,7 @@ onBeforeRouteUpdate(leave);
             </td>
             <td>
               <p v-for="a in row.assignments" :key="a.id">
-                {{ store.qualification(a.qualificationId).title
+                {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
                 }}<span
                   v-for="state in ['평가 전', '평가 중', '일부 통과', '수료']"
                   :key="state"
@@ -224,7 +236,9 @@ onBeforeRouteUpdate(leave);
         /><span
           >{{ u.name }} · {{ u.organizationPath.at(-1)?.name
           }}<small
-            >{{ readiness(u.id)?.reason }} · {{ readiness(u.id)?.count || 0 }}자격</small
+            >{{ readiness(u.id)?.reason }} · 필수 {{ readiness(u.id)?.requiredCount || 0 }} · 신규
+            가능 {{ readiness(u.id)?.count || 0 }} · 작성 중
+            {{ readiness(u.id)?.draftCount || 0 }}</small
           ></span
         ></label
       >
@@ -242,8 +256,8 @@ onBeforeRouteUpdate(leave);
       >안내문<textarea v-model="form.message" rows="3" maxlength="2000" :disabled="busy" />
     </label>
     <p class="muted">
-      현재 소속의 미취득·미계획 필수 자격을 요청에 보관합니다. 이후 추가되는 자격은 별도로 요청하며
-      기존 계획과 기한은 바꾸지 않습니다.
+      학습자가 팀 적용 자격을 선택합니다. 이번 요청의 필수 기준은 발송 시점에 고정하며, 필수 자격이
+      없어도 요청할 수 있습니다.
     </p>
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button

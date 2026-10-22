@@ -2,6 +2,7 @@ import type { State } from "./index.ts";
 import type { OrganizationDocument } from "./organizations.ts";
 
 export const masterCountLabels = {
+  qualificationTemplates: "기본자격",
   users: "사용자",
   organizations: "조직",
   qualifications: "자격 버전",
@@ -36,6 +37,7 @@ export const clearedDataLabels = {
 };
 export type ClearedCounts = Record<keyof typeof clearedDataLabels, number>;
 export interface MasterPayload {
+  qualificationTemplates: State["qualificationTemplates"];
   users: State["users"];
   qualifications: State["qualifications"];
   courses: State["courses"];
@@ -43,8 +45,8 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 2;
-  stateSchemaVersion: 11;
+  formatVersion: 3;
+  stateSchemaVersion: 13;
   organizationSchemaVersion: 2;
   createdAt: string;
   counts: MasterCounts;

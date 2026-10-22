@@ -1,3 +1,4 @@
+import { currentQualification } from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -375,10 +376,11 @@ export function renewalAvailability(
   if (opensOn && kstDate(at) < opensOn)
     errors.push(`${opensOn}부터 재인증할 수 있습니다.`);
   if (!q || q.deletedAt)
+    errors.push("팀 적용 기준이 없습니다. 관리자 확인이 필요합니다.");
+  else
     errors.push(
-      "팀 후보 목록에 적용할 게시 기준이 없습니다. 관리자 확인이 필요합니다.",
+      ...qualificationUseErrors(currentQualification(s, q), s.courses),
     );
-  else errors.push(...qualificationUseErrors(q, s.courses));
   return {
     canStart: !errors.length,
     reasons: errors,
@@ -387,7 +389,7 @@ export function renewalAvailability(
     appliedQualification: q
       ? {
           id: q.id,
-          title: q.title,
+          title: currentQualification(s, q).title,
           version: q.version,
           revision: q.revision,
           validity: q.validity,

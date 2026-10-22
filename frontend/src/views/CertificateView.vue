@@ -40,11 +40,15 @@ const back = computed(() =>
           a.certification?.snapshot?.learnerName || store.username(a.learnerId)
         }}</span>
         <h2>
-          {{ a.certification?.snapshot?.title || store.qualification(a.qualificationId).title }}
+          {{
+            a.certification?.snapshot?.title ||
+            store.qualification(a.qualificationId, a.qualificationMetadata).title
+          }}
         </h2>
         <p class="muted">
           v{{
-            a.certification?.snapshot?.version || store.qualification(a.qualificationId).version
+            a.certification?.snapshot?.version ||
+            store.qualification(a.qualificationId, a.qualificationMetadata).version
           }}
           · 취득일
           {{ new Date(a.certifiedAt!).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) }}
@@ -68,7 +72,11 @@ const back = computed(() =>
     </p>
     <p class="small-label">인증 {{ a.certification?.id }}</p>
     <p
-      v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')"
+      v-if="
+        store
+          .qualification(a.qualificationId, a.qualificationMetadata)
+          .description.includes('프로세스 검증용')
+      "
       class="test-data-disclaimer"
     >
       프로세스 검증용 가상 기준으로 발급된 시험 인증입니다. 실제 사내 직무 자격으로 사용하지

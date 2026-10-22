@@ -12,7 +12,7 @@ const sections = [
   { id: 'credentials', name: '개인 자격 관리', icon: 'award' },
   { id: 'targets', name: '인증 대상자 관리', icon: 'users' },
   { id: 'policies', name: '조직별 자격 설정', icon: 'users' },
-  { id: 'qualifications', name: '자격 관리', icon: 'award' },
+  { id: 'qualifications', name: '팀 자격 관리', icon: 'award' },
   { id: 'courses', name: '인증Set 관리', icon: 'book' },
   { id: 'assignments', name: '대상자·계획', icon: 'users' },
   { id: 'results', name: '결과 조회', icon: 'clipboard' },

@@ -46,10 +46,10 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
     await noPageOverflow(page);
   }
   await page.goto('/admin/qualifications/recipe');
-  await page.getByLabel('인증기간').selectOption('three-years');
+  await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await expect(page.getByLabel('유효 개월 수')).toHaveCount(0);
   await expect(page.getByLabel('재인증 시작 N일 전 알림')).toHaveValue('7');
-  await page.getByLabel('인증기간').selectOption('months');
+  await page.getByLabel('인증기간', { exact: true }).selectOption('months');
   await expect(page.getByLabel('유효 개월 수')).toBeVisible();
   await noPageOverflow(page);
 });
@@ -154,7 +154,12 @@ test('학습자 홈 할 일·알림·공지의 본문 대비와 읽음 상태', 
   });
   expect(Math.min(...Object.values(ratios)), JSON.stringify(ratios)).toBeGreaterThanOrEqual(4.5);
   await page.goto('/notifications');
-  await expect(page.locator('.notification-row.unread')).toContainText('읽지 않음');
+  await expect(
+    page.locator('.notification-row').first().locator('.notification-status'),
+  ).toHaveText('읽음');
+  await expect(
+    page.locator('.notification-row').first().locator('.collapsible-section-toggle'),
+  ).toHaveAttribute('aria-expanded', 'true');
   const notificationRatio = await page.evaluate(() => {
     const color = (value: string) =>
       (value.match(/[\d.]+/g) || [])

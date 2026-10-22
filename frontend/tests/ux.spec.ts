@@ -53,7 +53,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
   await expect(page.locator('.course-workspace')).toContainText('통과 유지');
@@ -65,7 +65,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await screenshot(page, 'objective');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '자격 관리', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '팀 자격 관리', exact: true })).toBeVisible();
   await screenshot(page, 'admin');
   await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
   await screenshot(page, 'admin-courses');
@@ -82,7 +82,7 @@ test('작은 화면과 키보드 접근', async ({ page }) => {
     await expect(page.getByRole('heading', { name: '시스템 공지', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '내 팀 공지', exact: true })).toBeVisible();
   }
-  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
   await noOverflow(page);

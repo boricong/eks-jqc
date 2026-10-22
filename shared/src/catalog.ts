@@ -24,6 +24,8 @@ const CatalogRowsSchema = z
   )
   .max(10000);
 export const CatalogSheetSchema = z.object({
+  templateId: z.string().max(160).optional(),
+  templateRevision: z.number().int().positive().optional(),
   legacyUnsupported: z.boolean().optional(),
   sheetName: z.string().max(100),
   mode: z.enum(["new", "revise"]),
@@ -56,6 +58,7 @@ export const CatalogWorkbookSchema = z.object({
     "eks-catalog-v4",
     "eks-catalog-v5",
     "eks-catalog-v6",
+    "eks-catalog-v7",
   ]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),

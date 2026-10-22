@@ -1,3 +1,4 @@
+import { registerFixtureQualification } from "./template-helpers.ts";
 import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -135,6 +136,9 @@ test("신규 일정 저장·기존 빈 날짜만 최초 보완·수정과 삭제
     { q } = await catalog(f),
     requestId = await invitation(f);
   const { id } = await f.call("learner-2", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     requestId,
     qualificationId: q,
   });
@@ -200,6 +204,9 @@ test("미확정 계획 삭제는 본인·revision·최신 역할을 검사하고
     { q } = await catalog(f),
     requestId = await invitation(f);
   const { id } = await f.call("learner-2", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     requestId,
     qualificationId: q,
   });
@@ -267,6 +274,9 @@ test("미확정 계획 삭제는 본인·revision·최신 역할을 검사하고
     "PLAN_DELETED",
   );
   const recreated = await f.call("learner-2", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     requestId,
     qualificationId: q,
   });
@@ -302,6 +312,9 @@ test("삭제와 확정의 경합은 배정을 중복 생성하지 않으며 확�
     { q } = await catalog(f),
     requestId = await invitation(f);
   const { id } = await f.call("learner-2", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     requestId,
     qualificationId: q,
   });
@@ -335,6 +348,9 @@ test("삭제와 확정의 경합은 배정을 중복 생성하지 않으며 확�
   const other = await catalog(f),
     r = await invitation(f),
     second = await f.call("learner-2", "/plans", {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((request) => request.id === r)!.revision,
       requestId: r,
       qualificationId: other.q,
     });
@@ -382,7 +398,12 @@ async function catalog(
     undefined,
     "PUT",
   );
-  const q = await f.call("operator-1", scope("/qualifications", root), {});
+  const q = await registerFixtureQualification(
+    f.store,
+    "개인 계획 자격",
+    "직무를 독립 수행할 수 있는지 검증",
+    root,
+  );
   await f.call(
     "operator-1",
     scope(`/qualifications/${q.id}`, root),
@@ -422,6 +443,9 @@ async function plan(
 ) {
   const request = await invitation(f, learner, ft, root);
   const p = await f.call(learner, "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === request)!.revision,
     requestId: request,
     qualificationId: q,
   });
@@ -567,9 +591,11 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
     "operator-1",
     scope("/qualification-templates"),
   );
-  assert.equal(templates.length, 15);
+  assert.equal(templates.length, 17);
   assert.equal(templates[4].englishName, "FDC Diagnois Cert");
-  const ids = templates.map((q: any) => q.id),
+  const ids = templates
+      .filter((q: any) => !q.id.startsWith("fixture-"))
+      .map((q: any) => q.id),
     key = randomUUID();
   await f.call("learner-1", "/qualification-templates", undefined, 403);
   await f.call(
@@ -629,7 +655,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
     "admin-1",
     `/qualifications/${q.id}`,
     { ...q, title: "Photo 독립 기준", templateId: "위조" },
-    200,
+    422,
     "PUT",
   );
   assert.equal(
@@ -668,7 +694,13 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   await f.call(
     "learner-1",
     "/plans",
-    { requestId: r, qualificationId: q },
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((request) => request.id === r)!.revision,
+      requestId: r,
+      qualificationId: q,
+    },
     403,
   );
   await f.call(
@@ -681,7 +713,13 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   await f.call(
     "learner-2",
     "/plans",
-    { requestId: r, qualificationId: etch },
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((request) => request.id === r)!.revision,
+      requestId: r,
+      qualificationId: etch,
+    },
     422,
   );
   await f.call(
@@ -702,6 +740,9 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
     422,
   );
   const p = await f.call("learner-2", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((request) => request.id === r)!.revision,
     requestId: r,
     qualificationId: q,
   });
@@ -784,6 +825,9 @@ test("계획 완료 직전 운영 종료 차단, 기존 미시작 계획 배정�
   const active = await plan(f, q);
   const requestId = await invitation(f, "dual");
   const draft = await f.call("dual", "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     requestId,
     qualificationId: q,
   });

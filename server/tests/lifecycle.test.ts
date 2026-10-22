@@ -129,6 +129,9 @@ async function request(f: F) {
 async function plan(f: F, requestId = undefined as string | undefined) {
   requestId ||= await request(f);
   const p = await f.call(learner, "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === requestId)!.revision,
     qualificationId: qid,
     requestId,
   });
@@ -570,7 +573,13 @@ test("폐기 후 새 요청·취득 회차·새 인증과 독립 평가, 초기�
   await f.call(
     learner,
     "/plans",
-    { qualificationId: qid, requestId: p.requestId },
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((r) => r.id === p.requestId)!.revision,
+      qualificationId: qid,
+      requestId: p.requestId,
+    },
     409,
   );
   const secondPlan = await plan(f),
@@ -699,7 +708,7 @@ test("Excel v4·v3 호환 왕복은 재인증 정책 보존, 운영 상태 조�
     data = exportCatalog(state, "org-photo", [qid]);
   const bytes = await writeCatalogWorkbook(data),
     parsed = await readCatalogWorkbook(bytes);
-  assert.equal(parsed.workbook.format, "eks-catalog-v6");
+  assert.equal(parsed.workbook.format, "eks-catalog-v7");
   assert.equal(parsed.workbook.sheets[0]!.renewalLeadMonths, 5);
   assert.equal(
     prepareCatalog(state, parsed.workbook, "org-photo").changes[0]!.kind,
@@ -781,7 +790,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 11);
+  assert.equal(candidate.schemaVersion, 13);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

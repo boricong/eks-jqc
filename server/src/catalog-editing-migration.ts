@@ -1,4 +1,4 @@
-import { validateState } from "./integrity.ts";
+import { migrateTemplates } from "./template-migration.ts";
 import { validateOrganizations } from "./organizations.ts";
 
 export function migrateCatalogEditing(
@@ -7,13 +7,13 @@ export function migrateCatalogEditing(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![10, 11].includes(raw?.schemaVersion))
+  if (![10, 11, 12, 13].includes(raw?.schemaVersion))
     throw new Error(
       "기준 편집 보존 이관에는 업무 스키마10·조직 스키마2가 필요합니다.",
     );
   const organizations = validateOrganizations(organizationInput);
   const next = structuredClone(raw),
-    alreadyApplied = raw.schemaVersion === 11;
+    alreadyApplied = raw.schemaVersion >= 11;
   if (!alreadyApplied) {
     next.schemaVersion = 11;
     next.revision++;
@@ -32,12 +32,12 @@ export function migrateCatalogEditing(
       details: { fromSchema: 10, progressReset: false },
     });
   }
-  const state = validateState(next, organizations);
+  const state = migrateTemplates(next, organizations, at).state;
   return {
     state,
     organizations,
     report: {
-      alreadyApplied,
+      alreadyApplied: raw.schemaVersion === 13,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       qualifications: state.qualifications.length,

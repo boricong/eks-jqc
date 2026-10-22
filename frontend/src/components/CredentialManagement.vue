@@ -17,7 +17,7 @@ const rows = computed(() =>
       (!status.value ||
         status.value === 'all' ||
         effectiveCredentialStatus(a.certification) === status.value) &&
-      `${store.username(a.learnerId)} ${store.qualification(a.qualificationId).title}`.includes(
+      `${store.username(a.learnerId)} ${store.qualification(a.qualificationId, a.qualificationMetadata).title}`.includes(
         search.value,
       ),
   ),
@@ -56,9 +56,11 @@ const rows = computed(() =>
           <tr v-for="a in rows" :key="a.id">
             <td>{{ store.username(a.learnerId) }}</td>
             <td>
-              {{ store.qualification(a.qualificationId).title
+              {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
               }}<small class="muted">
-                · 최초 v{{ store.qualification(a.qualificationId).version }}</small
+                · 최초 v{{
+                  store.qualification(a.qualificationId, a.qualificationMetadata).version
+                }}</small
               >
             </td>
             <td>{{ lifecycleLabels[effectiveCredentialStatus(a.certification!)] }}</td>

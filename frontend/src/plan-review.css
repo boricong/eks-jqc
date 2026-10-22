@@ -1,0 +1,230 @@
+.plans-page.is-plan-review {
+  font-family: var(--font-ui);
+}
+.plan-review {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.plan-review-heading h2,
+.plan-review-summary > h2,
+.plan-review-request > h2,
+.plan-review-completion > h2 {
+  margin: 0 0 12px;
+  font-size: var(--text-section);
+  font-weight: var(--weight-heading);
+  line-height: 1.45;
+}
+.plan-review-heading > p,
+.plan-review-help {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--ink-muted);
+  line-height: var(--leading-reading);
+}
+.plan-review-summary {
+  padding: 24px;
+  border-block: 1px solid var(--line);
+  background: var(--surface);
+}
+.plan-review-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
+  margin: 0;
+}
+.plan-review-facts > div,
+.plan-review-schedule > div {
+  min-width: 0;
+}
+.plan-review-facts dt,
+.plan-review-schedule dt,
+.plan-review-goal > h3 {
+  margin: 0 0 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-body);
+  line-height: var(--leading-body);
+}
+.plan-review-facts dd,
+.plan-review-schedule dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  line-height: var(--leading-reading);
+  overflow-wrap: anywhere;
+}
+.plan-review-qualification dd,
+.plan-review-target dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.plan-review-name {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  white-space: pre-wrap;
+}
+.plan-review-version {
+  font-size: var(--text-caption);
+  color: var(--ink-muted);
+}
+.plan-review-target strong {
+  color: var(--primary-hover);
+  font-size: var(--text-title);
+  font-weight: var(--weight-heading);
+  font-variant-numeric: tabular-nums;
+}
+.plan-review-description {
+  grid-column: 1 / -1;
+}
+.plan-review-description dd,
+.plan-review-goal > p {
+  margin: 0;
+  font-size: var(--text-reading);
+  line-height: var(--leading-reading);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.plan-review-request {
+  padding: 20px 24px;
+  background: var(--surface-tint);
+  border-block: 1px solid var(--line);
+}
+.plan-review-required {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-review-help {
+  margin-top: 16px;
+}
+.plan-review-warning {
+  padding: 16px 24px;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-body);
+  line-height: var(--leading-reading);
+}
+.plan-review-warning strong {
+  font-weight: var(--weight-control);
+}
+.plan-review-warning p {
+  margin: 4px 0 0;
+}
+.plan-review-courses {
+  min-width: 0;
+}
+.plan-review-course + .plan-review-course {
+  border-top: 0;
+}
+.plan-review .collapsible-section-title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  white-space: pre-wrap;
+}
+.plan-review-course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-variant-numeric: tabular-nums;
+}
+.plan-review-schedule {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.plan-review-goal {
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.plan-review-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.plan-review-completion {
+  padding: 20px 24px;
+  background: var(--surface-tint);
+  border-block: 1px solid var(--line);
+}
+.plan-review-completion p {
+  margin: 8px 0 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-reading);
+}
+.plan-review-empty {
+  padding: 24px;
+  margin: 0;
+  background: var(--surface-tint);
+  color: var(--ink-muted);
+}
+.plans-page .plan-review-actionbar {
+  gap: 12px 24px;
+  padding: 12px 24px;
+  align-items: flex-start;
+  /* Long save errors stay scrollable with the page instead of covering the review. */
+}
+.plan-review-actionbar:has(.save-error, .plan-review-submit-error) {
+  position: static;
+}
+.plan-action-feedback {
+  min-width: 0;
+}
+.plan-review-actionbar .plan-action-feedback {
+  align-self: center;
+}
+.plan-review-submit-error {
+  margin: 12px 0 0;
+  font-size: var(--text-caption);
+  overflow-wrap: anywhere;
+}
+.plan-review-actionbar > .button {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+.plan-review-actionbar .save-feedback {
+  align-self: center;
+}
+.plan-review :is(button, a),
+.plans-page [data-plan-field] {
+  scroll-margin-block: 80px 160px;
+}
+@media (max-width: 768px) {
+  .plan-review-facts,
+  .plan-review-schedule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plan-review-summary,
+  .plan-review-request,
+  .plan-review-warning,
+  .plan-review-completion {
+    padding: 20px 16px;
+  }
+  .plan-review .button {
+    min-height: 44px;
+  }
+  .plan-review .collapsible-section-toggle {
+    gap: 8px 12px;
+  }
+  .plan-review .collapsible-section-summary {
+    flex-basis: calc(100% - 34px);
+    order: 2;
+  }
+  .plans-page .plan-review-actionbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .plan-review-actionbar .plan-action-feedback {
+    align-self: stretch;
+  }
+}

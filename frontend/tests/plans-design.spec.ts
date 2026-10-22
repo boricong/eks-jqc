@@ -1,3 +1,4 @@
+import { linkFixtureTemplates } from '../../server/tests/template-helpers';
 import type { Page } from '@playwright/test';
 import { defaultPlanSchedule } from '@eks/contracts';
 import { test, expect, actor } from './fixtures';
@@ -190,6 +191,7 @@ test('5인증Set 일정의 밀도·인증Set 구분·단일 디자인과 반응�
         title: '설비 Backup 일정 검증',
         courseIds,
       });
+      linkFixtureTemplates(s);
       return {};
     },
   );

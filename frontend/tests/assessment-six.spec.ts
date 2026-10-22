@@ -177,6 +177,17 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
       width,
     );
     await page.getByLabel('상황 설명').scrollIntoViewIfNeeded();
+    const rail = page.getByRole('tablist', { name: '실기 · 상황 대응 평가 문항', exact: true });
+    await rail.getByRole('tab').first().press('End');
+    await expect(rail.getByRole('tab').last()).toBeFocused();
+    const selectedBox = await rail.getByRole('tab').last().boundingBox();
+    const railBox = await rail.boundingBox();
+    const panelBox = await page.locator('.assessment-item-panel:visible').boundingBox();
+    expect(selectedBox!.y).toBeGreaterThanOrEqual(railBox!.y - 1);
+    expect(selectedBox!.y + selectedBox!.height).toBeLessThanOrEqual(
+      railBox!.y + railBox!.height + 1,
+    );
+    expect(selectedBox!.x + selectedBox!.width).toBeCloseTo(panelBox!.x, 0);
     await page.screenshot({ path: test.info().outputPath(`vertical-${width}.png`) });
   }
   await saveCriterion(page);

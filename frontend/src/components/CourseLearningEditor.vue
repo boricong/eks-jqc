@@ -91,16 +91,17 @@ defineExpose({ focusInvalid, focusIssue });
       학습자가 확인해야 할 학습 범위입니다. 별도의 완료 기록 없이 평가를 진행합니다.
     </p>
     <div class="number-editor" :class="{ 'is-empty': !item }">
-      <CompactTabs
-        v-if="course.learningItems.length"
-        ref="tabs"
-        v-model="activeId"
-        :items="options"
-        label="학습 항목"
-        :panel-id="`${uid}-item-panel`"
-        vertical
-        numbered
-      />
+      <div v-if="course.learningItems.length" class="question-navigation">
+        <CompactTabs
+          ref="tabs"
+          v-model="activeId"
+          :items="options"
+          label="학습 항목"
+          :panel-id="`${uid}-item-panel`"
+          vertical
+          numbered
+        />
+      </div>
       <div
         v-if="item"
         :id="`${uid}-item-panel`"

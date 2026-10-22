@@ -1,6 +1,8 @@
+import { upgradeTemplateData } from "./template-migration.ts";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  QualificationTemplateSchema,
   UserSchema,
   CourseSchema,
   QualificationSchema,
@@ -40,6 +42,7 @@ export function masterPayload(
   org: OrganizationDocument,
 ): MasterPayload {
   return structuredClone({
+    qualificationTemplates: state.qualificationTemplates,
     users: state.users,
     qualifications: state.qualifications,
     courses: state.courses,
@@ -51,6 +54,7 @@ export function masterPayload(
 }
 export function masterCounts(p: MasterPayload): MasterCounts {
   return {
+    qualificationTemplates: p.qualificationTemplates?.length || 0,
     users: p.users.length,
     organizations: organizationEntries(p.organizations).length,
     qualifications: p.qualifications.length,
@@ -100,7 +104,8 @@ export function masterCandidate(
   );
   const state = validateState(
     {
-      schemaVersion: 11,
+      schemaVersion: 13,
+      qualificationTemplates: structuredClone(p.qualificationTemplates),
       revision: stateRevision,
       ...arrays,
       users: structuredClone(p.users),
@@ -119,8 +124,8 @@ export function exportMaster(
   const payload = masterPayload(s, org);
   return {
     format: "eks-master",
-    formatVersion: 2,
-    stateSchemaVersion: 11,
+    formatVersion: 3,
+    stateSchemaVersion: 13,
     organizationSchemaVersion: 2,
     createdAt: at,
     counts: masterCounts(payload),
@@ -147,6 +152,7 @@ function knownFields(raw: any, parsed: any, at = "파일") {
 }
 const payloadSchema = z
   .object({
+    qualificationTemplates: z.array(QualificationTemplateSchema),
     users: z.array(UserSchema),
     qualifications: z.array(QualificationSchema),
     courses: z.array(CourseSchema),
@@ -158,30 +164,42 @@ const payloadSchema = z
   .strict();
 export function readMaster(input: unknown): MasterFile {
   try {
-    const legacy =
-      (input as any)?.formatVersion === 1 &&
-      (input as any)?.stateSchemaVersion === 10;
-    const selectedSchema = legacy
-      ? payloadSchema.extend({
+    const version = (input as any)?.formatVersion;
+    const legacy = version === 1,
+      old = version === 1 || version === 2;
+    const oldQ = QualificationSchema.extend({
+      templateId: z.string().optional(),
+      templateRevision: z.number().int().positive().optional(),
+    });
+    const selectedSchema = old
+      ? payloadSchema.omit({ qualificationTemplates: true }).extend({
           qualifications: z.array(
-            QualificationSchema.extend({
-              status: z.enum(["draft", "published"]),
-              publishedAt: z.iso.datetime().optional(),
-            }),
+            legacy
+              ? oldQ.extend({
+                  status: z.enum(["draft", "published"]),
+                  publishedAt: z.iso.datetime().optional(),
+                })
+              : oldQ,
           ),
           courses: z.array(
-            CourseSchema.extend({
-              status: z.enum(["draft", "published"]),
-              publishedAt: z.iso.datetime().optional(),
-            }),
+            legacy
+              ? CourseSchema.extend({
+                  status: z.enum(["draft", "published"]),
+                  publishedAt: z.iso.datetime().optional(),
+                })
+              : CourseSchema,
           ),
         })
       : payloadSchema;
     const result = z
       .object({
         format: z.literal("eks-master"),
-        formatVersion: z.literal(legacy ? 1 : 2),
-        stateSchemaVersion: z.literal(legacy ? 10 : 11),
+        formatVersion: z.literal(legacy ? 1 : old ? 2 : 3),
+        stateSchemaVersion: legacy
+          ? z.literal(10)
+          : old
+            ? z.literal(11)
+            : z.union([z.literal(12), z.literal(13)]),
         organizationSchemaVersion: z.literal(2),
         createdAt: z.iso.datetime(),
         counts: z.record(z.string(), z.number().int().nonnegative()),
@@ -197,19 +215,23 @@ export function readMaster(input: unknown): MasterFile {
       "파일 내용 검증값이 일치하지 않습니다. 원래 파일을 다시 내보내 주세요.",
       "MASTER_FILE_INVALID",
     );
-    const payload = payloadSchema.parse(result.payload);
+    const payload = payloadSchema.parse(
+      old ? upgradeTemplateData(result.payload) : result.payload,
+    );
     masterCandidate(payload, 0, 0);
-    const counts = masterCounts(result.payload);
+    const counts = masterCounts(payload);
+    const previousCounts = { ...counts } as Record<string, number>;
+    if (old) delete previousCounts.qualificationTemplates;
     demand(
-      contentHash(counts) === contentHash(result.counts),
+      contentHash(previousCounts) === contentHash(result.counts),
       422,
       "파일의 항목별 건수가 실제 내용과 다릅니다.",
       "MASTER_FILE_INVALID",
     );
     return {
       ...result,
-      formatVersion: 2,
-      stateSchemaVersion: 11,
+      formatVersion: 3,
+      stateSchemaVersion: 13,
       payload,
       sha256: contentHash(payload),
       counts,
@@ -218,7 +240,7 @@ export function readMaster(input: unknown): MasterFile {
     if (e instanceof DomainError) throw e;
     throw new DomainError(
       422,
-      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v2(업무11·조직2), 호환 형식 v1(업무10·조직2)입니다. ${e instanceof Error ? e.message : ""}`,
+      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v3(업무12/13·조직2), 호환 형식 v1/v2(업무10/11·조직2)입니다. ${e instanceof Error ? e.message : ""}`,
       "MASTER_FILE_INVALID",
     );
   }

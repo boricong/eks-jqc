@@ -1,3 +1,4 @@
+import { planningView } from "./planning.ts";
 import {
   prepareCatalogSave,
   qualificationDeletionImpact,
@@ -32,7 +33,7 @@ import {
 } from "./organization-administrators.ts";
 import { authorizeNotice, saveNotice } from "./notices.ts";
 import { courseUsage } from "./course-lifecycle.ts";
-import { qualificationTemplates } from "./workflow.ts";
+import { saveTemplate } from "./qualification-templates.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
 import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
 import {
@@ -311,12 +312,15 @@ export async function buildApp(
       store.organizations.snapshot(),
       (request.query as any).lv1OrganizationId,
     );
-    return qualificationTemplates.map((t) => ({
+    return store.snapshot().qualificationTemplates.map((t) => ({
       ...t,
       imported: store
         .snapshot()
         .qualifications.some(
-          (q) => q.lv1OrganizationId === scope && q.templateId === t.id,
+          (q) =>
+            q.lv1OrganizationId === scope &&
+            q.templateId === t.id &&
+            !q.deletedAt,
         ),
     }));
   });
@@ -609,6 +613,43 @@ export async function buildApp(
       },
     );
   });
+  app.get("/api/system/qualification-templates", async (request) => {
+    systemOperator(actor(request));
+    const s = store.snapshot();
+    return {
+      items: s.qualificationTemplates,
+      audits: s.audits.filter((a) =>
+        a.action.startsWith("qualification-template."),
+      ),
+    };
+  });
+  for (const method of ["POST", "PUT"] as const)
+    app.route({
+      method,
+      url: `/api/system/qualification-templates${method === "PUT" ? "/:id" : ""}`,
+      handler: async (request) => {
+        const u = actor(request);
+        systemOperator(u);
+        const target =
+          method === "PUT" ? (request.params as any).id : undefined;
+        const key = z
+          .string()
+          .min(1)
+          .max(160)
+          .parse(request.headers["idempotency-key"]);
+        const fingerprint = createHash("sha256")
+          .update(JSON.stringify({ method, target, body: request.body }))
+          .digest("hex");
+        return store.transact(
+          u.id,
+          key,
+          fingerprint,
+          (s) => systemOperator(actor(request, s)),
+          (s) => saveTemplate(s, u.id, target, request.body),
+          { action: "qualification-template.save", preserveBackup: true },
+        );
+      },
+    });
   app.get("/api/system/notices", async (request) => {
     systemOperator(actor(request));
     return store.snapshot().notices.filter((n) => n.scope === "system");
@@ -798,6 +839,24 @@ export async function buildApp(
     () => "",
   );
   mutation("POST", "/api/planning-requests", "planning.request", () => "");
+  mutation("PUT", "/api/planning-requests/:id/selection", "planning.select");
+  mutation("POST", "/api/planning-requests/:id/complete", "planning.complete");
+  app.get("/api/planning-requests/:id/candidates", async (request) => {
+    const u = actor(request),
+      s = store.snapshot();
+    const r = s.planningRequests.find(
+      (r) => r.id === (request.params as any).id,
+    );
+    demand(
+      r &&
+        u.roles.includes("learner") &&
+        r.learnerId === u.id &&
+        r.lv1OrganizationId === u.lv1OrganizationId,
+      403,
+      "본인의 계획 요청만 조회할 수 있습니다.",
+    );
+    return planningView(s, store.organizations.snapshot(), u, r, clock());
+  });
   mutation("POST", "/api/plans", "plan.create", () => "");
   mutation("PUT", "/api/plans/:id", "plan.save");
   mutation(

@@ -1,7 +1,8 @@
+import type { Locator } from '@playwright/test';
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { courseSection, openSavedCourse, saveCriterion } from './catalog-helpers';
 
-test('자료 목록·상단 탭·세로 번호의 네 화면 폭과 실제 정렬·글자 크기', async ({
+test('자료 목록·상단 탭·연결형 세로 번호의 네 화면 폭과 실제 정렬·글자 크기', async ({
   page,
   backend,
 }, info) => {
@@ -72,11 +73,20 @@ test('자료 목록·상단 탭·세로 번호의 네 화면 폭과 실제 정�
       const rail = page.locator('.course-editor-content .number-tabs:visible');
       await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
       const selected = rail.locator('[aria-selected="true"]');
-      await expect(selected).toHaveCSS('border-bottom-width', '0px');
       await expect(selected).toHaveCSS('border-left-width', '3px');
       await expect(selected).toHaveCSS('border-radius', '0px');
       await expect(selected).toHaveCSS('color', 'rgb(68, 52, 212)');
       const panel = page.locator('.course-editor-content [role="tabpanel"]:visible');
+      const panelBox = await panel.boundingBox();
+      const tabBox = await selected.boundingBox();
+      const frameBox = await page.locator('.number-editor:visible').boundingBox();
+      const navigationBox = await page.locator('.question-navigation:visible').boundingBox();
+      expect(tabBox!.x + tabBox!.width).toBeCloseTo(panelBox!.x, 0);
+      expect(navigationBox!.y).toBeCloseTo(panelBox!.y, 0);
+      expect(navigationBox!.height).toBeCloseTo(panelBox!.height, 0);
+      expect(frameBox!.width).toBeCloseTo(navigationBox!.width + panelBox!.width + 2, 0);
+      await expect(selected).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
       await expect(panel.locator('h3')).toHaveCSS('font-size', '16px');
       const add = page.getByRole('button', {
         name: name === '학습 항목' ? '학습 항목 추가' : '문항 추가',
@@ -123,6 +133,149 @@ test('자료 목록·상단 탭·세로 번호의 네 화면 폭과 실제 정�
   expect(errors).toEqual([]);
 });
 
+async function choiceLayout(rows: Locator, width: number, readonly = false) {
+  const boxes = await rows.evaluateAll((els) =>
+    els.map((el) => {
+      const origin = el.getBoundingClientRect();
+      const rect = (selector: string) => {
+        const box = el.querySelector(selector)?.getBoundingClientRect();
+        return box
+          ? { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height }
+          : null;
+      };
+      return {
+        width: origin.width,
+        height: origin.height,
+        radio: rect('.choice-radio'),
+        input: rect('textarea'),
+        remove: rect('button'),
+        error: rect('.choice-error'),
+      };
+    }),
+  );
+  for (const box of boxes) {
+    expect(box.input!.x).toBeCloseTo(boxes[0]!.input!.x, 0);
+    expect(box.input!.width).toBeCloseTo(boxes[0]!.input!.width, 0);
+    expect(box.radio!.height).toBeGreaterThanOrEqual(44);
+    if (readonly) expect(box.remove).toBeNull();
+    else {
+      expect(box.remove!.width).toBeGreaterThanOrEqual(44);
+      expect(box.remove!.height).toBeGreaterThanOrEqual(44);
+      expect(box.remove!.y + box.remove!.height / 2).toBeCloseTo(
+        box.radio!.y + box.radio!.height / 2,
+        0,
+      );
+    }
+    if (width > 600) {
+      expect(box.radio!.y + box.radio!.height / 2).toBeCloseTo(
+        box.input!.y + box.input!.height / 2,
+        0,
+      );
+      expect(box.radio!.x + box.radio!.width).toBeLessThan(box.input!.x);
+    } else {
+      expect(box.input!.y).toBeGreaterThanOrEqual(box.radio!.y + box.radio!.height);
+      expect(box.input!.x).toBeCloseTo(box.radio!.x, 0);
+      expect(box.input!.x + box.input!.width).toBeCloseTo(box.width - 8, 0);
+    }
+    if (box.error) {
+      expect(box.error.x).toBeCloseTo(box.input!.x, 0);
+      expect(box.error.y).toBeGreaterThanOrEqual(box.input!.y + box.input!.height);
+    }
+  }
+  return boxes;
+}
+
+test('선택지 정답 변경·긴 내용·오류·읽기 전용의 정렬과 정답 삭제 보정', async ({
+  page,
+  backend,
+}, info) => {
+  await backend.store.transact(
+    'admin-1',
+    crypto.randomUUID(),
+    'choice-layout-fixture',
+    () => {},
+    (state) => {
+      const course = structuredClone(state.courses.find((c) => c.id === 'demo-course-1')!);
+      course.id = course.entityId = 'choice-layout';
+      for (const question of [course.questions[0]!, course.practicalQuestions[0]!]) {
+        question.choices = ['기준과 기록을 확인합니다. '.repeat(30), '두 번째 선택지', ''];
+        question.correct = 0;
+      }
+      state.courses.push(course);
+      state.courses.push({
+        ...structuredClone(course),
+        id: 'choice-readonly',
+        entityId: 'choice-readonly',
+        deletedAt: new Date().toISOString(),
+        deletedBy: 'admin-1',
+        deletionReason: '읽기 전용 확인',
+      });
+      return {};
+    },
+  );
+  await page.goto('/');
+  await actor(page, 'admin-1');
+  await page.goto('/admin/courses/choice-layout');
+  // Reopen the saved test fixture through its receipt to expose readiness errors.
+  await saveCriterion(page);
+  await openSavedCourse(page);
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const kind of ['지식 평가', '상황 대응 평가']) {
+      await courseSection(page, kind);
+      const rows = page.locator('.objective-choice:visible');
+      await expect(rows.last().locator('.choice-error')).toBeVisible();
+      await page.getByLabel('1번 선택지를 정답으로 지정', { exact: true }).check();
+      const before = await choiceLayout(rows, width);
+      await page.getByLabel('2번 선택지를 정답으로 지정', { exact: true }).check();
+      const after = await choiceLayout(rows, width);
+      expect(after).toEqual(before);
+      await expect(rows.nth(1).locator('.choice-status')).toBeVisible();
+      await expect(rows.first().locator('.choice-status')).toBeHidden();
+      const input = rows.last().locator('textarea');
+      expect(await input.getAttribute('aria-describedby')).toBe(
+        await rows.last().locator('.choice-error').getAttribute('id'),
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+      ).toBe(true);
+      await page.screenshot({
+        path: info.outputPath(`choices-${kind}-${width}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  await page.getByLabel('1번 선택지 삭제', { exact: true }).click();
+  await expect(page.getByLabel('1번 선택지를 정답으로 지정', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('1번 선택지', { exact: true })).toHaveValue('두 번째 선택지');
+  await page.getByLabel('1번 선택지 삭제', { exact: true }).click();
+  await expect(page.locator('.objective-choice input:checked')).toHaveCount(0);
+  await expect(page.locator('.choice-help')).toContainText('정답 미선택');
+  await page.getByRole('button', { name: '선택지 추가', exact: true }).click();
+  await expect(page.locator('.objective-choice:visible')).toHaveCount(2);
+  await page.getByLabel('2번 선택지', { exact: true }).fill('새 선택지');
+  await page.getByLabel('2번 선택지를 정답으로 지정', { exact: true }).check();
+  await courseSection(page, '지식 평가');
+  await courseSection(page, '상황 대응 평가');
+  await expect(page.getByLabel('2번 선택지', { exact: true })).toHaveValue('새 선택지');
+  await expect(page.getByLabel('2번 선택지를 정답으로 지정', { exact: true })).toBeChecked();
+  await saveCriterion(page);
+  await openSavedCourse(page, '상황 대응 평가');
+  await expect(page.getByLabel('2번 선택지', { exact: true })).toHaveValue('새 선택지');
+  await expect(page.getByLabel('2번 선택지를 정답으로 지정', { exact: true })).toBeChecked();
+  await page.goto('/admin/courses/choice-readonly');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const kind of ['지식 평가', '상황 대응 평가']) {
+      await courseSection(page, kind);
+      const rows = page.locator('.objective-choice:visible');
+      await expect(rows.first().locator('textarea')).toBeDisabled();
+      await expect(rows.first().locator('input')).toBeDisabled();
+      await choiceLayout(rows, width, true);
+    }
+  }
+});
+
 test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복귀·유형 전환 보존', async ({
   page,
   backend,
@@ -159,6 +312,9 @@ test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복�
   const rail = page.getByRole('tablist', { name: '학습 항목', exact: true });
   await rail.getByRole('tab').last().press('ArrowUp');
   await expect(page.getByLabel('학습 항목명')).toHaveValue('독립 수행');
+  await rail.getByRole('tab').first().press('ArrowDown');
+  await expect(page.getByLabel('학습 항목명')).toHaveValue('작업 확인');
+  await rail.getByRole('tab').last().press('ArrowUp');
   await page.getByRole('button', { name: '이 항목 삭제', exact: true }).click();
   await answerConfirmation(page, false);
   await expect(rail.getByRole('tab')).toHaveCount(2);
@@ -213,7 +369,7 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   expect(backend.store.snapshot().courses).toHaveLength(count + 1);
   await page
     .locator('.admin-sidebar')
-    .getByRole('link', { name: '자격 관리', exact: true })
+    .getByRole('link', { name: '팀 자격 관리', exact: true })
     .click();
   await page
     .locator('.admin-sidebar')

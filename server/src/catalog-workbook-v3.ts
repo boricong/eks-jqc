@@ -26,6 +26,8 @@ const meta: [string, string][] = [
   ["code", "자격 연결"],
   ["sourceId", "원본 연결"],
   ["sourceRevision", "변경 확인"],
+  ["templateId", "기본자격 ID"],
+  ["templateRevision", "공통 정보 수정 번호"],
 ];
 const systemKeys = [
   "code",
@@ -83,11 +85,13 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v6";
+  book.subject = "eks-catalog-v7";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 사용자용 양식 v4"],
-    ["1. 자격 기본정보를 작성하고 인증Set 표에 인증Set명을 입력하세요."],
+    ["EKS 자격 기준 · 등록된 팀 자격 양식 v7"],
+    [
+      "1. 등록된 팀 자격의 기간·인증Set을 수정합니다. 공통 이름·영문명·설명은 참고용입니다.",
+    ],
     [
       "2. 학습·평가 표의 인증Set 선택에서 연결할 인증Set명을 고르세요. 새 인증Set도 목록에 반영됩니다.",
     ],
@@ -98,7 +102,7 @@ export async function writeCatalogV3(
       "4. 새로운 행의 관리 코드는 비워 두면 가져올 때 자동 생성합니다. 인증Set명이 같아 연결이 모호하면 웹에서 선택하세요.",
     ],
     [
-      "5. 기존 기준 수정은 작성 방식을 유지합니다. 독립 사본은 시트를 복제하고 작성 방식을 새 자격으로 선택하세요.",
+      "5. 새 자격·독립 사본을 생성할 수 없습니다. 팀 자격 관리에서 기본자격을 먼저 등록해 주세요.",
     ],
     [
       "6. 포함한 자격의 제외한 인증Set·문항은 새 개정안에서 빠집니다. 기존 학습과 인증은 유지됩니다.",
@@ -162,7 +166,7 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v6",
+      format: "eks-catalog-v7",
       lv1OrganizationId: data.lv1OrganizationId,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
@@ -198,7 +202,9 @@ export async function writeCatalogV3(
       if (translations[k])
         cell.dataValidation = {
           type: "list",
-          formulae: [`"${Object.values(translations[k]!).join(",")}"`],
+          formulae: [
+            `"${k === "mode" ? translations.mode!.revise : Object.values(translations[k]!).join(",")}"`,
+          ],
           allowBlank: false,
           showErrorMessage: true,
           error: "목록에서 선택해 주세요.",
@@ -221,6 +227,24 @@ export async function writeCatalogV3(
           showErrorMessage: true,
           error: "1~1200의 개월 수를 입력해 주세요.",
         };
+      if (
+        [
+          "title",
+          "englishName",
+          "description",
+          "templateId",
+          "templateRevision",
+        ].includes(k)
+      ) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "F6F9FC" },
+        };
+        cell.font = { color: { argb: "61718A" } };
+        cell.note =
+          "참고용 공통 정보입니다. 기본자격 관리에서만 변경할 수 있으며 파일에서 변경하면 저장이 차단됩니다.";
+      }
       if (k === "lifecycleStatus")
         cell.note =
           "참고용 상태입니다. 변경은 시스템의 운영 상태 변경에서 수행하세요.";
@@ -369,7 +393,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v6",
+    format: "eks-catalog-v7",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -449,6 +473,7 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
         "eks-catalog-v4",
         "eks-catalog-v5",
         "eks-catalog-v6",
+        "eks-catalog-v7",
       ].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
@@ -496,6 +521,10 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
     };
     if (mode === "revise") {
       q.sourceId = m.sourceId ? String(m.sourceId) : undefined;
+      q.templateId = m.templateId || undefined;
+      q.templateRevision = m.templateRevision
+        ? Number(m.templateRevision)
+        : undefined;
       q.sourceRevision = m.sourceRevision
         ? Number(m.sourceRevision)
         : undefined;

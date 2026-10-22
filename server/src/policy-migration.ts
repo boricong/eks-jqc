@@ -9,7 +9,7 @@ import { validateOrganizations } from "./organizations.ts";
 
 export function migratePolicies(raw: any, organizationRaw: any) {
   if (
-    [7, 8, 9, 10, 11].includes(raw.schemaVersion) &&
+    [7, 8, 9, 10, 11, 12, 13].includes(raw.schemaVersion) &&
     organizationRaw.schemaVersion === 2
   ) {
     const organizations = validateOrganizations(organizationRaw),

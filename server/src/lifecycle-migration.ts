@@ -1,5 +1,5 @@
 import { migrateAssessmentFlow } from "./assessment-flow-migration.ts";
-import { StateSchema } from "@eks/contracts";
+import { LegacyStateSchema as StateSchema, type State } from "@eks/contracts";
 import { validateOrganizations } from "./organizations.ts";
 import { validateState } from "./integrity.ts";
 import {
@@ -14,7 +14,7 @@ export function migrateLifecycle(
 ) {
   const raw = input as any,
     organizations = validateOrganizations(organizationInput);
-  if (![8, 9, 10, 11].includes(raw?.schemaVersion))
+  if (![8, 9, 10, 11, 12, 13].includes(raw?.schemaVersion))
     throw new Error(
       "자격 상태 이관에는 업무 스키마 8과 조직 스키마 2가 필요합니다.",
     );
@@ -32,7 +32,10 @@ export function migrateLifecycle(
     }
     for (const p of next.plans) p.acquisitionCycleId = p.id;
     for (const a of next.assignments) a.acquisitionCycleId = a.planId || a.id;
-    const state = StateSchema.parse({ ...next, schemaVersion: 11 });
+    const state = StateSchema.parse({
+      ...next,
+      schemaVersion: 11,
+    }) as unknown as State;
     for (const c of state.certifications)
       initializeCertification(
         state,

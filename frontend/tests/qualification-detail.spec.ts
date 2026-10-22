@@ -17,6 +17,19 @@ test('홈 자격 상세·설명 펼치기·다중 자료·인증Set별 펼침 �
         '반도체 설비의 구성과 기록을 비교하여 적절한 판단을 설명합니다.\n'
       ).repeat(12);
       q.englishName = 'Equipment Process Test';
+      // Existing confirmed assignment fixture keeps its own display metadata.
+      Object.assign(
+        s.qualificationTemplates.find((t) => t.id === q.templateId)!,
+        { description: q.description, englishName: q.englishName },
+      );
+      s.assignments
+        .filter((a) => a.qualificationId === q.id)
+        .forEach((a) =>
+          Object.assign(a.qualificationMetadata!, {
+            description: q.description,
+            englishName: q.englishName,
+          }),
+        );
       q.validity = { type: 'months', months: 36, reminderDays: [90, 30, 7] };
       s.courses.find((c) => c.id === 'demo-course-1')!.materials = [
         {
@@ -67,7 +80,7 @@ test('홈 자격 상세·설명 펼치기·다중 자료·인증Set별 펼침 �
   await page.goto('/');
   await actor(page, 'learner-1');
   const before = backend.store.snapshot();
-  await page.getByRole('link', { name: '이어서 진행', exact: true }).click();
+  await page.getByRole('link', { name: '상세정보 보기', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '자격 상세', exact: true, level: 1 }),
   ).toBeVisible();

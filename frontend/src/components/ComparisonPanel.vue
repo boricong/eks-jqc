@@ -28,7 +28,7 @@ const entries = computed(() =>
         a,
         e,
         c: store.course(e.courseId),
-        q: store.qualification(a.qualificationId),
+        q: store.qualification(a.qualificationId, a.qualificationMetadata),
       })),
     ),
 );

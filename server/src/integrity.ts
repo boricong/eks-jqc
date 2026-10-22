@@ -2,6 +2,7 @@ import { validateCatalogStructure } from "./catalog-editing.ts";
 import { validatePolicies } from "./organization-policies.ts";
 import {
   StateSchema,
+  LegacyStateSchema,
   assessmentQuestions,
   assessmentPassScore,
   courseErrors,
@@ -20,8 +21,39 @@ function check(condition: unknown, message: string): asserts condition {
 export function validateState(
   input: unknown,
   organizations?: OrganizationDocument,
+  legacy = false,
 ): State {
-  const s = StateSchema.parse(input);
+  const s = (
+    legacy ? LegacyStateSchema.parse(input) : StateSchema.parse(input)
+  ) as State;
+  if (!legacy) {
+    const templates = new Set(s.qualificationTemplates.map((t) => t.id));
+    check(
+      templates.size === s.qualificationTemplates.length,
+      "기본자격 ID 중복",
+    );
+    const teams = new Map<string, string>();
+    const lineages = new Map<string, string>();
+    for (const q of s.qualifications) {
+      check(templates.has(q.templateId), "기본자격 연결 누락");
+      const key = `${q.lv1OrganizationId}:${q.templateId}`;
+      check(
+        !teams.has(key) || teams.get(key) === q.entityId,
+        "팀 기본자격 계보 중복",
+      );
+      teams.set(key, q.entityId);
+      check(
+        !lineages.has(q.entityId) || lineages.get(q.entityId) === key,
+        "자격 계보의 기본자격·팀 연결 변경",
+      );
+      lineages.set(q.entityId, key);
+      check(
+        q.templateRevision <=
+          s.qualificationTemplates.find((t) => t.id === q.templateId)!.revision,
+        "기본자격 수정 번호 참조",
+      );
+    }
+  }
   validateLifecycle(s);
   check(
     s.users.some((u) => u.roles.includes("system_operator")),
@@ -438,3 +470,8 @@ export function validateState(
   validateWorkflow(s);
   return s;
 }
+
+export const validateLegacyState = (
+  input: unknown,
+  organizations?: OrganizationDocument,
+) => validateState(input, organizations, true);

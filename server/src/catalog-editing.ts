@@ -1,3 +1,7 @@
+import {
+  currentQualification,
+  checkCommonFields,
+} from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -35,7 +39,7 @@ export function catalogReferences(
       org?.qualificationPools.filter((p) => p.qualificationId === id).length ||
       0,
     requests: s.planningRequests.filter((r) =>
-      r.targets?.some((t) => t.qualificationId === id),
+      [...(r.targets || []), ...(r.selections || [])].some((t) => t.qualificationId === id),
     ).length,
     plans: s.plans.filter((p) => p.qualificationId === id).length,
     assignments: s.assignments.filter((a) => a.qualificationId === id).length,
@@ -70,6 +74,11 @@ export function catalogContent(value: Course | Qualification) {
     deletionReason,
     ...content
   } = value;
+  if ("courseIds" in content) {
+    const { title, englishName, description, templateRevision, ...team } =
+      content;
+    return JSON.parse(JSON.stringify(team));
+  }
   return JSON.parse(JSON.stringify(content));
 }
 
@@ -222,6 +231,8 @@ export function prepareCatalogSave(
       "검토 후 연결이나 기준이 변경되었습니다. 다시 검토해 주세요.",
       "REVISION_CONFLICT",
     );
+  if (section === "qualifications")
+    checkCommonFields(s, source as Qualification, body);
   const metadata = {
     id: source.id,
     entityId: source.entityId,
@@ -245,7 +256,7 @@ export function prepareCatalogSave(
           retirementReason: (source as Course).retirementReason,
         })
       : QualificationSchema.parse({
-          ...source,
+          ...currentQualification(s, source as Qualification),
           ...body,
           ...metadata,
           lifecycleStatus: (source as Qualification).lifecycleStatus,
@@ -388,14 +399,15 @@ export function qualificationDeletionImpact(
     canDelete: !q.deletedAt && !pools.length,
     blockers: pools.length
       ? [
-          "팀 적용 버전입니다. 조직별 자격 설정에서 적용 버전을 교체하거나 후보 지정을 먼저 해제해 주세요.",
+          "팀 적용 버전입니다. 팀 자격 관리에서 적용 버전을 교체하거나 팀 적용을 먼저 해제해 주세요.",
         ]
       : q.deletedAt
         ? ["이미 삭제된 자격입니다."]
         : [],
-    mode: Object.values(references).some((n) => n > 0)
-      ? ("archive" as const)
-      : ("remove" as const),
+    mode:
+      !!q.templateId || Object.values(references).some((n) => n > 0)
+        ? ("archive" as const)
+        : ("remove" as const),
   };
 }
 

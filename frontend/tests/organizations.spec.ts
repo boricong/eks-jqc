@@ -3,6 +3,116 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { test, expect, actor } from './fixtures';
 
+test('팀 적용·필수 자격 이력이 있어도 조직 트리와 상세·변경 이력을 조회한다', async ({
+  page,
+  backend,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await actor(page, 'operator-1');
+  const session = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  async function change(url: string, data: object, method = 'PUT') {
+    const response = await page.request.fetch(`/api${url}`, {
+      method,
+      headers: { 'X-Session-Tab': session!, 'Idempotency-Key': crypto.randomUUID() },
+      data: { revision: backend.store.organizations.snapshot().revision, ...data },
+    });
+    expect(response.ok(), await response.text()).toBeTruthy();
+  }
+  await change('/organization-policies/org-photo/qualification-pool?lv1OrganizationId=org-photo', {
+    qualificationIds: ['demo-qualification'],
+  });
+  await change('/organization-policies/org-photo?lv1OrganizationId=org-photo', {
+    description: '팀의 조직 설명',
+    duties: '자격 인증 운영',
+    requiredQualifications: ['demo-qualification'],
+  });
+  await change('/system/organizations/org-photo', { name: '조회 검증팀' }, 'PATCH');
+  const longDescription = '긴 조직 설명과 담당 업무를 확인합니다. '.repeat(50);
+  await change('/organization-policies/org-photo-fmg?lv1OrganizationId=org-photo', {
+    description: longDescription,
+    duties: '세부 조직 업무',
+    requiredQualifications: [],
+  });
+  const before = await readFile(backend.store.organizations.file, 'utf8');
+  await page.goto('/system/organizations');
+  await expect(page.locator('.tree-node')).toHaveCount(35);
+  await expect(page.getByLabel('조직명', { exact: true })).toHaveValue('조회 검증팀');
+  const history = page.locator('.organization-history');
+  await history.locator('summary').click();
+  await expect(history).toContainText('조직 정보 변경');
+  await expect(history).toContainText('조직별 자격 설정 변경');
+  await expect(history).toContainText('팀 적용 자격 변경');
+  await expect(history).toContainText('필수 자격 없음');
+  await expect(history).toContainText('필수 자격 1개');
+  await expect(history).toContainText('팀 적용 자격 0개');
+  await expect(history).toContainText('팀 적용 자격 1개');
+  await expect(history).toContainText('조직 설명: 팀의 조직 설명');
+  await expect(history).toContainText('담당 업무: 자격 인증 운영');
+  await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(page.locator('.tree-node')).toHaveCount(35);
+  await page.screenshot({ path: test.info().outputPath('organization-audits-1920.png') });
+  await page.getByLabel('조직 검색').fill('조회 검증팀 FMG');
+  await page
+    .locator('.tree-node')
+    .filter({ hasText: /Lv2\s*FMG$/ })
+    .click();
+  await expect(page.getByLabel('조직명', { exact: true })).toHaveValue('FMG');
+  await expect(history).toContainText(longDescription.trim());
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
+  }
+  await page.screenshot({
+    path: test.info().outputPath('organization-audits-390.png'),
+    fullPage: true,
+  });
+  expect(await readFile(backend.store.organizations.file, 'utf8')).toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test('일부 필드가 없거나 지원하지 않는 변경 이력이 조직 조회를 중단하지 않는다', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await actor(page, 'operator-1');
+  await page.route('**/api/system/organizations', async (route) => {
+    const response = await route.fetch();
+    const doc = await response.json();
+    doc.audits = [
+      {
+        action: 'organization.update',
+        before: { name: '이전 이름' },
+        after: { path: [null, {}], name: '이후 이름' },
+      },
+      { action: 'organization.policy', before: {}, after: { requiredQualifications: null } },
+      { action: 'organization.pool', before: null, after: {} },
+      { action: 'organization.future', before: '이전 기록', after: [] },
+    ].map((event) => ({
+      ...event,
+      id: crypto.randomUUID(),
+      targetId: doc.entries[0].id,
+      actorId: 'operator-1',
+      date: new Date().toISOString(),
+    }));
+    await route.fulfill({ response, json: doc });
+  });
+  await page.goto('/system/organizations');
+  await expect(page.locator('.tree-node')).toHaveCount(35);
+  const history = page.locator('.organization-history');
+  await history.locator('summary').click();
+  await expect(history).toContainText('이전: 이전 이름');
+  await expect(history).toContainText('이후: 이후 이름');
+  await expect(history).toContainText('상세 표시를 지원하지 않는 이력입니다.');
+  await expect(history).not.toContainText('NaN');
+  expect(errors).toEqual([]);
+});
+
 async function addUser(page: Page, name: string, role: string, root = 'org-etch') {
   await page.getByRole('button', { name: '사용자 추가', exact: true }).click();
   await page.getByLabel('이름', { exact: true }).fill(name);

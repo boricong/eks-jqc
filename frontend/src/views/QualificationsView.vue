@@ -41,7 +41,7 @@ const list = computed(() =>
             ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
             : certificationStatus(a.certification) === validity.value))) &&
       store
-        .qualification(a.qualificationId)
+        .qualification(a.qualificationId, a.qualificationMetadata)
         .title.toLowerCase()
         .includes(search.value.toLowerCase()),
   ),
@@ -108,13 +108,19 @@ const list = computed(() =>
         ><span class="qualification-icon"
           ><AppIcon :name="a.certifiedAt ? 'award' : 'book'" :size="26" /></span
         ><span class="qualification-info"
-          ><span class="row-title">{{ store.qualification(a.qualificationId).title }}</span
+          ><span class="row-title">{{
+            store.qualification(a.qualificationId, a.qualificationMetadata).title
+          }}</span
           ><span
-            v-if="store.qualification(a.qualificationId).description.includes('프로세스 검증용')"
+            v-if="
+              store
+                .qualification(a.qualificationId, a.qualificationMetadata)
+                .description.includes('프로세스 검증용')
+            "
             class="test-data-tag"
             >시험 데이터</span
           ><span class="muted"
-            >v{{ store.qualification(a.qualificationId).version }} · 필수
+            >v{{ store.qualification(a.qualificationId, a.qualificationMetadata).version }} · 필수
             {{ a.enrollments.length }}인증Set</span
           ><span v-if="a.certification" class="muted"
             >취득 {{ kstDate(a.certifiedAt!) }} ·

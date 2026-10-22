@@ -85,7 +85,7 @@ export const router = createRouter({
     },
     { path: '/system', redirect: '/system/organizations' },
     {
-      path: '/system/:section(organizations|users|overview|testing|notices)',
+      path: '/system/:section(organizations|users|overview|testing|notices|qualification-templates)',
       component: SystemView,
       meta: { role: 'system_operator' },
     },

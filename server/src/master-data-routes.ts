@@ -132,10 +132,10 @@ export function registerMasterDataRoutes(
       const result = await preview(r, "master-import", readMaster(r.body));
       return {
         ...result,
-        ...((r.body as any)?.stateSchemaVersion === 10
+        ...([10, 11].includes((r.body as any)?.stateSchemaVersion)
           ? {
               compatibility:
-                "업무10 형식1을 업무11로 변환합니다. 자격·인증Set의 초안/사용 등록 속성만 제거하며 ID·내용·연결·상태를 보존합니다.",
+                "이전 형식을 업무13으로 변환합니다. 기본자격 연결을 검사하고 원래 ID·내용·연결·상태를 보존합니다. 공통 설명은 별도 보완이 필요합니다.",
             }
           : {}),
       };

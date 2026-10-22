@@ -52,7 +52,10 @@ function update(index: number, value: string) {
           :aria-invalid="!!errors?.correct"
           :aria-describedby="errors?.correct ? `${name}-correct-error` : undefined"
           @change="emit('update:correct', index)"
-        /><span>{{ index + 1 }}<small v-if="correct === index">정답</small></span></label
+        /><span class="choice-number">{{ index + 1 }}</span
+        ><small class="choice-status" :class="{ 'is-visible': correct === index }"
+          >정답</small
+        ></label
       >
       <div class="choice-content">
         <textarea
@@ -66,13 +69,6 @@ function update(index: number, value: string) {
           "
           @input="update(index, ($event.target as HTMLTextAreaElement).value)"
         />
-        <p
-          v-if="errors?.[`choice${index + 1}`]"
-          :id="`${name}-choice-${index}-error`"
-          class="field-error"
-        >
-          {{ errors[`choice${index + 1}`] }}
-        </p>
       </div>
       <button
         v-if="!disabled"
@@ -83,6 +79,13 @@ function update(index: number, value: string) {
       >
         ×
       </button>
+      <p
+        v-if="errors?.[`choice${index + 1}`]"
+        :id="`${name}-choice-${index}-error`"
+        class="field-error choice-error"
+      >
+        {{ errors[`choice${index + 1}`] }}
+      </p>
     </div>
     <p v-if="errors?.correct" :id="`${name}-correct-error`" class="field-error">
       {{ errors.correct }}

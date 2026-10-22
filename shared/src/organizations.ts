@@ -191,3 +191,28 @@ export interface OrganizationAdministratorsView {
   organizationId: string;
   candidates: { id: string; name: string; assigned: boolean }[];
 }
+
+export interface PlanningCandidate {
+  entityId: string;
+  qualificationId: string;
+  title: string;
+  version: number;
+  required: boolean;
+  selected: boolean;
+  status: "available" | "draft" | "planned" | "valid" | "blocked";
+  reason: string;
+  canStart: boolean;
+  planId?: string;
+  assignmentId?: string;
+  certificationId?: string;
+  previousCertificationId?: string;
+}
+export interface PlanningRequestView {
+  requestId: string;
+  revision: number;
+  candidates: PlanningCandidate[];
+  errors: string[];
+  canComplete: boolean;
+  noAdditional: boolean;
+  stage: string;
+}

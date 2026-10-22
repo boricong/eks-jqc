@@ -1,3 +1,7 @@
+import {
+  linkFixtureTemplates,
+  registerFixtureQualification,
+} from "./template-helpers.ts";
 import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -52,7 +56,12 @@ async function secondOrganization(f: Fixture) {
     undefined,
     "PUT",
   );
-  const qualification = await f.call("admin-2", "/qualifications", {});
+  const qualification = await registerFixtureQualification(
+    f.store,
+    "Etch 자격",
+    "Etch 직무 검증",
+    "org-etch",
+  );
   await f.call(
     "admin-2",
     `/qualifications/${qualification.id}`,
@@ -270,7 +279,12 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
     },
     403,
   );
-  const q = await f.call("admin-2", "/qualifications", {});
+  const q = await registerFixtureQualification(
+    f.store,
+    "잘못 연결",
+    "",
+    "org-etch",
+  );
   await f.call(
     "admin-2",
     `/qualifications/${q.id}`,
@@ -626,6 +640,9 @@ async function planAssignment(
     },
   );
   const p = await f.call(input.learnerId, "/plans", {
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === request.ids[0])!.revision,
     requestId: request.ids[0],
     qualificationId: q.id,
   });
@@ -678,7 +695,7 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
   const draft = await f.call("admin-1", "/courses", {});
   const usage = await f.call("admin-1", `/courses/${draft.id}/usage`);
   assert.equal(usage.canDelete, true);
-  const q = await f.call("admin-1", "/qualifications", {});
+  const q = await registerFixtureQualification(f.store, "초안 연결");
   await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
@@ -709,7 +726,7 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
   await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
-    { title: "연결 해제", revision: 2, courseIds: [] },
+    { revision: 2, courseIds: [] },
     200,
     randomUUID(),
     "PUT",
@@ -1549,6 +1566,8 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
       c.questions[1]!.points = 1;
       s.courses.push(c);
       s.qualifications.push({
+        templateId: "rounding-fixture",
+        templateRevision: 1,
         englishName: "",
         description: "검증용 직무 수행 기준",
         validity: { type: "unlimited", months: null, reminderDays: [] },
@@ -1561,6 +1580,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
         courseIds: [c.id],
       });
     }
+    linkFixtureTemplates(s);
   });
   for (const score of [66, 67]) {
     const a = await planAssignment(f, "admin-1", {

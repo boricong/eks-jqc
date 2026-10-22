@@ -37,7 +37,7 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await overflow(page);
-    await expect(page.getByRole('link', { name: '이어서 진행', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '상세정보 보기', exact: true })).toBeVisible();
     if (width === 1920)
       await page.screenshot({ path: test.info().outputPath('light-learner-home.png') });
   }
@@ -79,8 +79,6 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
 test('평가 10,000행 표는 가상 렌더링하고 편집에 응답한다', async ({ page, backend }) => {
   const data = exportCatalog(backend.store.snapshot(), 'org-photo', ['demo-qualification']),
     sheet = data.sheets[0]!;
-  sheet.mode = 'new';
-  sheet.code = 'LARGE';
   const c = sheet.tables.courses[0]!,
     q = sheet.tables.objective[0]!;
   sheet.tables.courses = Array.from({ length: 20 }, (_, i) => ({
@@ -141,7 +139,7 @@ test('Excel 가져오기→표 셀 편집→변경 비교→선택 기준 저장
   await page.goto('/');
   await actor(page, 'admin-1');
   const data = exportCatalog(backend.store.snapshot(), 'org-photo', ['demo-qualification']);
-  data.sheets[0]!.title = '엑셀 개정 검증';
+  data.sheets[0]!.renewalLeadMonths = 4;
   const buffer = await writeCatalogWorkbook(data);
   await page.goto('/admin/catalog');
   await page.locator('input[type=file]').setInputFiles({
@@ -162,7 +160,9 @@ test('Excel 가져오기→표 셀 편집→변경 비교→선택 기준 저장
   await expect(page.getByRole('dialog')).toContainText('개정');
   await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
   await expect(page.locator('.catalog-history')).toContainText('기준 저장');
-  const draft = backend.store.snapshot().qualifications.find((q) => q.title === '엑셀 개정 검증')!;
+  const draft = backend.store
+    .snapshot()
+    .qualifications.find((q) => q.entityId === 'demo-qualification' && q.version === 2)!;
   expect('status' in draft).toBe(false);
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
@@ -170,7 +170,7 @@ test('Excel 가져오기→표 셀 편집→변경 비교→선택 기준 저장
   const download = await downloadPromise;
   const path = await download.path();
   const parsed = await readCatalogWorkbook(await readFile(path!));
-  expect(parsed.workbook.sheets.some((q) => q.title === '엑셀 개정 검증')).toBe(true);
+  expect(parsed.workbook.sheets.some((q) => q.renewalLeadMonths === 4)).toBe(true);
   expect(errors).toEqual([]);
 });
 test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 화면', async ({ page, backend }) => {

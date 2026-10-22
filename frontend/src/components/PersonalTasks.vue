@@ -12,7 +12,10 @@ const requests = computed(() =>
   store.actor.certificationEligibility === 'hold'
     ? []
     : store.data.planningRequests.filter(
-        (r) => r.learnerId === store.actorId && !store.data.plans.some((p) => p.requestId === r.id),
+        (r) =>
+          r.learnerId === store.actorId &&
+          !r.completion &&
+          r.organizationId === store.actor.organizationId,
       ),
 );
 const expiring = computed(() =>
@@ -48,17 +51,17 @@ const alerts = computed(() =>
           >계획 작성 기한 {{ r.dueOn }}{{ r.dueOn < kstDate() ? ' · 기한 경과' : '' }} ·
           {{ r.message }}</small
         ></span
-      ><span>계획 시작 →</span></RouterLink
+      ><span>요청 확인 →</span></RouterLink
     >
     <RouterLink v-for="p in plans" :key="p.id" :to="`/plans/${p.id}`" class="simple-row"
       ><span
-        ><strong>{{ store.qualification(p.qualificationId).title }}</strong
+        ><strong>{{ store.qualification(p.qualificationId, p.qualificationMetadata).title }}</strong
         ><small>계획 작성 중</small></span
       ><span>계획 이어 쓰기 →</span></RouterLink
     >
     <RouterLink v-for="a in expiring" :key="a.id" :to="`/certifications/${a.id}`" class="simple-row"
       ><span
-        ><strong>{{ store.qualification(a.qualificationId).title }}</strong
+        ><strong>{{ store.qualification(a.qualificationId, a.qualificationMetadata).title }}</strong
         ><small
           >{{
             certificationStatus(a.certification!) === 'revoked'

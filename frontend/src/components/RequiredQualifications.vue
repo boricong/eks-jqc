@@ -33,11 +33,8 @@ const labels = {
     <p class="organization-path">{{ view.organizationPath.map((p) => p.name).join(' › ') }}</p>
     <p v-if="view.description">{{ view.description }}</p>
     <p v-if="view.duties">담당 업무 · {{ view.duties }}</p>
-    <p v-if="!view.configured" class="notice-body">
-      조직 기준 미설정 · 관리자가 필수 자격을 설정한 뒤 계획 요청을 보내면 시작할 수 있습니다.
-    </p>
-    <p v-else-if="!view.items.length" class="muted">
-      관리자가 이 조직에 필수 자격이 없음을 확인했습니다.
+    <p v-if="!view.items.length" class="muted">
+      등록된 조직 필수 자격이 없습니다. 계획 요청을 받으면 팀 자격을 선택할 수 있습니다.
     </p>
     <div v-for="item in view.items" :key="item.entityId" class="required-row">
       <div>

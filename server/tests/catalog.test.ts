@@ -1,3 +1,4 @@
+import { registerFixtureQualification } from "./template-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -55,7 +56,7 @@ test("다른 개정 초안이 있어도 무변경 왕복은 허용하고 실제 
   const unchanged = prepareCatalog(state, data, "org-photo");
   assert.equal(unchanged.issues.length, 0);
   assert.equal(unchanged.changes[0]!.kind, "unchanged");
-  data.sheets[0]!.title = "실제 변경";
+  data.sheets[0]!.renewalLeadMonths = 4;
   const revision = prepareCatalog(state, data, "org-photo");
   assert.equal(revision.issues.length, 0);
   assert.equal(revision.qualifications[0]!.version, 3);
@@ -91,8 +92,8 @@ test("사용자 양식 v3은 동일한 기준으로 왕복하며 연결 이름 �
     generated.workbook.sheets[1]!.code,
   );
   assert.equal(
-    prepareCatalog(s, generated.workbook, "org-photo").changes.filter(
-      (c) => c.kind === "new",
+    prepareCatalog(s, generated.workbook, "org-photo").issues.filter(
+      (i) => i.column === "mode",
     ).length,
     2,
   );
@@ -127,7 +128,7 @@ test("선택 기준 저장은 원자적이며 무변경 재시도와 최신 revi
   const s = photo(),
     data = workbook(s);
   data.sheets = data.sheets.slice(0, 2);
-  data.sheets.forEach((q) => (q.description += " 개정"));
+  data.sheets.forEach((q) => (q.renewalLeadMonths = 4));
   const saved = saveCatalogBatch(s, data, "org-photo", "admin-1");
   assert.equal(saved.workbook.sheets.length, 2);
   assert.equal(s.catalogBatches.at(-1)!.status, "saved");
@@ -230,7 +231,7 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
       (r) => (table === "courses" ? r.code : r.courseCode) !== removedCode,
     );
   q.tables.objective.splice(0, 1);
-  q.title += " 개정";
+  q.renewalLeadMonths = 4;
   const policy = structuredClone(org);
   policy.qualificationPools = data.sheets.map((sheet) => ({
     lv1OrganizationId: "org-photo",
@@ -268,12 +269,9 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
   copy.sheets = [copy.sheets[0]!];
   copy.sheets[0]!.mode = "new";
   copy.sheets[0]!.code = "NEW-INDEPENDENT";
-  const copied = saveCatalogBatch(s, copy, "org-photo", "operator-1");
-  const other = s.qualifications.find(
-    (q) => q.id === copied.qualificationIds[0],
-  )!;
-  assert.ok(
-    other.courseIds.every((id) => !before.courses.some((c) => c.id === id)),
+  assert.throws(
+    () => saveCatalogBatch(s, copy, "org-photo", "operator-1"),
+    /기본자격/,
   );
 });
 test("초안 준비 부족과 구조 오류 구분, 중복 코드·참조·정답·원본 revision 차단", () => {
@@ -281,7 +279,8 @@ test("초안 준비 부족과 구조 오류 구분, 중복 코드·참조·정�
     data = workbook(s);
   data.sheets = data.sheets.slice(0, 1);
   const q = data.sheets[0]!;
-  q.description = "";
+  q.validityType = "unknown";
+  q.months = null;
   let p = prepareCatalog(s, data, "org-photo");
   assert.ok(p.issues.some((i) => i.severity === "readiness"));
   assert.ok(!p.issues.some((i) => i.severity === "structure"));
@@ -405,7 +404,7 @@ test("API 권한·Lv1 필수·구조 검사·중복 재시도·영구 백업·�
   const f = await fixture(t),
     data = workbook(f.store.snapshot());
   data.sheets = data.sheets.slice(0, 1);
-  data.sheets[0]!.title += " 수정";
+  data.sheets[0]!.renewalLeadMonths = 4;
   const url = "/catalog/batches?lv1OrganizationId=org-photo";
   await f.call(
     "learner-1",
@@ -471,7 +470,7 @@ test("백업 실패·동시 변경·게시 실패에서 부분 저장이 없고 
   const f = await fixture(t),
     data = workbook(f.store.snapshot());
   data.sheets = data.sheets.slice(0, 2);
-  data.sheets.forEach((q) => (q.title += " 변경"));
+  data.sheets.forEach((q) => (q.renewalLeadMonths = 4));
   const before = await readFile(f.file, "utf8"),
     orgBefore = await readFile(f.store.organizations.file, "utf8");
   f.store.beforeReplace = () => {
@@ -496,7 +495,8 @@ test("백업 실패·동시 변경·게시 실패에서 부분 저장이 없고 
   );
   assert.equal(await readFile(f.file, "utf8"), before);
   data.sheets[1]!.sourceRevision = 1;
-  data.sheets[1]!.description = "";
+  data.sheets[1]!.validityType = "unknown";
+  data.sheets[1]!.months = null;
   const result = await f.call("admin-1", "/catalog/batches", {
     workbook: data,
   });
@@ -516,8 +516,7 @@ test("10,000 평가 행 상한·숫자/0 구분·메타정보 오류 위치", ()
     data = workbook(s);
   data.sheets = data.sheets.slice(0, 1);
   const sheet = data.sheets[0]!;
-  sheet.mode = "new";
-  sheet.code = "LARGE";
+
   const c = sheet.tables.courses[0]!,
     question = sheet.tables.objective[0]!;
   sheet.tables.courses = Array.from({ length: 20 }, (_, i) => ({
@@ -568,7 +567,7 @@ test("사전 백업 생성 실패는 업무 파일을 변경하지 않는다", a
   const f = await fixture(t),
     data = workbook(f.store.snapshot());
   data.sheets = data.sheets.slice(0, 1);
-  data.sheets[0]!.title += " 변경";
+  data.sheets[0]!.renewalLeadMonths = 4;
   const before = await readFile(f.file, "utf8");
   const old = f.store.backupDir;
   (f.store as any).backupDir = path.join(f.dir, "blocked-backup");
@@ -587,7 +586,7 @@ test("미변경 기존 초안도 버전 추가 없이 일괄 등록하고 개별
   const f = await fixture(t),
     data = workbook(f.store.snapshot());
   data.sheets = data.sheets.slice(0, 1);
-  data.sheets[0]!.title += " 준비";
+  data.sheets[0]!.renewalLeadMonths = 4;
   const result = await f.call("admin-1", "/catalog/batches", {
     workbook: data,
   });
@@ -614,7 +613,7 @@ test("미변경 기존 초안도 버전 추가 없이 일괄 등록하고 개별
     undefined,
     410,
   );
-  const q = await f.call("admin-1", "/qualifications", {}),
+  const q = await registerFixtureQualification(f.store, "독립 연결"),
     original = f.store.snapshot().courses[0]!;
   await f.call(
     "admin-1",

@@ -37,24 +37,14 @@ const validity = computed({
     @input="emit('change')"
     @change="emit('change')"
   >
-    <div class="form-grid">
-      <label class="field"
-        >자격명<input v-model="sheet.title" data-field="title" /><CatalogFieldErrors
-          :issues="issues"
-          field="title" /></label
-      ><label class="field"
-        >영문명<input v-model="sheet.englishName" data-field="englishName" /><CatalogFieldErrors
-          :issues="issues"
-          field="englishName"
-      /></label>
-    </div>
-    <label class="field"
-      >자격 설명<textarea
-        v-model="sheet.description"
-        data-field="description"
-        rows="3"
-      /><CatalogFieldErrors :issues="issues" field="description" />
-    </label>
+    <dl class="property-list">
+      <dt>자격명</dt>
+      <dd>{{ sheet.title }}</dd>
+      <dt>영문명</dt>
+      <dd>{{ sheet.englishName || '—' }}</dd>
+      <dt>공통 설명</dt>
+      <dd style="white-space: pre-wrap">{{ sheet.description || '시스템 관리자 보완 필요' }}</dd>
+    </dl>
     <div class="form-grid">
       <label class="field"
         >인증기간<select v-model="validity" data-field="validityType" aria-label="인증기간">

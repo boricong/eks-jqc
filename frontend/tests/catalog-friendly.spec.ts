@@ -1,3 +1,4 @@
+import { registerFixtureQualification } from '../../server/tests/template-helpers';
 import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import { exportCatalog } from '../../server/src/catalog';
@@ -132,6 +133,25 @@ test('자격·인증Set 중심 편집: 코드 없이 문항 작성, 제외 취�
   await dialog.getByLabel('1번 선택지', { exact: true }).fill('원본과 대조');
   await dialog.getByLabel('2번 선택지', { exact: true }).fill('확인 생략');
   await dialog.getByLabel('1번 선택지를 정답으로 지정', { exact: true }).check();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const row = dialog.locator('.objective-choice').first();
+    const radio = await row.locator('input[type="radio"]').boundingBox();
+    const input = await row.locator('textarea').boundingBox();
+    const remove = await row.getByRole('button').boundingBox();
+    expect(radio!.width).toBe(18);
+    expect(remove!.width).toBeGreaterThanOrEqual(44);
+    expect(radio!.y + radio!.height / 2).toBeCloseTo(remove!.y + remove!.height / 2, 0);
+    if (width > 600)
+      expect(radio!.y + radio!.height / 2).toBeCloseTo(input!.y + input!.height / 2, 0);
+    else expect(input!.y).toBeGreaterThanOrEqual(remove!.y + remove!.height);
+    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`catalog-choices-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 1920, height: 900 });
   await dialog.getByRole('button', { name: '내용 반영' }).click();
   await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
   await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
@@ -155,7 +175,11 @@ test('일부 기준 저장은 다른 자격의 입력을 유지하고 브라우�
       'org-photo',
       state.qualifications.map((q) => q.id),
     );
-  data.sheets.forEach((s, i) => (s.description += ` 수정${i}`));
+  data.sheets.forEach((s, i) => {
+    s.validityType = 'months';
+    s.months = 36;
+    s.renewalLeadMonths = 4 + i;
+  });
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
@@ -184,8 +208,8 @@ test('일부 기준 저장은 다른 자격의 입력을 유지하고 브라우�
   await expect(page.locator('.catalog-nav-item')).toHaveCount(2);
   await page.locator('.catalog-nav-item').nth(1).click();
   await page.getByRole('button', { name: '기본정보 수정', exact: true }).click();
-  await expect(page.getByLabel('자격 설명', { exact: true })).toHaveValue(
-    data.sheets[1]!.description,
+  await expect(page.getByLabel('재인증 시작 · 만료 전 개월', { exact: true })).toHaveValue(
+    String(data.sheets[1]!.renewalLeadMonths),
   );
 });
 
@@ -230,12 +254,16 @@ test('브라우저 보관 실패를 알리고 저장 충돌에서도 입력과 �
   ).toBeEnabled();
 });
 
-test('새 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화면', async ({ page }, testInfo) => {
+test('등록한 팀 자격의 준비 상태·한글 입력과 단일 디자인·좁은 화면', async ({
+  page,
+  backend,
+}, testInfo) => {
+  const { id } = await registerFixtureQualification(backend.store, '신규 설비 자격');
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/catalog');
-  await page.getByRole('button', { name: '새 자격 만들기', exact: true }).click();
-  await page.getByLabel('자격명', { exact: true }).fill('신규 설비 자격');
+  await page.getByTestId(`catalog-qualification-${id}`).getByRole('button').click();
+  await page.getByRole('button', { name: '기본정보 수정', exact: true }).click();
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
   await page.getByLabel('인증Set명', { exact: true }).fill('설비 구성 확인');

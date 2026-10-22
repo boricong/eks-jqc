@@ -1,3 +1,8 @@
+import { planningView } from "./planning.ts";
+import {
+  currentQualification,
+  checkCommonFields,
+} from "./qualification-templates.ts";
 import { saveCatalogItem, deleteQualification } from "./catalog-editing.ts";
 import {
   requiredQualifications,
@@ -318,7 +323,8 @@ function reconcile(
       learnerId: a.learnerId,
       qualificationId: a.qualificationId,
       date: at,
-      snapshot: snapshot(q),
+      snapshot: snapshot({ ...q, ...a.qualificationMetadata }),
+      qualificationMetadata: a.qualificationMetadata,
       validity: structuredClone(q.validity),
       ...(q.validity.type === "months"
         ? { expiresOn: expirationDate(at, q.validity) }
@@ -336,7 +342,7 @@ function reconcile(
         certificationId: id,
         type: "certification",
         title: "필수 인증Set을 모두 수료하여 자격을 취득했습니다",
-        body: q.title,
+        body: a.qualificationMetadata?.title || q.title,
         href: `/certifications/${a.id}`,
       },
       at,
@@ -487,7 +493,7 @@ export function execute(
       )
         delete p.previousCertificationId;
     for (const r of s.planningRequests)
-      for (const t of r.targets || [])
+      for (const t of [...(r.targets || []), ...r.selections])
         if (
           t.previousCertificationId &&
           removedCertIds.has(t.previousCertificationId)
@@ -559,6 +565,12 @@ export function execute(
     const isCourse = target === "courses",
       list = isCourse ? s.courses : s.qualifications;
     if (action === "catalog.create") {
+      demand(
+        isCourse,
+        403,
+        "새 자격은 시스템 기본자격 관리에서 생성한 뒤 팀에 등록해 주세요.",
+        "TEMPLATE_REQUIRED",
+      );
       const id = uid(),
         base = {
           id,
@@ -599,6 +611,8 @@ export function execute(
       body.id,
     );
     if (action === "catalog.clone") {
+      if (!isCourse)
+        checkCommonFields(s, item as State["qualifications"][number], body);
       demand(!item.deletedAt, 409, "삭제된 기준입니다.");
       if (body.revision != null)
         demand(
@@ -608,7 +622,11 @@ export function execute(
           "REVISION_CONFLICT",
         );
       const clone = {
-        ...structuredClone(item),
+        ...structuredClone(
+          isCourse
+            ? item
+            : currentQualification(s, item as State["qualifications"][number]),
+        ),
         id: uid(),
         parentId: item.id,
         version:
@@ -1046,7 +1064,14 @@ export function workspace(
     : null;
   if (u.roles.includes("learner") && u.organizationActive)
     for (const q of s.qualifications)
-      if (requiredView?.items.some((i) => i.qualificationId === q.id))
+      if (
+        requiredView?.items.some((i) => i.qualificationId === q.id) ||
+        organizations.qualificationPools.some(
+          (p) =>
+            p.lv1OrganizationId === u.lv1OrganizationId &&
+            p.qualificationId === q.id,
+        )
+      )
         qids.add(q.id);
   const visibleCourseIds = new Set([
     ...cids,
@@ -1072,6 +1097,9 @@ export function workspace(
           (admin || x.id === u.id),
       ).length,
     },
+    qualificationPool: organizations.qualificationPools.filter(
+      (p) => p.lv1OrganizationId === lv1,
+    ),
     requiredQualifications: requiredView,
     requestProgress: s.planningRequests
       .filter(
@@ -1079,6 +1107,15 @@ export function workspace(
           visibleScope(r.lv1OrganizationId) && (admin || r.learnerId === u.id),
       )
       .map((r) => requestProgress(s, organizations, r.id, at)),
+    planningOptions: u.roles.includes("learner")
+      ? s.planningRequests
+          .filter(
+            (r) =>
+              r.learnerId === u.id &&
+              r.lv1OrganizationId === u.lv1OrganizationId,
+          )
+          .map((r) => planningView(s, organizations, u, r, at))
+      : [],
     planningReadiness: admin
       ? s.users
           .map((user) => userView(user, organizations))
@@ -1165,9 +1202,11 @@ export function workspace(
               [a.learnerId, a.ownerAdminId].includes(user.id),
             )),
       ),
-    qualifications: s.qualifications.filter(
-      (q) => visibleScope(q.lv1OrganizationId) && (admin || qids.has(q.id)),
-    ),
+    qualifications: s.qualifications
+      .filter(
+        (q) => visibleScope(q.lv1OrganizationId) && (admin || qids.has(q.id)),
+      )
+      .map((q) => currentQualification(s, q)),
     courses: s.courses
       .filter(
         (c) =>

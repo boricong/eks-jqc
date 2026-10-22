@@ -26,7 +26,9 @@ const assignment = computed(() => {
   return value?.learnerId === store.actorId ? value : undefined;
 });
 const qualification = computed(
-  () => assignment.value && store.qualification(assignment.value.qualificationId),
+  () =>
+    assignment.value &&
+    store.qualification(assignment.value.qualificationId, assignment.value.qualificationMetadata),
 );
 const plan = computed(() => store.data.plans.find((p) => p.id === assignment.value?.planId));
 const selected = computed(

@@ -53,7 +53,9 @@ export async function requestPlan(page: Page, learnerName: string) {
 }
 export async function completePlan(page: Page, title: string, recordLearning = true) {
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption({ label: `${title} · v1` });
+  const select = page.getByLabel('취득할 자격');
+  const option = select.locator('option').filter({ hasText: `${title} · v1` });
+  await select.selectOption((await option.getAttribute('value')) as string);
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   await page.getByLabel('목표 인증일', { exact: true }).fill('2027-02-01');

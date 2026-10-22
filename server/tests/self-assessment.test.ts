@@ -242,6 +242,7 @@ test("종료된 무백업 전환은 원본·조직·백업을 변경하지 않�
 test("전환 후 새 진행은 전환 명령 재실행에 의해 삭제되지 않는다", () => {
   const s = transitionAssessments(legacy(), org).state;
   s.planningRequests.push({
+    mode: "fixed", selections: [],
     id: "new",
     learnerId: "learner-1",
     lv1OrganizationId: "org-photo",

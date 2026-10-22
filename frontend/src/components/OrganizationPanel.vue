@@ -23,15 +23,60 @@ const dirty = computed(
       form.value.parentId !== selected.value.parentId ||
       form.value.active !== selected.value.active),
 );
-function describe(value: unknown) {
-  const entry = value as OrganizationEntry | null;
-  return entry
-    ? entry.path.map((p) => p.name).join(' › ') +
-        ' · ' +
-        (entry.active ? '사용' : '사용 중지') +
-        ' · 표시 순서 ' +
-        (entry.order + 1)
-    : '신규 조직';
+function historyLabel(action: string) {
+  switch (action) {
+    case 'organization.create':
+      return '조직 추가';
+    case 'organization.update':
+      return '조직 정보 변경';
+    case 'organization.policy':
+      return '조직별 자격 설정 변경';
+    case 'organization.pool':
+      return '팀 적용 자격 변경';
+    default:
+      return '조직 변경';
+  }
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function describe(action: string, value: unknown): string {
+  if (value === null) return action === 'organization.create' ? '신규 조직' : '기록 없음';
+  // Audit payloads differ by action; policy and pool snapshots have no organization path.
+  if (action === 'organization.pool' && Array.isArray(value))
+    return `팀 적용 자격 ${value.length}개`;
+  if (isRecord(value)) {
+    if (action === 'organization.policy') {
+      const required = value.requiredQualifications;
+      return [
+        `조직 설명: ${typeof value.description === 'string' && value.description ? value.description : '미설정'}`,
+        `담당 업무: ${typeof value.duties === 'string' && value.duties ? value.duties : '미설정'}`,
+        Array.isArray(required)
+          ? required.length
+            ? `필수 자격 ${required.length}개`
+            : '필수 자격 없음'
+          : required === null
+            ? '필수 자격 없음'
+            : '필수 자격 기록 없음',
+      ].join(' · ');
+    }
+    if (action === 'organization.create' || action === 'organization.update') {
+      const path = Array.isArray(value.path)
+        ? value.path
+            .filter(isRecord)
+            .map((part) => (typeof part.name === 'string' ? part.name : ''))
+            .filter(Boolean)
+            .join(' › ')
+        : '';
+      const parts = [
+        path || (typeof value.name === 'string' ? value.name : ''),
+        typeof value.active === 'boolean' ? (value.active ? '사용' : '사용 중지') : '',
+        typeof value.order === 'number' ? `표시 순서 ${value.order + 1}` : '',
+      ].filter(Boolean);
+      if (parts.length) return parts.join(' · ');
+    }
+  }
+  return '상세 표시를 지원하지 않는 이력입니다.';
 }
 const level = computed(() =>
   creating.value
@@ -260,11 +305,12 @@ onMounted(() => load());
         <summary>변경 이력 {{ history.length }}건</summary>
         <p v-if="!history.length" class="muted">최초 등록 이후 변경이 없습니다.</p>
         <article v-for="event in history" :key="event.id">
+          <p>{{ historyLabel(event.action) }}</p>
           <p>
             {{ new Date(event.date).toLocaleString('ko-KR') }} · {{ store.username(event.actorId) }}
           </p>
-          <p>이전: {{ describe(event.before) }}</p>
-          <p>이후: {{ describe(event.after) }}</p>
+          <p>이전: {{ describe(event.action, event.before) }}</p>
+          <p>이후: {{ describe(event.action, event.after) }}</p>
         </article>
       </details>
     </section>
@@ -287,3 +333,9 @@ onMounted(() => load());
     >
   </AppDialog>
 </template>
+<style scoped>
+.organization-history article {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+</style>

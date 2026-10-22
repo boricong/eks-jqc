@@ -1,13 +1,16 @@
+import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
   requiredQualifications,
   planPolicyErrors,
   planningReadiness,
 } from "./organization-policies.ts";
-import { readFileSync } from "node:fs";
+import { currentQualification, metadata } from "./qualification-templates.ts";
+export { qualificationTemplates } from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   PersonalPlanSchema,
+  PlanStartInputSchema,
   LearningRecordSchema,
   QualificationSchema,
   qualificationUseErrors,
@@ -29,16 +32,6 @@ import {
 } from "./qualification-lifecycle.ts";
 import { notify } from "./notifications.ts";
 
-export const qualificationTemplates: {
-  id: string;
-  title: string;
-  englishName: string;
-}[] = JSON.parse(
-  readFileSync(
-    new URL("./qualification-templates.json", import.meta.url),
-    "utf8",
-  ),
-);
 const find = <T extends { id: string }>(xs: T[], id: string): T => {
   const value = xs.find((x) => x.id === id);
   demand(value, 404, "기록을 찾을 수 없습니다.");
@@ -96,7 +89,8 @@ export function authorizeWorkflow(
   }
   demand(u.roles.includes("learner"), 403, "학습자 권한이 필요합니다.");
   let record: { learnerId: string; lv1OrganizationId: string };
-  if (action === "plan.create")
+  if (action.startsWith("planning.")) record = find(s.planningRequests, target);
+  else if (action === "plan.create")
     record = find(s.planningRequests, body.requestId);
   else if (action.startsWith("plan.")) record = find(s.plans, target);
   else record = find(s.assignments, find(s.enrollments, target).assignmentId);
@@ -129,19 +123,28 @@ export function executeWorkflow(
   scope = u.lv1OrganizationId,
   at = new Date().toISOString(),
 ) {
-  if (["plan.create", "plan.complete"].includes(action)) requireEligible(u);
+  if (
+    [
+      "plan.create",
+      "plan.complete",
+      "planning.select",
+      "planning.complete",
+    ].includes(action)
+  )
+    requireEligible(u);
   const audit = (
     id: string,
     reason = "",
     assignmentId?: string,
     details: Record<string, any> = {},
+    auditAction = action,
   ) =>
     s.audits.push({
       id: randomUUID(),
       actorId: u.id,
       lv1OrganizationId: scope,
       date: at,
-      action,
+      action: auditAction,
       targetId: id,
       reason,
       assignmentId,
@@ -158,30 +161,50 @@ export function executeWorkflow(
       422,
       "사용 중인 Lv1을 선택해 주세요.",
     );
-    const ids = z.array(z.string()).min(1).max(15).parse(body.templateIds);
+    const ids = z.array(z.string()).min(1).max(1000).parse(body.templateIds);
     demand(new Set(ids).size === ids.length, 422, "자격이 중복되었습니다.");
     const imported: string[] = [],
       existing: string[] = [];
     for (const templateId of ids) {
-      const template = find(qualificationTemplates, templateId);
-      const previous = s.qualifications.find(
-        (q) => q.lv1OrganizationId === scope && q.templateId === templateId,
-      );
-      if (previous) {
-        existing.push(previous.id);
+      const template = find(s.qualificationTemplates, templateId);
+      const previous = s.qualifications
+        .filter(
+          (q) => q.lv1OrganizationId === scope && q.templateId === templateId,
+        )
+        .sort((a, b) => b.version - a.version)[0];
+      if (
+        previous &&
+        s.qualifications.some(
+          (q) => q.entityId === previous.entityId && !q.deletedAt,
+        )
+      ) {
+        existing.push(
+          s.qualifications
+            .filter((q) => q.entityId === previous.entityId && !q.deletedAt)
+            .sort((a, b) => b.version - a.version)[0]!.id,
+        );
         continue;
       }
       const id = randomUUID();
       s.qualifications.push(
         QualificationSchema.parse({
           id,
-          entityId: id,
-          version: 1,
+          entityId: previous?.entityId || id,
+          parentId: previous?.id,
+          version: previous
+            ? Math.max(
+                ...s.qualifications
+                  .filter((q) => q.entityId === previous.entityId)
+                  .map((q) => q.version),
+              ) + 1
+            : 1,
           revision: 1,
           lv1OrganizationId: scope,
           title: template.title,
           englishName: template.englishName,
           templateId,
+          templateRevision: template.revision,
+          description: template.description,
           lifecycleStatus: "Active",
           renewalLeadMonths: 3,
           courseIds: [],
@@ -219,17 +242,20 @@ export function executeWorkflow(
       requireEligible(learner);
       const readiness = planningReadiness(s, organizations, learner, at);
       demand(readiness.canRequest, 422, `${learner.name}: ${readiness.reason}`);
-      const targets = requiredQualifications(s, organizations, learner, at)
-        .items.filter((i) => ["ready", "waiting"].includes(i.status))
-        .map((i) => ({
-          entityId: i.entityId,
-          qualificationId: i.qualificationId,
-          title: i.title,
-          version: i.version,
-          ...(i.previousCertificationId
-            ? { previousCertificationId: i.previousCertificationId }
-            : {}),
-        }));
+      const targets = requiredQualifications(
+        s,
+        organizations,
+        learner,
+        at,
+      ).items.map((i) => ({
+        entityId: i.entityId,
+        qualificationId: i.qualificationId,
+        title: i.title,
+        version: i.version,
+        ...(i.previousCertificationId
+          ? { previousCertificationId: i.previousCertificationId }
+          : {}),
+      }));
       const id = randomUUID();
       ids.push(id);
       s.planningRequests.push({
@@ -240,6 +266,8 @@ export function executeWorkflow(
         organizationId: learner.organizationId,
         organizationPath: learner.organizationPath,
         targets,
+        selections: [],
+        mode: "learner_choice",
         source: "requested",
         dueOn: input.dueOn,
         message: input.message,
@@ -266,12 +294,119 @@ export function executeWorkflow(
     }
     return { ids };
   }
+  if (action === "planning.select" || action === "planning.complete") {
+    const r = find(s.planningRequests, target);
+    expected(r, body.revision);
+    demand(!r.completion, 409, "이미 완료한 계획 요청입니다.");
+    demand(
+      r.organizationId === u.organizationId && u.organizationActive,
+      409,
+      "현재 소속의 사용 중인 요청을 확인해 주세요.",
+    );
+    const view = planningView(s, organizations, u, r, at);
+    if (action === "planning.select") {
+      demand(
+        r.mode === "learner_choice",
+        409,
+        "이전 요청은 당시 대상 범위를 유지합니다. 새 요청을 받아 주세요.",
+      );
+      const input = z
+        .object({
+          revision: z.number(),
+          entityIds: z.array(z.string()).max(1000),
+        })
+        .strict()
+        .parse(body);
+      demand(
+        new Set(input.entityIds).size === input.entityIds.length,
+        422,
+        "선택한 자격이 중복되었습니다.",
+      );
+      const ids = input.entityIds.filter(
+        (id) => !r.targets?.some((t) => t.entityId === id),
+      );
+      for (const c of view.candidates.filter(
+        (c) => c.selected && !c.required && !ids.includes(c.entityId),
+      ))
+        demand(
+          !s.plans.some(
+            (p) =>
+              !p.deletedAt &&
+              p.learnerId === u.id &&
+              s.qualifications.find((q) => q.id === p.qualificationId)
+                ?.entityId === c.entityId &&
+              p.previousCertificationId ===
+                r.selections.find((t) => t.entityId === c.entityId)
+                  ?.previousCertificationId,
+          ),
+          409,
+          "작성 중인 계획은 삭제 후 선택을 해제해 주세요. 확정한 계획은 해제할 수 없습니다.",
+        );
+      const before = structuredClone(r.selections);
+      r.selections = ids.map((id) => {
+        const existing = r.selections.find((t) => t.entityId === id);
+        if (existing) return existing;
+        const c = view.candidates.find((c) => c.entityId === id);
+        demand(
+          c && ["available", "draft"].includes(c.status),
+          422,
+          "현재 팀의 계획 가능한 자격을 선택해 주세요.",
+        );
+        return {
+          entityId: c.entityId,
+          qualificationId: c.qualificationId,
+          title: c.title,
+          version: c.version,
+          ...(c.previousCertificationId
+            ? { previousCertificationId: c.previousCertificationId }
+            : {}),
+        };
+      });
+      audit(r.id, "계획 자격 선택", undefined, { before, after: r.selections });
+    } else {
+      demand(
+        view.canComplete,
+        409,
+        view.errors.join(" · "),
+        "PLANNING_INCOMPLETE",
+      );
+      demand(
+        !view.noAdditional || body.confirmNoAdditional === true,
+        422,
+        "추가 계획 대상이 없음을 확인해 주세요.",
+      );
+      const rows = view.candidates.filter(
+        (c) => c.selected || view.noAdditional,
+      );
+      r.completion = {
+        date: at,
+        reason: view.noAdditional ? "no_additional" : "planned",
+        evidence: rows.map((c) => ({
+          entityId: c.entityId,
+          ...(c.status === "valid"
+            ? {
+                certificationId: c.certificationId,
+                assignmentId: s.certifications.find(
+                  (cert) => cert.id === c.certificationId,
+                )!.assignmentId,
+              }
+            : c.planId
+              ? { planId: c.planId }
+              : { assignmentId: c.assignmentId }),
+        })),
+      };
+      audit(r.id, "계획 수립 전체 완료", undefined, {
+        completion: r.completion,
+      });
+    }
+    r.revision++;
+    return { id: r.id, revision: r.revision };
+  }
   if (action === "plan.create") {
-    const input = z
-      .object({ requestId: z.string(), qualificationId: z.string() })
-      .parse(body);
+    const input = PlanStartInputSchema.parse(body);
     const request = find(s.planningRequests, input.requestId),
       q = find(s.qualifications, input.qualificationId);
+    expected(request, input.requestRevision);
     demand(
       u.organizationActive &&
         q.lv1OrganizationId === u.lv1OrganizationId &&
@@ -279,7 +414,7 @@ export function executeWorkflow(
       422,
       "소속 조직의 계획 가능한 자격을 선택해 주세요.",
     );
-    const policyErrors = planPolicyErrors(
+    const policyErrors = planRequestErrors(
       s,
       organizations,
       u,
@@ -289,6 +424,7 @@ export function executeWorkflow(
         organizationId: u.organizationId,
       },
       at,
+      true,
     );
     demand(
       !policyErrors.length,
@@ -296,26 +432,41 @@ export function executeWorkflow(
       policyErrors.join(" · "),
       "POLICY_CHANGED",
     );
-    const row = requiredQualifications(s, organizations, u, at).items.find(
-      (i) => i.entityId === q.entityId,
+    const row = candidate(s, organizations, u, q.entityId, at, request);
+    demand(row.canStart, 409, row?.reason || "선택한 자격을 확인해 주세요.");
+    const errors = qualificationUseErrors(
+      currentQualification(s, q),
+      s.courses,
     );
-    demand(
-      row && !["fulfilled", "expired", "unknown"].includes(row.status),
-      409,
-      row?.reason || "필수 자격이 아닙니다.",
-    );
-    const errors = qualificationUseErrors(q, s.courses);
     demand(!errors.length, 422, errors.join("\n"));
     const previous = lastRevoked(s, u.id, q.entityId, at);
+    // A draft is reusable only for the current organization, version and acquisition cycle.
     const existing = s.plans.find(
       (p) =>
-        !p.deletedAt &&
-        p.learnerId === u.id &&
-        p.previousCertificationId === previous?.id &&
-        find(s.qualifications, p.qualificationId).entityId === q.entityId &&
-        (!p.assignmentId ||
-          openAssignment(s, find(s.assignments, p.assignmentId), at)),
+        p.id === row.planId &&
+        p.status === "draft" &&
+        p.qualificationId === q.id &&
+        p.organizationId === u.organizationId &&
+        p.previousCertificationId === previous?.id,
     );
+    if (!row.selected) {
+      const before = structuredClone(request.selections);
+      request.selections.push({
+        entityId: q.entityId,
+        qualificationId: q.id,
+        title: row.title,
+        version: q.version,
+        ...(previous ? { previousCertificationId: previous.id } : {}),
+      });
+      request.revision++;
+      audit(
+        request.id,
+        "계획 시작으로 요청에 자격 포함",
+        undefined,
+        { before, after: request.selections },
+        "planning.select",
+      );
+    }
     if (existing) return { id: existing.id };
     demand(
       !s.assignments.some(
@@ -374,6 +525,39 @@ export function executeWorkflow(
         "확정되었거나 배정된 계획은 삭제하거나 기본 일정을 적용할 수 없습니다.",
       );
       if (action === "plan.delete") {
+        // Resolve the shared draft before deleting it; older, superseded drafts must
+        // not remove the selection attached to the current draft.
+        for (const r of s.planningRequests.filter(
+          (r) =>
+            !r.completion &&
+            r.learnerId === u.id &&
+            r.organizationId === p.organizationId &&
+            !r.targets?.some((t) => t.entityId === q.entityId) &&
+            r.selections.some(
+              (t) =>
+                t.entityId === q.entityId &&
+                t.previousCertificationId === p.previousCertificationId,
+            ) &&
+            candidate(
+              s,
+              organizations,
+              { ...u, organizationId: p.organizationId! },
+              q.entityId,
+              at,
+              r,
+            ).planId === p.id,
+        )) {
+          const before = structuredClone(r.selections);
+          r.selections = r.selections.filter((t) => t.entityId !== q.entityId);
+          r.revision++;
+          audit(
+            r.id,
+            "미확정 계획 삭제로 요청에서 자격 제외",
+            undefined,
+            { planId: p.id, before, after: r.selections },
+            "planning.select",
+          );
+        }
         p.deletedAt = at;
         p.deletedBy = u.id;
       } else {
@@ -432,7 +616,7 @@ export function executeWorkflow(
       );
       const errors = [
         ...planErrors(p),
-        ...qualificationUseErrors(q, s.courses),
+        ...qualificationUseErrors(currentQualification(s, q), s.courses),
       ];
       demand(
         !q.deletedAt && !errors.length,
@@ -458,6 +642,7 @@ export function executeWorkflow(
           ? { previousCertificationId: p.previousCertificationId }
           : {}),
         qualificationId: q.id,
+        qualificationMetadata: metadata(currentQualification(s, q)),
         learnerId: u.id,
         ownerAdminId: request.requestedBy,
         createdBy: u.id,
@@ -473,6 +658,7 @@ export function executeWorkflow(
       );
       Object.assign(p, {
         status: "completed",
+        qualificationMetadata: metadata(currentQualification(s, q)),
         completedAt: at,
         assignmentId,
         approval: "skipped_by_policy",

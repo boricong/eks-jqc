@@ -51,18 +51,16 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await page.getByRole('button', { name: '사용자 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await actor(page, 'admin-1');
+  await page.goto('/admin/qualifications');
+  await page.getByRole('button', { name: '팀 적용', exact: true }).click();
+  await page.getByLabel('평가 흐름 체험 적용 버전').selectOption('demo-qualification');
+  await page.getByRole('button', { name: '팀 적용 확정' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/admin/policies');
-  await page.locator('.policy-pool-management > summary').click();
-  await page.getByLabel('팀 자격 검색').fill('평가 흐름 체험');
-  await page.getByRole('button', { name: '검색 결과 전체 선택' }).click();
-  await page.getByRole('button', { name: '팀 목록 변경 확인' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '설정 저장' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByLabel('조직 검색').fill('Photo 공정 검증 상세 조직');
   await page.getByRole('treeitem').filter({ hasText: 'Photo 공정 검증 상세 조직' }).click();
   await page.getByLabel('조직 설명').fill('상황 대응 능력 검증 조직');
   await page.getByLabel('담당 업무').fill('설비 정보와 결과 기록 검토');
-  await page.getByLabel('필수 자격 선정을 완료합니다').check();
   await page.getByRole('checkbox', { name: /평가 흐름 체험 · v1/ }).check();
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
   await expect(page.getByRole('dialog')).toContainText('구성원 1명');
@@ -78,9 +76,12 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   expect(request.organizationId).toBe(deep.id);
   expect(request.targets).toHaveLength(1);
   await actor(page, 'learner-2');
-  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toContainText(
-    'Photo 공정 검증 상세 조직',
-  );
+  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
+  await page.goto('/plans');
+  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
+  await expect(
+    page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
+  ).toHaveText('[필수] 평가 흐름 체험 · v1');
   await completePlan(page, '평가 흐름 체험', false);
   const a = backend.store.snapshot().assignments.find((a) => a.learnerId === 'learner-2')!;
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
@@ -113,19 +114,22 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   expect(
     backend.store.snapshot().certifications.filter((c) => c.assignmentId === a.id),
   ).toHaveLength(1);
-  await page.goto('/');
-  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toContainText('필수 충족');
+  await page.goto('/plans');
+  await expect(page.getByRole('region', { name: '이번 요청의 계획 현황' })).toContainText(
+    '유효 인증',
+  );
+  await expect(
+    page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
+  ).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test('소속 정책 미설정 안내·초안의 기준 변경 경고·입력 보존·삭제 경로', async ({
-  page,
-  backend,
-}) => {
+test('요청 대기·초안의 기준 변경 경고·입력 보존·삭제 경로', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'learner-2');
-  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toContainText('미설정');
   await page.goto('/plans');
+  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
+  await expect(page.getByLabel('취득할 자격')).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: '계획 수립 요청을 기다리고 있습니다.', exact: true }),
   ).toBeVisible();
@@ -149,7 +153,7 @@ test('소속 정책 미설정 안내·초안의 기준 변경 경고·입력 보
     },
   );
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('alert')).toContainText('현재 소속 조직의 필수 자격이 아닙니다');
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByLabel('목표 인증일', { exact: true })).toHaveValue('2027-01-31');
   await page.goto('/plans');
   await page.getByRole('button', { name: '평가 흐름 체험 계획 삭제', exact: true }).click();

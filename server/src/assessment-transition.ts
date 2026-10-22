@@ -4,7 +4,7 @@ import {
   type State,
   CourseSchema,
 } from "@eks/contracts";
-import { validateState } from "./integrity.ts";
+import { validateLegacyState as validateState } from "./integrity.ts";
 import { photoCourseSpecs } from "./photo-certification-fixture.ts";
 
 export const ASSESSMENT_TRANSITION = "self-assessment-v6";

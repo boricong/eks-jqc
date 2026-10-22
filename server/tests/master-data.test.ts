@@ -119,6 +119,7 @@ test("기준 파일은 설정·모든 버전·자료·정답만 왕복하며 내
   assert.deepEqual(Object.keys(file.payload).sort(), [
     "courses",
     "organizations",
+    "qualificationTemplates",
     "qualifications",
     "users",
   ]);
@@ -506,7 +507,13 @@ test("파일 불러오기 후 새 요청·계획·두 자동 평가·수료·인
   );
   const plan = await f.call(
     "/plans",
-    { requestId: req.ids[0], qualificationId: "demo-qualification" },
+    {
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((r) => r.id === req.ids[0])!.revision,
+      requestId: req.ids[0],
+      qualificationId: "demo-qualification",
+    },
     "learner-1",
   );
   const draft = f.store.snapshot().plans.find((p) => p.id === plan.id)!;

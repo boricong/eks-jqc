@@ -8,7 +8,7 @@ for (const failure of ['response', 'refresh'] as const) {
   }) => {
     await page.goto('/');
     await actor(page, 'learner-1');
-    await page.getByRole('link', { name: '이어서 진행' }).click();
+    await page.getByRole('link', { name: '상세정보 보기' }).click();
     await page.getByRole('button', { name: /02 기록 작성/ }).click();
     await page.getByRole('link', { name: '평가하기', exact: true }).click();
     await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
@@ -61,7 +61,7 @@ for (const failure of ['response', 'refresh'] as const) {
 test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'learner-1');
-  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
@@ -89,7 +89,7 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await page.reload();
   await expect(page.getByRole('heading', { name: '접속 계정 선택', exact: true })).toBeVisible();
   await actor(page, 'learner-1');
-  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
   await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
@@ -101,7 +101,7 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
 test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'learner-1');
-  await page.getByRole('link', { name: '이어서 진행' }).click();
+  await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
   await page.getByRole('link', { name: '평가하기', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
