@@ -34,10 +34,14 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await actor(page, 'learner-2');
   await expect(page.getByRole('link', { name: '조직별 자격 설정', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/policies/);
+  await expect(page).toHaveURL(/\/admin\/dashboard/);
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
-    2,
+    3,
   );
+  await page
+    .getByRole('navigation', { name: '관리 메뉴' })
+    .getByRole('link', { name: '조직별 자격 설정', exact: true })
+    .click();
   await expect(page.getByRole('treeitem')).toHaveCount(1);
   await expect(page.locator('.policy-pool-management')).toHaveCount(0);
   await expect(admins.getByRole('checkbox')).toHaveCount(0);

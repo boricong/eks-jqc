@@ -276,4 +276,31 @@ npm run data:migrate-planning -- --apply --expected-revision=N --expected-sha256
 - `DELETE /api/plans/:id`는 기존 계획 revision을 받고, 비필수 초안 삭제와 그 초안을 공유하는 미완료 요청의 선택 제외·revision·감사를 함께 저장합니다. 필수 대상·확정 계획·완료 요청 근거는 변경하지 않습니다.
 - `PUT /api/planning-requests/:id/selection`(`revision`, `entityIds`)은 이전 클라이언트 호환 및 계획 없이 선택만 남은 비필수 항목의 `요청에서 제외`에 사용합니다. 새 계획 시작 화면은 이 API를 호출하지 않습니다.
 
+## 인증 현황 대시보드
+
+`인증 업무 관리 → 인증 현황`(`/admin/dashboard`)에서 현재 현황을 요약·조직별·자격별·구성원별·만료/재인증으로 조회합니다. 팀 관리자는 자기 Lv1, 세부조직 관리자는 실제 소속 조직의 직접 소속 인원만 조회합니다. 운영자는 Lv1을 선택합니다. 읽기 전용이며 기존 결과·인증 관리 링크는 해당 권한이 있는 사용자에게만 제공합니다.
+
+- 기본 대상은 활성 소속의 학습자 중 대상자 Hold를 제외한 인원입니다. 제외 인원도 별도 목록으로 조회할 수 있고 보유 인증의 효력·만료는 유지됩니다.
+- 현재 팀 적용 자격과 조회 대상 구성원의 진행·보유 기록이 남은 자격을 포함합니다. 자격 계보별로 묶으며 적용 해제된 과거 기록도 보존합니다.
+- 필수 충족률은 현재 조직의 사람×필수 자격 중 Active 인증으로 충족한 비율입니다. 필수0은 `—`이며 요청 당시 필수·계획 요청 완료와 별개입니다. 이전 버전의 유효 인증도 같은 계보의 필수 충족으로 인정합니다.
+- 구성원 행의 필수 충족과 `필수 전부 충족 인원`은 그 사람의 현재 필수 전체를 확인합니다. 자격·효력 필터로 미충족 자격을 숨겨도 전부 충족으로 바뀌지 않습니다. 조건별 사람×자격 지표의 명세는 해당 조건과 분모를 그대로 사용합니다.
+- 계획 확정·자격 취득·현재 효력·재인증 진행은 별개입니다. 여러 요청에서 공유하는 초안은 진행 한 건이며 인증 발급된 배정을 취득 진행으로 중복 집계하지 않습니다.
+- 날짜는 Asia/Seoul 기준입니다. 만료일 당일은 유효하고 다음 날부터 만료입니다. 0~30/31~60/61~90일 조회는 기존 재인증 가능 기간을 바꾸지 않습니다.
+- 만료 구간의 `기간 만료`(`expired`)와 `수동 폐기`(`revoked`)는 구분합니다. 개인 인증 Hold는 만료 예정에 포함하고 무기한·기간 미정·Revoke는 예정 구간에서 제외합니다.
+
+조회 API는 기존 탭별 세션과 데이터 세대 검사를 사용하고 모든 응답을 `Cache-Control: no-store`로 제공합니다. 정답·답안·문항별 득점·개인 목표·상세 사유 원문은 전용 응답에 포함하지 않습니다.
+
+| GET 경로 | 응답 |
+| --- | --- |
+| `/api/dashboard/options` | 허용 조직·자격 선택지 |
+| `/api/dashboard` | `view=summary/organizations/qualifications/members/matrix/renewals`, 요약과 현재 페이지 |
+| `/api/dashboard/details` | `metric`에 해당하는 사람·사람×자격·요청·인증·인증Set 단위 명세 |
+| `/api/dashboard/members/:userId` | 현재 구성원의 자격 효력·진행·일정·수료/평가 통과 요약과 과거 근거 |
+
+공통 쿼리는 `lv1OrganizationId`, `organizationId`, `includeDescendants`, `population=eligible/excluded/all`이며 탭에 따라 `search`, `entityId`, `required`, `efficacy`, `progress`, `qualificationScope`, `expiryBucket`, `renewalState`, 정렬·페이지 조건을 사용합니다. 일반 목록은 `pageSize=25/50/100`, 매트릭스는 행 페이지와 `columnPage`(10열)를 사용합니다. 정확한 허용값과 반환 필드는 `shared/src/dashboard.ts`를 따릅니다.
+
+`snapshot`에는 `asOf`, KST `date`, 업무·조직 revision, 실제 조회 범위와 제외 수가 포함됩니다. 상세 요청에 `expectedStateRevision`, `expectedOrganizationRevision`, `expectedDate`를 전달하고 기준이 바뀌었으면 `409 DASHBOARD_STALE`로 다시 조회합니다. 권한 검사는 기준 시점 검사보다 먼저 수행합니다. 한 조회의 업무·조직 데이터를 직렬 대기열에서 함께 읽으며 GET은 파일·감사·만료 상태를 변경하지 않습니다.
+
+새 영속 데이터와 스키마 이관은 없습니다. 과거 충족률 추이·기간별 발급 실적·Excel 출력·예약 발송은 포함하지 않습니다. 실제 업무 데이터로 시험하지 말고 기존 임시 JSON 시험 구성을 사용합니다.
+
 업무13의 기존 선택/완료 구조를 사용하므로 이번 변경에는 데이터 이관이나 초기화가 필요하지 않습니다.

@@ -13,6 +13,7 @@ const paths: Record<string, string> = {
   award: 'M16 15 18 22l-6-3-6 3 2-7M19 9a7 7 0 1 1-14 0 7 7 0 0 1 14 0',
   home: 'm3 10 9-8 9 8v11h-6v-7H9v7H3Z',
   list: 'M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1',
+  chart: 'M4 3v18h17M8 17v-5m5 5V7m5 10v-8',
   settings:
     'M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2M16 8l2-2M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0',
   users:

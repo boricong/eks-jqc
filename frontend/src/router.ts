@@ -70,10 +70,16 @@ export const router = createRouter({
       meta: { management: true },
       children: [
         {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: () => import('./views/DashboardView.vue'),
+          meta: { management: true, managementSection: 'dashboard', title: '인증 현황' },
+        },
+        {
           path: 'catalog',
           name: 'catalog',
           component: () => import('./views/CatalogView.vue'),
-          meta: { management: true },
+          meta: { management: true, managementSection: 'catalog' },
         },
         {
           path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|comparisons|notices)/:id?',
@@ -106,10 +112,10 @@ router.beforeEach(async (to) => {
     to.meta.management &&
     store.canEnterManagement &&
     (to.path === '/admin' ||
-      !store.canManageSection(to.name === 'catalog' ? 'catalog' : String(to.params.section)))
+      !store.canManageSection(String(to.meta.managementSection || to.params.section)))
   )
     return {
-      path: store.fullManagement ? '/admin/qualifications' : '/admin/policies',
+      path: '/admin/dashboard',
       query: to.query,
     };
   const managed =
@@ -159,7 +165,7 @@ router.beforeResolve(async (to) => {
       await store.refresh();
       if (
         (to.meta.management &&
-          !store.canManageSection(to.name === 'catalog' ? 'catalog' : String(to.params.section))) ||
+          !store.canManageSection(String(to.meta.managementSection || to.params.section))) ||
         (to.meta.role && !store.hasRole(to.meta.role as Role))
       )
         return '/';

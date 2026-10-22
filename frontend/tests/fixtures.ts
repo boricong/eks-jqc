@@ -6,25 +6,35 @@ import { JsonStore } from '../../server/src/storage';
 import { seedState } from '../../server/src/seed';
 import { buildApp } from '../../server/src/app';
 
-export const test = base.extend<{ backend: { store: JsonStore; restart: () => Promise<void> } }>({
+export const test = base.extend<{
+  backend: { store: JsonStore; restart: () => Promise<void>; setClock: (now?: string) => void };
+}>({
   backend: [
     async ({}, use) => {
       const dir = await mkdtemp(path.join(os.tmpdir(), 'eks-browser-')),
         file = path.join(dir, 'runtime', 'state.json'),
         seed = seedState(true);
       await new JsonStore(file).initialize(seed);
+      let fixedNow: string | undefined;
+      const options = {
+        origins: ['http://127.0.0.1:5286'],
+        clock: () => fixedNow || new Date().toISOString(),
+      };
       let store = await new JsonStore(file).load(),
-        app = await buildApp(store, { origins: ['http://127.0.0.1:5286'] });
+        app = await buildApp(store, options);
       await app.listen({ host: '127.0.0.1', port: 5287 });
       try {
         await use({
           get store() {
             return store;
           },
+          setClock: (now) => {
+            fixedNow = now;
+          },
           restart: async () => {
             await app.close();
             store = await new JsonStore(file).load();
-            app = await buildApp(store, { origins: ['http://127.0.0.1:5286'] });
+            app = await buildApp(store, options);
             await app.listen({ host: '127.0.0.1', port: 5287 });
           },
         });

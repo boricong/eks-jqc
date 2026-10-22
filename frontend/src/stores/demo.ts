@@ -83,7 +83,7 @@ export const useDemo = defineStore('workspace', () => {
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
     fullManagement.value ||
-    (['policies', 'targets'].includes(section) && hasRole('organization_admin'));
+    (['dashboard', 'policies', 'targets'].includes(section) && hasRole('organization_admin'));
   const managementAccess = computed(
     () =>
       canEnterManagement.value &&

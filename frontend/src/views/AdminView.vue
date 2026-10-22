@@ -220,23 +220,27 @@ const selectableCourses = computed(() => {
         a.title.localeCompare(b.title, 'ko'),
     );
 });
+const resultAssignmentId = computed(() =>
+  section.value === 'results' ? String(route.params.id || route.query.assignmentId || '') : '',
+);
 const assignments = computed(() =>
-  organizationData.value.assignments.filter(
-    (a) =>
-      matches(
-        store.qualification(a.qualificationId, a.qualificationMetadata).title +
-          ' ' +
-          store.username(a.learnerId),
-      ) &&
-      (filter.value === 'all' ||
-        (filter.value === 'excluded' && !!a.excludedReason) ||
-        (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
-        (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt) ||
-        (!a.excludedReason &&
-          a.certification &&
-          (filter.value === 'valid'
-            ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
-            : filter.value === certificationStatus(a.certification)))),
+  organizationData.value.assignments.filter((a) =>
+    resultAssignmentId.value
+      ? a.id === resultAssignmentId.value
+      : matches(
+          store.qualification(a.qualificationId, a.qualificationMetadata).title +
+            ' ' +
+            store.username(a.learnerId),
+        ) &&
+        (filter.value === 'all' ||
+          (filter.value === 'excluded' && !!a.excludedReason) ||
+          (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
+          (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt) ||
+          (!a.excludedReason &&
+            a.certification &&
+            (filter.value === 'valid'
+              ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
+              : filter.value === certificationStatus(a.certification)))),
   ),
 );
 const notices = computed(() => organizationData.value.notices.filter((n) => matches(n.title)));
@@ -827,7 +831,10 @@ onBeforeRouteUpdate(canLeave);
           </div>
         </section>
         <div
-          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
+          v-if="
+            !resultAssignmentId &&
+            !['comparisons', 'policies', 'targets', 'credentials'].includes(section)
+          "
           class="list-toolbar"
         >
           <div class="filter-controls">
@@ -1027,7 +1034,18 @@ onBeforeRouteUpdate(canLeave);
           <p v-if="!assignments.length" class="empty-state">검색 결과가 없습니다.</p>
         </div>
         <div v-else-if="section === 'results'" class="results-list">
-          <details v-for="a in assignments" :key="a.id" class="panel result-details">
+          <RouterLink
+            v-if="resultAssignmentId"
+            class="text-link"
+            :to="store.managementLink('/admin/results')"
+            >전체 결과 목록</RouterLink
+          >
+          <details
+            v-for="a in assignments"
+            :key="a.id"
+            class="panel result-details"
+            :open="!!resultAssignmentId"
+          >
             <summary>
               <span
                 ><strong>{{ store.username(a.learnerId) }}</strong

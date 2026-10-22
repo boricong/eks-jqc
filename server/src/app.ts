@@ -36,6 +36,7 @@ import { courseUsage } from "./course-lifecycle.ts";
 import { saveTemplate } from "./qualification-templates.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
 import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
+import { registerDashboardRoutes } from "./dashboard-routes.ts";
 import {
   policiesView,
   changePolicy,
@@ -380,6 +381,7 @@ export async function buildApp(
   registerMasterDataRoutes(app, store, actor, clock, () => sessions.clear());
   registerCatalogRoutes(app, store, actor);
   registerLifecycleRoutes(app, store, actor, clock);
+  registerDashboardRoutes(app, store, actor, clock);
   const mutation = (
     method: "POST" | "PUT" | "DELETE",
     url: string,

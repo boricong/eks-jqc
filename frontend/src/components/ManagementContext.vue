@@ -8,10 +8,7 @@ async function change(event: Event) {
   const select = event.target as HTMLSelectElement;
   const target = select.value;
   await router.push({
-    path:
-      route.name === 'catalog'
-        ? '/admin/catalog'
-        : `/admin/${String(route.params.section || 'qualifications')}`,
+    path: `/admin/${String(route.meta.managementSection || route.params.section || 'dashboard')}`,
     query: { lv1OrganizationId: target },
   });
   select.value = store.managementLv1;
@@ -45,7 +42,9 @@ async function change(event: Event) {
           : store.hasRole('admin')
             ? '팀 조직 관리자'
             : store.hasRole('organization_admin')
-              ? '세부 조직 관리자 · 실제 소속 조직만 설정'
+              ? route.name === 'dashboard'
+                ? '세부 조직 관리자 · 실제 소속 조직의 직접 소속 인원만 조회'
+                : '세부 조직 관리자 · 실제 소속 조직만 설정'
               : '관리 권한이 변경되었습니다'
       }}
       <span v-if="store.managementOrganization && !store.managementOrganization.effectiveActive">

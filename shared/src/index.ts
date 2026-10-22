@@ -612,3 +612,4 @@ export function assessmentPassScore(course: Course, kind: Kind) {
 }
 
 export * from "./master-data.ts";
+export * from "./dashboard.ts";

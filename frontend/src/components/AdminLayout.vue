@@ -8,6 +8,7 @@ const store = useDemo(),
   route = useRoute(),
   menuOpen = ref(false);
 const sections = [
+  { id: 'dashboard', name: '인증 현황', icon: 'chart' },
   { id: 'catalog', name: '기준 일괄 관리', icon: 'file' },
   { id: 'credentials', name: '개인 자격 관리', icon: 'award' },
   { id: 'targets', name: '인증 대상자 관리', icon: 'users' },
@@ -19,9 +20,7 @@ const sections = [
   { id: 'comparisons', name: '기준 검증', icon: 'check' },
   { id: 'notices', name: '팀 공지 관리', icon: 'notice' },
 ];
-const section = computed(() =>
-  route.name === 'catalog' ? 'catalog' : String(route.params.section),
-);
+const section = computed(() => String(route.meta.managementSection || route.params.section));
 const current = computed(
   () => sections.find((s) => s.id === section.value)?.name || '인증 업무 관리',
 );
