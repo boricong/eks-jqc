@@ -4,9 +4,11 @@
 
 전체 구현 범위, 사용자 결정, 실행 환경, 변경 이력과 기록 형식은 [루트 인수인계](../handover.md)를 따른다. 과거 이력은 원본에 보존하고, 이 문서는 현재 작업의 요약과 진입점을 제공한다.
 
-## 진행 — 누적 변경 커밋·푸시와 개발 서버 실행
+## 완료 — 누적 변경 커밋·푸시와 개발 서버 실행
 
-2026-10-25 사용자 요청으로 현재 작업 폴더의 누적 변경 전체를 main에 커밋/푸시한다. 착수 원격 fetch 결과 HEAD/origin/main은8a9b707로 일치하며 변경65파일(신규9개 포함), 실행 데이터/환경 파일은 Git 제외 상태다. 직전 전체 서버192/192·Playwright218/218과 이번 TypeScript/Vite 재빌드·diff 검사를 확인했다. 서버5186/5187은 종료 상태이며 기존 PID37731의 저장소 잠금이 남아 있다. 프로세스 종료를 검사하는 정식 data:unlock 후 기존 local-20261022의 업무/조직 JSON 경로를 모두 지정해 Node24로 실행하고 health/화면·데이터 해시를 확인한다. 근거는 `/private/tmp/eks-release-20261025-*`에 보관하며 완료 후 실제 커밋/푸시/서버 결과를 갱신한다.
+2026-10-25 사용자 요청으로 현재 작업 폴더의 누적 변경65파일(신규9개 포함)을 `28619af`(`feat: improve learner workflows and qualification version policies`)로 커밋해 origin/main에 푸시했다. 착수 HEAD/origin/main은8a9b707로 일치했고 푸시 후28619af 일치를 확인했다. 실행 데이터/환경 파일은 Git 제외 상태다. 직전 전체 서버192/192·Playwright218/218과 이번 TypeScript/Vite 재빌드·diff 검사를 확인했다. 이번에는 소스 변경 없이 커밋/푸시·실행만 수행했다.
+
+종료 상태의5186/5187과 기존 PID37731 잠금을 확인하고, 프로세스 종료 여부를 검사하는 정식 data:unlock 명령으로 두 잠금을 해제했다. 기존 local-20261022/state.json·organizations.json 경로를 모두 지정해 Node24로 개발 서버를 백그라운드 실행했다(부모94582/API94583/Vite94584). 화면 `http://127.0.0.1:5186/`은200, API5187 health는ok/revision67이다. 실행 전후 업무·조직·maintenance JSON 해시는 모두 동일하다. 초기화/이관/업무 변경은 없으며 서버 세션은 새로 시작되어 계정 재선택이 필요할 수 있다. 근거는 `/private/tmp/eks-release-20261025-{before.diff,before-status,build.log,server.log,server.pid,runtime-before.json,runtime-verified.json,index.html}`이다. 이 완료 기록은 별도 문서 커밋으로 함께 푸시한다.
 
 ## 완료 — 팀 자격 저장 선택과 완료 계획 기준 보존
 
