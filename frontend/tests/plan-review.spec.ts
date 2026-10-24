@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import type { JsonStore } from '../../server/src/storage';
 import { test, expect, actor, answerConfirmation } from './fixtures';
-import { requestPlan } from './workflow-helpers';
+import { requestPlan, savePlanViaApi } from './workflow-helpers';
 import { linkFixtureTemplates } from '../../server/tests/template-helpers';
 
 const longTitle = '설비 상태와 공정 조건을 점검하고 독립적으로 수행하는 자격 '.repeat(4);
@@ -246,7 +246,7 @@ for (const failure of ['response', 'refresh'] as const) {
   });
 }
 
-test('확정 계획 조회·정확한 버전·변경 사유 저장과 누락/운영 제한 보존', async ({
+test('확정 계획 읽기 전용·정확한 버전·서버 변경 재조회와 누락/운영 제한 보존', async ({
   page,
   backend,
 }) => {
@@ -287,21 +287,18 @@ test('확정 계획 조회·정확한 버전·변경 사유 저장과 누락/운
   expect(
     await page
       .locator('.plan-review-request')
-      .evaluate((el) => Boolean(el.previousElementSibling?.querySelector('input'))),
+      .evaluate((el) => Boolean(el.previousElementSibling?.classList.contains('plan-review'))),
   ).toBe(true);
   await expect(course(page).locator('.plan-review-course-meta')).toContainText('v1');
   await expect(page.getByText('노출되면 안 되는 새 버전')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '학습으로 이동', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '목표 인증일 수정', exact: true }).click();
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2030-01-01');
-  await expect(
-    page.getByRole('button', { name: '일정·목표 변경 저장', exact: true }),
-  ).toBeDisabled();
-  await page.getByLabel('계획 변경 사유').fill('현장 일정 조정');
-  await page.getByRole('button', { name: '일정·목표 변경 저장', exact: true }).click();
+  await expect(page.locator('[data-plan-field]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '목표 인증일 수정', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);
+  await savePlanViaApi(page, plan.id, { targetOn: '2030-01-01' }, '현장 일정 조정');
+  await refresh(page);
   await expect(page.locator('.save-status')).toHaveText('계획 완료');
-  await review(page);
   await expect(page.locator('.plan-review-target')).toContainText('2030.01.01');
   expect(backend.store.snapshot().assignments.find((a) => a.id === assignment.id)).toEqual(
     assignment,

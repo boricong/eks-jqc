@@ -7,6 +7,11 @@ import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import CredentialLifecycle from '../components/CredentialLifecycle.vue';
 import { kindLabels } from '@eks/contracts';
+import {
+  isOwnedRecordContext,
+  ownedQualificationsLocation,
+  documentContextQuery,
+} from '../learner-navigation';
 const store = useDemo(),
   route = useRoute();
 const a = computed(() => {
@@ -17,13 +22,15 @@ const a = computed(() => {
     : undefined;
 });
 const back = computed(() =>
-  store.canEnterManagement && route.query.lv1OrganizationId
-    ? store.managementLink('/admin/results')
-    : store.hasRole('system_operator')
-      ? '/system/overview'
-      : store.hasRole('admin')
-        ? '/admin/results'
-        : '/qualifications?filter=certified',
+  isOwnedRecordContext(route, a.value, store.actor)
+    ? ownedQualificationsLocation
+    : store.canEnterManagement && route.query.lv1OrganizationId
+      ? store.managementLink('/admin/results')
+      : store.hasRole('system_operator')
+        ? '/system/overview'
+        : store.hasRole('admin')
+          ? '/admin/results'
+          : '/qualifications?filter=certified',
 );
 </script>
 <template>
@@ -130,9 +137,7 @@ const back = computed(() =>
           class="text-link"
           :to="{
             path: `/completions/${e.completion.id}`,
-            query: route.query.lv1OrganizationId
-              ? { lv1OrganizationId: route.query.lv1OrganizationId }
-              : {},
+            query: documentContextQuery(route, a, store.actor),
           }"
           >인증Set 수료증 보기 →</RouterLink
         >

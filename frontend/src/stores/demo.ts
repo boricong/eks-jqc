@@ -8,6 +8,9 @@ import {
   courseUseErrors as courseErrors,
   qualificationReadinessErrors as checkQualification,
   retiredCourses,
+  qualificationForRecord,
+  type QualificationPolicySnapshot,
+  type QualificationVersionMode,
   type Assignment,
   type Course,
   type Qualification,
@@ -216,6 +219,11 @@ export const useDemo = defineStore('workspace', () => {
     ...data.value.qualifications.find((q) => q.id === id)!,
     ...snapshot,
   });
+  const qualificationFor = (record: {
+    qualificationId: string;
+    qualificationMetadata?: Partial<Qualification>;
+    qualificationPolicySnapshot?: QualificationPolicySnapshot;
+  }) => qualificationForRecord(qualification(record.qualificationId), record);
   const course = (id: string) => data.value.courses.find((c) => c.id === id)!;
   const assignment = (id: string) => data.value.assignments.find((a) => a.id === id);
   const enrollmentFor = (aid: string, cid: string) =>
@@ -300,7 +308,11 @@ export const useDemo = defineStore('workspace', () => {
   async function saveCatalog(
     section: string,
     item: Course | Qualification,
-    review: { stateRevision: number; organizationRevision: number },
+    review: {
+      stateRevision: number;
+      organizationRevision: number;
+      versionMode?: QualificationVersionMode;
+    },
   ) {
     const result = await command(`/${section}/${item.id}`, { ...item, ...review }, 'PUT');
     notify(
@@ -363,6 +375,7 @@ export const useDemo = defineStore('workspace', () => {
     toast,
     notify,
     qualification,
+    qualificationFor,
     course,
     assignment,
     enrollmentFor,

@@ -431,3 +431,200 @@ test("보존 삭제 후 확정 배정은 원래 평가로 수료·인증하며 �
   await registerFixtureQualification(f.store);
   assert.deepEqual(f.store.snapshot().certifications, legacyAwards);
 });
+
+test("팀 자격 마이너 선택·기본 호환·순서 무변경과 완료 배정의 저장 전 기준 고정", async (t) => {
+  const f = await fixture(t),
+    before = f.store.snapshot();
+  const q = before.qualifications.find((q) => q.id === "demo-qualification")!;
+  const current = { ...q, versionMode: "current", renewalLeadMonths: 4 };
+  const preview = await f.call(`/qualifications/${q.id}/save-preview`, current);
+  assert.equal(preview.versionPolicy.changeKind, "minor");
+  assert.equal(preview.newVersion, false);
+  assert.deepEqual(f.store.snapshot(), before);
+  const key = randomUUID();
+  const body = {
+    ...current,
+    stateRevision: preview.stateRevision,
+    organizationRevision: preview.organizationRevision,
+  };
+  const originalFile = await readFile(f.file, "utf8");
+  f.store.beforeReplace = () => {
+    throw new Error("snapshot save failure");
+  };
+  await f.call(`/qualifications/${q.id}`, body, "PUT", 503, "admin-1", key);
+  assert.deepEqual(f.store.snapshot(), before);
+  assert.equal(await readFile(f.file, "utf8"), originalFile);
+  f.store.beforeReplace = undefined;
+  const saved = await f.call(
+    `/qualifications/${q.id}`,
+    body,
+    "PUT",
+    200,
+    "admin-1",
+    key,
+  );
+  assert.equal(saved.id, q.id);
+  assert.equal(saved.version, q.version);
+  assert.equal(saved.revision, q.revision + 1);
+  assert.deepEqual(
+    await f.call(`/qualifications/${q.id}`, body, "PUT", 200, "admin-1", key),
+    saved,
+  );
+  const after = f.store.snapshot();
+  assert.deepEqual(after.courses, before.courses);
+  for (const a of after.assignments.filter((a) => a.qualificationId === q.id)) {
+    assert.deepEqual(a.qualificationPolicySnapshot?.validity, q.validity);
+    assert.equal(
+      a.qualificationPolicySnapshot?.renewalLeadMonths,
+      q.renewalLeadMonths ?? 3,
+    );
+    const { qualificationPolicySnapshot: _, ...rest } = a;
+    assert.deepEqual(
+      rest,
+      before.assignments.find((v) => v.id === a.id),
+    );
+  }
+  const latest = after.qualifications.find((v) => v.id === q.id)!;
+  const noChange = await f.call(
+    `/qualifications/${q.id}`,
+    {
+      ...latest,
+      courseIds: [...latest.courseIds].reverse(),
+      versionMode: "new",
+    },
+    "PUT",
+  );
+  assert.equal(noChange.unchanged, true);
+  assert.equal(noChange.version, latest.version);
+  assert.equal(noChange.revision, latest.revision);
+  assert.deepEqual(
+    f.store.snapshot().qualifications.find((v) => v.id === q.id)?.courseIds,
+    latest.courseIds,
+  );
+});
+
+test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 참조 없이도 강제한다", async (t) => {
+  const f = await fixture(t);
+  const original = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === "demo-qualification")!;
+  for (const version of [2, 3]) {
+    const result = await f.call(
+      `/qualifications/${original.id}`,
+      { ...original, renewalLeadMonths: version + 3, versionMode: "new" },
+      "PUT",
+    );
+    assert.equal(result.version, version);
+    assert.notEqual(result.id, original.id);
+  }
+  assert.deepEqual(
+    f.store.snapshot().qualifications.find((q) => q.id === original.id),
+    original,
+  );
+  const registered = await registerFixtureQualification(f.store);
+  const q = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === registered.id)!;
+  const body = { ...q, courseIds: ["demo-course-1"] };
+  const before = f.store.snapshot();
+  const preview = await f.call(`/qualifications/${q.id}/save-preview`, {
+    ...body,
+    versionMode: "current",
+  });
+  assert.equal(preview.versionPolicy.requiresNewVersion, true);
+  assert.equal(preview.versionPolicy.effectiveMode, "new");
+  assert.deepEqual(f.store.snapshot(), before);
+  const denied = await f.call(
+    `/qualifications/${q.id}`,
+    { ...body, versionMode: "current" },
+    "PUT",
+    409,
+  );
+  assert.equal(denied.code, "QUALIFICATION_NEW_VERSION_REQUIRED");
+  assert.deepEqual(f.store.snapshot(), before);
+  const saved = await f.call(`/qualifications/${q.id}`, body, "PUT");
+  assert.equal(saved.version, 2);
+  assert.equal(saved.newVersion, true);
+  assert.equal(
+    f.store.snapshot().qualifications.find((v) => v.id === q.id)?.courseIds
+      .length,
+    0,
+  );
+});
+
+test("인증Set 삭제·버전 교체는 메이저, 검토 충돌·보존 불가는 원자적 차단", async (t) => {
+  const f = await fixture(t),
+    initial = f.store.snapshot();
+  const q = initial.qualifications.find((q) => q.id === "demo-qualification")!;
+  const remove = await f.call(`/qualifications/${q.id}/save-preview`, {
+    ...q,
+    courseIds: q.courseIds.slice(1),
+    versionMode: "current",
+  });
+  assert.equal(remove.versionPolicy.changeKind, "major");
+  await f.store.transact(
+    "admin-1",
+    randomUUID(),
+    "new-course-version",
+    () => {},
+    (s) => {
+      const c = s.courses.find((c) => c.id === q.courseIds[0])!;
+      s.courses.push({
+        ...structuredClone(c),
+        id: "replacement-v2",
+        parentId: c.id,
+        version: 2,
+      });
+      return {};
+    },
+  );
+  const replacement = await f.call(`/qualifications/${q.id}/save-preview`, {
+    ...q,
+    courseIds: ["replacement-v2", ...q.courseIds.slice(1)],
+    versionMode: "current",
+  });
+  assert.equal(replacement.versionPolicy.requiresNewVersion, true);
+  assert.ok(
+    replacement.changes
+      .find((v: any) => v.label === "인증Set 연결")
+      .after.includes("v2"),
+  );
+  const before = f.store.snapshot();
+  const stale = await f.call(
+    `/qualifications/${q.id}`,
+    {
+      ...q,
+      renewalLeadMonths: 4,
+      versionMode: "current",
+      stateRevision: initial.revision,
+      organizationRevision: f.store.organizations.snapshot().revision,
+    },
+    "PUT",
+    409,
+  );
+  assert.equal(stale.code, "REVISION_CONFLICT");
+  const { saveCatalogItem } = await import("../src/catalog-editing.ts");
+  await assert.rejects(
+    f.store.transact(
+      "admin-1",
+      randomUUID(),
+      "broken-reference",
+      () => {},
+      (s) => {
+        s.enrollments = s.enrollments.filter(
+          (e) => e.courseId !== q.courseIds[0],
+        );
+        return saveCatalogItem(
+          s,
+          f.store.organizations.snapshot(),
+          "qualifications",
+          q.id,
+          { ...q, versionMode: "current", renewalLeadMonths: 4 },
+          "org-photo",
+        );
+      },
+    ),
+    /안전하게 보존/,
+  );
+  assert.deepEqual(f.store.snapshot(), before);
+});

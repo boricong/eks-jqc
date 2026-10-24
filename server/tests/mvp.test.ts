@@ -62,7 +62,7 @@ async function secondOrganization(f: Fixture) {
     "Etch 직무 검증",
     "org-etch",
   );
-  await f.call(
+  const configured = await f.call(
     "admin-2",
     `/qualifications/${qualification.id}`,
     {
@@ -77,7 +77,7 @@ async function secondOrganization(f: Fixture) {
     "PUT",
   );
   const assignment = await planAssignment(f, "admin-2", {
-    qualificationId: qualification.id,
+    qualificationId: configured.id,
     learnerId: learner,
     ftId: ft,
   });
@@ -682,11 +682,11 @@ async function lifecycle(
 
 test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 재시도·최신 권한", async (t) => {
   const f = await fixture(t);
-  const draft = await f.call("admin-1", "/courses", {});
+  let draft = await f.call("admin-1", "/courses", {});
   const usage = await f.call("admin-1", `/courses/${draft.id}/usage`);
   assert.equal(usage.canDelete, true);
   const q = await registerFixtureQualification(f.store, "초안 연결");
-  await f.call(
+  const linkedQualification = await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
     { title: "초안 연결", revision: 1, courseIds: [draft.id] },
@@ -704,7 +704,7 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
   );
   const linked = await f.call("admin-1", `/courses/${draft.id}/usage`);
   assert.equal(linked.canDelete, false);
-  assert.equal(linked.qualifications[0].id, q.id);
+  assert.equal(linked.qualifications[0].id, linkedQualification.id);
   await f.call(
     "admin-1",
     `/courses/${draft.id}`,
@@ -713,14 +713,8 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
     randomUUID(),
     "DELETE",
   );
-  await f.call(
-    "admin-1",
-    `/qualifications/${q.id}`,
-    { revision: 2, courseIds: [] },
-    200,
-    randomUUID(),
-    "PUT",
-  );
+  // Historical versions retain course references; test removal on a separate unused draft.
+  draft = await f.call("admin-1", "/courses", {});
   const fresh = await f.call("admin-1", `/courses/${draft.id}/usage`);
   const command = { ...fresh, reason: "미사용 초안 정리" },
     key = randomUUID();
@@ -858,7 +852,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   );
   q = f.store.snapshot().qualifications.find((q) => q.id === nextQ.id)!;
   await f.call("admin-1", `/qualifications/${q.id}`, q, 200, undefined, "PUT");
-  await f.call(
+  const revisedQualification = await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
     {
@@ -869,6 +863,9 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     undefined,
     "PUT",
   );
+  q = f.store
+    .snapshot()
+    .qualifications.find((item) => item.id === revisedQualification.id)!;
   await planAssignment(f, "admin-1", {
     qualificationId: q.id,
     learnerId: "dual",

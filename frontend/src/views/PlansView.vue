@@ -22,8 +22,7 @@ const store = useDemo(),
   busy = ref(false),
   error = ref(''),
   step = ref(1),
-  fieldErrors = ref<Record<string, string>>({}),
-  reason = ref('');
+  fieldErrors = ref<Record<string, string>>({});
 const initializing = ref(false),
   deleting = ref<PersonalPlan | null>(null),
   deleteDialog = ref<HTMLDialogElement | null>(null),
@@ -42,9 +41,7 @@ const requestId = computed(() =>
 const request = computed(() => requests.value.find((r) => r.id === requestId.value));
 const current = computed(() => plans.value.find((p) => p.id === route.params.id));
 const reviewQualification = computed(() =>
-  current.value
-    ? store.qualification(current.value.qualificationId, current.value.qualificationMetadata)
-    : undefined,
+  current.value ? store.qualificationFor(current.value) : undefined,
 );
 const planRequest = computed(() => requests.value.find((r) => r.id === current.value?.requestId));
 const reviewOpen = ref<Record<string, boolean>>({});
@@ -96,18 +93,16 @@ watch(
   { immediate: true },
 );
 type Fields = Pick<PersonalPlan, 'targetOn' | 'schedules'>;
-const draft = useSavedDraft<Fields>((value, revision) =>
-  store.command(
-    `/plans/${activePlanId.value}`,
-    {
-      ...value,
-      revision,
-      ...(current.value?.status === 'completed' ? { reason: reason.value } : {}),
-    },
-    'PUT',
-  ),
+const draft = useSavedDraft<Fields>(async (value, revision) => {
+  if (current.value?.status !== 'draft' || current.value.id !== activePlanId.value)
+    throw new Error('완료된 계획은 이 화면에서 변경할 수 없습니다.');
+  return store.command(`/plans/${activePlanId.value}`, { ...value, revision }, 'PUT');
+});
+const form = computed(() =>
+  current.value?.status === 'completed'
+    ? { targetOn: current.value.targetOn, schedules: current.value.schedules }
+    : draft.value.value,
 );
-const form = draft.value;
 watch(
   () => form.value?.schedules.map((s) => s.courseId),
   (ids) => {
@@ -119,7 +114,8 @@ function reviewDate(value?: string) {
   return value ? value.replaceAll('-', '.') : '미정';
 }
 async function editReviewField(target: 2 | 3, key: string) {
-  if (busy.value || initializing.value || draft.terminal.value) return;
+  if (current.value?.status !== 'draft' || busy.value || initializing.value || draft.terminal.value)
+    return;
   const planId = current.value?.id;
   await moveTo(target);
   await nextTick();
@@ -137,7 +133,6 @@ async function load() {
   initializing.value = false;
   error.value = '';
   fieldErrors.value = {};
-  reason.value = '';
   if (current.value?.status === 'draft' && !current.value.scheduleDefaultsAppliedAt) {
     initializing.value = true;
     try {
@@ -152,7 +147,7 @@ async function load() {
     }
   }
   if (generation !== loadGeneration) return;
-  if (current.value && !draft.terminal.value)
+  if (current.value?.status === 'draft' && !draft.terminal.value)
     draft.load(
       { targetOn: current.value.targetOn, schedules: current.value.schedules },
       current.value.revision,
@@ -163,6 +158,14 @@ watch(() => `${store.actorId}:${route.params.id || ''}`, load, { immediate: true
 watch(current, (value, previous) => {
   if (!value && previous?.id === route.params.id && activePlanId.value === previous.id)
     draft.stop('삭제된 계획입니다. 내 계획에서 다시 작성해 주세요.');
+  else if (value?.status === 'completed') {
+    ++loadGeneration;
+    draft.clear();
+    initializing.value = false;
+    fieldErrors.value = {};
+    error.value = '';
+    step.value = 4;
+  }
 });
 function handleError(err: unknown) {
   if (err instanceof ApiError && err.code === 'PLAN_DELETED') draft.stop(err.message);
@@ -240,7 +243,14 @@ async function focusFirstError() {
   input?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 async function moveTo(target: number) {
-  if (busy.value || initializing.value || draft.terminal.value || target === step.value) return;
+  if (
+    current.value?.status !== 'draft' ||
+    busy.value ||
+    initializing.value ||
+    draft.terminal.value ||
+    target === step.value
+  )
+    return;
   if (target < step.value) {
     fieldErrors.value = {};
     error.value = '';
@@ -324,6 +334,7 @@ async function reloadRequest() {
   }
 }
 async function complete() {
+  if (current.value?.status !== 'draft') return;
   busy.value = true;
   error.value = '';
   try {
@@ -348,20 +359,6 @@ async function complete() {
     busy.value = false;
   }
 }
-async function saveRevision() {
-  busy.value = true;
-  error.value = '';
-  try {
-    if (!reason.value.trim()) throw new Error('계획 변경 사유를 입력해 주세요.');
-    await draft.flush();
-    store.notify('계획 일정·목표를 수정했습니다.');
-    reason.value = '';
-  } catch (err) {
-    handleError(err);
-  } finally {
-    busy.value = false;
-  }
-}
 async function reload() {
   if (!(await confirmAction('현재 입력을 버리고 서버의 계획을 다시 불러올까요?', '다시 불러오기')))
     return;
@@ -370,8 +367,7 @@ async function reload() {
 }
 async function leave() {
   if (busy.value || requestBusy.value || initializing.value) return false;
-  if (current.value?.status === 'completed' && draft.dirty.value)
-    return await confirmAction('저장하지 않은 계획 변경을 버리고 이동할까요?', '변경 버리고 이동');
+  if (current.value?.status === 'completed') return true;
   return draft.canLeave();
 }
 function protectStart(event: BeforeUnloadEvent) {
@@ -433,7 +429,7 @@ onBeforeRouteUpdate(leave);
           }}
         </p>
       </div>
-      <nav class="plan-steps" aria-label="계획 작성 단계">
+      <nav v-if="current.status === 'draft'" class="plan-steps" aria-label="계획 작성 단계">
         <button
           v-for="(label, i) in ['자격 선택', '일정 수립', '학습 목표(선택)', '최종 확인']"
           :key="label"
@@ -591,7 +587,7 @@ onBeforeRouteUpdate(leave);
           <p>
             {{
               current.status === 'completed'
-                ? '확정한 일정을 확인하세요. 일정이나 선택 입력한 목표를 변경하면 사유를 남겨 저장합니다.'
+                ? '확정한 일정과 선택 입력한 학습 목표를 확인하세요.'
                 : '목표 인증일과 인증Set별 일정을 확인한 뒤 계획을 완료해 주세요.'
             }}
           </p>
@@ -611,6 +607,7 @@ onBeforeRouteUpdate(leave);
               <dd>
                 <strong>{{ reviewDate(form.targetOn) }}</strong
                 ><button
+                  v-if="current.status === 'draft'"
                   type="button"
                   class="button secondary small"
                   :disabled="busy"
@@ -683,7 +680,7 @@ onBeforeRouteUpdate(leave);
               <h3>학습 목표</h3>
               <p>{{ s.goal }}</p>
             </div>
-            <div class="plan-review-edit-actions">
+            <div v-if="current.status === 'draft'" class="plan-review-edit-actions">
               <button
                 type="button"
                 class="button secondary"
@@ -717,12 +714,9 @@ onBeforeRouteUpdate(leave);
             </p>
             <p>요청 전체의 계획 수립 완료는 내 계획에서 별도로 진행해 주세요.</p>
           </template>
-          <p v-else>
-            자격과 인증Set의 기준 버전은 고정됩니다. 일정·학습 목표는 변경 사유를 남겨 수정할 수
-            있습니다.
-          </p>
+          <p v-else>완료된 계획은 이 화면에서 변경할 수 없습니다.</p>
           <ul
-            v-if="planErrors(form).length"
+            v-if="current.status === 'draft' && planErrors(form).length"
             class="validation-list"
             aria-label="계획 확인 필요 항목"
           >
@@ -730,18 +724,6 @@ onBeforeRouteUpdate(leave);
           </ul>
         </aside>
       </div>
-      <section v-if="current.status === 'completed'" class="panel editor-panel">
-        <label class="field"
-          ><span>계획 변경 사유</span
-          ><input v-model="reason" :disabled="busy" maxlength="2000" /></label
-        ><button
-          class="button primary"
-          :disabled="busy || !draft.dirty.value || !reason.trim()"
-          @click="saveRevision"
-        >
-          일정·목표 변경 저장
-        </button>
-      </section>
       <CollapsibleSection
         v-if="step === 4"
         v-model:open="reviewRequestOpen"
@@ -783,19 +765,15 @@ onBeforeRouteUpdate(leave);
       <ActionBar class="actionbar" :class="{ 'plan-review-actionbar': step === 4 }">
         <div class="plan-action-feedback">
           <SaveFeedback
-            :status="
-              busy
-                ? '저장 중'
-                : current.status === 'completed' && !draft.dirty.value
-                  ? '계획 완료'
-                  : draft.status.value
-            "
+            v-if="current.status === 'draft'"
+            :status="busy ? '저장 중' : draft.status.value"
             :error="draft.error.value"
             :conflict="draft.conflict.value"
             :busy="busy"
             @retry="draft.flush().catch(() => {})"
             @reload="reload"
           />
+          <span v-else class="save-status" role="status" aria-atomic="true">계획 완료</span>
           <p
             v-if="step === 4 && error"
             class="error-message preserve-lines plan-review-submit-error"

@@ -9,6 +9,7 @@ const props = defineProps<{
     passed: number;
     total: number;
     completed: boolean;
+    required: boolean;
   }[];
   selected: string;
 }>();
@@ -55,7 +56,7 @@ watch([() => props.selected, visible], async () => {
 <template>
   <aside class="panel qualification-course-nav" aria-label="인증Set 선택">
     <div class="section-heading">
-      <h2>필수 인증Set</h2>
+      <h2>인증Set</h2>
       <span class="muted">{{ courses.length }}개</span>
     </div>
     <button
@@ -66,11 +67,13 @@ watch([() => props.selected, visible], async () => {
       @click="open = !open"
     >
       <span
-        ><strong>{{ current?.title }}</strong
+        ><span class="course-label"
+          ><strong>{{ current?.title }}</strong
+          ><span v-if="current?.required" class="course-required-badge">필수</span></span
         ><small>{{ current?.status }}</small></span
       ><span>인증Set 선택 {{ open ? '접기' : '열기' }}</span>
     </button>
-    <nav v-show="visible" :id="id" ref="navigation" aria-label="필수 인증Set">
+    <nav v-show="visible" :id="id" ref="navigation" aria-label="인증Set">
       <button
         v-for="(course, index) in courses"
         :key="course.id"
@@ -84,7 +87,9 @@ watch([() => props.selected, visible], async () => {
           }}</template></span
         >
         <span
-          ><strong>{{ course.title }}</strong
+          ><span class="course-label"
+            ><strong>{{ course.title }}</strong
+            ><span v-if="course.required" class="course-required-badge">필수</span></span
           ><small>{{ course.status }}</small></span
         >
       </button>

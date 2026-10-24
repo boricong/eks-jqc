@@ -3,7 +3,10 @@ import { managementTitle } from '../management-navigation';
 import PageHeading from '../components/PageHeading.vue';
 import HomeNotices from '../components/HomeNotices.vue';
 import HomeQualificationCarousel from '../components/HomeQualificationCarousel.vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import CompactTabs from '../components/CompactTabs.vue';
+import { useHomeRole } from '../composables/useHomeRole';
+import { useHomeSummary } from '../composables/useHomeSummary';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import PersonalTasks from '../components/PersonalTasks.vue';
@@ -14,13 +17,33 @@ import {
   credentialCurrent,
 } from '@eks/contracts';
 const store = useDemo();
+const { items: homeRoles, selected: homeRole, select: selectHome } = useHomeRole();
+const summary = useHomeSummary(homeRole);
+const roleTabs = ref<InstanceType<typeof CompactTabs>>();
+const multipleRoles = computed(() => homeRoles.value.length > 1);
+const homeLabel = computed(
+  () => homeRoles.value.find((item) => item.id === homeRole.value)?.label || '홈',
+);
+const panelLabel = computed(() =>
+  multipleRoles.value ? roleTabs.value?.tabId(homeRole.value) : undefined,
+);
+const managementName = computed(
+  () =>
+    summary.data.value?.snapshot.scope.organizationName ||
+    store.actor.organizationPath.find(
+      (p) =>
+        p.id ===
+        (homeRole.value === 'admin' ? store.actor.lv1OrganizationId : store.actor.organizationId),
+    )?.name ||
+    '담당 조직',
+);
 const active = computed(() =>
   store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt),
 );
 const planningRequests = computed(() => {
   const actor = store.actor;
   if (
-    actor.role !== 'learner' ||
+    homeRole.value !== 'learner' ||
     actor.certificationEligibility === 'hold' ||
     !actor.organizationActive
   )
@@ -61,26 +84,28 @@ const upcoming = computed(() =>
 );
 const attention = computed(() => [
   {
-    label: '기준 준비',
+    label: '자격 설정 필요',
     count: store.data.qualifications.filter(
-      (q) => !q.deletedAt && store.qualificationErrors(q).length > 0,
+      (q) =>
+        q.lv1OrganizationId === store.actor.lv1OrganizationId &&
+        !q.deletedAt &&
+        store.qualificationErrors(q).length > 0,
     ).length,
-    to: '/admin/qualifications',
+    to: summary.link('/admin/qualifications'),
   },
   {
-    label: '계획 기한',
-    count: store.data.planningRequests.filter(
-      (r) =>
-        r.dueOn < new Date().toISOString().slice(0, 10) &&
-        !['계획 완료', '추가 계획 대상 없음'].includes(
-          store.data.requestProgress.find((p) => p.id === r.id)?.stage || '',
-        ),
+    label: '인증Set 설정 필요',
+    count: store.data.courses.filter(
+      (c) =>
+        c.lv1OrganizationId === store.actor.lv1OrganizationId &&
+        !c.deletedAt &&
+        store.courseErrors(c).length > 0,
     ).length,
-    to: '/admin/assignments',
+    to: summary.link('/admin/courses'),
   },
 ]);
 const stats = computed(() =>
-  store.actor.role === 'learner'
+  homeRole.value === 'learner'
     ? [
         {
           label: '진행 중인 자격',
@@ -105,7 +130,7 @@ const stats = computed(() =>
           to: '/qualifications?filter=certified',
         },
       ]
-    : store.actor.role === 'system_operator'
+    : homeRole.value === 'system_operator'
       ? [
           {
             label: 'Lv1 조직',
@@ -128,30 +153,32 @@ const stats = computed(() =>
             to: '/system/overview',
           },
         ]
-      : [
-          {
-            label: '자격 설정 필요',
-            value: store.data.qualifications.filter(
-              (q) => !q.deletedAt && store.qualificationErrors(q).length > 0,
-            ).length,
-            icon: 'file',
-            to: '/admin/qualifications',
-          },
-          {
-            label: '인증Set 설정 필요',
-            value: store.data.courses.filter((c) => store.courseErrors(c).length > 0).length,
-            icon: 'book',
-            to: '/admin/courses',
-          },
-          {
-            label: '진행 중인 배정',
-            value: store.data.assignments.filter(
-              (a) => !a.certifiedAt && !a.excludedReason && eligibleAssignment(a),
-            ).length,
-            icon: 'users',
-            to: '/admin/assignments',
-          },
-        ],
+      : summary.data.value
+        ? [
+            {
+              label:
+                homeRole.value === 'organization_admin' ? '직속 취득 대상 인원' : '취득 대상 인원',
+              value: summary.data.value.summary.eligiblePeople,
+              icon: 'users',
+              to: summary.link('/admin/dashboard', { tab: 'members' }),
+            },
+            {
+              label: '필수 자격 충족률',
+              value:
+                summary.data.value.summary.requiredCoverage.rate === null
+                  ? '해당 없음'
+                  : `${Math.round(summary.data.value.summary.requiredCoverage.rate)}%`,
+              icon: 'award',
+              to: summary.link('/admin/dashboard', { metric: 'requiredCoverage' }),
+            },
+            {
+              label: '계획 기한 경과',
+              value: summary.data.value.summary.overdueRequests,
+              icon: 'clipboard',
+              to: summary.link('/admin/dashboard', { metric: 'overdueRequests' }),
+            },
+          ]
+        : [],
 );
 </script>
 <template>
@@ -174,145 +201,212 @@ const stats = computed(() =>
           }).format(new Date())
         }}</span>
       </PageHeading>
-      <p v-if="store.fullManagement" class="hero-eligibility">
-        {{
-          store.data.eligibilitySummary.eligible
-            ? `취득 대상 ${store.data.eligibilitySummary.eligible}명`
-            : '취득 대상 없음'
-        }}
-        · Hold 제외 {{ store.data.eligibilitySummary.held }}명
-      </p>
-      <section class="stats-panel" aria-label="내 현황">
-        <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
-          ><div class="stat-top">
-            <span>{{ stat.label }}</span
-            ><AppIcon :name="stat.icon" />
-          </div>
-          <div class="stat-bottom">
-            <span class="stat-value">{{ stat.value }}</span
-            ><AppIcon name="diagonal" :size="18" /></div
-        ></RouterLink>
-      </section>
-    </section>
-    <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
-      취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은 별도로
-      유지됩니다.
-    </p>
-    <nav class="home-shortcuts" aria-label="업무 바로가기">
-      <RouterLink v-if="store.hasRole('learner')" to="/plans" class="text-link"
-        >내 계획<AppIcon name="chevron" :size="16"
-      /></RouterLink>
-      <RouterLink
-        v-if="store.fullManagement"
-        :to="store.managementLink('/admin/catalog')"
-        class="text-link"
-        >{{ managementTitle('catalog') }}<AppIcon name="chevron" :size="16"
-      /></RouterLink>
-      <RouterLink v-if="store.hasRole('organization_admin')" to="/admin/policies" class="text-link"
-        >{{ managementTitle('policies') }}<AppIcon name="chevron" :size="16"
-      /></RouterLink>
-    </nav>
-    <div class="home-columns">
-      <div class="home-primary">
-        <HomeQualificationCarousel
-          v-if="store.actor.role === 'learner'"
-          :key="store.actorId"
-          :assignments="active"
-          :planning-requests="planningRequests"
+      <div v-if="multipleRoles" class="home-role-tabs">
+        <CompactTabs
+          ref="roleTabs"
+          :items="homeRoles"
+          :model-value="homeRole"
+          label="홈 보기"
+          panel-id="home-role-summary home-role-content"
+          @update:model-value="selectHome"
         />
-        <PersonalTasks />
-        <section v-if="renewables.length" class="home-card lifecycle-panel">
-          <div class="section-heading"><h2>보유 자격 · 재인증</h2></div>
-          <RouterLink
-            v-for="a in renewables"
-            :key="a.id"
-            class="lifecycle-renewal-link"
-            :to="`/certifications/${a.id}`"
-            ><strong>{{
-              store.qualification(a.qualificationId, a.qualificationMetadata).title
-            }}</strong
-            ><span
-              >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification!)!) }} · 만료
-              {{ credentialCurrent(a.certification!).expiresOn }}</span
-            ><span class="text-link">상태·재인증 확인 →</span></RouterLink
+      </div>
+      <div
+        id="home-role-summary"
+        :role="multipleRoles ? 'tabpanel' : undefined"
+        :aria-labelledby="panelLabel"
+      >
+        <p v-if="summary.managed.value" class="home-scope">
+          <strong>{{ managementName }}</strong> ·
+          {{ homeRole === 'organization_admin' ? '직속 인원 기준' : '팀 전체 기준' }}
+          <span v-if="summary.data.value">
+            · Hold 제외 {{ summary.data.value.snapshot.exclusions.heldPeople }}명</span
           >
-        </section>
-        <section v-if="store.actor.role !== 'learner'" class="home-card">
-          <div class="section-heading">
-            <h2>
-              {{ store.actor.role === 'system_operator' ? '시스템 운영' : '기준 관리' }}
-            </h2>
-            <RouterLink
-              :to="
-                store.actor.role === 'system_operator'
-                  ? '/system/overview'
-                  : '/admin/qualifications'
-              "
-              class="text-link"
-              >전체 보기<AppIcon name="chevron" :size="16"
-            /></RouterLink>
-          </div>
-          <template v-if="store.actor.role === 'system_operator'"
-            ><label class="field home-org-select"
-              >관리할 Lv1 조직<select
-                aria-label="홈 관리할 Lv1 조직"
-                @change="
-                  $router.push(
-                    store.managementLink(
-                      '/admin/qualifications',
-                      ($event.target as HTMLSelectElement).value,
-                    ),
-                  )
-                "
-              >
-                <option value="" disabled selected>조직을 선택해 인증 업무 관리</option>
-                <option
-                  v-for="o in store.data.organizations.filter((o) => o.level === 1)"
-                  :key="o.id"
-                  :value="o.id"
-                >
-                  {{ o.name }}
-                </option>
-              </select></label
-            ><RouterLink to="/system/organizations" class="simple-row"
-              >조직 트리 관리<AppIcon name="chevron" /></RouterLink
-            ><RouterLink to="/system/users" class="simple-row"
-              >사용자 소속·역할 관리<AppIcon name="chevron" /></RouterLink
-            ><RouterLink to="/system/overview" class="simple-row"
-              >전체 조직 업무 조회<AppIcon name="chevron" /></RouterLink
-          ></template>
-          <template v-else
-            ><RouterLink
-              v-for="item in attention"
-              :key="item.label"
-              :to="item.to"
-              class="simple-row"
-              ><span
-                ><strong
-                  >{{ item.label }} <span class="home-count">{{ item.count }}</span></strong
-                ></span
-              ><AppIcon name="chevron" /></RouterLink
-          ></template>
+        </p>
+        <p v-if="summary.loading.value" class="home-summary-status" role="status">
+          관리 현황을 불러오는 중입니다.
+        </p>
+        <div v-else-if="summary.error.value" class="home-summary-status" role="alert">
+          <p>{{ summary.error.value }}</p>
+          <button class="button secondary" @click="summary.load">현황 다시 조회</button>
+        </div>
+        <section
+          v-if="stats.length"
+          class="stats-panel"
+          :aria-label="homeRole === 'learner' ? '내 현황' : `${homeLabel} 현황`"
+        >
+          <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
+            ><div class="stat-top">
+              <span>{{ stat.label }}</span
+              ><AppIcon :name="stat.icon" />
+            </div>
+            <div class="stat-bottom">
+              <span class="stat-value">{{ stat.value }}</span
+              ><AppIcon name="diagonal" :size="18" /></div
+          ></RouterLink>
         </section>
       </div>
-      <aside class="home-secondary">
-        <HomeNotices />
-        <section v-if="upcoming.length" class="home-card">
-          <h2>나의 인증 일정</h2>
-          <RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row">
-            <span
+    </section>
+    <div
+      id="home-role-content"
+      :role="multipleRoles ? 'tabpanel' : undefined"
+      :aria-labelledby="panelLabel"
+    >
+      <p
+        v-if="homeRole === 'learner' && store.actor.certificationEligibility === 'hold'"
+        class="error-message"
+      >
+        취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은
+        별도로 유지됩니다.
+      </p>
+      <nav class="home-shortcuts" aria-label="업무 바로가기">
+        <RouterLink v-if="homeRole === 'learner'" to="/plans" class="text-link"
+          >내 계획<AppIcon name="chevron" :size="16"
+        /></RouterLink>
+        <template v-if="summary.managed.value">
+          <RouterLink :to="summary.link('/admin/dashboard')" class="text-link"
+            >인증 현황<AppIcon name="chevron" :size="16"
+          /></RouterLink>
+          <RouterLink
+            v-if="homeRole === 'admin'"
+            :to="summary.link('/admin/catalog')"
+            class="text-link"
+            >{{ managementTitle('catalog') }}<AppIcon name="chevron" :size="16"
+          /></RouterLink>
+          <RouterLink v-else :to="summary.link('/admin/policies')" class="text-link"
+            >{{ managementTitle('policies') }}<AppIcon name="chevron" :size="16"
+          /></RouterLink>
+        </template>
+        <RouterLink to="/notifications" class="text-link"
+          >알림함<AppIcon name="chevron" :size="16"
+        /></RouterLink>
+      </nav>
+      <div class="home-columns">
+        <div class="home-primary">
+          <HomeQualificationCarousel
+            v-if="homeRole === 'learner'"
+            :key="store.actorId"
+            :assignments="active"
+            :planning-requests="planningRequests"
+          />
+          <PersonalTasks v-if="homeRole === 'learner'" />
+          <section
+            v-if="homeRole === 'learner' && renewables.length"
+            class="home-card lifecycle-panel"
+          >
+            <div class="section-heading"><h2>보유 자격 · 재인증</h2></div>
+            <RouterLink
+              v-for="a in renewables"
+              :key="a.id"
+              class="lifecycle-renewal-link"
+              :to="`/certifications/${a.id}`"
               ><strong>{{
-                store.qualification(p.qualificationId, p.qualificationMetadata).title
+                store.qualification(a.qualificationId, a.qualificationMetadata).title
               }}</strong
-              ><small
-                >목표 인증일 {{ p.targetOn }} ·
-                {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small
-              ></span
+              ><span
+                >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification!)!) }} · 만료
+                {{ credentialCurrent(a.certification!).expiresOn }}</span
+              ><span class="text-link">상태·재인증 확인 →</span></RouterLink
             >
-            <AppIcon name="chevron" :size="16" />
-          </RouterLink>
-        </section>
-      </aside>
+          </section>
+          <section v-if="homeRole !== 'learner'" class="home-card">
+            <div class="section-heading">
+              <h2>
+                {{
+                  homeRole === 'system_operator'
+                    ? '시스템 운영'
+                    : homeRole === 'organization_admin'
+                      ? '조직 관리'
+                      : '기준 관리'
+                }}
+              </h2>
+              <RouterLink
+                :to="
+                  homeRole === 'system_operator'
+                    ? '/system/overview'
+                    : summary.link(
+                        homeRole === 'admin' ? '/admin/qualifications' : '/admin/policies',
+                      )
+                "
+                class="text-link"
+                >전체 보기<AppIcon name="chevron" :size="16"
+              /></RouterLink>
+            </div>
+            <template v-if="homeRole === 'system_operator'"
+              ><label class="field home-org-select"
+                >관리할 Lv1 조직<select
+                  aria-label="홈 관리할 Lv1 조직"
+                  @change="
+                    $router.push(
+                      store.managementLink(
+                        '/admin/qualifications',
+                        ($event.target as HTMLSelectElement).value,
+                      ),
+                    )
+                  "
+                >
+                  <option value="" disabled selected>조직을 선택해 인증 업무 관리</option>
+                  <option
+                    v-for="o in store.data.organizations.filter((o) => o.level === 1)"
+                    :key="o.id"
+                    :value="o.id"
+                  >
+                    {{ o.name }}
+                  </option>
+                </select></label
+              ><RouterLink to="/system/organizations" class="simple-row"
+                >조직 트리 관리<AppIcon name="chevron" /></RouterLink
+              ><RouterLink to="/system/users" class="simple-row"
+                >사용자 소속·역할 관리<AppIcon name="chevron" /></RouterLink
+              ><RouterLink to="/system/overview" class="simple-row"
+                >전체 조직 업무 조회<AppIcon name="chevron" /></RouterLink
+            ></template>
+            <template v-else-if="homeRole === 'admin'"
+              ><RouterLink
+                v-for="item in attention"
+                :key="item.label"
+                :to="item.to"
+                class="simple-row"
+                ><span
+                  ><strong
+                    >{{ item.label }} <span class="home-count">{{ item.count }}</span></strong
+                  ></span
+                ><AppIcon name="chevron" /></RouterLink
+              ><RouterLink :to="summary.link('/admin/assignments')" class="simple-row"
+                >계획 요청·진행<AppIcon name="chevron" /></RouterLink
+            ></template>
+            <template v-else>
+              <RouterLink :to="summary.link('/admin/dashboard')" class="simple-row"
+                >인증 현황<AppIcon name="chevron"
+              /></RouterLink>
+              <RouterLink :to="summary.link('/admin/policies')" class="simple-row"
+                >조직 필수 자격 설정<AppIcon name="chevron"
+              /></RouterLink>
+              <RouterLink :to="summary.link('/admin/targets')" class="simple-row"
+                >취득 대상자 상태<AppIcon name="chevron"
+              /></RouterLink>
+            </template>
+          </section>
+        </div>
+        <aside class="home-secondary">
+          <HomeNotices />
+          <section v-if="homeRole === 'learner' && upcoming.length" class="home-card">
+            <h2>나의 인증 일정</h2>
+            <RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row">
+              <span
+                ><strong>{{
+                  store.qualification(p.qualificationId, p.qualificationMetadata).title
+                }}</strong
+                ><small
+                  >목표 인증일 {{ p.targetOn }} ·
+                  {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small
+                ></span
+              >
+              <AppIcon name="chevron" :size="16" />
+            </RouterLink>
+          </section>
+        </aside>
+      </div>
     </div>
   </div>
 </template>

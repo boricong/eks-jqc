@@ -91,7 +91,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   for (const e of backend.store.snapshot().enrollments.filter((e) => e.assignmentId === a.id)) {
     const c = backend.store.snapshot().courses.find((c) => c.id === e.courseId)!;
     await page.goto(`/qualifications/${a.id}?course=${c.id}`);
-    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+    await page.getByRole('link', { name: '평가 시작', exact: true }).click();
     await expect(page.locator('.assessment-grid')).toBeVisible();
     for (const kind of c.assessmentKinds) {
       await page.goto(`/qualifications/${a.id}/courses/${c.id}/${kind}`);
@@ -101,12 +101,12 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
         await tabs.getByRole('tab').nth(i).click();
         await page.getByRole('radio').nth(q.correct!).check();
       }
-      await page.getByRole('button', { name: '제출', exact: true }).click();
+      await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
       await expect(page.getByTestId('process-guide')).toContainText(
         '현재 단계 · 제출 전 답안 확인',
       );
       await page.getByRole('button', { name: '최종 제출', exact: true }).click();
-      await expect(page.locator('.result-panel')).toContainText('자동 채점');
+      await expect(page.locator('.result-panel')).toContainText('평가 통과');
     }
   }
   await page.getByRole('link', { name: '인증서 보기', exact: true }).click();

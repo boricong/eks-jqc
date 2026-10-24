@@ -9,7 +9,7 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
   await page.goto('/admin/qualifications/demo-qualification');
   await expect(page.getByRole('heading', { name: '팀 설정', exact: true })).toBeVisible();
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
-  await saveCriterion(page);
+  await saveCriterion(page, 'new');
   await expect
     .poll(
       () =>

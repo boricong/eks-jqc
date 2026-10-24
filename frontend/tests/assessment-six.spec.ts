@@ -51,7 +51,7 @@ test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초�
   await page.goto('/qualifications/assignment-1/courses/demo-course-2/practical');
   const tabs = page.getByRole('tablist', { name: '응시 문항', exact: true });
   await expect(tabs.getByRole('tab')).toHaveCount(500);
-  await page.getByRole('button', { name: '제출', exact: true }).click();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
   await expect(page.getByRole('alert')).toContainText('모든 문항');
   await page.getByRole('dialog').getByRole('button', { name: '확인', exact: true }).click();
   await page.route('**/api/attempts/*/draft', (r) =>
@@ -91,7 +91,7 @@ test('학습자 500문항 세로 응시·미응답·저장 실패 보존과 초�
   await expect(operator.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('radio').nth(1).check();
   await expect(page.locator('.save-error')).toBeVisible();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeDisabled();
   expect(backend.store.snapshot().attempts).toHaveLength(0);
   await operator.close();
 });

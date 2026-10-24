@@ -263,7 +263,7 @@ test('긴 학습·평가 내용의 글자 위계와 네 화면 폭에서 응시 
     await audit(page);
     await expect(page.locator('h1')).toHaveCSS('font-size', '24px');
     await expect(page.locator('.answer-panel > h3')).toHaveCSS('font-size', '16px');
-    await expect(page.locator('.choice').first()).toHaveCSS('font-size', '15px');
+    await expect(page.locator('.choice').first()).toHaveCSS('font-size', '14px');
     await expect(page.locator('.choice input').first()).toBeEnabled();
     await page.locator('.choice input').first().focus();
     await expect(page.locator('.choice input').first()).toBeFocused();

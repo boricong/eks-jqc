@@ -116,15 +116,15 @@ test('학습 히어로·설명 펼치기·단일 자료·인증Set별 선택 기
     '비교를 위해 함께 펼치는 자료입니다.',
   );
   await page
-    .getByRole('navigation', { name: '필수 인증Set', exact: true })
+    .getByRole('navigation', { name: '인증Set', exact: true })
     .getByRole('button')
     .nth(1)
     .click();
   await showLearningMaterials(page);
   await expect(materials).toContainText('등록된 학습자료가 없습니다.');
-  await expect(page.getByRole('link', { name: '평가로 이동', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '평가 시작', exact: true })).toBeVisible();
   await page
-    .getByRole('navigation', { name: '필수 인증Set', exact: true })
+    .getByRole('navigation', { name: '인증Set', exact: true })
     .getByRole('button')
     .first()
     .click();
@@ -134,7 +134,7 @@ test('학습 히어로·설명 펼치기·단일 자료·인증Set별 선택 기
   await expect(external).toHaveAttribute('target', '_blank');
   await expect(external).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(materials.locator('.material-content')).toHaveCount(0);
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '평가 유형 선택', exact: true })).toBeVisible();
   await expect(summary).toHaveCount(0);
   await expect(materials).toHaveCount(0);
@@ -194,22 +194,22 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
   await expect(page.locator('.qualification-learning')).not.toContainText(
     '기준의 이름과 버전을 독립적으로 확인한다.',
   );
-  await page.getByRole('navigation', { name: '필수 인증Set' }).getByRole('button').nth(1).click();
+  await page.getByRole('navigation', { name: '인증Set' }).getByRole('button').nth(1).click();
   await expect(goals).toContainText('2026-12-01');
   await expect(page.locator('.learning-course-hero')).not.toContainText(
     '수행 기록의 누락 여부를 판단한다.',
   );
   await expect(goals).not.toContainText('목표 인증일');
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
   await page.getByRole('radio').first().check();
   await expect(page.locator('.save-status')).toHaveText('저장됨');
   const draft = backend.store.snapshot().attempts.find((t) => t.learnerId === 'learner-2')!;
-  await page.getByRole('link', { name: /평가 선택 ·/ }).click();
+  await page.getByRole('link', { name: '평가 선택으로', exact: true }).click();
   await expect(page.locator('.qualification-course-heading')).toContainText('기록 작성');
   await page.goto(`/qualifications/${a.id}`);
   await expect(page.locator('.qualification-course-heading')).toContainText('기록 작성');
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
   await expect(page.getByRole('radio').first()).toBeChecked();
   expect(backend.store.snapshot().attempts.find((t) => t.id === draft.id)?.answers).toEqual(
@@ -226,15 +226,15 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
         await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(i).click();
         await page.getByRole('radio').nth(question.correct!).check();
       }
-      await page.getByRole('button', { name: '제출', exact: true }).click();
+      await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
       await page.getByRole('button', { name: '최종 제출', exact: true }).click();
-      await expect(page.locator('.result-panel')).toContainText('자동 채점');
+      await expect(page.locator('.result-panel')).toContainText('평가 통과');
     }
   }
   await page.goto(`/qualifications/${a.id}?course=demo-course-2`);
   await expect(summary).toContainText('인증 취득');
   await expect(summary).toContainText('유효');
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await expect(page.getByRole('link', { name: '인증Set 수료증 보기', exact: true })).toBeVisible();
   await page.locator('.qualification-history > summary').click();
   await expect(page.locator('.qualification-history')).toContainText('자동 채점');
@@ -310,8 +310,8 @@ test('최대 100인증Set·긴 설명/자료의 네 화면 폭과 모바일 선�
   await expect(page.locator('.qualification-course-content')).toContainText(
     '확정된 배정은 계속 진행할 수 있습니다.',
   );
-  await expect(page.getByRole('link', { name: '평가로 이동', exact: true })).toBeVisible();
-  const nav = page.getByRole('navigation', { name: '필수 인증Set', includeHidden: true });
+  await expect(page.getByRole('link', { name: '평가 시작', exact: true })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: '인증Set', includeHidden: true });
   await expect(nav.getByRole('button')).toHaveCount(100);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -349,7 +349,7 @@ test('최대 100인증Set·긴 설명/자료의 네 화면 폭과 모바일 선�
     },
   );
   await page.reload();
-  await expect(page.getByRole('link', { name: '평가로 이동', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '평가 시작', exact: true })).toHaveCount(0);
   await expect(page.locator('.qualification-context-note')).toContainText('검증 제외');
   await page.goto('/qualifications/assignment-1?course=demo-course-1&stage=assessment');
   await expect(page.locator('.assessment-grid').getByRole('link')).toHaveCount(0);

@@ -10,6 +10,9 @@ import {
   QualificationSchema,
   courseUseErrors,
   qualificationReadinessErrors,
+  qualificationPolicySnapshot,
+  QualificationVersionModeSchema,
+  type CatalogItemSavePreview,
   type Course,
   type Qualification,
   type State,
@@ -39,7 +42,9 @@ export function catalogReferences(
       org?.qualificationPools.filter((p) => p.qualificationId === id).length ||
       0,
     requests: s.planningRequests.filter((r) =>
-      [...(r.targets || []), ...(r.selections || [])].some((t) => t.qualificationId === id),
+      [...(r.targets || []), ...(r.selections || [])].some(
+        (t) => t.qualificationId === id,
+      ),
     ).length,
     plans: s.plans.filter((p) => p.qualificationId === id).length,
     assignments: s.assignments.filter((a) => a.qualificationId === id).length,
@@ -196,7 +201,7 @@ export function prepareCatalogSave(
   id: string,
   body: any,
   scope: string,
-) {
+): CatalogItemSavePreview {
   const list = s[section];
   const source = list.find((i) => i.id === id);
   demand(source, 404, "기준을 찾을 수 없습니다.");
@@ -262,23 +267,46 @@ export function prepareCatalogSave(
           lifecycleStatus: (source as Qualification).lifecycleStatus,
           templateId: (source as Qualification).templateId,
         });
+  const versionMode =
+    section === "qualifications"
+      ? QualificationVersionModeSchema.optional().parse(body.versionMode)
+      : undefined;
+  const sameCourses =
+    section === "qualifications" &&
+    (source as Qualification).courseIds.length ===
+      (candidate as Qualification).courseIds.length &&
+    (source as Qualification).courseIds.every((id) =>
+      (candidate as Qualification).courseIds.includes(id),
+    );
+  if (sameCourses)
+    (candidate as Qualification).courseIds = [
+      ...(source as Qualification).courseIds,
+    ];
   validateCatalogStructure(s, section, candidate);
   const unchanged = isDeepStrictEqual(
     catalogContent(candidate),
     catalogContent(source),
   );
   const references = catalogReferences(s, section, id, org);
-  const newVersion = !unchanged && Object.values(references).some((n) => n > 0);
+  const requiresNewVersion = section === "qualifications" && !sameCourses;
+  const automatic = Object.values(references).some((n) => n > 0);
+  const newVersion =
+    !unchanged &&
+    (requiresNewVersion ||
+      (section === "qualifications" && versionMode
+        ? versionMode === "new"
+        : automatic));
+  const nextVersion =
+    Math.max(
+      ...list
+        .filter((i) => i.entityId === source.entityId)
+        .map((i) => i.version),
+    ) + 1;
   if (!unchanged) {
     if (newVersion) {
       candidate.id = randomUUID();
       candidate.parentId = source.id;
-      candidate.version =
-        Math.max(
-          ...list
-            .filter((i) => i.entityId === source.entityId)
-            .map((i) => i.version),
-        ) + 1;
+      candidate.version = nextVersion;
       candidate.revision = 1;
     } else candidate.revision++;
   }
@@ -306,6 +334,20 @@ export function prepareCatalogSave(
     changes,
     unchanged,
     newVersion,
+    ...(section === "qualifications"
+      ? {
+          versionPolicy: {
+            changeKind: unchanged
+              ? ("none" as const)
+              : requiresNewVersion
+                ? ("major" as const)
+                : ("minor" as const),
+            requiresNewVersion,
+            effectiveMode: newVersion ? ("new" as const) : ("current" as const),
+            nextVersion,
+          },
+        }
+      : {}),
     references,
     stateRevision: s.revision,
     organizationRevision: org.revision,
@@ -331,10 +373,21 @@ export function saveCatalogItem(
   scope: string,
 ) {
   const result = prepareCatalogSave(s, org, section, id, body, scope);
+  demand(
+    !(
+      result.versionPolicy?.requiresNewVersion && body.versionMode === "current"
+    ),
+    409,
+    "인증Set 구성이 변경되어 새 버전 생성이 필요합니다. 다시 검토해 주세요.",
+    "QUALIFICATION_NEW_VERSION_REQUIRED",
+  );
   if (!result.unchanged) {
     if (section === "qualifications") {
       const q = result.candidate as Qualification;
+      const original = s.qualifications.find((item) => item.id === id)!;
+      if (!result.newVersion) freezeCompletedQualification(s, original);
       q.courseIds = q.courseIds.map((courseId) => {
+        if (original.courseIds.includes(courseId)) return courseId;
         if (
           !s.qualifications.some(
             (other) =>
@@ -370,7 +423,57 @@ export function saveCatalogItem(
     unchanged: result.unchanged,
     readiness: result.readiness,
     linkedQualifications: result.linkedQualifications,
+    versionPolicy: result.versionPolicy,
+    changes: result.changes,
   };
+}
+
+function freezeCompletedQualification(s: State, q: Qualification) {
+  const original = qualificationPolicySnapshot(q);
+  const records = s.assignments.filter((a) => a.qualificationId === q.id);
+  const fail = () =>
+    demand(
+      false,
+      409,
+      "완료 계획의 기존 자격 기준을 안전하게 보존할 수 없습니다. 관리자 확인 후 다시 저장해 주세요.",
+      "QUALIFICATION_SNAPSHOT_CONFLICT",
+    );
+  for (const a of records) {
+    const p = a.planId
+      ? s.plans.find((p) => p.id === a.planId && p.status === "completed")
+      : undefined;
+    const frozen =
+      a.qualificationPolicySnapshot ||
+      p?.qualificationPolicySnapshot ||
+      original;
+    if (
+      frozen.id !== q.id ||
+      frozen.entityId !== q.entityId ||
+      (a.qualificationPolicySnapshot &&
+        p?.qualificationPolicySnapshot &&
+        !isDeepStrictEqual(
+          a.qualificationPolicySnapshot,
+          p.qualificationPolicySnapshot,
+        ))
+    )
+      fail();
+    const enrolled = s.enrollments
+      .filter((e) => e.assignmentId === a.id)
+      .map((e) => e.courseId);
+    if (
+      enrolled.length !== frozen.courseIds.length ||
+      !enrolled.every((id) => frozen.courseIds.includes(id))
+    )
+      fail();
+    a.qualificationPolicySnapshot ??= structuredClone(frozen);
+    if (p) p.qualificationPolicySnapshot ??= structuredClone(frozen);
+  }
+  for (const p of s.plans.filter(
+    (p) => p.status === "completed" && p.qualificationId === q.id,
+  )) {
+    if (!records.some((a) => a.id === p.assignmentId)) fail();
+    p.qualificationPolicySnapshot ??= structuredClone(original);
+  }
 }
 
 export function qualificationDeletionImpact(

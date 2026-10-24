@@ -140,3 +140,51 @@
     margin-top: 0;
   }
 }
+
+/* Home view selection shares the existing flat tab treatment. */
+.home-role-tabs {
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+.home-role-tabs .compact-tabs > button {
+  background: transparent;
+  color: var(--ink-secondary);
+  min-height: 40px;
+  max-width: none;
+}
+.home-role-tabs .compact-tabs > button:not([aria-selected='true']):hover {
+  background: rgba(83, 58, 253, 0.04);
+}
+.home-role-tabs .compact-tabs > button[aria-selected='true'] {
+  background: rgba(83, 58, 253, 0.06);
+  color: var(--primary-press);
+  font-weight: var(--weight-heading);
+  border-bottom: 2px solid var(--primary-press);
+}
+.home-role-tabs .compact-tabs > button:focus-visible {
+  outline: 2px solid var(--primary-press);
+  outline-offset: -2px;
+}
+.home-scope {
+  font-size: var(--text-caption);
+  color: var(--ink-secondary);
+  margin: 0 0 12px;
+  line-height: 1.65;
+}
+.home-summary-status {
+  font-size: var(--text-body);
+  padding: 16px 0;
+  min-height: 84px;
+}
+.home-summary-status .button {
+  margin-top: 12px;
+}
+@media (max-width: 768px) {
+  .home-role-tabs .compact-tabs > button,
+  .home-summary-status .button,
+  .home-shortcuts .text-link {
+    min-height: 44px;
+  }
+}

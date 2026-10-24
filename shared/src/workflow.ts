@@ -36,6 +36,23 @@ export const ValiditySchema = z.object({
   reminderDays: z.array(z.number().int().min(1).max(36500)).max(20),
 });
 export type ValidityPolicy = z.infer<typeof ValiditySchema>;
+export const QualificationVersionModeSchema = z.enum(["current", "new"]);
+export type QualificationVersionMode = z.infer<
+  typeof QualificationVersionModeSchema
+>;
+export const QualificationPolicySnapshotSchema = z.object({
+  id,
+  entityId: id,
+  version: z.number().int().positive(),
+  revision: z.number().int().positive(),
+  courseIds: z.array(id).max(100),
+  validity: ValiditySchema,
+  renewalLeadMonths: z.number().int().min(1).max(1200).default(3),
+  renewalNoticeDaysBefore: z.number().int().min(0).max(365).default(7),
+});
+export type QualificationPolicySnapshot = z.infer<
+  typeof QualificationPolicySnapshotSchema
+>;
 export const unknownValidity = (): ValidityPolicy => ({
   type: "unknown",
   months: null,
@@ -118,6 +135,7 @@ export const PlanScheduleSchema = z.object({
 });
 export const PersonalPlanSchema = z.object({
   qualificationMetadata: QualificationMetadataSchema.optional(),
+  qualificationPolicySnapshot: QualificationPolicySnapshotSchema.optional(),
   id,
   acquisitionCycleId: id.optional(),
   previousCertificationId: id.optional(),

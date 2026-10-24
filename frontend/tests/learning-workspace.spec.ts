@@ -26,7 +26,7 @@ test('목록·상세의 학습/평가 주소와 인증Set 유지, 뒤로·앞으
   await expect(page.locator('.qualification-row .progress-label')).toContainText('평가 통과');
   await page.locator('.qualification-row').first().click();
   await expect(page).toHaveURL(/assignment-1\?stage=assessment/);
-  const courseNav = page.getByRole('navigation', { name: '필수 인증Set' });
+  const courseNav = page.getByRole('navigation', { name: '인증Set' });
   await courseNav.getByRole('button').nth(1).click();
   await expect(page).toHaveURL(/stage=assessment&course=demo-course-2/);
   await expect(page.getByRole('region', { name: '자격 요약' })).toHaveCount(0);
@@ -184,7 +184,7 @@ test('모바일 자료 선택과 페이지 읽기 위치를 탭·응시 왕복 �
     .toBe(600);
   await menu(page).getByRole('link', { name: '평가', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeEnabled();
   await page.getByRole('link', { name: '학습으로 이동', exact: true }).click();
   await expect
     .poll(() => body.evaluate((el) => Math.round(-el.getBoundingClientRect().top)))
@@ -228,7 +228,7 @@ test('빈 인증Set·학습 항목·자료와 Hold 제한은 명확하게 표시
   });
   await refresh(page);
   await expect(page.locator('.qualification-context-note')).toContainText('Hold');
-  await expect(page.getByRole('link', { name: '평가로 이동', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '평가 시작', exact: true })).toHaveCount(0);
   await menu(page).getByRole('link', { name: '평가', exact: true }).click();
   await expect(page.locator('.assessment-grid').getByRole('link')).toHaveCount(0);
   empty = true;
@@ -247,7 +247,7 @@ for (const failure of ['pending', 'response', 'conflict'] as const) {
     await page.goto('/');
     await actor(page, 'learner-1');
     await page.goto('/qualifications/assignment-1/courses/demo-course-2/objective');
-    await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeEnabled();
     const tabs = page.getByRole('tablist', { name: '응시 문항' });
     await tabs.getByRole('tab').nth(1).click();
     const attempts = () =>
@@ -276,7 +276,7 @@ for (const failure of ['pending', 'response', 'conflict'] as const) {
       } else
         await route.fulfill({ status: 409, json: { message: '다른 창에서 변경한 답안입니다.' } });
     });
-    await page.getByLabel('항목의 누락 여부', { exact: true }).check();
+    await page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ }).check();
     await page.getByRole('link', { name: '학습으로 이동', exact: true }).click();
     await requestStarted;
     if (failure === 'pending') {
@@ -285,7 +285,7 @@ for (const failure of ['pending', 'response', 'conflict'] as const) {
     } else {
       await answerConfirmation(page, false);
       await expect(page).toHaveURL(/\/objective$/);
-      await expect(page.getByLabel('항목의 누락 여부', { exact: true })).toBeChecked();
+      await expect(page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ })).toBeChecked();
       await page.unroute('**/api/attempts/*/draft');
       if (failure === 'conflict') {
         await page.getByRole('link', { name: '학습으로 이동', exact: true }).click();
@@ -308,7 +308,7 @@ for (const failure of ['pending', 'response', 'conflict'] as const) {
     await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
     await expect(tabs.getByRole('tab').nth(1)).toHaveAttribute('aria-selected', 'true');
     if (failure !== 'conflict')
-      await expect(page.getByLabel('항목의 누락 여부', { exact: true })).toBeChecked();
+      await expect(page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ })).toBeChecked();
     expect(attempts()).toHaveLength(1);
     expect(attempts()[0]!.id).toBe(id);
   });

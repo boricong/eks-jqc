@@ -28,11 +28,7 @@ const assignment = computed(() => {
   const value = store.assignment(String(route.params.id));
   return value?.learnerId === store.actorId ? value : undefined;
 });
-const qualification = computed(
-  () =>
-    assignment.value &&
-    store.qualification(assignment.value.qualificationId, assignment.value.qualificationMetadata),
-);
+const qualification = computed(() => assignment.value && store.qualificationFor(assignment.value));
 const plan = computed(() => store.data.plans.find((p) => p.id === assignment.value?.planId));
 const selected = computed(
   () =>
@@ -73,6 +69,7 @@ const courses = computed(
     assignment.value?.enrollments.map((e) => ({
       id: e.courseId,
       title: store.course(e.courseId).title,
+      required: qualification.value?.courseIds.includes(e.courseId) === true,
       status: courseStatus(e),
       passed: store.requiredKinds(store.course(e.courseId)).filter((kind) => e[kind] === 'passed')
         .length,
@@ -195,16 +192,10 @@ function chooseCourse(id: string) {
                 <span v-else class="status">{{ courseStatus(selected) }}</span>
               </template>
               <RouterLink
-                v-if="!showAssessments && assignment.planId"
-                :to="`/plans/${assignment.planId}`"
-                class="text-link"
-                >일정 수정</RouterLink
-              >
-              <RouterLink
                 v-if="!showAssessments && !blocked"
                 :to="qualificationLocation('assessment', assignment.id, course.id)"
-                class="button secondary"
-                >평가로 이동<AppIcon name="arrow" :size="16"
+                class="button primary learning-assessment-start"
+                >평가 시작<AppIcon name="arrow" :size="16"
               /></RouterLink>
             </div>
           </div>
@@ -317,38 +308,45 @@ function chooseCourse(id: string) {
             >
           </div>
           <div class="assessment-grid">
+            <div v-if="kinds.length" class="assessment-list-heading" aria-hidden="true">
+              <span>평가 유형</span><span>문항 수</span><span>합격 기준</span><span>상태</span
+              ><span>평가 진행</span>
+            </div>
             <section
               v-for="kind in kinds"
               :key="kind"
               class="assessment-card"
               :class="{ recommended: recommended === kind }"
+              :aria-label="kindLabels[kind]"
             >
-              <div class="section-heading">
-                <h3>{{ kindLabels[kind] }}</h3>
+              <h3 class="assessment-type">{{ kindLabels[kind] }}</h3>
+              <p class="assessment-count">
+                <span class="assessment-cell-label">문항 수</span>{{ count(kind) }}문항
+              </p>
+              <p class="assessment-threshold">
+                <span class="assessment-cell-label">합격 기준</span
+                >{{ threshold(kind) == null ? '미설정' : `${threshold(kind)}% 이상 통과` }}
+              </p>
+              <div class="assessment-state">
+                <span class="sr-only">상태</span>
                 <StatusBadge
                   :status="selected[kind]"
                   :label="selected[kind] === 'ready' ? '미응시' : undefined"
                 />
               </div>
-              <p class="assessment-metadata">
-                {{ count(kind) }}문항 · {{ threshold(kind) }}% 이상 통과
-              </p>
               <div class="assessment-action">
-                <span v-if="blocked" class="muted">{{
-                  assignment.excludedReason ? '검증 제외' : '취득 대상자 Hold'
-                }}</span>
+                <span v-if="blocked" class="muted">응시 제한</span>
                 <RouterLink
                   v-else-if="selected[kind] === 'passed'"
                   :to="assessmentPath(kind)"
                   class="button secondary"
                   >결과 보기</RouterLink
                 >
-                <div v-else-if="prerequisite(kind)" class="assessment-locked">
-                  <p><AppIcon name="lock" :size="16" />지식 평가를 먼저 통과해 주세요</p>
+                <template v-else-if="prerequisite(kind)">
                   <RouterLink :to="assessmentPath('objective')" class="button secondary"
                     >지식 평가로 이동</RouterLink
                   >
-                </div>
+                </template>
                 <RouterLink
                   v-else
                   :to="assessmentPath(kind)"
@@ -358,6 +356,16 @@ function chooseCourse(id: string) {
                   }}<AppIcon :name="selected[kind] === 'failed' ? 'retry' : 'arrow'" :size="18"
                 /></RouterLink>
               </div>
+              <p v-if="blocked || prerequisite(kind)" class="assessment-row-notice">
+                <AppIcon name="lock" :size="16" />
+                {{
+                  blocked
+                    ? assignment.excludedReason
+                      ? '검증 제외로 평가를 진행할 수 없습니다.'
+                      : '취득 대상자 Hold로 평가를 진행할 수 없습니다.'
+                    : '지식 평가를 먼저 통과해 주세요'
+                }}
+              </p>
             </section>
           </div>
           <p v-if="!kinds.length" class="muted">

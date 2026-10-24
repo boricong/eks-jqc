@@ -40,6 +40,7 @@ import {
   expirationDate,
   unknownValidity,
   kindLabels,
+  qualificationForRecord,
 } from "@eks/contracts";
 import { demand, DomainError } from "./storage.ts";
 import { userView, organization, systemOperator } from "./organizations.ts";
@@ -269,7 +270,7 @@ function reconcile(
   const { e, a, c } = context(s, enrollmentId);
   active(a);
   const learner = find(s.users, a.learnerId),
-    q = find(s.qualifications, a.qualificationId);
+    q = qualificationForRecord(find(s.qualifications, a.qualificationId), a);
   const snapshot = (catalog: { title: string; version: number }) => ({
     learnerName: learner.name,
     organizationPath: structuredClone(
@@ -665,7 +666,14 @@ export function execute(
         result.id,
         result.newVersion ? "기존 기준을 보존하고 새 버전 저장" : "기준 저장",
         undefined,
-        { sourceId: item.id },
+        {
+          sourceId: item.id,
+          sourceVersion: item.version,
+          resultVersion: result.version,
+          versionMode: body.versionMode ?? null,
+          versionPolicy: result.versionPolicy ?? null,
+          changes: result.changes,
+        },
       );
     return result;
   }

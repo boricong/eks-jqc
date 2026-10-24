@@ -29,7 +29,14 @@ import { useListView } from '../composables/useListView';
 import PlanningPanel from '../components/PlanningPanel.vue';
 import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
-import { kindLabels, certificationStatus, kstDate, credentialCurrent } from '@eks/contracts';
+import {
+  kindLabels,
+  certificationStatus,
+  kstDate,
+  credentialCurrent,
+  type CatalogItemSavePreview,
+  type QualificationVersionMode,
+} from '@eks/contracts';
 import type { Assignment, Course, Notice, Qualification, AuditEvent } from '../types';
 const store = useDemo(),
   route = useRoute(),
@@ -59,7 +66,13 @@ const query = ref(''),
   errors = ref<string[]>([]);
 const validationShown = ref(false);
 const courseEditor = ref<InstanceType<typeof CourseEditor>>();
-const savePreview = ref<any>(null);
+const savePreview = ref<CatalogItemSavePreview | null>(null);
+const versionMode = ref<QualificationVersionMode>('current');
+const previewPending = ref(false),
+  previewError = ref('');
+let previewGeneration = 0;
+const saveTrigger = ref<HTMLButtonElement>();
+let saveReturnTarget: HTMLElement | null = null;
 const savedLinks = ref<{ id: string; title: string; version: number }[]>([]);
 const listHeading = ref<HTMLElement>();
 const courseSaveResult = ref<{
@@ -160,6 +173,9 @@ watch(
       ? 'all'
       : remembered.filter || (section.value === 'courses' ? 'active' : 'all');
     savePreview.value = null;
+    previewGeneration++;
+    previewPending.value = false;
+    previewError.value = '';
     savedLinks.value = [];
     selectedAssignment.value = null;
     noticeDraft.value = null;
@@ -274,25 +290,71 @@ async function createCatalog() {
     busy.value = false;
   }
 }
-async function saveCatalog(confirm = false) {
+function closeSavePreview() {
+  if (busy.value) return;
+  saveReturnTarget = saveTrigger.value || null;
+  previewGeneration++;
+  previewPending.value = false;
+  savePreview.value = null;
+  previewError.value = '';
+}
+function restoreSaveFocus() {
+  if (saveReturnTarget?.isConnected) saveReturnTarget.focus();
+  saveReturnTarget = null;
+}
+async function reviewSave(mode: QualificationVersionMode = versionMode.value) {
   if (!editor.value || readOnly.value || busy.value) return;
+  const sequence = ++previewGeneration;
+  const context = `${store.actorId}:${store.managementLv1}:${editor.value.id}`;
+  versionMode.value = mode;
+  previewPending.value = true;
+  previewError.value = '';
+  errors.value = [];
+  try {
+    const preview = await api<CatalogItemSavePreview>(
+      store.managementPath(`/${section.value}/${editor.value.id}/save-preview`),
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...plain(editor.value),
+          ...(section.value === 'qualifications' ? { versionMode: mode } : {}),
+        }),
+      },
+    );
+    if (
+      sequence !== previewGeneration ||
+      context !== `${store.actorId}:${store.managementLv1}:${editor.value?.id}`
+    )
+      return;
+    savePreview.value = preview;
+    if (preview.versionPolicy) versionMode.value = preview.versionPolicy.effectiveMode;
+  } catch (error) {
+    if (sequence === previewGeneration) {
+      previewError.value = (error as Error).message;
+      errors.value = [previewError.value];
+    }
+  } finally {
+    if (sequence === previewGeneration) previewPending.value = false;
+  }
+}
+async function saveCatalog(confirm = false) {
+  if (!editor.value || readOnly.value || busy.value || previewPending.value) return;
   if (courseEditor.value && !courseEditor.value.commit()) return;
+  if (!confirm) {
+    await reviewSave('current');
+    return;
+  }
+  if (!savePreview.value || previewError.value) return;
   const context = `${store.actorId}:${store.managementLv1}:${editor.value.id}`;
   busy.value = true;
   errors.value = [];
   try {
-    if (!confirm) {
-      const preview = await api(
-        store.managementPath(`/${section.value}/${editor.value.id}/save-preview`),
-        { method: 'POST', body: JSON.stringify(plain(editor.value)) },
-      );
-      if (context === `${store.actorId}:${store.managementLv1}:${editor.value?.id}`)
-        savePreview.value = preview;
-      return;
-    }
     const result = await store.saveCatalog(section.value, plain(editor.value), {
       stateRevision: savePreview.value.stateRevision,
       organizationRevision: savePreview.value.organizationRevision,
+      ...(savePreview.value.versionPolicy
+        ? { versionMode: savePreview.value.versionPolicy.effectiveMode }
+        : {}),
     });
     if (context !== `${store.actorId}:${store.managementLv1}:${editor.value?.id}`) return;
     savePreview.value = null;
@@ -705,21 +767,91 @@ onBeforeRouteUpdate(canLeave);
           >
         </div>
         <ActionBar v-if="!readOnly" class="actionbar">
-          <span class="muted">전체 기준을 저장합니다. 팀 적용 버전은 유지됩니다.</span
-          ><button class="button primary" :disabled="busy" @click="saveCatalog()">저장</button>
+          <span class="muted">{{
+            section === 'qualifications'
+              ? '변경 내용을 확인하고 저장 방식을 선택합니다.'
+              : '전체 기준을 저장합니다. 팀 적용 버전은 유지됩니다.'
+          }}</span
+          ><button
+            ref="saveTrigger"
+            class="button primary"
+            :disabled="busy || previewPending"
+            @click="saveCatalog()"
+          >
+            저장
+          </button>
         </ActionBar>
         <AppDialog
           :open="!!savePreview"
           title="기준 저장 확인"
+          @closed="restoreSaveFocus"
           @update:open="
             (v) => {
-              if (!v && !busy) savePreview = null;
+              if (!v) closeSavePreview();
             }
           "
         >
           <template v-if="savePreview"
             ><h3>{{ editor.title || '이름 없는 기준' }} · v{{ editor.version }}</h3>
-            <p>
+            <template v-if="savePreview.versionPolicy">
+              <p v-if="savePreview.unchanged">변경 내용이 없습니다.</p>
+              <template v-else>
+                <p
+                  v-if="savePreview.versionPolicy.requiresNewVersion"
+                  class="qualification-save-notice"
+                >
+                  인증Set 구성 변경으로 새 버전 생성이 필요합니다. v{{
+                    savePreview.candidate.version
+                  }}
+                  버전을 생성합니다.
+                </p>
+                <fieldset
+                  v-else
+                  class="qualification-save-options"
+                  :disabled="busy"
+                  :aria-busy="previewPending"
+                >
+                  <legend>저장 방식</legend>
+                  <label
+                    ><input
+                      type="radio"
+                      name="qualification-version-mode"
+                      value="current"
+                      :checked="versionMode === 'current'"
+                      @change="reviewSave('current')"
+                    />
+                    <span
+                      >현재 버전에 저장<small>v{{ editor.version }} 유지</small></span
+                    >
+                  </label>
+                  <label
+                    ><input
+                      type="radio"
+                      name="qualification-version-mode"
+                      value="new"
+                      :checked="versionMode === 'new'"
+                      @change="reviewSave('new')"
+                    />
+                    <span
+                      >새 버전 생성<small
+                        >v{{ savePreview.versionPolicy.nextVersion }} 생성</small
+                      ></span
+                    >
+                  </label>
+                </fieldset>
+                <p v-if="previewPending" role="status" class="qualification-save-description">
+                  저장 방식을 확인하고 있습니다.
+                </p>
+                <p v-else-if="!previewError" class="qualification-save-description">
+                  {{
+                    savePreview.versionPolicy.effectiveMode === 'current'
+                      ? '해당 버전의 팀 설정을 수정합니다. 이미 완료된 계획과 기존 발급 기간은 유지되며, 이후 이 버전으로 완료하는 계획에는 수정한 설정이 적용됩니다.'
+                      : '기존 버전과 팀 적용 선택은 유지됩니다. 새 버전을 사용하려면 팀 적용을 별도로 변경해 주세요. 완료된 계획의 인증Set과 취득 기준은 유지됩니다.'
+                  }}
+                </p>
+              </template>
+            </template>
+            <p v-else>
               {{
                 savePreview.unchanged
                   ? '변경 내용이 없습니다.'
@@ -730,7 +862,7 @@ onBeforeRouteUpdate(canLeave);
                     : '현재 버전을 수정합니다.'
               }}
             </p>
-            <p>기존 진행과 팀 적용 버전은 변경하지 않습니다.</p>
+            <p v-if="!savePreview.versionPolicy">기존 진행과 팀 적용 버전은 변경하지 않습니다.</p>
             <details v-if="savePreview.changes?.length" class="criterion-changes">
               <summary>변경 전후 확인 · {{ savePreview.changes.length }}개 항목</summary>
               <section v-for="change in savePreview.changes" :key="change.label">
@@ -755,14 +887,41 @@ onBeforeRouteUpdate(canLeave);
             </details>
             <p v-if="errors.length" class="error-message" role="alert">
               {{ errors.join(' · ') }}
-            </p></template
-          >
+            </p>
+            <button
+              v-if="previewError || errors.length"
+              class="button secondary"
+              :disabled="busy || previewPending"
+              @click="reviewSave()"
+            >
+              다시 검토
+            </button>
+          </template>
           <template #footer
-            ><button class="button secondary" :disabled="busy" @click="savePreview = null">
-              계속 편집</button
-            ><button class="button primary" :disabled="busy" @click="saveCatalog(true)">
-              저장 확인
-            </button></template
+            ><button
+              v-if="savePreview?.versionPolicy && savePreview.unchanged"
+              class="button primary"
+              @click="closeSavePreview()"
+            >
+              닫기
+            </button>
+            <template v-else
+              ><button class="button secondary" :disabled="busy" @click="closeSavePreview()">
+                계속 편집</button
+              ><button
+                class="button primary"
+                :disabled="busy || previewPending || !!previewError"
+                @click="saveCatalog(true)"
+              >
+                {{
+                  savePreview?.versionPolicy
+                    ? savePreview.newVersion
+                      ? '새 버전 생성'
+                      : '현재 버전에 저장'
+                    : '저장 확인'
+                }}
+              </button></template
+            ></template
           >
         </AppDialog>
       </template>

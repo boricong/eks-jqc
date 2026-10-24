@@ -46,7 +46,7 @@ for (const count of [1, 10, 30, 500])
         .snapshot()
         .attempts.filter((a) => a.courseId === 'demo-course-2' && a.status === 'graded'),
     ).toHaveLength(0);
-    await page.getByRole('button', { name: '제출', exact: true }).click();
+    await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
     dialog = page.getByRole('dialog');
     await expect(dialog).toContainText(`미응답 ${count}문항`);
     await dialog.getByRole('button', { name: '확인', exact: true }).click();
@@ -67,7 +67,7 @@ for (const count of [1, 10, 30, 500])
     expect(res.ok(), await res.text()).toBeTruthy();
     await page.reload();
     await expect(page.locator('.assessment-progress')).toContainText(`${count} / ${count} 응답`);
-    await page.getByRole('button', { name: '제출', exact: true }).click();
+    await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
     await expect(
       page.getByRole('heading', { name: '제출 전 답안 확인', exact: true }),
     ).toBeVisible();
@@ -76,14 +76,20 @@ for (const count of [1, 10, 30, 500])
       '최종 제출 후에는 답안을 수정할 수 없습니다.',
     );
     if (count > 20) {
-      await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
+      await page
+        .getByRole('navigation', { name: '답안 확인 페이지', exact: true })
+        .getByRole('button', { name: '다음 페이지', exact: true })
+        .click();
       await expect(page.locator('.review-number').first()).toHaveText('21');
-      await page.getByRole('button', { name: '이전 페이지', exact: true }).click();
+      await page
+        .getByRole('navigation', { name: '답안 확인 페이지', exact: true })
+        .getByRole('button', { name: '이전 페이지', exact: true })
+        .click();
     }
     await page.getByRole('button', { name: '1번 답안 수정', exact: true }).click();
     await expect(tabs.getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('radio').first()).toBeChecked();
-    await page.getByRole('button', { name: '제출', exact: true }).click();
+    await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
     if (count === 30)
       for (const width of [1920, 1440, 768, 390]) {
         await page.setViewportSize({ width, height: 900 });
@@ -120,10 +126,10 @@ test('실기 잠금·미통과 배경·지식 재응시 통과 후 실기 열림
   await page.goto('/');
   await actor(page, 'learner-1');
   await page.goto('/qualifications/assignment-1?course=demo-course-2&stage=assessment');
-  await expect(page.locator('.assessment-locked')).toContainText('지식 평가를 먼저 통과');
+  await expect(page.locator('.assessment-row-notice')).toContainText('지식 평가를 먼저 통과');
   await page.goto('/qualifications/assignment-1/courses/demo-course-2/practical');
   await expect(page.locator('.assessment-prerequisite')).toBeVisible();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeDisabled();
   expect(
     backend.store
       .snapshot()
@@ -138,7 +144,7 @@ test('실기 잠금·미통과 배경·지식 재응시 통과 후 실기 열림
       .nth((c.questions[i]!.correct! + 1) % c.questions[i]!.choices.length)
       .check();
   }
-  await page.getByRole('button', { name: '제출', exact: true }).click();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
   await page.getByRole('button', { name: '최종 제출', exact: true }).click();
   await expect(page.locator('.outcome-failed')).toBeVisible();
   await expect(page.getByRole('heading', { name: '미통과 · 재응시 가능' })).toBeVisible();
@@ -152,10 +158,12 @@ test('실기 잠금·미통과 배경·지식 재응시 통과 후 실기 열림
   }
   await page.getByRole('button', { name: '다시 응시', exact: true }).click();
   for (let i = 0; i < c.questions.length; i++) {
+    const index = page.getByRole('button', { name: /문항 선택/ });
+    if (await index.isVisible()) await index.click();
     await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(i).click();
     await page.getByRole('radio').nth(c.questions[i]!.correct!).check();
   }
-  await page.getByRole('button', { name: '제출', exact: true }).click();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
   await page.getByRole('button', { name: '최종 제출', exact: true }).click();
   await page.getByRole('link', { name: '상황 대응 평가 시작', exact: true }).click();
   await expect(page.locator('.scenario-context')).toBeVisible();
@@ -193,5 +201,5 @@ test('다른 탭에서 지식 평가를 통과하면 열린 실기 화면도 새
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.assessment-prerequisite')).toHaveCount(0);
   await expect(page.getByRole('radio').first()).toBeEnabled();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeEnabled();
 });

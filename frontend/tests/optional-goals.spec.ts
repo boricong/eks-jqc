@@ -1,8 +1,8 @@
 import { test, expect, actor } from './fixtures';
-import { requestPlan } from './workflow-helpers';
+import { requestPlan, savePlanViaApi } from './workflow-helpers';
 
 for (const mode of ['skip', 'empty', 'partial'] as const) {
-  test(`목표 ${mode} 상태로 최종 확인·완료, 선택 단계 왕복·확정 후 추가/삭제`, async ({
+  test(`목표 ${mode} 상태로 최종 확인·완료, 선택 단계 왕복·확정 화면 잠금과 API 목표 추가/삭제`, async ({
     page,
     backend,
   }) => {
@@ -48,30 +48,25 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
     await page.goto(`/plans/${plan.id}`);
     const course = page.locator(`[data-review-course="${plan.schedules[0]!.courseId}"]`);
-    await course
-      .getByRole('button', {
-        name: mode === 'partial' ? '학습 목표 수정' : '학습 목표 추가(선택)',
-        exact: true,
-      })
-      .click();
-    const goal = page.locator(`[data-plan-field="${plan.schedules[0]!.courseId}.goal"]`);
-    await expect(goal).toBeFocused();
-    await goal.fill('확정 후 선택 목표 추가');
-    await expect(page.getByRole('button', { name: '일정·목표 변경 저장' })).toBeDisabled();
-    await page.getByLabel('계획 변경 사유').fill('선택 목표 추가');
-    await page.getByRole('button', { name: '일정·목표 변경 저장' }).click();
-    await expect(page.locator('.save-status')).toHaveText('계획 완료');
-    await goal.fill('');
-    await page.getByLabel('계획 변경 사유').fill('선택 목표 삭제');
-    await page.getByRole('button', { name: '일정·목표 변경 저장' }).click();
-    await expect
-      .poll(() => backend.store.snapshot().plans.find((p) => p.id === plan.id)!.schedules[0]!.goal)
-      .toBe('');
-    await page.getByRole('button', { name: '4. 최종 확인', exact: true }).click();
+    await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);
+    await expect(course.getByRole('button', { name: /학습 목표.*(수정|선택)/ })).toHaveCount(0);
+    await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);
+    const schedules = structuredClone(
+      backend.store.snapshot().plans.find((p) => p.id === plan.id)!.schedules,
+    );
+    schedules[0]!.goal = '확정 후 서버에서 선택 목표 추가';
+    await savePlanViaApi(page, plan.id, { schedules }, '선택 목표 추가');
+    await page.reload();
+    await expect(course.locator('.plan-review-goal')).toContainText(
+      '확정 후 서버에서 선택 목표 추가',
+    );
+    schedules[0]!.goal = '';
+    await savePlanViaApi(page, plan.id, { schedules }, '선택 목표 삭제');
+    await page.reload();
     await expect(course.locator('.plan-review-goal')).toHaveCount(0);
     await expect(
       course.getByRole('button', { name: '학습 목표 추가(선택)', exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     expect(backend.store.snapshot().assignments.filter((a) => a.planId === plan.id)).toHaveLength(
       1,
     );

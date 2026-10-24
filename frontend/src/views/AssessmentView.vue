@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import PageHeading from '../components/PageHeading.vue';
 import PropertyList from '../components/PropertyList.vue';
 import ActionBar from '../components/ActionBar.vue';
 import SaveFeedback from '../components/SaveFeedback.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import { useProcessContext } from '../composables/useProcessContext';
-import { computed, ref, watch, nextTick, useId } from 'vue';
+import { computed, ref, watch, nextTick, useId, onBeforeUnmount } from 'vue';
 import { useRoute, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { useAttemptDraft } from '../composables/useAttemptDraft';
 import { useDemo } from '../stores/demo';
@@ -41,6 +40,32 @@ const noticeOpen = ref(false),
   noticeType = ref<'last' | 'missing'>('last'),
   missingIds = ref<string[]>([]),
   reviewPage = ref(1);
+const infoOpen = ref(false),
+  questionNavOpen = ref(false),
+  root = ref<HTMLElement>(),
+  submitbar = ref<InstanceType<typeof ActionBar>>(),
+  barHeight = ref(0);
+let barObserver: ResizeObserver | undefined;
+watch(
+  () => submitbar.value?.$el,
+  (element) => {
+    barObserver?.disconnect();
+    barHeight.value = 0;
+    if (!(element instanceof HTMLElement)) return;
+    barObserver = new ResizeObserver(() => {
+      barHeight.value = element.getBoundingClientRect().height;
+    });
+    barObserver.observe(element);
+  },
+  { flush: 'post' },
+);
+onBeforeUnmount(() => barObserver?.disconnect());
+const reviewReturn = ref<{
+  attemptId: string;
+  page: number;
+  questionId: string;
+  offset: number;
+} | null>(null);
 const {
   attempt,
   draft,
@@ -83,6 +108,19 @@ const knowledgePath = computed(
 );
 const result = computed(() => e.value?.[kind.value]);
 const isResult = computed(() => stage.value === 'result' || result.value === 'passed');
+const held = computed(() => store.actor.certificationEligibility === 'hold');
+const title = computed(() =>
+  isResult.value
+    ? '평가 결과'
+    : stage.value === 'review'
+      ? '제출 전 답안 확인'
+      : kind.value === 'objective'
+        ? '지식 평가'
+        : '상황 대응 평가',
+);
+const passScore = computed(() =>
+  kind.value === 'objective' ? c.value?.passScore : c.value?.practicalPassScore,
+);
 const prerequisite = computed(() =>
   c.value && result.value !== 'passed'
     ? assessmentPrerequisite(c.value, kind.value, e.value?.objective === 'passed')
@@ -116,6 +154,9 @@ async function prepare() {
   stage.value = 'edit';
   noticeOpen.value = false;
   reviewPage.value = 1;
+  reviewReturn.value = null;
+  infoOpen.value = false;
+  questionNavOpen.value = false;
   load(null);
   try {
     if (!valid.value || !a.value || !c.value || !e.value) return;
@@ -143,9 +184,32 @@ function answer(id: string, value: number) {
   changed();
   error.value = '';
 }
+async function chooseQuestion(id: string) {
+  selected.value = id;
+  if (questionNavOpen.value && window.matchMedia('(max-width: 768px)').matches) {
+    questionNavOpen.value = false;
+    await focusAnswer();
+  }
+}
 async function focusAnswer() {
   await nextTick();
-  document.querySelector<HTMLElement>('.answer-panel input')?.focus();
+  const input =
+    root.value?.querySelector<HTMLElement>('.answer-panel input:checked') ||
+    root.value?.querySelector<HTMLElement>('.answer-panel input');
+  focusVisible(input);
+}
+function focusVisible(element?: HTMLElement | null) {
+  if (!element) return;
+  element.focus({ preventScroll: true });
+  const rect = element.getBoundingClientRect(),
+    bottom = innerHeight - barHeight.value - 16;
+  if (rect.top < 80) window.scrollBy(0, rect.top - 80);
+  else if (rect.bottom > bottom) window.scrollBy(0, rect.bottom - bottom);
+}
+function reviewRow(id: string) {
+  return [...(root.value?.querySelectorAll<HTMLElement>('[data-review-question]') || [])].find(
+    (el) => el.dataset.reviewQuestion === id,
+  );
 }
 function showMissing(ids = missing.value.map((q) => q.id)) {
   missingIds.value = ids;
@@ -161,7 +225,7 @@ async function noticeClosed() {
   }
 }
 async function review() {
-  if (busy.value || prerequisite.value) return;
+  if (busy.value || prerequisite.value || held.value) return;
   if (missing.value.length) {
     showMissing();
     return;
@@ -171,9 +235,23 @@ async function review() {
   try {
     await flush();
     if (seq === generation) {
+      if (reviewReturn.value && reviewReturn.value.attemptId === attempt.value?.id)
+        reviewPage.value = Math.min(reviewReturn.value!.page, reviewPages.value);
       stage.value = 'review';
+      error.value = '';
+      busy.value = false;
       await nextTick();
-      document.querySelector<HTMLElement>('.assessment-review h2')?.focus();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (seq !== generation || busy.value || stage.value !== 'review') return;
+      const resume = reviewReturn.value;
+      const row =
+        resume && resume.attemptId === attempt.value?.id ? reviewRow(resume.questionId) : undefined;
+      if (resume && row) {
+        window.scrollBy(0, row.getBoundingClientRect().top - resume.offset);
+        focusVisible(row.querySelector<HTMLElement>('.review-edit'));
+      } else {
+        focusVisible(root.value?.querySelector<HTMLElement>('.assessment-stage-title'));
+      }
     }
   } catch {
     /* The autosave component retains the answer and error. */
@@ -182,7 +260,7 @@ async function review() {
   }
 }
 async function submit() {
-  if (busy.value || !attempt.value || prerequisite.value) return;
+  if (busy.value || !attempt.value || prerequisite.value || held.value) return;
   if (missing.value.length) {
     showMissing();
     return;
@@ -200,13 +278,19 @@ async function submit() {
       load(null);
       stage.value = 'result';
       await nextTick();
-      document.querySelector<HTMLElement>('.assessment-outcome h2')?.focus();
+      focusVisible(root.value?.querySelector<HTMLElement>('.assessment-outcome h2'));
     }
   } catch (err) {
     if (seq !== generation) return;
     error.value = (err as Error).message;
     if (err instanceof ApiError && err.code === 'ASSESSMENT_INCOMPLETE')
       showMissing((err.details?.missingQuestionIds as string[]) || missing.value.map((q) => q.id));
+    else {
+      await nextTick();
+      root.value
+        ?.querySelector<HTMLElement>('.assessment-submit-error')
+        ?.focus({ preventScroll: true });
+    }
   } finally {
     if (seq === generation) busy.value = false;
   }
@@ -219,8 +303,26 @@ async function retrySave() {
 async function reload() {
   if (!(await confirmAction('현재 입력을 서버에 저장된 답안으로 바꿀까요?', '답안 다시 불러오기')))
     return;
+  const actor = store.actorId,
+    path = route.fullPath,
+    attemptId = attempt.value?.id;
+  const previous = {
+    selected: selected.value,
+    page: reviewPage.value,
+    resume: reviewReturn.value,
+    info: infoOpen.value,
+    stage: stage.value,
+  };
   await store.refresh();
+  if (actor !== store.actorId || path !== route.fullPath) return;
   await prepare();
+  if (actor !== store.actorId || path !== route.fullPath || attemptId !== attempt.value?.id) return;
+  if (questions.value.some((q) => q.id === previous.selected)) selected.value = previous.selected;
+  reviewPage.value = Math.min(previous.page, reviewPages.value);
+  reviewReturn.value = previous.resume;
+  infoOpen.value = previous.info;
+  if (previous.stage === 'review' && !missing.value.length) await review();
+  else await focusAnswer();
 }
 function navigate(d: number) {
   if (d > 0 && position.value === questions.value.length - 1) {
@@ -231,14 +333,31 @@ function navigate(d: number) {
   selected.value = questions.value[position.value + d]?.id || selected.value;
 }
 async function editQuestion(id: string) {
+  if (busy.value) return;
+  const row =
+    reviewRow(id) ||
+    [...(root.value?.querySelectorAll<HTMLElement>('[data-review-question]') || [])].find(
+      (el) => el.getBoundingClientRect().bottom > 80,
+    );
+  if (attempt.value && row)
+    reviewReturn.value = {
+      attemptId: attempt.value.id,
+      page: reviewPage.value,
+      questionId: row.dataset.reviewQuestion!,
+      offset: row.getBoundingClientRect().top,
+    };
   selected.value = id;
   stage.value = 'edit';
   await focusAnswer();
 }
 async function changeReviewPage(page: number) {
-  reviewPage.value = page;
+  if (busy.value) return;
+  reviewPage.value = Math.max(1, Math.min(page, reviewPages.value));
+  reviewReturn.value = null;
   await nextTick();
-  document.querySelector<HTMLElement>('.assessment-review h2')?.focus();
+  const row = root.value?.querySelector<HTMLElement>('[data-review-question]');
+  row?.focus({ preventScroll: true });
+  if (row) window.scrollBy(0, row.getBoundingClientRect().top - 80);
 }
 watch(selected, (value) => {
   if (!busy.value && attempt.value) memory.attempt(attempt.value.id).question = value;
@@ -260,26 +379,58 @@ onBeforeRouteUpdate(leave);
 <template>
   <div
     v-if="valid && a && e && c"
+    ref="root"
     class="container page assessment-page"
-    :class="{ 'is-assessment-result': isResult }"
+    :class="{
+      'is-assessment-result': isResult,
+      'is-assessment-review': stage === 'review' && !isResult,
+    }"
+    :style="{ '--assessment-bar-height': `${barHeight}px` }"
   >
     <LearnerNav :assignment-id="a.id" :course-id="c.id" />
-    <RouterLink :to="returnPath" class="back-link">← 평가 선택 · {{ c.title }}</RouterLink>
-    <PageHeading class="page-heading">
-      <div>
-        <h1>{{ isResult ? '평가 결과' : kindLabels[kind] }}</h1>
-        <p>
-          {{ qualificationTitle }} · {{ c.title }} ·
-          {{
-            kind === 'practical'
-              ? '가상 상황의 대응 선택을 평가합니다.'
-              : '개념과 기준의 이해를 평가합니다.'
-          }}
-        </p>
+    <header class="assessment-task-header">
+      <div class="assessment-stage-heading">
+        <h1 class="assessment-stage-title" tabindex="-1">{{ title }}</h1>
+        <button
+          type="button"
+          class="text-link assessment-info-toggle"
+          :aria-expanded="infoOpen"
+          :aria-controls="uid + '-info'"
+          @click="infoOpen = !infoOpen"
+        >
+          평가 정보<AppIcon name="down" :size="16" :class="{ 'is-open': infoOpen }" />
+        </button>
       </div>
-      <RouterLink :to="learningPath" class="button secondary">학습으로 이동</RouterLink>
-    </PageHeading>
-    <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+      <p class="assessment-context">
+        <strong>{{ c.title }}</strong
+        ><span>v{{ c.version }} · {{ kindLabels[kind] }}</span>
+      </p>
+      <section v-show="infoOpen" :id="uid + '-info'" class="assessment-info" aria-label="평가 정보">
+        <PropertyList>
+          <div>
+            <dt>자격</dt>
+            <dd>{{ qualificationTitle }}</dd>
+          </div>
+          <div>
+            <dt>응시 회차</dt>
+            <dd>
+              {{
+                (isResult ? last?.round : attempt?.round)
+                  ? `${isResult ? last?.round : attempt?.round}회`
+                  : '확인할 수 없음'
+              }}
+            </dd>
+          </div>
+          <div v-if="isResult && last?.date">
+            <dt>확정 일시 · KST</dt>
+            <dd>{{ new Date(last.date).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }}</dd>
+          </div>
+        </PropertyList>
+      </section>
+    </header>
+    <p v-if="held" class="assessment-restriction" role="status">
+      취득 대상자 Hold · 새 응시와 제출은 중단됩니다. 저장된 답안과 결과는 확인할 수 있습니다.
+    </p>
     <section
       v-if="isResult"
       class="panel result-panel assessment-outcome"
@@ -287,86 +438,89 @@ onBeforeRouteUpdate(leave);
       aria-label="평가 결과 요약"
     >
       <div class="outcome-content">
-        <div class="outcome-icon">
-          <AppIcon :name="result === 'passed' ? 'check' : 'alert'" :size="32" />
+        <div class="outcome-summary">
+          <div class="outcome-status">
+            <div class="outcome-icon">
+              <AppIcon :name="result === 'passed' ? 'check' : 'alert'" :size="24" />
+            </div>
+            <h2 tabindex="-1">{{ result === 'passed' ? '평가 통과' : '미통과 · 재응시 가능' }}</h2>
+          </div>
+          <PropertyList class="outcome-facts">
+            <div>
+              <dt>평가 점수</dt>
+              <dd>
+                <template v-if="last?.earned !== undefined && last?.total !== undefined"
+                  ><strong>{{ last.earned }}</strong> / {{ last.total }}점</template
+                ><span v-else>확인할 수 없음</span>
+              </dd>
+            </div>
+            <div>
+              <dt>합격 기준</dt>
+              <dd>{{ passScore == null ? '미설정' : `${passScore}% 이상` }}</dd>
+            </div>
+          </PropertyList>
         </div>
-        <p class="outcome-eyebrow">{{ kindLabels[kind] }} · {{ last?.round }}회 · 자동 채점</p>
-        <h2 tabindex="-1">{{ result === 'passed' ? '평가 통과' : '미통과 · 재응시 가능' }}</h2>
         <p class="outcome-description">
           {{
             result === 'passed'
-              ? store.complete(e)
-                ? '필수 평가를 모두 통과하여 인증Set을 수료했습니다.'
-                : kind === 'objective'
-                  ? '지식 평가를 통과했습니다. 상황 대응 평가를 이어서 진행해 주세요.'
-                  : '상황 대응 평가를 통과했습니다. 남은 필수 평가를 확인해 주세요.'
-              : '합격 기준에 도달하지 못했습니다. 학습자료를 확인한 뒤 다시 응시할 수 있습니다.'
+              ? a.certifiedAt
+                ? '모든 필수 인증Set을 수료하여 자격을 취득했습니다.'
+                : store.complete(e)
+                  ? '인증Set을 수료했습니다. 남은 인증Set의 평가를 확인해 주세요.'
+                  : practicalNext
+                    ? '지식 평가를 통과했습니다. 상황 대응 평가를 이어서 진행해 주세요.'
+                    : '통과한 평가를 확인하고 남은 평가를 진행해 주세요.'
+              : '합격 기준에 도달하지 못했습니다. 학습자료를 확인하거나 다시 응시해 주세요.'
           }}
         </p>
-        <PropertyList class="outcome-facts">
-          <div>
-            <dt>평가 점수</dt>
-            <dd>
-              <strong>{{ last?.earned }}</strong> / {{ last?.total }}점
-            </dd>
-          </div>
-          <div>
-            <dt>합격 기준</dt>
-            <dd>{{ kind === 'objective' ? c.passScore : c.practicalPassScore }}% 이상</dd>
-          </div>
-          <div v-if="last?.date">
-            <dt>확정 일시 · KST</dt>
-            <dd>{{ new Date(last.date).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }}</dd>
-          </div>
-        </PropertyList>
         <div class="result-assessments">
           <span v-for="k in c.assessmentKinds" :key="k"
             >{{ kindLabels[k] }} <StatusBadge :status="e[k]"
           /></span>
+          <span v-if="e.completion" class="outcome-award">인증Set 수료</span
+          ><span v-if="a.certifiedAt" class="outcome-award">자격 취득</span>
         </div>
         <div class="actions outcome-actions">
-          <RouterLink
-            v-if="practicalNext"
-            :to="`/qualifications/${a.id}/courses/${c.id}/practical`"
-            class="button primary"
-            >상황 대응 평가 시작</RouterLink
-          >
           <button
             v-if="result === 'failed'"
             class="button primary"
-            :disabled="busy"
+            :disabled="busy || held"
             @click="prepare"
           >
             다시 응시
           </button>
-          <RouterLink v-if="result === 'failed'" :to="learningPath" class="button secondary"
-            >학습자료 확인</RouterLink
+          <template v-else-if="practicalNext"
+            ><RouterLink
+              v-if="!held"
+              :to="`/qualifications/${a.id}/courses/${c.id}/practical`"
+              class="button primary"
+              >상황 대응 평가 시작</RouterLink
+            ><button v-else class="button primary" disabled>상황 대응 평가 시작</button></template
           >
+          <RouterLink
+            v-else-if="a.certifiedAt"
+            :to="`/certifications/${a.id}`"
+            class="button primary"
+            >인증서 보기</RouterLink
+          >
+          <RouterLink v-else :to="returnPath" class="button primary">평가 선택으로</RouterLink>
+          <RouterLink :to="learningPath" class="button secondary">{{
+            result === 'failed' ? '학습자료 확인' : '학습으로 이동'
+          }}</RouterLink>
           <RouterLink
             v-if="e.completion"
             :to="{ path: `/completions/${e.completion.id}`, query: { stage: 'assessment' } }"
             class="button secondary"
             >인증Set 수료증 보기</RouterLink
           >
-          <RouterLink v-if="a.certifiedAt" :to="`/certifications/${a.id}`" class="button primary"
-            >인증서 보기</RouterLink
+          <RouterLink
+            v-if="result === 'failed' || practicalNext || a.certifiedAt"
+            :to="returnPath"
+            class="text-link"
+            >평가 선택으로</RouterLink
           >
-          <RouterLink :to="returnPath" class="button secondary">평가 선택으로</RouterLink>
         </div>
-        <p class="outcome-credit">
-          배경:
-          <a href="https://heropatterns.com/" target="_blank" rel="noopener noreferrer"
-            >Topography · Steve Schoger</a
-          >
-          ·
-          <a
-            href="https://creativecommons.org/licenses/by/4.0/"
-            target="_blank"
-            rel="noopener noreferrer"
-            >CC BY 4.0</a
-          >
-          · 색상·불투명도 조정
-        </p>
+        <p v-if="error" class="error-message" role="alert">{{ error }}</p>
       </div>
     </section>
     <template v-else>
@@ -378,14 +532,28 @@ onBeforeRouteUpdate(leave);
           <RouterLink :to="knowledgePath" class="button primary">지식 평가로 이동</RouterLink>
         </div>
       </section>
-      <p class="assessment-progress">
-        {{ answered }} / {{ questions.length }} 응답 · 합격 기준
-        {{ kind === 'objective' ? c.passScore : c.practicalPassScore }}%
-      </p>
+      <div v-if="stage === 'edit'" class="assessment-progress" aria-label="응시 현황">
+        <span>{{ answered }} / {{ questions.length }} 응답</span
+        ><span
+          >미응답 <strong>{{ missing.length }}</strong></span
+        ><span>합격 기준 {{ passScore == null ? '미설정' : `${passScore}%` }}</span>
+      </div>
       <div v-if="stage === 'edit'" class="number-editor panel">
+        <button
+          type="button"
+          class="button secondary question-index-toggle"
+          :aria-expanded="questionNavOpen"
+          :aria-controls="uid + '-questions'"
+          @click="questionNavOpen = !questionNavOpen"
+        >
+          문항 선택 · {{ position + 1 }} / {{ questions.length }}<AppIcon name="down" :size="16" />
+        </button>
         <CompactTabs
+          :id="uid + '-questions'"
           ref="tabs"
-          v-model="selected"
+          :model-value="selected"
+          @update:model-value="chooseQuestion"
+          :class="{ 'question-index-open': questionNavOpen }"
           :items="options"
           vertical
           numbered
@@ -398,7 +566,7 @@ onBeforeRouteUpdate(leave);
           role="tabpanel"
           :aria-labelledby="tabs?.tabId(current.id)"
           class="answer-panel"
-          :disabled="busy || !attempt || conflict || !!prerequisite"
+          :disabled="busy || !attempt || conflict || !!prerequisite || held"
         >
           <legend class="sr-only">{{ position + 1 }}번 문항</legend>
           <h2>{{ position + 1 }}번</h2>
@@ -406,8 +574,10 @@ onBeforeRouteUpdate(leave);
             <h3>상황</h3>
             <p>{{ current.scenario }}</p>
           </section>
-          <h3>{{ current.prompt }}</h3>
-          <div class="choices">
+          <p class="assessment-content-label">문항</p>
+          <h3 class="assessment-question-prompt">{{ current.prompt }}</h3>
+          <p :id="uid + '-choices-label'" class="assessment-content-label">보기</p>
+          <div class="choices" role="group" :aria-labelledby="uid + '-choices-label'">
             <label
               v-for="(option, i) in current.choices"
               :key="i"
@@ -415,14 +585,15 @@ onBeforeRouteUpdate(leave);
               :class="{ chosen: draft.answers[current.id] === i }"
               ><input
                 type="radio"
-                :aria-label="option"
+                :aria-label="`${i + 1}번 : ${option}`"
                 :name="current.id"
                 :checked="draft.answers[current.id] === i"
                 @change="answer(current.id, i)"
-              /><span>{{ i + 1 }}. {{ option }}</span></label
+              /><span class="choice-number">{{ i + 1 }}번 :</span
+              ><span class="choice-text">{{ option }}</span></label
             >
           </div>
-          <div class="actions">
+          <div class="actions question-actions">
             <button class="button secondary" :disabled="position === 0" @click="navigate(-1)">
               이전 문항</button
             ><button class="button secondary" @click="navigate(1)">다음 문항</button>
@@ -431,73 +602,98 @@ onBeforeRouteUpdate(leave);
       </div>
       <section v-else class="panel review-panel assessment-review" aria-label="제출 전 답안 확인">
         <header class="review-heading">
-          <div>
-            <p class="review-eyebrow">최종 제출 전 마지막 확인</p>
-            <h2 tabindex="-1">제출 전 답안 확인</h2>
-            <p>{{ c.title }} · {{ kindLabels[kind] }}</p>
-          </div>
-          <span class="review-count">{{ answered }} / {{ questions.length }} 응답 완료</span>
+          <span class="review-count">{{ answered }} / {{ questions.length }} 응답 완료</span
+          ><span class="review-range"
+            >{{ (reviewPage - 1) * 20 + 1 }}–{{ Math.min(reviewPage * 20, questions.length) }}번 ·
+            총 {{ questions.length }}문항</span
+          >
+          <nav v-if="reviewPages > 1" class="review-pagination" aria-label="답안 확인 페이지">
+            <button
+              class="button secondary"
+              :disabled="reviewPage === 1 || busy"
+              @click="changeReviewPage(reviewPage - 1)"
+            >
+              이전 페이지</button
+            ><span>{{ reviewPage }} / {{ reviewPages }}</span
+            ><button
+              class="button secondary"
+              :disabled="reviewPage === reviewPages || busy"
+              @click="changeReviewPage(reviewPage + 1)"
+            >
+              다음 페이지
+            </button>
+          </nav>
         </header>
         <div class="review-list">
           <article
             v-for="{ question: q, index: i } in reviewQuestions"
             :key="q.id"
             class="review-row review-question"
+            :data-review-question="q.id"
+            tabindex="-1"
+            :aria-label="`${i + 1}번 답안`"
           >
-            <span class="review-number">{{ i + 1 }}</span>
             <div class="review-question-body">
-              <h3>{{ q.prompt }}</h3>
+              <span class="review-number">{{ i + 1 }}</span>
               <section v-if="'scenario' in q" class="review-scenario">
-                <h4>제시된 상황</h4>
+                <h4>상황</h4>
                 <p>{{ q.scenario }}</p>
               </section>
+              <h3>{{ q.prompt }}</h3>
               <div class="review-selected">
-                <span>내가 선택한 답</span>
-                <p>
-                  <strong>{{ (draft.answers[q.id] ?? -1) + 1 }}번</strong>
-                  {{ q.choices[draft.answers[q.id]!] }}
-                </p>
+                <span>선택 답안 · {{ (draft.answers[q.id] ?? -1) + 1 }}번</span>
+                <p>{{ q.choices[draft.answers[q.id]!] }}</p>
+                <button
+                  class="button secondary review-edit"
+                  :aria-label="`${i + 1}번 답안 수정`"
+                  :disabled="busy"
+                  @click="editQuestion(q.id)"
+                >
+                  답안 수정
+                </button>
               </div>
             </div>
-            <button
-              class="button secondary review-edit"
-              :aria-label="`${i + 1}번 답안 수정`"
-              @click="editQuestion(q.id)"
-            >
-              수정
-            </button>
           </article>
         </div>
-        <nav v-if="reviewPages > 1" class="review-pagination" aria-label="답안 확인 페이지">
+        <nav
+          v-if="reviewPages > 1"
+          class="review-pagination review-pagination-bottom"
+          aria-label="답안 확인 하단 페이지"
+        >
           <button
             class="button secondary"
-            :disabled="reviewPage === 1"
+            :disabled="reviewPage === 1 || busy"
             @click="changeReviewPage(reviewPage - 1)"
           >
             이전 페이지</button
-          ><span>{{ reviewPage }} / {{ reviewPages }} 페이지 · 총 {{ questions.length }}문항</span
+          ><span>{{ reviewPage }} / {{ reviewPages }}</span
           ><button
             class="button secondary"
-            :disabled="reviewPage === reviewPages"
+            :disabled="reviewPage === reviewPages || busy"
             @click="changeReviewPage(reviewPage + 1)"
           >
             다음 페이지
           </button>
         </nav>
       </section>
-      <ActionBar class="actionbar assessment-submitbar">
-        <SaveFeedback
-          :status="
-            { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[
-              saveStatus
-            ]
-          "
-          :error="saveError"
-          :conflict="conflict"
-          :busy="busy"
-          @retry="retrySave"
-          @reload="reload"
-        />
+      <ActionBar ref="submitbar" class="actionbar assessment-submitbar">
+        <div class="assessment-save-area">
+          <SaveFeedback
+            :status="
+              { saved: '저장됨', saving: '저장 중', dirty: '저장 대기', error: '저장 실패' }[
+                saveStatus
+              ]
+            "
+            :error="saveError"
+            :conflict="conflict"
+            :busy="busy"
+            @retry="retrySave"
+            @reload="reload"
+          />
+          <p v-if="error" class="error-message assessment-submit-error" role="alert" tabindex="-1">
+            {{ error }}
+          </p>
+        </div>
         <div class="assessment-submit-actions">
           <p v-if="stage === 'review'" class="submission-warning">
             <AppIcon name="lock" :size="16" />최종 제출 후에는 답안을 수정할 수 없습니다.
@@ -507,16 +703,26 @@ onBeforeRouteUpdate(leave);
               v-if="stage === 'review'"
               class="button secondary"
               :disabled="busy"
-              @click="stage = 'edit'"
+              @click="editQuestion(selected)"
             >
-              계속 풀기</button
-            ><RouterLink v-else :to="returnPath" class="button secondary">평가 선택으로</RouterLink
-            ><button
+              계속 풀기
+            </button>
+            <div v-else class="assessment-secondary-links">
+              <RouterLink :to="returnPath" class="text-link">평가 선택으로</RouterLink
+              ><RouterLink :to="learningPath" class="text-link">학습으로 이동</RouterLink>
+            </div>
+            <button
               class="button primary"
-              :disabled="busy || !attempt || conflict || !!prerequisite"
+              :disabled="busy || !attempt || conflict || !!prerequisite || held"
               @click="stage === 'review' ? submit() : review()"
             >
-              {{ stage === 'review' ? '최종 제출' : '제출' }}
+              {{
+                stage === 'review'
+                  ? '최종 제출'
+                  : reviewReturn
+                    ? '답안 확인으로 돌아가기'
+                    : '답안 확인'
+              }}
             </button>
           </div>
         </div>
@@ -527,7 +733,7 @@ onBeforeRouteUpdate(leave);
       :title="noticeType === 'last' ? '마지막 문항입니다' : '모든 문항에 답해야 제출할 수 있습니다'"
       @closed="noticeClosed"
       ><p v-if="noticeType === 'last'">
-        마지막 문항입니다. 제출을 선택하면 답안을 확인한 뒤 최종 제출할 수 있습니다.
+        마지막 문항입니다. 답안 확인을 선택하면 선택한 답안을 검토한 뒤 최종 제출할 수 있습니다.
       </p>
       <template v-else
         ><p>

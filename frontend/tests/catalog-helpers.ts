@@ -10,13 +10,22 @@ export async function openSavedCourse(page: Page, section?: string) {
   await expect(page.getByLabel('인증Set명', { exact: true })).toBeEnabled();
   if (section) await courseSection(page, section);
 }
-export async function saveCriterion(page: Page) {
+export async function saveCriterion(page: Page, mode?: 'current' | 'new') {
   const dialog = page.getByRole('dialog', { name: '기준 저장 확인', exact: true });
   if (await dialog.isVisible())
     await dialog.getByRole('button', { name: '계속 편집', exact: true }).click();
   await page.getByRole('button', { name: '저장', exact: true }).click();
   await expect(page.getByRole('button', { name: '저장', exact: true })).toBeEnabled();
   await expect(dialog.or(page.locator('.editor-errors')).first()).toBeVisible();
-  if (await dialog.isVisible())
-    await dialog.getByRole('button', { name: '저장 확인', exact: true }).click();
+  if (await dialog.isVisible()) {
+    if (mode && (await dialog.getByRole('radio').count())) {
+      await dialog
+        .getByRole('radio', { name: mode === 'new' ? /^새 버전 생성/ : /^현재 버전에 저장/ })
+        .check();
+    }
+    await dialog
+      .locator('.dialog-footer')
+      .getByRole('button', { name: /^(저장 확인|현재 버전에 저장|새 버전 생성|닫기)$/ })
+      .click();
+  }
 }

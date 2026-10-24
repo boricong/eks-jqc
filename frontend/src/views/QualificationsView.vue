@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { learningStage, qualificationLocation } from '../learner-navigation';
+import {
+  learningStage,
+  qualificationLocation,
+  ownedCertificateLocation,
+} from '../learner-navigation';
 import PageHeading from '../components/PageHeading.vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   kstDate,
   certificationStatus,
@@ -18,7 +22,9 @@ import ValidityBadge from '../components/ValidityBadge.vue';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
-const assessments = computed(() => learningStage(route) === 'assessment');
+const assessments = computed(
+  () => route.query.filter !== 'certified' && learningStage(route) === 'assessment',
+);
 const search = ref(''),
   validity = ref('all');
 const filter = computed(() =>
@@ -27,6 +33,13 @@ const filter = computed(() =>
     : route.query.filter === 'certified'
       ? 'certified'
       : 'active',
+);
+watch(
+  () => filter.value === 'certified',
+  () => {
+    search.value = '';
+    validity.value = 'all';
+  },
 );
 const list = computed(() =>
   store.data.assignments.filter(
@@ -51,7 +64,7 @@ const list = computed(() =>
 </script>
 <template>
   <div class="container page">
-    <LearnerNav />
+    <LearnerNav v-if="filter !== 'certified'" />
     <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
       취득 대상자 Hold · 새 취득·평가·재인증은 중단됩니다. 기록과 자료는 확인할 수 있습니다.
     </p>
@@ -60,7 +73,7 @@ const list = computed(() =>
       <span class="muted">{{ store.actor.name }}</span>
     </PageHeading>
     <div class="list-toolbar">
-      <div class="tabs" aria-label="자격 상태">
+      <div v-if="filter !== 'certified'" class="tabs" aria-label="자격 상태">
         <button
           :class="{ active: filter === 'active' }"
           :aria-pressed="filter === 'active'"
@@ -69,13 +82,7 @@ const list = computed(() =>
           진행 중
           <span>{{
             store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt).length
-          }}</span></button
-        ><button
-          :class="{ active: filter === 'certified' }"
-          :aria-pressed="filter === 'certified'"
-          @click="router.replace({ query: { filter: 'certified' } })"
-        >
-          보유 자격 <span>{{ store.myAssignments.filter((a) => a.certifiedAt).length }}</span>
+          }}</span>
         </button>
         <button
           :class="{ active: filter === 'excluded' }"
@@ -111,7 +118,7 @@ const list = computed(() =>
         :key="a.id"
         :to="
           a.certifiedAt
-            ? `/certifications/${a.id}`
+            ? ownedCertificateLocation(a.id)
             : qualificationLocation(assessments ? 'assessment' : 'learning', a.id)
         "
         class="qualification-row"

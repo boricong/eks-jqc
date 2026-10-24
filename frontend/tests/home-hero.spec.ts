@@ -1,3 +1,4 @@
+import { heroContrast } from './home-helpers';
 import { test, expect, actor } from './fixtures';
 import type { Page } from '@playwright/test';
 import { nodeFor } from '../../server/src/organizations';
@@ -5,90 +6,6 @@ import { nodeFor } from '../../server/src/organizations';
 const widths = [1920, 1440, 768, 390];
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-}
-
-// Sample the rendered SVG behind every text run, rather than assuming a solid background.
-async function heroContrast(page: Page) {
-  const hero = page.locator('.home-hero');
-  await page.evaluate(() => document.fonts.ready);
-  const samples = await hero.evaluate((el) => {
-    const bounds = el.getBoundingClientRect();
-    const result: { x: number; y: number; color: string; minimum: number }[] = [];
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
-      if (!node.textContent?.trim()) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const color = getComputedStyle(node.parentElement!).color;
-      for (const r of range.getClientRects()) {
-        for (let y = r.top + 1; y < r.bottom; y += 3)
-          for (let x = r.left + 1; x < r.right; x += 3)
-            result.push({ x: x - bounds.x, y: y - bounds.y, color, minimum: 4.5 });
-      }
-    }
-    for (const a of el.querySelectorAll<HTMLElement>('.stat-item')) {
-      const r = a.getBoundingClientRect();
-      const color = getComputedStyle(el).getPropertyValue('--primary-press').trim();
-      for (let x = r.left - 4; x <= r.right + 4; x += 4)
-        for (const y of [r.top - 4, r.bottom + 4])
-          result.push({ x: x - bounds.x, y: y - bounds.y, color, minimum: 3 });
-    }
-    return result;
-  });
-  const hide = await page.addStyleTag({
-    content:
-      '.home-hero * { color: transparent !important; text-shadow: none !important; outline: none !important; } .home-hero svg { visibility: hidden !important; }',
-  });
-  let png: Buffer;
-  try {
-    png = await hero.screenshot();
-  } finally {
-    await hide.evaluate((el) => el.parentNode?.removeChild(el));
-  }
-  const ratios = await page.evaluate(
-    async ({ image, samples }) => {
-      const img = new Image();
-      img.src = image;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      const pixels = ctx.getImageData(0, 0, img.width, img.height).data;
-      const luminance = (rgb: number[]) =>
-        rgb
-          .map((v) => v / 255)
-          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-          .reduce((n, v, i) => n + v * [0.2126, 0.7152, 0.0722][i]!, 0);
-      const minima = { text: 100, focus: 100 };
-      for (const s of samples) {
-        const x = Math.max(0, Math.min(img.width - 1, Math.round(s.x)));
-        const y = Math.max(0, Math.min(img.height - 1, Math.round(s.y)));
-        const i = (y * img.width + x) * 4;
-        const bg = luminance([pixels[i]!, pixels[i + 1]!, pixels[i + 2]!]);
-        const rgb = s.color.startsWith('#')
-          ? s.color
-              .slice(1)
-              .match(/../g)!
-              .map((v) => parseInt(v, 16))
-          : s.color
-              .match(/[\d.]+/g)!
-              .slice(0, 3)
-              .map(Number);
-        const fg = luminance(rgb);
-        const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
-        const key = s.minimum === 4.5 ? 'text' : 'focus';
-        minima[key] = Math.min(minima[key], ratio);
-      }
-      return minima;
-    },
-    { image: `data:image/png;base64,${png!.toString('base64')}`, samples },
-  );
-  expect(ratios.text).toBeGreaterThanOrEqual(4.5);
-  expect(ratios.focus).toBeGreaterThanOrEqual(3);
-  return ratios;
 }
 
 test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 네 화면 폭', async ({
@@ -117,6 +34,7 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
   for (const id of ['learner-1', 'admin-1', 'operator-1', 'learner-2']) {
     await actor(page, id);
     const hero = page.locator('.home-hero');
+    await expect(hero.locator('a')).toHaveCount(3);
     const values = await hero.locator('.stat-value').allTextContents();
     const links = await hero
       .locator('a')
@@ -141,7 +59,9 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
       if (width < 768) expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y);
       else expect(boxes[0]!.y).toBe(boxes[2]!.y);
       if (width === 1920) {
-        expect((await hero.boundingBox())!.height).toBeLessThanOrEqual(240);
+        expect((await hero.boundingBox())!.height).toBeLessThanOrEqual(
+          id === 'learner-2' ? 304 : 264,
+        );
         for (const name of ['시스템 공지', '내 팀 공지'])
           await expect(page.getByRole('heading', { name, exact: true })).toBeInViewport();
       }
@@ -152,7 +72,7 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
     await hero.locator('a').first().focus();
     await expect(hero.locator('a').first()).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(new RegExp(links[0]!.replaceAll('/', '\\/')));
+    await expect(page).toHaveURL(new URL(links[0]!, page.url()).href);
     await page.goto('/');
   }
   await info.attach('rendered-gradient-contrast', {
@@ -256,7 +176,7 @@ test('프로세스 검토의 정보 위계·단계 배치·키보드·화면 및
   await page.getByRole('button', { name: '다음 문항', exact: true }).click();
   await page.locator('.choice input').first().check();
   await toggle.click();
-  await page.getByRole('button', { name: '제출', exact: true }).click();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await actor(page, 'admin-1');

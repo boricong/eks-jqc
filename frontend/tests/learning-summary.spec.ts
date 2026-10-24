@@ -28,7 +28,7 @@ test('학습 목록 제거·자격 정보의 키보드/재조회 유지·재진�
   await page.keyboard.press('Space');
   await expect(details).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  const nav = page.getByRole('navigation', { name: '필수 인증Set' });
+  const nav = page.getByRole('navigation', { name: '인증Set' });
   await nav.getByRole('button').nth(1).click();
   await expect(details).toBeVisible();
   await refresh(page);
@@ -149,10 +149,7 @@ test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 
   await expect(hero.locator('.learning-dates dd').first()).toHaveCSS('font-size', '14px');
   await expect(hero.locator('.learning-assessment-date dd')).toHaveCSS('color', 'rgb(83, 58, 253)');
   await expect(hero.locator('.learning-assessment-date dd')).toHaveCSS('font-weight', '600');
-  await expect(hero.getByRole('link', { name: '일정 수정', exact: true })).toHaveAttribute(
-    'href',
-    `/plans/${assignment.planId}`,
-  );
+  await expect(hero.getByRole('link', { name: '일정 수정', exact: true })).toHaveCount(0);
   const dates = hero.locator('.learning-dates > div');
   expect(
     Math.abs((await dates.first().boundingBox())!.y - (await dates.last().boundingBox())!.y),
@@ -283,7 +280,7 @@ test('가로 탭 기본 범위·키보드·범위 펼침/읽기 위치·인증Se
   await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBe(500);
   await refresh(page);
   await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBe(500);
-  const nav = page.getByRole('navigation', { name: '필수 인증Set' });
+  const nav = page.getByRole('navigation', { name: '인증Set' });
   await nav.getByRole('button').nth(1).click();
   await expect(scope).toHaveAttribute('aria-selected', 'true');
   await nav.getByRole('button').first().click();

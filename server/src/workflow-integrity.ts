@@ -1,8 +1,31 @@
-import { planErrors, expirationDate, type State } from "@eks/contracts";
+import {
+  planErrors,
+  expirationDate,
+  type State,
+  type QualificationPolicySnapshot,
+} from "@eks/contracts";
 function check(value: unknown, label: string): asserts value {
   if (!value) throw new Error(`저장 데이터 무결성 오류: ${label}`);
 }
 export function validateWorkflow(s: State) {
+  function snapshotValid(
+    qualificationId: string,
+    frozen?: QualificationPolicySnapshot,
+  ) {
+    if (!frozen) return;
+    const q = s.qualifications.find((q) => q.id === qualificationId);
+    check(
+      q &&
+        frozen.id === q.id &&
+        frozen.entityId === q.entityId &&
+        frozen.version === q.version &&
+        frozen.revision <= q.revision &&
+        new Set(frozen.courseIds).size === frozen.courseIds.length &&
+        frozen.courseIds.length === q.courseIds.length &&
+        frozen.courseIds.every((id) => q.courseIds.includes(id)),
+      "보존된 자격 기준 참조",
+    );
+  }
   const user = (id: string) => s.users.some((u) => u.id === id);
   for (const r of s.planningRequests)
     check(user(r.learnerId) && user(r.requestedBy), "계획 요청 사용자");
@@ -52,6 +75,11 @@ export function validateWorkflow(s: State) {
     }
   }
   for (const p of s.plans) {
+    snapshotValid(p.qualificationId, p.qualificationPolicySnapshot);
+    check(
+      !p.qualificationPolicySnapshot || p.status === "completed",
+      "초안의 기준 고정 금지",
+    );
     check(Boolean(p.deletedAt) === Boolean(p.deletedBy), "계획 삭제 정보");
     if (p.deletedAt)
       check(
@@ -97,6 +125,14 @@ export function validateWorkflow(s: State) {
       check(!p.assignmentId && !p.completedAt && !p.approval, "계획 초안 상태");
   }
   for (const a of s.assignments) {
+    snapshotValid(a.qualificationId, a.qualificationPolicySnapshot);
+    const completed = s.plans.find((p) => p.id === a.planId);
+    if (a.qualificationPolicySnapshot && completed?.qualificationPolicySnapshot)
+      check(
+        JSON.stringify(a.qualificationPolicySnapshot) ===
+          JSON.stringify(completed.qualificationPolicySnapshot),
+        "완료 계획·배정 기준 일치",
+      );
     if (a.planId)
       check(
         s.plans.some(

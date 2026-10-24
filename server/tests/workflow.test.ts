@@ -530,7 +530,7 @@ async function catalog(
     "직무를 독립 수행할 수 있는지 검증",
     root,
   );
-  await f.call(
+  const savedQualification = await f.call(
     "operator-1",
     scope(`/qualifications/${q.id}`, root),
     {
@@ -543,7 +543,7 @@ async function catalog(
     undefined,
     "PUT",
   );
-  return { c: c.id as string, q: q.id as string };
+  return { c: c.id as string, q: savedQualification.id as string };
 }
 async function invitation(
   f: Fixture,
@@ -1246,4 +1246,122 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
       .validity.months,
     6,
   );
+});
+
+test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적용과 최초 발급/새 재인증 분리", async (t) => {
+  const f = await fixture(t),
+    ids = await catalog(f);
+  const first = await plan(f, ids.q);
+  const getQ = () =>
+    f.store.snapshot().qualifications.find((q) => q.id === ids.q)!;
+  const getPlan = () => f.store.snapshot().plans.find((p) => p.id === first.p)!;
+  const original = getQ();
+  assert.deepEqual(
+    getPlan().qualificationPolicySnapshot?.validity,
+    original.validity,
+  );
+  await f.store.transact(
+    "operator-1",
+    randomUUID(),
+    "legacy-completed",
+    () => {},
+    (s) => {
+      delete s.plans.find((p) => p.id === first.p)!.qualificationPolicySnapshot;
+      delete s.assignments.find((a) => a.id === first.a.id)!
+        .qualificationPolicySnapshot;
+      return {};
+    },
+  );
+  const saved = await f.call(
+    "operator-1",
+    scope(`/qualifications/${ids.q}`, "org-photo"),
+    {
+      ...getQ(),
+      validity: { type: "months", months: 12, reminderDays: [] },
+      renewalLeadMonths: 2,
+      renewalNoticeDaysBefore: 3,
+      versionMode: "current",
+    },
+    200,
+    "PUT",
+  );
+  assert.equal(saved.id, ids.q);
+  assert.equal(saved.newVersion, false);
+  assert.deepEqual(
+    getPlan().qualificationPolicySnapshot?.validity,
+    original.validity,
+  );
+  assert.equal(
+    getPlan().qualificationPolicySnapshot?.renewalLeadMonths,
+    original.renewalLeadMonths,
+  );
+  await f.restart();
+  const oldAssignment = f.store
+    .snapshot()
+    .assignments.find((a) => a.id === first.a.id)!;
+  assert.deepEqual(
+    oldAssignment.qualificationPolicySnapshot,
+    getPlan().qualificationPolicySnapshot,
+  );
+  const enrollment = f.store
+    .snapshot()
+    .enrollments.find((e) => e.assignmentId === first.a.id)!;
+  await finish(f, enrollment.id, "objective");
+  await finish(f, enrollment.id, "practical");
+  const cert = f.store
+    .snapshot()
+    .certifications.find((c) => c.assignmentId === first.a.id)!;
+  assert.deepEqual(cert.validity, original.validity);
+  assert.equal(
+    cert.periods?.[0]?.renewalLeadMonths,
+    original.renewalLeadMonths ?? 3,
+  );
+  assert.equal(
+    cert.periods?.[0]?.renewalNoticeDaysBefore,
+    original.renewalNoticeDaysBefore ?? 7,
+  );
+  const request = await invitation(f, "dual");
+  const draft = await f.call("dual", "/plans", {
+    requestId: request,
+    requestRevision: f.store
+      .snapshot()
+      .planningRequests.find((r) => r.id === request)!.revision,
+    qualificationId: ids.q,
+  });
+  const p = f.store.snapshot().plans.find((p) => p.id === draft.id)!;
+  await f.call(
+    "dual",
+    `/plans/${p.id}`,
+    {
+      revision: p.revision,
+      targetOn: "2027-12-01",
+      schedules: p.schedules.map((s) => ({
+        ...s,
+        learningStart: "2026-10-01",
+        learningEnd: "2026-10-15",
+        assessmentOn: "2026-11-01",
+        goal: "",
+      })),
+    },
+    200,
+    "PUT",
+  );
+  await f.call("dual", `/plans/${p.id}/complete`, { revision: 2 });
+  assert.equal(
+    f.store.snapshot().plans.find((p) => p.id === draft.id)!
+      .qualificationPolicySnapshot?.validity.months,
+    12,
+  );
+  const { renewalAvailability } =
+    await import("../src/qualification-lifecycle.ts");
+  const latestCert = f.store
+    .snapshot()
+    .certifications.find((c) => c.id === cert.id)!;
+  const available = renewalAvailability(
+    f.store.snapshot(),
+    f.store.organizations.snapshot(),
+    latestCert,
+    "2030-01-01T00:00:00Z",
+  );
+  assert.equal(available.appliedQualification?.validity.months, 12);
 });

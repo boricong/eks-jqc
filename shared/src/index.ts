@@ -23,6 +23,9 @@ import {
   AwardSnapshotSchema,
   PlanningRequestSchema,
   PersonalPlanSchema,
+  QualificationPolicySnapshotSchema,
+  type QualificationPolicySnapshot,
+  type QualificationVersionMode,
   LearningRecordSchema,
   NotificationSchema,
   type PlanningRequest,
@@ -175,6 +178,40 @@ export const QualificationSchema = z.object({
   templateRevision: z.number().int().positive(),
 });
 export type Qualification = z.infer<typeof QualificationSchema>;
+export const qualificationPolicySnapshot = (
+  q: Qualification,
+): QualificationPolicySnapshot => QualificationPolicySnapshotSchema.parse(q);
+// Only frozen content is overlaid: live status, deletion and permissions remain live.
+export function qualificationForRecord(
+  q: Qualification,
+  record: {
+    qualificationMetadata?: Partial<Qualification>;
+    qualificationPolicySnapshot?: QualificationPolicySnapshot;
+  },
+): Qualification {
+  return {
+    ...q,
+    ...record.qualificationMetadata,
+    ...record.qualificationPolicySnapshot,
+  };
+}
+export interface CatalogItemSavePreview {
+  candidate: Course | Qualification;
+  changes: { label: string; before: string; after: string }[];
+  unchanged: boolean;
+  newVersion: boolean;
+  references: Record<string, number>;
+  stateRevision: number;
+  organizationRevision: number;
+  readiness: string[];
+  linkedQualifications: { id: string; title: string; version: number }[];
+  versionPolicy?: {
+    changeKind: "none" | "minor" | "major";
+    requiresNewVersion: boolean;
+    effectiveMode: QualificationVersionMode;
+    nextVersion: number;
+  };
+}
 export const DraftSchema = z.object({
   answers: z.record(id, z.number().int().nonnegative()),
 });
@@ -214,6 +251,7 @@ export const EnrollmentSchema = z.object({
 });
 export const AssignmentSchema = z.object({
   qualificationMetadata: QualificationMetadataSchema.optional(),
+  qualificationPolicySnapshot: QualificationPolicySnapshotSchema.optional(),
   id,
   acquisitionCycleId: id.optional(),
   previousCertificationId: id.optional(),

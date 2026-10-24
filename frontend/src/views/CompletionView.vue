@@ -3,6 +3,11 @@ import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { kindLabels } from '@eks/contracts';
+import {
+  isOwnedRecordContext,
+  ownedCertificateLocation,
+  documentContextQuery,
+} from '../learner-navigation';
 import { useDemo } from '../stores/demo';
 const store = useDemo(),
   route = useRoute();
@@ -14,15 +19,17 @@ const a = computed(() =>
 const e = computed(() => a.value?.enrollments.find((e) => e.completion?.id === route.params.id));
 const record = computed(() => e.value?.completion);
 const back = computed(() =>
-  route.query.lv1OrganizationId && store.canEnterManagement
-    ? store.managementLink('/admin/results')
-    : a.value?.learnerId === store.actorId
-      ? `/qualifications/${a.value?.id}?course=${e.value?.courseId}${route.query.stage === 'assessment' ? '&stage=assessment' : ''}`
-      : store.hasRole('system_operator')
-        ? '/system/overview'
-        : store.hasRole('admin')
-          ? '/admin/results'
-          : '/',
+  isOwnedRecordContext(route, a.value, store.actor)
+    ? ownedCertificateLocation(a.value!.id)
+    : route.query.lv1OrganizationId && store.canEnterManagement
+      ? store.managementLink('/admin/results')
+      : a.value?.learnerId === store.actorId
+        ? `/qualifications/${a.value?.id}?course=${e.value?.courseId}${route.query.stage === 'assessment' ? '&stage=assessment' : ''}`
+        : store.hasRole('system_operator')
+          ? '/system/overview'
+          : store.hasRole('admin')
+            ? '/admin/results'
+            : '/',
 );
 </script>
 <template>
@@ -67,11 +74,10 @@ const back = computed(() =>
       </p>
       <RouterLink
         v-if="a.certification"
-        :to="
-          store.canEnterManagement && route.query.lv1OrganizationId
-            ? store.managementLink(`/certifications/${a.id}`)
-            : `/certifications/${a.id}`
-        "
+        :to="{
+          path: `/certifications/${a.id}`,
+          query: documentContextQuery(route, a, store.actor),
+        }"
         class="button secondary"
         >자격 인증서 보기</RouterLink
       >

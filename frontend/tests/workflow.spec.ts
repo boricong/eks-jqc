@@ -1,6 +1,6 @@
 import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
-import { completePlan, requestPlan } from './workflow-helpers';
+import { completePlan, requestPlan, savePlanViaApi } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 
 async function refresh(page: Page) {
@@ -91,11 +91,11 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
   const assignment = backend.store.snapshot().assignments.find((a) => a.planId === plan.id)!;
   await page.goto(`/plans/${plan.id}`);
-  await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
-  await page.getByLabel('목표 인증일').fill('2027-03-31');
-  await expect(page.getByRole('button', { name: '일정·목표 변경 저장' })).toBeDisabled();
-  await page.getByLabel('계획 변경 사유').fill('현장 교육 일정 조정');
-  await page.getByRole('button', { name: '일정·목표 변경 저장' }).click();
+  await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);
+  await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);
+  await savePlanViaApi(page, plan.id, { targetOn: '2027-03-31' }, '현장 교육 일정 조정');
+  await page.reload();
+  await expect(page.locator('.plan-review-target')).toContainText('2027.03.31');
   await expect.poll(() => backend.store.snapshot().plans[0]!.targetOn).toBe('2027-03-31');
   expect(backend.store.snapshot().assignments.find((a) => a.id === assignment.id)).toEqual(
     assignment,

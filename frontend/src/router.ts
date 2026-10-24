@@ -1,4 +1,4 @@
-import { learningStage } from './learner-navigation';
+import { learningStage, isOwnedQualificationsRoute } from './learner-navigation';
 import { createRouter, createWebHistory } from 'vue-router';
 import { useDemo } from './stores/demo';
 import HomeView from './views/HomeView.vue';
@@ -19,7 +19,11 @@ import type { Role } from '@eks/contracts';
 export const router = createRouter({
   history: createWebHistory(),
   scrollBehavior(to, from, saved) {
-    if (to.path === from.path) return;
+    if (
+      to.path === from.path &&
+      isOwnedQualificationsRoute(to) === isOwnedQualificationsRoute(from)
+    )
+      return;
     return saved || { top: 0 };
   },
   routes: [
@@ -197,7 +201,8 @@ router.afterEach((to, from, failure) => {
     : to.meta.title
       ? `${to.meta.title} · EKS 직무자격인증`
       : 'EKS 직무자격인증';
-  if (to.path === from.path) return;
+  if (to.path === from.path && isOwnedQualificationsRoute(to) === isOwnedQualificationsRoute(from))
+    return;
   requestAnimationFrame(() => {
     const main = document.querySelector<HTMLElement>('#main');
     main?.focus({ preventScroll: true });

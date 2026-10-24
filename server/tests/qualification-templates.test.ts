@@ -163,7 +163,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     422,
     "PUT",
   );
-  await call(
+  const configured = await call(
     "admin-1",
     `/qualifications/${q.id}`,
     {
@@ -174,7 +174,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     200,
     "PUT",
   );
-  q = store.snapshot().qualifications.find((x) => x.id === q.id)!;
+  q = store.snapshot().qualifications.find((x) => x.id === configured.id)!;
   await call(
     "admin-1",
     "/organization-policies/org-photo/qualification-pool",
@@ -342,7 +342,7 @@ test("공통 정보 충돌·저장 실패는 원본을 보존하고 팀 설정�
     200,
     "PUT",
   );
-  await call(
+  const savedB = await call(
     "operator-1",
     `/qualifications/${teamB.id}?lv1OrganizationId=org-etch`,
     {
@@ -353,12 +353,12 @@ test("공통 정보 충돌·저장 실패는 원본을 보존하고 팀 설정�
     200,
     "PUT",
   );
-  teamB = store.snapshot().qualifications.find((q) => q.id === teamB.id)!;
+  teamB = store.snapshot().qualifications.find((q) => q.id === savedB.id)!;
   let teamA = store
     .snapshot()
     .qualifications.find((q) => q.id === a.imported[0])!;
   await call("detail", `/qualifications/${teamA.id}`, teamA, 403, "PUT");
-  await call(
+  const savedA = await call(
     "admin-1",
     `/qualifications/${teamA.id}`,
     {
@@ -369,6 +369,7 @@ test("공통 정보 충돌·저장 실패는 원본을 보존하고 팀 설정�
     200,
     "PUT",
   );
+  teamA = store.snapshot().qualifications.find((q) => q.id === savedA.id)!;
   assert.deepEqual(
     store.snapshot().qualifications.find((q) => q.id === teamB.id),
     teamB,

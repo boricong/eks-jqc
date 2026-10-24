@@ -31,21 +31,13 @@ const validity = computed(() => {
         <div class="learning-hero-meta">
           <span class="small-label">v{{ qualification.version }}</span>
           <StatusBadge
-            :status="
-              assignment.excludedReason
-                ? 'excluded'
-                : assignment.certifiedAt
-                  ? 'certified'
-                  : 'ready'
-            "
-            :label="
-              assignment.excludedReason
-                ? '검증 제외'
-                : assignment.certifiedAt
-                  ? '인증 취득'
-                  : '진행 중'
-            "
+            v-if="assignment.excludedReason || assignment.certifiedAt"
+            :status="assignment.excludedReason ? 'excluded' : 'certified'"
+            :label="assignment.excludedReason ? '검증 제외' : '인증 취득'"
           />
+          <span v-else class="status learning-progress-status"
+            ><span class="learning-progress-dot" aria-hidden="true"></span>진행 중</span
+          >
         </div>
       </div>
       <div class="learning-hero-actions">

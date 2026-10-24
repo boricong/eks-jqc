@@ -39,7 +39,7 @@ test('주요 구역의 독립적인 키보드 접기·펼치기와 입력·선�
   await expect(check).not.toBeChecked();
   await check.check();
   await page.getByRole('button', { name: '공통 정보 접기', exact: true }).click();
-  await saveCriterion(page);
+  await saveCriterion(page, 'new');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page).not.toHaveURL(/demo-qualification$/);
   await expect(sections.locator('[aria-expanded="true"]')).toHaveCount(4);

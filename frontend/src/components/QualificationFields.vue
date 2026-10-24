@@ -44,7 +44,7 @@ const validityChoice = computed({
         <option value="months">기간 직접 입력</option>
         <option value="unlimited">무기한</option></select
       ><span :id="`${id}-validity-help`" class="qualification-field-help"
-        >발급 당시 자격 버전의 기간을 적용합니다. 기존 인증의 기간은 바뀌지 않습니다.</span
+        >계획 완료 당시의 기간을 적용합니다. 완료된 계획과 기존 인증의 기간은 바뀌지 않습니다.</span
       ></label
     >
     <label v-if="validityChoice === 'months'" class="field"

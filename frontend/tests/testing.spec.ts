@@ -16,10 +16,10 @@ async function respond(page: Page, course: Course, kind: Kind, pass = true) {
       .nth(pass ? q.correct! : (q.correct! + 1) % q.choices.length)
       .check();
   }
-  await page.getByRole('button', { name: '제출', exact: true }).click();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
   await expect(page.getByRole('heading', { name: '제출 전 답안 확인', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '최종 제출', exact: true }).click();
-  await expect(page.locator('.result-panel')).toContainText('자동 채점');
+  await expect(page.locator('.result-panel')).toContainText(pass ? '평가 통과' : '미통과');
 }
 
 test('계획 요청 기본 기한 → 전 FT 학습자의 학습·독립 평가·재응시·수료·인증', async ({
@@ -63,7 +63,7 @@ test('계획 요청 기본 기한 → 전 FT 학습자의 학습·독립 평가�
     await page.getByRole('link', { name: '상황 대응 평가 시작', exact: true }).click();
     await respond(page, course, 'practical');
     await expect(
-      page.getByText('필수 평가를 모두 통과하여 인증Set을 수료했습니다.', { exact: true }),
+      page.locator('.result-panel').getByText('인증Set 수료', { exact: true }),
     ).toBeVisible();
   }
   await page.getByRole('link', { name: '인증서 보기' }).click();
@@ -83,9 +83,7 @@ test('전 FT 계정·여러 탭 격리와 폐지된 평가 화면 안내', async
   await other.goto('/');
   await actor(other, 'ft-1');
   await page.goto('/qualifications/assignment-1/courses/demo-course-1/practical');
-  await expect(
-    page.getByRole('heading', { name: '실기 · 상황 대응 평가', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '상황 대응 평가', exact: true })).toBeVisible();
   await page.getByRole('radio').first().check();
   await expect(page.locator('.save-status')).toHaveText('저장됨');
   await expect(other.getByRole('heading', { name: '박준호 님', exact: true })).toBeVisible();

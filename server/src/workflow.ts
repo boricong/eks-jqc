@@ -13,6 +13,7 @@ import {
   PlanStartInputSchema,
   LearningRecordSchema,
   QualificationSchema,
+  qualificationPolicySnapshot,
   qualificationUseErrors,
   planErrors,
   WORKFLOW_VERSION,
@@ -643,6 +644,7 @@ export function executeWorkflow(
           : {}),
         qualificationId: q.id,
         qualificationMetadata: metadata(currentQualification(s, q)),
+        qualificationPolicySnapshot: qualificationPolicySnapshot(q),
         learnerId: u.id,
         ownerAdminId: request.requestedBy,
         createdBy: u.id,
@@ -659,6 +661,7 @@ export function executeWorkflow(
       Object.assign(p, {
         status: "completed",
         qualificationMetadata: metadata(currentQualification(s, q)),
+        qualificationPolicySnapshot: qualificationPolicySnapshot(q),
         completedAt: at,
         assignmentId,
         approval: "skipped_by_policy",

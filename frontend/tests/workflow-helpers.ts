@@ -1,6 +1,30 @@
-import { qualificationUseErrors } from '@eks/contracts';
+import { qualificationUseErrors, type PersonalPlan } from '@eks/contracts';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
+
+// The API still accepts completed-plan changes; learner screens are read-only.
+export async function savePlanViaApi(
+  page: Page,
+  id: string,
+  fields: Partial<Pick<PersonalPlan, 'targetOn' | 'schedules'>>,
+  reason: string,
+) {
+  const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  const headers = { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() };
+  const workspace = await (await page.request.get('/api/workspace', { headers })).json();
+  const plan = workspace.plans.find((p: PersonalPlan) => p.id === id) as PersonalPlan;
+  const response = await page.request.put(`/api/plans/${id}`, {
+    headers,
+    data: {
+      targetOn: plan.targetOn,
+      schedules: plan.schedules,
+      ...fields,
+      revision: plan.revision,
+      reason,
+    },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
 
 export async function requestPlan(page: Page, learnerName: string) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
@@ -54,7 +78,10 @@ export async function requestPlan(page: Page, learnerName: string) {
 export async function completePlan(page: Page, title: string, recordLearning = true) {
   await page.goto('/plans');
   const select = page.getByLabel('취득할 자격');
-  const option = select.locator('option').filter({ hasText: `${title} · v1` });
+  const option = select
+    .locator('option')
+    .filter({ hasText: `${title} · v` })
+    .first();
   await select.selectOption((await option.getAttribute('value')) as string);
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
@@ -75,7 +102,7 @@ export async function completePlan(page: Page, title: string, recordLearning = t
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
   if (recordLearning) {
     await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+    await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   }
 }
 export async function practicalOnly(page: Page) {

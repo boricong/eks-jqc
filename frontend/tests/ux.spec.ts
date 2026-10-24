@@ -56,7 +56,7 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await expect(page.locator('.assessment-card').first()).toContainText('통과');
   await expect(
     page.locator('.assessment-card').first().getByRole('link', { name: '결과 보기' }),
@@ -88,14 +88,14 @@ test('작은 화면과 키보드 접근', async ({ page }) => {
   }
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await noOverflow(page);
   await page.getByRole('link', { name: '다시 응시' }).click();
   await noOverflow(page);
   await page.getByRole('link', { name: '학습으로 이동', exact: true }).click();
   await showLearningMaterials(page);
   await expect(page.getByRole('region', { name: '학습자료', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
   await actor(page, 'admin-1');
   await page.getByRole('button', { name: '메뉴', exact: true }).click();

@@ -10,12 +10,12 @@ for (const failure of ['response', 'refresh'] as const) {
     await actor(page, 'learner-1');
     await page.getByRole('link', { name: '상세정보 보기' }).click();
     await page.getByRole('button', { name: /02 기록 작성/ }).click();
-    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+    await page.getByRole('link', { name: '평가 시작', exact: true }).click();
     await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
-    await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
+    await page.getByRole('radio', { name: /^\d+번 : 대상 이름과 확인한 값$/ }).check();
     await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
-    await page.getByLabel('항목의 누락 여부', { exact: true }).check();
-    await page.getByRole('button', { name: '제출', exact: true }).click();
+    await page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ }).check();
+    await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
     let requests = 0;
     const keys: string[] = [];
     await page.route('**/api/attempts/*/submit', async (route) => {
@@ -63,13 +63,13 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
-  await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeEnabled();
+  await page.getByRole('radio', { name: /^\d+번 : 대상 이름과 확인한 값$/ }).check();
   await expect(page.locator('.save-status')).toHaveText('저장됨');
   await page.reload();
-  await expect(page.getByLabel('대상 이름과 확인한 값', { exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^\d+번 : 대상 이름과 확인한 값$/ })).toBeChecked();
   await page.route('**/api/attempts/*/draft', (route) =>
     route.fulfill({
       status: 503,
@@ -78,10 +78,10 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
     }),
   );
   await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
-  await page.getByLabel('항목의 누락 여부', { exact: true }).check();
+  await page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ }).check();
   await expect(page.locator('.save-error')).toContainText('저장 실패 시험');
   await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
-  await expect(page.getByLabel('항목의 누락 여부', { exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ })).toBeChecked();
   await page.unroute('**/api/attempts/*/draft');
   await page.getByRole('button', { name: '저장 재시도' }).click();
   await expect(page.locator('.save-status')).toHaveText('저장됨');
@@ -91,11 +91,11 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
-  await expect(page.getByLabel('대상 이름과 확인한 값', { exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^\d+번 : 대상 이름과 확인한 값$/ })).toBeChecked();
   await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
-  await expect(page.getByLabel('항목의 누락 여부', { exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^\d+번 : 항목의 누락 여부$/ })).toBeChecked();
 });
 
 test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
@@ -103,9 +103,9 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeEnabled();
   const tabId = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const view = await (
       await page.request.get('/api/workspace', { headers: { 'X-Session-Tab': tabId! } })
@@ -116,12 +116,12 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
     data: { revision: attempt.revision, answers: { 'd2-q1': 1 } },
   });
   expect(response.ok()).toBeTruthy();
-  await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
+  await page.getByRole('radio', { name: /^\d+번 : 대상 이름과 확인한 값$/ }).check();
   await expect(page.locator('.save-error')).toContainText('다른 창에서 변경');
-  await expect(page.getByRole('button', { name: '제출', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ })).toBeDisabled();
   await page.getByRole('button', { name: '다시 불러오기' }).click();
   await answerConfirmation(page, true);
-  await expect(page.getByLabel('파일 색상', { exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^\d+번 : 파일 색상$/ })).toBeChecked();
 });
 
 test('개발 서버에서 서버 초기 데이터와 런타임 파일 노출 차단', async ({ page, backend }) => {

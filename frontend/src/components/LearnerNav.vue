@@ -40,14 +40,9 @@ const items = computed(() => [
     label: '평가',
     key: 'assessment',
   },
-  { path: '/qualifications?filter=certified', label: '보유 자격', key: 'certified' },
 ]);
 function active(key: string) {
-  return route.path.startsWith('/plans')
-    ? key === 'plans'
-    : route.query.filter === 'certified'
-      ? key === 'certified'
-      : key === learningStage(route);
+  return route.path.startsWith('/plans') ? key === 'plans' : key === learningStage(route);
 }
 </script>
 <template>

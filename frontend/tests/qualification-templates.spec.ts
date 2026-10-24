@@ -33,7 +33,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await page.goto('/admin/qualifications');
   await page.reload();
   await page.getByRole('button', { name: '팀 적용', exact: true }).click();
-  await page.getByLabel('공통 설비 운전 적용 버전').selectOption({ label: 'v1 · 적용 가능' });
+  await page.getByLabel('공통 설비 운전 적용 버전').selectOption({ label: 'v2 · 적용 가능' });
   await expect(page.getByLabel('평가 흐름 체험 적용 버전')).toHaveValue('');
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -45,9 +45,9 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.getByRole('button', { name: '팀 적용 확정' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: '공통 설비 운전' })).toContainText(
-    '적용 중',
-  );
+  await expect(
+    page.getByRole('row').filter({ hasText: '공통 설비 운전' }).filter({ hasText: 'v2' }),
+  ).toContainText('적용 중');
   await page.goto('/admin/policies');
   await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
@@ -66,7 +66,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await expect(
-    page.getByRole('option', { name: '[필수] 공통 설비 운전 · v1', exact: true }),
+    page.getByRole('option', { name: '[필수] 공통 설비 운전 · v2', exact: true }),
   ).toHaveCount(1);
 });
 
@@ -162,7 +162,7 @@ test('저장 검토 중 공통 정보 변경은 팀 입력을 보존하며 과�
       .locator('.editor-panel')
       .filter({ has: page.getByRole('heading', { name: '공통 정보', exact: true }) }),
   ).toContainText('최신 공통 이름');
-  await saveCriterion(page);
+  await saveCriterion(page, 'new');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   expect(backend.store.snapshot().assignments).toEqual(before.assignments);
   const latest = backend.store

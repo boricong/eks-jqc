@@ -615,7 +615,7 @@ test("미변경 기존 초안도 버전 추가 없이 일괄 등록하고 개별
   );
   const q = await registerFixtureQualification(f.store, "독립 연결"),
     original = f.store.snapshot().courses[0]!;
-  await f.call(
+  const linked = await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
     {
@@ -627,8 +627,9 @@ test("미변경 기존 초안도 버전 추가 없이 일괄 등록하고 개별
     200,
     "PUT",
   );
-  const copied = f.store.snapshot().qualifications.find((v) => v.id === q.id)!
-    .courseIds[0]!;
+  const copied = f.store
+    .snapshot()
+    .qualifications.find((v) => v.id === linked.id)!.courseIds[0]!;
   assert.notEqual(copied, original.id);
   assert.notEqual(
     f.store.snapshot().courses.find((c) => c.id === copied)!.entityId,
