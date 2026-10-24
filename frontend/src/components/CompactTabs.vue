@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue';
 const props = defineProps<{
-  items: { id: string; label: string; invalid?: boolean }[];
+  items: { id: string; label: string; ariaLabel?: string; invalid?: boolean }[];
   modelValue: string;
   label: string;
   panelId: string;
@@ -77,8 +77,8 @@ defineExpose({ tabId });
       type="button"
       role="tab"
       :id="tabId(item.id)"
-      :title="item.label"
-      :aria-label="`${item.label}${item.invalid ? ' · 보완 필요' : ''}`"
+      :title="item.ariaLabel || item.label"
+      :aria-label="`${item.ariaLabel || item.label}${item.invalid ? ' · 보완 필요' : ''}`"
       :aria-controls="modelValue === item.id ? panelId : undefined"
       :aria-selected="modelValue === item.id"
       :tabindex="modelValue === item.id ? 0 : -1"

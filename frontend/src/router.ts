@@ -1,3 +1,4 @@
+import { learningStage } from './learner-navigation';
 import { createRouter, createWebHistory } from 'vue-router';
 import { useDemo } from './stores/demo';
 import HomeView from './views/HomeView.vue';
@@ -82,12 +83,17 @@ export const router = createRouter({
           meta: { management: true, managementSection: 'catalog' },
         },
         {
-          path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|comparisons|notices)/:id?',
+          path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|notices)/:id?',
           name: 'admin',
           component: AdminView,
           meta: { management: true },
         },
       ],
+    },
+    // Retired feature links keep their team context and return to the dashboard.
+    {
+      path: '/admin/comparisons/:id?',
+      redirect: (to) => ({ path: '/admin/dashboard', query: to.query }),
     },
     { path: '/system', redirect: '/system/organizations' },
     {
@@ -179,7 +185,18 @@ router.beforeResolve(async (to) => {
 router.afterEach((to, from, failure) => {
   useDemo().contextLoading = false;
   if (failure) return;
-  document.title = to.meta.title ? `${to.meta.title} · EKS 직무자격인증` : 'EKS 직무자격인증';
+  const learnerTitle = ['qualification', 'qualifications', 'assessment'].includes(String(to.name))
+    ? to.query.filter === 'certified'
+      ? '보유 자격'
+      : learningStage(to) === 'assessment'
+        ? '자격 평가'
+        : '자격 학습'
+    : undefined;
+  document.title = learnerTitle
+    ? `${learnerTitle} · EKS 직무자격인증`
+    : to.meta.title
+      ? `${to.meta.title} · EKS 직무자격인증`
+      : 'EKS 직무자격인증';
   if (to.path === from.path) return;
   requestAnimationFrame(() => {
     const main = document.querySelector<HTMLElement>('#main');

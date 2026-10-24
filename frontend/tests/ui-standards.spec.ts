@@ -65,7 +65,6 @@ const routes = {
       'courses',
       'assignments',
       'results',
-      'comparisons',
       'notices',
     ].map((s) => `/admin/${s}`),
     '/admin/courses/demo-course-1',
@@ -145,7 +144,7 @@ test('확인창의 취소·키보드 초점 복귀·이동과 중첩 확인에�
   await title.fill('저장하지 않은 변경');
   const link = page
     .getByRole('navigation', { name: '관리 메뉴' })
-    .getByRole('link', { name: '팀 자격 관리', exact: true });
+    .getByRole('link', { name: '팀 자격 설정', exact: true });
   await link.click();
   const confirmation = page.getByTestId('app-confirmation');
   await expect(confirmation).toBeVisible();

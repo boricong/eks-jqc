@@ -342,7 +342,7 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses');
-  await page.getByLabel('인증Set 관리 검색').fill('필터에 없는 이름');
+  await page.getByLabel('인증Set 설정 검색').fill('필터에 없는 이름');
   await page.getByLabel('상태 필터').selectOption('all');
   await page.getByLabel('목록 정렬').selectOption('desc');
   await page.getByLabel('페이지 크기').selectOption('50');
@@ -351,8 +351,8 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   await page.getByLabel('인증Set명', { exact: true }).fill('새 인증Set 저장 확인');
   await saveCriterion(page);
   await expect(page).toHaveURL(/\/admin\/courses\?lv1OrganizationId=org-photo$/);
-  await expect(page.getByRole('heading', { name: '인증Set 관리', exact: true })).toBeFocused();
-  await expect(page.getByLabel('인증Set 관리 검색')).toHaveValue('필터에 없는 이름');
+  await expect(page.getByRole('heading', { name: '인증Set 설정', exact: true })).toBeFocused();
+  await expect(page.getByLabel('인증Set 설정 검색')).toHaveValue('필터에 없는 이름');
   await expect(page.getByLabel('상태 필터')).toHaveValue('all');
   await expect(page.getByLabel('목록 정렬')).toHaveValue('desc');
   await expect(page.getByLabel('페이지 크기')).toHaveValue('50');
@@ -369,11 +369,11 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   expect(backend.store.snapshot().courses).toHaveLength(count + 1);
   await page
     .locator('.admin-sidebar')
-    .getByRole('link', { name: '팀 자격 관리', exact: true })
+    .getByRole('link', { name: '팀 자격 설정', exact: true })
     .click();
   await page
     .locator('.admin-sidebar')
-    .getByRole('link', { name: '인증Set 관리', exact: true })
+    .getByRole('link', { name: '인증Set 설정', exact: true })
     .click();
   await expect(receipt).toHaveCount(0);
 });

@@ -23,6 +23,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await page.goto('/admin/policies');
   await page.getByLabel('조직 검색').fill('RE A조');
   await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
+  await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
   const admins = page.getByRole('region', { name: '세부 조직 관리자 지정' });
   await admins.getByRole('checkbox', { name: '정하린', exact: true }).check();
   await admins.getByRole('checkbox', { name: '박준호', exact: true }).check();
@@ -32,7 +33,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
     .poll(() => backend.store.snapshot().users.filter((u) => u.organizationAdministration).length)
     .toBe(2);
   await actor(page, 'learner-2');
-  await expect(page.getByRole('link', { name: '조직별 자격 설정', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '조직 필수 자격 설정', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/);
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
@@ -40,19 +41,20 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   );
   await page
     .getByRole('navigation', { name: '관리 메뉴' })
-    .getByRole('link', { name: '조직별 자격 설정', exact: true })
+    .getByRole('link', { name: '조직 필수 자격 설정', exact: true })
     .click();
   await expect(page.getByRole('treeitem')).toHaveCount(1);
   await expect(page.locator('.policy-pool-management')).toHaveCount(0);
   await expect(admins.getByRole('checkbox')).toHaveCount(0);
-  await page.getByLabel('조직 설명').fill('세부 관리자 검증 내용');
+  await page.getByRole('button', { name: '조직 정보 펼치기', exact: true }).click();
+  await page.getByLabel('조직 설명', { exact: true }).fill('세부 관리자 검증 내용');
   await page.getByRole('button', { name: '조직 설정 변경 확인', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(
     nodeFor(backend.store.organizations.snapshot().roots, 'org-photo-pyeongtaek-1')!.description,
   ).toBe('세부 관리자 검증 내용');
-  await page.getByLabel('조직 설명').fill('권한 회수 뒤 보존할 입력');
+  await page.getByLabel('조직 설명', { exact: true }).fill('권한 회수 뒤 보존할 입력');
   await backend.store.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -65,7 +67,9 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   );
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('alert')).toContainText('입력 내용은 유지');
-  await expect(page.getByLabel('조직 설명')).toHaveValue('권한 회수 뒤 보존할 입력');
+  await expect(page.getByLabel('조직 설명', { exact: true })).toHaveValue(
+    '권한 회수 뒤 보존할 입력',
+  );
   await expect(
     page.getByRole('button', { name: '조직 설정 변경 확인', exact: true }),
   ).toBeDisabled();
@@ -138,10 +142,10 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
   await page.goto('/admin/qualifications');
   const sidebar = page.getByRole('complementary', { name: '인증 업무 관리 탐색' });
   await expect(sidebar).toBeVisible();
-  await sidebar.getByRole('link', { name: '기준 일괄 관리', exact: true }).click();
+  await sidebar.getByRole('link', { name: '기준 일괄 편집', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/catalog/);
   await expect(sidebar).toBeVisible();
-  await expect(sidebar.getByRole('link', { name: '기준 일괄 관리', exact: true })).toHaveAttribute(
+  await expect(sidebar.getByRole('link', { name: '기준 일괄 편집', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
@@ -165,7 +169,7 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
     ).toBeTruthy();
     if (width < 1025) {
       await page.locator('.management-menu-toggle').click();
-      await expect(sidebar.getByRole('link', { name: '인증Set 관리', exact: true })).toBeVisible();
+      await expect(sidebar.getByRole('link', { name: '인증Set 설정', exact: true })).toBeVisible();
       await page.locator('.management-menu-toggle').click();
     }
     await page.screenshot({
@@ -176,7 +180,7 @@ test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
   await page.getByLabel('인증Set명', { exact: true }).fill('보존할 기준 입력');
-  await sidebar.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await sidebar.getByRole('link', { name: '인증Set 설정', exact: true }).click();
   await answerConfirmation(page, false);
   await expect(page).toHaveURL(/\/admin\/catalog/);
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 기준 입력');
@@ -190,17 +194,22 @@ test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', a
   await actor(page, 'learner-2');
   await completePlan(page, '평가 흐름 체험', false);
   const overview = page.getByRole('region', { name: '자격 요약', exact: true });
-  const goals = page.getByRole('region', { name: '내 학습 목표와 일정', exact: true });
-  await expect(overview.getByRole('heading', { name: '자격 설명', exact: true })).toBeVisible();
-  await expect(goals.getByRole('heading', { name: '내 학습 목표', exact: true })).toBeVisible();
-  await expect(overview.locator('dl > div')).toHaveCount(4);
-  await expect(goals.locator('dl > div')).toHaveCount(3);
+  const goals = page.getByRole('region', { name: '내 학습 일정', exact: true });
+  await expect(overview.getByRole('heading', { name: '평가 흐름 체험', level: 1 })).toBeVisible();
+  await expect(goals.getByRole('heading', { name: '학습 목표', exact: true })).toHaveCount(0);
+  await expect(goals.locator('time')).toHaveCount(3);
+  await expect(overview.locator('dl > div')).toHaveCount(3);
+  await expect(goals.locator('dl > div')).toHaveCount(2);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
-    await expect(overview).toHaveCSS('row-gap', '16px');
+    await expect(overview).toHaveCSS('background-color', 'rgb(246, 249, 252)');
+    const title = (await overview.locator('.learning-hero-main').boundingBox())!;
+    const progress = (await overview.locator('.learning-hero-progress').boundingBox())!;
+    if (width >= 1024) expect(progress.x).toBeGreaterThan(title.x + title.width);
+    else expect(progress.y).toBeGreaterThanOrEqual(title.y + title.height);
     await page.screenshot({
       path: test.info().outputPath(`learning-overview-${width}.png`),
       fullPage: true,

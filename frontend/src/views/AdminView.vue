@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PageHeading from '../components/PageHeading.vue';
+import { managementTitle } from '../management-navigation';
 import ActionBar from '../components/ActionBar.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import CourseEditor from '../components/CourseEditor.vue';
@@ -14,7 +15,6 @@ import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
 import CourseLifecycle from '../components/CourseLifecycle.vue';
-import ComparisonPanel from '../components/ComparisonPanel.vue';
 import CertificationTargets from '../components/CertificationTargets.vue';
 import QualificationLifecycle from '../components/QualificationLifecycle.vue';
 import QualificationFields from '../components/QualificationFields.vue';
@@ -48,20 +48,9 @@ const organizationData = computed(() => {
     audits: data.audits.filter((e) => e.lv1OrganizationId === root),
   };
 });
-const sections = [
-  { id: 'credentials', name: '개인 팀 자격 관리', icon: 'award' },
-  { id: 'targets', name: '인증 대상자 관리', icon: 'users' },
-  { id: 'policies', name: '조직별 자격 설정', icon: 'users' },
-  { id: 'qualifications', name: '팀 자격 관리', icon: 'award' },
-  { id: 'courses', name: '인증Set 관리', icon: 'book' },
-  { id: 'assignments', name: '대상자·계획', icon: 'users' },
-  { id: 'results', name: '결과 조회', icon: 'clipboard' },
-  { id: 'comparisons', name: '기준 검증', icon: 'check' },
-  { id: 'notices', name: '팀 공지 관리', icon: 'notice' },
-];
 const section = computed(() => String(route.params.section));
 const filterKey = () => `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
-const title = computed(() => sections.find((s) => s.id === section.value)!.name);
+const title = computed(() => managementTitle(section.value));
 const busy = ref(false);
 const editingContext = ref('');
 const query = ref(''),
@@ -127,6 +116,15 @@ const selectedAssignment = ref<Assignment | null>(null),
 const noticeDraft = ref<Notice | null>(null);
 function plain<T>(item: T): T {
   return JSON.parse(JSON.stringify(item));
+}
+function enrollmentPhase(enrollment: Assignment['enrollments'][number]) {
+  return enrollment.completion
+    ? '수료'
+    : [enrollment.objective, enrollment.practical].includes('passed')
+      ? '일부 통과'
+      : enrollment.history.length || Object.keys(enrollment.activeAttempts).length
+        ? '평가 중'
+        : '평가 전';
 }
 watch(
   () => [route.fullPath, store.actorId, store.managementLv1],
@@ -478,11 +476,7 @@ onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 </script>
 <template>
-  <div
-    class="admin-section"
-    :class="{ 'individual-editor': !!editor }"
-    :data-density="list.density"
-  >
+  <div class="admin-section" :class="{ 'individual-editor': !!editor }">
     <div v-if="!store.managementReady && section !== 'policies'" class="empty-state">
       관리할 Lv1 조직을 선택하면 인증 업무를 관리할 수 있습니다.
     </div>
@@ -830,10 +824,110 @@ onBeforeRouteUpdate(canLeave);
             >
           </div>
         </section>
+        <template v-if="section === 'assignments'">
+          <PlanningPanel :key="store.managementLv1" />
+          <section class="assignment-progress" aria-labelledby="acquisition-progress-heading">
+            <h2 id="acquisition-progress-heading">자격별 취득 진행</h2>
+            <div class="list-toolbar">
+              <div class="filter-controls">
+                <label class="search-field"
+                  ><AppIcon name="search" :size="18" /><input
+                    v-model="query"
+                    placeholder="대상자 · 자격 검색"
+                    aria-label="취득 진행 검색"
+                /></label>
+                <select v-model="filter" aria-label="취득 진행 상태">
+                  <option value="all">전체 상태</option>
+                  <option value="active">진행 중</option>
+                  <option value="certified">인증 취득 전체</option>
+                  <option value="valid">현재 유효</option>
+                  <option value="expiring">만료 예정</option>
+                  <option value="revoked">Revoke · 폐기</option>
+                  <option value="held">Hold · 효력 정지</option>
+                  <option value="unknown">유효기간 미설정</option>
+                  <option value="excluded">검증 제외</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-panel">
+              <table>
+                <thead>
+                  <tr>
+                    <th>대상자</th>
+                    <th>자격</th>
+                    <th>인증Set 수료</th>
+                    <th>상태</th>
+                    <th><span class="sr-only">관리</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="a in pageAssignments" :key="a.id">
+                    <td>{{ store.username(a.learnerId) }}</td>
+                    <td>
+                      {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
+                      }}<small class="table-subtext"
+                        >v{{
+                          store.qualification(a.qualificationId, a.qualificationMetadata).version
+                        }}</small
+                      >
+                    </td>
+                    <td>
+                      {{ store.completedCount(a) }} / {{ a.enrollments.length }}
+                      <template v-for="stage in ['평가 전', '평가 중', '일부 통과']" :key="stage">
+                        <span
+                          v-if="
+                            a.enrollments.some(
+                              (enrollment) => enrollmentPhase(enrollment) === stage,
+                            )
+                          "
+                          class="table-subtext"
+                        >
+                          {{ stage }}
+                          {{
+                            a.enrollments.filter(
+                              (enrollment) => enrollmentPhase(enrollment) === stage,
+                            ).length
+                          }}인증Set
+                        </span>
+                      </template>
+                    </td>
+                    <td>
+                      <StatusBadge
+                        :status="
+                          a.excludedReason ? 'excluded' : a.certifiedAt ? 'certified' : 'draft'
+                        "
+                        :label="!a.excludedReason && !a.certifiedAt ? '진행 중' : undefined"
+                      />
+                    </td>
+                    <td>
+                      <details v-if="!a.excludedReason" class="row-menu">
+                        <summary aria-label="배정 관리">
+                          <AppIcon name="settings" :size="18" />
+                        </summary>
+                        <div>
+                          <button @click="openAssignment(a, 'exclude')">검증 제외</button>
+                        </div>
+                      </details>
+                      <span v-else class="muted">{{ a.excludedReason }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-if="!assignments.length" class="empty-state">검색 결과가 없습니다.</p>
+            </div>
+            <ListControls
+              :count="list.count"
+              :pages="list.pages"
+              v-model:page="list.page"
+              v-model:size="list.size"
+              v-model:sort="list.sort"
+            />
+          </section>
+        </template>
         <div
           v-if="
             !resultAssignmentId &&
-            !['comparisons', 'policies', 'targets', 'credentials'].includes(section)
+            !['policies', 'targets', 'credentials', 'assignments'].includes(section)
           "
           class="list-toolbar"
         >
@@ -880,7 +974,6 @@ onBeforeRouteUpdate(canLeave);
           :key="`${store.actorId}:${store.managementLv1}`"
         />
         <OrganizationPolicies v-if="section === 'policies'" :key="store.actorId" />
-        <PlanningPanel v-if="section === 'assignments'" :key="store.managementLv1" />
         <div v-if="section === 'qualifications'" class="table-panel">
           <table>
             <thead>
@@ -989,49 +1082,6 @@ onBeforeRouteUpdate(canLeave);
             </tbody>
           </table>
           <p v-if="!courses.length" class="empty-state">검색 결과가 없습니다.</p>
-        </div>
-        <div v-else-if="section === 'assignments'" class="table-panel">
-          <table>
-            <thead>
-              <tr>
-                <th>대상자</th>
-                <th>자격</th>
-                <th>인증Set 수료</th>
-                <th>상태</th>
-                <th><span class="sr-only">관리</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="a in pageAssignments" :key="a.id">
-                <td>{{ store.username(a.learnerId) }}</td>
-                <td>
-                  {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
-                  }}<small class="table-subtext"
-                    >v{{
-                      store.qualification(a.qualificationId, a.qualificationMetadata).version
-                    }}</small
-                  >
-                </td>
-                <td>{{ store.completedCount(a) }} / {{ a.enrollments.length }}</td>
-                <td>
-                  <StatusBadge
-                    :status="a.excludedReason ? 'excluded' : a.certifiedAt ? 'certified' : 'draft'"
-                    :label="!a.excludedReason && !a.certifiedAt ? '진행 중' : undefined"
-                  />
-                </td>
-                <td>
-                  <details v-if="!a.excludedReason" class="row-menu">
-                    <summary aria-label="배정 관리"><AppIcon name="settings" :size="18" /></summary>
-                    <div>
-                      <button @click="openAssignment(a, 'exclude')">검증 제외</button>
-                    </div>
-                  </details>
-                  <span v-else class="muted">{{ a.excludedReason }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="!assignments.length" class="empty-state">검색 결과가 없습니다.</p>
         </div>
         <div v-else-if="section === 'results'" class="results-list">
           <RouterLink
@@ -1162,7 +1212,6 @@ onBeforeRouteUpdate(canLeave);
           </details>
           <p v-if="!assignments.length" class="panel empty-state">검색 결과가 없습니다.</p>
         </div>
-        <ComparisonPanel v-else-if="section === 'comparisons'" />
         <div v-else-if="section === 'notices'" class="table-panel">
           <table>
             <thead>
@@ -1202,12 +1251,11 @@ onBeforeRouteUpdate(canLeave);
           <p v-if="!notices.length" class="empty-state">등록된 공지가 없습니다.</p>
         </div>
         <ListControls
-          v-if="!['comparisons', 'policies', 'targets', 'credentials'].includes(section)"
+          v-if="!['policies', 'targets', 'credentials', 'assignments'].includes(section)"
           :count="list.count"
           :pages="list.pages"
           v-model:page="list.page"
           v-model:size="list.size"
-          v-model:density="list.density"
           v-model:sort="list.sort"
         />
       </template>
@@ -1255,6 +1303,22 @@ onBeforeRouteUpdate(canLeave);
     </div>
   </div>
 </template>
+
+<style scoped>
+.assignment-progress {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.assignment-progress > h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.assignment-progress > .list-toolbar {
+  margin: 0;
+}
+</style>
 
 <style scoped>
 .criterion-versions {

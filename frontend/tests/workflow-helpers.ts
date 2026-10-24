@@ -42,7 +42,7 @@ export async function requestPlan(page: Page, learnerName: string) {
     },
   );
   expect(saved.ok(), await saved.text()).toBeTruthy();
-  await page.getByRole('link', { name: '대상자·계획', exact: true }).click();
+  await page.getByRole('link', { name: '계획 요청·진행', exact: true }).click();
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('checkbox', { name: learnerName, exact: true }).check();
@@ -65,8 +65,8 @@ export async function completePlan(page: Page, title: string, recordLearning = t
     await el.fill('2026-10-15');
   for (const el of await page.getByLabel('평가 예정일', { exact: true }).all())
     await el.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표 설정', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
   for (const el of await page.getByRole('textbox').all())
     await el.fill('판단 근거를 설명하고 도움 없이 독립적으로 수행한다.');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
@@ -75,7 +75,7 @@ export async function completePlan(page: Page, title: string, recordLearning = t
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
   if (recordLearning) {
     await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-    await page.getByRole('link', { name: '평가하기', exact: true }).click();
+    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
   }
 }
 export async function practicalOnly(page: Page) {

@@ -37,7 +37,7 @@ export function courseUsage(
       (q) => `연결된 자격: ${q.title || "이름 없는 자격"} v${q.version}`,
     ),
     ...(Object.values(counts).some((n) => n > 0)
-      ? ["수강·평가·수료·인증·비교 기록이 연결되어 있습니다."]
+      ? ["수강·평가·수료·인증 또는 이전 보존 자료가 연결되어 있습니다."]
       : []),
     ...(successorVersions.length ? ["후속 버전이 연결되어 있습니다."] : []),
   ];

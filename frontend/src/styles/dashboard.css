@@ -262,8 +262,8 @@
   border-bottom: 1px solid var(--line);
 }
 .dashboard-table td {
-  height: 40px;
-  padding: 6px 12px;
+  height: var(--row-compact);
+  padding: 4px 12px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
   overflow-wrap: anywhere;
@@ -273,11 +273,6 @@
 }
 .dashboard-table tbody tr:hover {
   background: var(--surface-tint);
-}
-.dashboard-table[data-density='roomy'] td {
-  height: 48px;
-  padding-top: 10px;
-  padding-bottom: 10px;
 }
 .dashboard-table .dashboard-name {
   min-width: 140px;

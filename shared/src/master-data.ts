@@ -24,7 +24,7 @@ export const clearedDataLabels = {
   completions: "인증Set 수료",
   certifications: "개인 인증",
   renewals: "재인증",
-  comparisons: "실제 수행 비교",
+  comparisons: "이전 수행 비교 기록(보존 자료)",
   learningRecords: "과거 학습 기록",
   notices: "시스템·팀 공지",
   notifications: "개인 알림",

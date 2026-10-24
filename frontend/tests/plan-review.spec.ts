@@ -53,7 +53,7 @@ async function startReview(page: Page, store: JsonStore, count = 2, long = false
   await page.getByLabel('취득할 자격').selectOption('review-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
   await page.getByLabel('목표 인증일', { exact: true }).fill('2029-12-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
   await expect(page.locator('textarea[data-plan-field]')).toHaveCount(count);
   for (const input of await page.locator('textarea[data-plan-field]').all())
     await input.fill(long ? longGoal : '기준을 확인하고 독립적으로 수행합니다.');
@@ -84,7 +84,28 @@ test('요약·요청 기준·독립 접기와 수정 필드 초점·입력·펼�
   await expect(page.locator('.plan-context')).toHaveCount(0);
   await expect(page.locator('.plan-review-summary')).toContainText('2029.12.01');
   await expect(page.locator('.plan-review-facts').first()).toContainText('2개');
+  const requestToggle = page.getByRole('button', { name: '요청 기준 펼치기', exact: true });
+  await expect(requestToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.plan-review-request .plan-review-facts')).toBeHidden();
+  expect(
+    await page
+      .locator('.plan-review-request')
+      .evaluate((el) => Boolean(el.previousElementSibling?.classList.contains('plan-review'))),
+  ).toBe(true);
+  await page.locator('.plan-review-request').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath('request-criteria-collapsed-1920.png') });
+  await requestToggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.plan-review-request .plan-review-facts')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('.plan-review-request .plan-review-facts')).toBeHidden();
+  await page.keyboard.press('Space');
+  await expect(page.locator('.plan-review-request .plan-review-facts')).toBeVisible();
   await expect(page.locator('.plan-review-request')).toContainText('요청 당시 필수 자격');
+  await expect(page.locator('.plan-review-request .collapsible-section-title')).toHaveCSS(
+    'font-size',
+    '14px',
+  );
   await expect(page.locator('.plan-review-course [aria-expanded="true"]')).toHaveCount(2);
   await toggle(page).focus();
   await page.keyboard.press('Enter');
@@ -117,13 +138,27 @@ test('요약·요청 기준·독립 접기와 수정 필드 초점·입력·펼�
   await refresh(page);
   await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(course(page, 2)).toContainText('수정한 목표');
+  await expect(page.getByRole('button', { name: '요청 기준 접기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
   expect(backend.store.snapshot().plans[0]!.targetOn).toBe('2030-01-01');
+  await page.reload();
+  await review(page);
+  await expect(page.getByRole('button', { name: '요청 기준 펼치기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
   await page.goto('/');
   await actor(page, 'learner-1');
   await actor(page, 'learner-2');
   await page.goto(`/plans/${plan.id}`);
   await review(page);
   await expect(page.locator('.plan-review-course [aria-expanded="true"]')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '요청 기준 펼치기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
 });
 
 test('저장 실패·충돌에서 입력 유지, 재시도·서버 재조회 뒤 같은 계획 펼침 보존', async ({
@@ -245,10 +280,19 @@ test('확정 계획 조회·정확한 버전·변경 사유 저장과 누락/운
   );
   await page.goto(`/plans/${plan.id}`);
   await expect(page.getByRole('heading', { name: '계획 내용', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '요청 기준 펼치기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(
+    await page
+      .locator('.plan-review-request')
+      .evaluate((el) => Boolean(el.previousElementSibling?.querySelector('input'))),
+  ).toBe(true);
   await expect(course(page).locator('.plan-review-course-meta')).toContainText('v1');
   await expect(page.getByText('노출되면 안 되는 새 버전')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: '학습·평가로 이동', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '학습으로 이동', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '목표 인증일 수정', exact: true }).click();
   await page.getByLabel('목표 인증일', { exact: true }).fill('2030-01-01');
   await expect(
@@ -278,6 +322,11 @@ test('요청 당시 기준과 현재 조직 구분·필수 없음 및 운영 제
   await expect(page.locator('.plan-review-warning')).toContainText(
     '조직 기준 정보가 변경되었습니다.',
   );
+  await expect(page.getByRole('button', { name: '요청 기준 펼치기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await page.getByRole('button', { name: '요청 기준 펼치기', exact: true }).click();
   await expect(page.locator('.plan-review-required')).toContainText(title);
   await backend.store.transact(
     'admin-1',
@@ -309,6 +358,7 @@ for (const count of [5, 20]) {
     await startReview(page, backend.store, count, true);
     await expect(page.locator('.plan-review-course')).toHaveCount(count);
     await expect(page.locator('.plan-review-course [aria-expanded="true"]')).toHaveCount(count);
+    await page.getByRole('button', { name: '요청 기준 펼치기', exact: true }).click();
     const before = backend.store.snapshot();
     for (const width of count === 5 ? [1920, 1440, 768, 390] : [390]) {
       await page.setViewportSize({ width, height: 900 });

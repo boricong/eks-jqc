@@ -10,7 +10,7 @@ for (const failure of ['response', 'refresh'] as const) {
     await actor(page, 'learner-1');
     await page.getByRole('link', { name: '상세정보 보기' }).click();
     await page.getByRole('button', { name: /02 기록 작성/ }).click();
-    await page.getByRole('link', { name: '평가하기', exact: true }).click();
+    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
     await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
     await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
     await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
@@ -63,7 +63,7 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
   await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
   await page.getByLabel('대상 이름과 확인한 값', { exact: true }).check();
@@ -91,7 +91,7 @@ test('자동 저장·실패 재시도·재시작 후 응시 복원', async ({ pa
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
   await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
   await expect(page.getByLabel('대상 이름과 확인한 값', { exact: true })).toBeChecked();
   await page.getByRole('tablist', { name: '응시 문항' }).getByRole('tab').nth(1).click();
@@ -103,7 +103,7 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await actor(page, 'learner-1');
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
   await expect(page.getByRole('button', { name: '제출', exact: true })).toBeEnabled();
   const tabId = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
@@ -122,43 +122,6 @@ test('다른 창의 답안 수정과 충돌 복구', async ({ page }) => {
   await page.getByRole('button', { name: '다시 불러오기' }).click();
   await answerConfirmation(page, true);
   await expect(page.getByLabel('파일 색상', { exact: true })).toBeChecked();
-});
-
-test('인증Set별 실제 수행 비교·확정·정정 원본 보존', async ({ page, backend }) => {
-  await page.goto('/');
-  await actor(page, 'admin-1');
-  await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
-  await page.getByRole('link', { name: '기준 검증', exact: true }).click();
-  await page.getByRole('button', { name: '비교 기록 추가' }).click();
-  await page.getByLabel('객관식 · 지식 평가 회차').selectOption('attempt-1');
-  await page.getByLabel('실기 · 상황 대응 평가 회차').selectOption('attempt-2');
-  await page.getByLabel('관찰일', { exact: true }).fill('2026-10-16');
-  await page.getByLabel('관찰자', { exact: true }).fill('현장 관찰자');
-  await page.getByLabel('수행 작업', { exact: true }).fill('별도의 직무 수행 과제');
-  await page.getByLabel('실제 수행 판정 기준', { exact: true }).fill('최소 항목 독립 수행');
-  await page
-    .getByLabel('근거 요약', { exact: true })
-    .fill('평가와 별도로 작업을 수행하는 모습을 관찰함');
-  await page.getByLabel('근거 구분').selectOption('independent');
-  await page.getByLabel('실제 수행 판정', { exact: true }).selectOption('met');
-  await page.getByRole('button', { name: '비교 확정' }).click();
-  await expect(page.locator('.comparison-panel .status-badge')).toHaveText('실제 수행만 충족');
-  await page.reload();
-  await expect(page.getByLabel('관찰자', { exact: true })).toHaveValue('현장 관찰자');
-  await expect(page.getByLabel('관찰자', { exact: true })).toBeDisabled();
-  await page.screenshot({ path: test.info().outputPath('comparison-1920x900.png') });
-  await page.getByRole('button', { name: '정정 기록 만들기' }).click();
-  await page.getByLabel('정정 사유').fill('근거 출처 확인');
-  await page.getByRole('button', { name: '정정 초안 생성' }).click();
-  await page.getByLabel('근거 구분').selectOption('same_assessment');
-  await page.getByRole('button', { name: '비교 확정' }).click();
-  await expect(page.locator('.comparison-panel .status-badge')).toHaveText('비교 보류');
-  const records = backend.store.snapshot().comparisons;
-  expect(records).toHaveLength(2);
-  expect(records[0]!.outcome).toBe('performance_only');
-  expect(records[1]!.supersedesId).toBe(records[0]!.id);
-  await page.setViewportSize({ width: 390, height: 900 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test('개발 서버에서 서버 초기 데이터와 런타임 파일 노출 차단', async ({ page, backend }) => {

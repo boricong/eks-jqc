@@ -132,8 +132,10 @@ onBeforeRouteUpdate(canLeave);
           {{ usage.counts.certifications }}건
         </p>
         <p>
-          평가 {{ usage.counts.attempts }}건 · 비교 {{ usage.counts.comparisons }}건 · 후속 버전
-          {{ usage.successorVersions.length }}개
+          평가 {{ usage.counts.attempts }}건<span v-if="usage.counts.comparisons">
+            · 이전 보존 자료 {{ usage.counts.comparisons }}건</span
+          >
+          · 후속 버전 {{ usage.successorVersions.length }}개
         </p>
         <p>연결된 자격 {{ usage.qualifications.length }}개</p>
         <ul v-if="usage.qualifications.length">

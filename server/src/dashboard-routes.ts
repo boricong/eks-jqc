@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type {
   DashboardMetric,
   DashboardQuery,
+  DashboardChartSelection,
   State,
   UserView,
 } from "@eks/contracts";
@@ -106,6 +107,22 @@ const querySchema = z
         "excludedPeople",
       ])
       .optional(),
+    chartId: z
+      .enum([
+        "required-coverage",
+        "progress",
+        "organization-coverage",
+        "organization-people",
+        "qualification-coverage",
+        "qualification-efficacy",
+        "qualification-progress",
+        "member-coverage",
+        "expiry",
+        "renewal",
+      ])
+      .optional(),
+    groupKey: z.string().min(1).max(200).optional(),
+    seriesKey: z.string().min(1).max(80).optional(),
     expectedStateRevision: z.coerce.number().int().nonnegative().optional(),
     expectedOrganizationRevision: z.coerce
       .number()
@@ -124,7 +141,7 @@ export function registerDashboardRoutes(
 ) {
   const read = (
     request: FastifyRequest,
-    kind: "options" | "dashboard" | "details" | "member",
+    kind: "options" | "dashboard" | "details" | "member" | "chart-details",
   ) => {
     const query: DashboardQuery = querySchema.parse(request.query);
     if (kind === "details")
@@ -132,11 +149,21 @@ export function registerDashboardRoutes(
         .string()
         .pipe(querySchema.shape.metric.unwrap())
         .parse(query.metric) as DashboardMetric;
+    let selection: DashboardChartSelection | undefined;
+    if (kind === "chart-details")
+      selection = z
+        .object({
+          chartId: querySchema.shape.chartId.unwrap(),
+          groupKey: querySchema.shape.groupKey.unwrap(),
+          seriesKey: querySchema.shape.seriesKey.unwrap(),
+        })
+        .parse(query);
     return store.consistent((state, organizations) => {
       // Reauthenticate inside the shared storage queue. A queued role/scope change applies to this read.
       const current = actor(request, state),
         at = clock();
       const reader = dashboardReader(state, organizations, current, query, at);
+      if (kind === "chart-details") return reader.chartDetails(selection!);
       if (kind === "options") return reader.options();
       if (kind === "details") return reader.details(query.metric!);
       if (kind === "member")
@@ -150,6 +177,7 @@ export function registerDashboardRoutes(
       return reader.dashboard();
     });
   };
+  app.get("/api/dashboard/chart-details", (r) => read(r, "chart-details"));
   app.get("/api/dashboard/options", (r) => read(r, "options"));
   app.get("/api/dashboard", (r) => read(r, "dashboard"));
   app.get("/api/dashboard/details", (r) => read(r, "details"));

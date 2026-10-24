@@ -123,12 +123,9 @@ test('모든 진행 자격의 순서·버튼/방향키·초점·상세 연결과
     await expect(region.getByRole('status')).toHaveText(`${position} / 3`);
     await detail(page).click();
     await expect(page).toHaveURL(new RegExp(`/qualifications/${id}$`));
-    await expect(page.getByRole('heading', { name: '자격 상세', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: '자격 요약', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: '자격 요약' })).toContainText(title);
-    await page
-      .getByRole('navigation', { name: '현재 위치' })
-      .getByRole('link', { name: '홈', exact: true })
-      .click();
+    await page.getByRole('link', { name: 'EKS 직무자격인증 홈', exact: true }).click();
   }
   await region.getByRole('link', { name: '전체 보기' }).click();
   await expect(page).toHaveURL(/\/qualifications$/);

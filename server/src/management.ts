@@ -8,7 +8,6 @@ export const isManagementAction = (action: string) =>
     "course.",
     "qualification.delete",
     "assignment.",
-    "comparison.",
     "notice.",
     "template.",
     "planning.request",

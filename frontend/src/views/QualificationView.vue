@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import PageHeading from '../components/PageHeading.vue';
-import PropertyList from '../components/PropertyList.vue';
-import { computed } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import LearnerNav from '../components/LearnerNav.vue';
-import CourseMaterials from '../components/CourseMaterials.vue';
+import LearningMaterialReader from '../components/LearningMaterialReader.vue';
+import CompactTabs from '../components/CompactTabs.vue';
+import { useLearnerMemory } from '../composables/useLearnerMemory';
+import { learningStage, qualificationLocation } from '../learner-navigation';
+import '../learning-workspace.css';
 import QualificationSummary from '../components/QualificationSummary.vue';
 import QualificationCourseNav from '../components/QualificationCourseNav.vue';
 import {
@@ -42,12 +45,18 @@ const selected = computed(
 );
 const course = computed(() => selected.value && store.course(selected.value.courseId));
 const schedule = computed(() => plan.value?.schedules.find((s) => s.courseId === course.value?.id));
-const showAssessments = computed(() => route.query.stage === 'assessment');
-const previousCriteria = computed(
-  () =>
-    !store.data.requiredQualifications?.items.some(
-      (i) => i.qualificationId === assignment.value?.qualificationId,
-    ),
+const showAssessments = computed(() => learningStage(route) === 'assessment');
+const memory = useLearnerMemory();
+const contextKey = computed(() => `${store.actorId}:${assignment.value?.id}:${course.value?.id}`);
+const reading = computed(() => memory.reading(contextKey.value));
+const contentId = useId();
+const contentTabs = ref<InstanceType<typeof CompactTabs>>();
+const contentItems = computed(() => [
+  { id: 'scope', label: `학습범위 ${course.value?.learningItems.length || 0}개` },
+  { id: 'materials', label: `학습자료 ${course.value?.materials.length || 0}개` },
+]);
+const blocked = computed(
+  () => !!assignment.value?.excludedReason || store.actor.certificationEligibility === 'hold',
 );
 function courseStatus(enrollment: Enrollment) {
   if (store.complete(enrollment)) return '수료';
@@ -108,28 +117,39 @@ function threshold(kind: Kind) {
   return kind === 'objective' ? course.value!.passScore : course.value!.practicalPassScore;
 }
 function chooseCourse(id: string) {
-  void router.replace({ query: { course: id } });
+  void router.replace(
+    qualificationLocation(
+      showAssessments.value ? 'assessment' : 'learning',
+      assignment.value?.id,
+      id,
+    ),
+  );
 }
 </script>
 <template>
   <div
-    v-if="assignment && qualification && selected && course"
+    v-if="assignment && qualification"
     class="container page qualification-detail"
+    :class="{ 'is-learning': !showAssessments, 'is-assessment-selection': showAssessments }"
   >
-    <LearnerNav />
-    <nav class="qualification-breadcrumb" aria-label="현재 위치">
-      <RouterLink to="/">홈</RouterLink><span aria-hidden="true">›</span
-      ><RouterLink to="/qualifications">자격 취득</RouterLink><span aria-hidden="true">›</span
-      ><span aria-current="page">자격 상세</span>
+    <LearnerNav :assignment-id="assignment.id" :course-id="selected?.courseId" />
+    <nav v-if="showAssessments" class="qualification-breadcrumb" aria-label="현재 위치">
+      <RouterLink to="/">홈</RouterLink><span aria-hidden="true">›</span>
+      <RouterLink :to="qualificationLocation(showAssessments ? 'assessment' : 'learning')">{{
+        showAssessments ? '평가 목록' : '학습 목록'
+      }}</RouterLink
+      ><span aria-hidden="true">›</span
+      ><span aria-current="page">{{ showAssessments ? '자격 평가' : '자격 학습' }}</span>
     </nav>
-    <PageHeading class="page-heading">
-      <h1>자격 상세</h1>
-      <RouterLink v-if="assignment.planId" :to="`/plans/${assignment.planId}`" class="text-link"
-        >인증 계획 · 일정·목표 확인<AppIcon name="chevron" :size="16"
-      /></RouterLink>
-    </PageHeading>
+    <PageHeading v-if="showAssessments" class="qualification-evaluation-title"
+      ><div>
+        <span class="small-label">자격 평가</span>
+        <h1>{{ qualification.title }}</h1>
+      </div></PageHeading
+    >
     <QualificationSummary
-      :key="assignment.id"
+      v-else
+      :key="`${store.actorId}:${assignment.id}`"
       :qualification="qualification"
       :assignment="assignment"
       :completed="store.completedCount(assignment)"
@@ -140,106 +160,160 @@ function chooseCourse(id: string) {
     <p v-if="assignment.excludedReason" class="error-message qualification-context-note">
       검증 제외 · {{ assignment.excludedReason }}
     </p>
-    <p v-else-if="previousCriteria" class="notice-body qualification-context-note">
-      이전 기준으로 진행 중 · 확정 당시 자격·인증Set 버전을 유지합니다.
+    <p
+      v-if="store.actor.certificationEligibility === 'hold'"
+      class="error-message qualification-context-note"
+    >
+      취득 대상자 Hold · 새 취득·평가는 중단됩니다. 기록과 학습자료는 확인할 수 있습니다.
     </p>
-    <div class="qualification-workspace">
+    <div v-if="selected && course" class="qualification-workspace">
       <QualificationCourseNav
         :courses="courses"
         :selected="selected.courseId"
         @select="chooseCourse"
       />
       <div class="course-workspace qualification-course-content">
-        <div class="section-heading qualification-course-heading">
-          <div>
-            <span class="small-label">선택 인증Set · v{{ course.version }}</span>
-            <h2>{{ course.title }}</h2>
-          </div>
-          <StatusBadge v-if="store.complete(selected)" status="complete" /><span
-            v-else
-            class="status"
-            >{{ courseStatus(selected) }}</span
-          >
-        </div>
-        <p v-if="course.operationalStatus === 'retired'" class="notice-body">
-          <StatusBadge status="retired" /> 확정된 배정은 계속 진행할 수 있습니다.
-        </p>
         <section
-          v-show="!showAssessments"
-          class="panel learning-guide qualification-learning"
-          aria-label="학습 안내"
+          :class="{ 'learning-course-hero': !showAssessments }"
+          :aria-label="!showAssessments ? '인증Set 요약' : undefined"
         >
-          <section class="course-goals text-stack" aria-label="내 학습 목표와 일정">
-            <div class="text-stack">
-              <h3>내 학습 목표</h3>
-              <p class="prose-text">{{ schedule?.goal || '작성된 학습 목표가 없습니다.' }}</p>
+          <div class="section-heading qualification-course-heading">
+            <div :class="{ 'learning-course-title': !showAssessments }">
+              <span v-if="showAssessments" class="small-label"
+                >선택 인증Set · v{{ course.version }}</span
+              >
+              <h2>{{ course.title }}</h2>
+              <template v-if="!showAssessments">
+                <span class="small-label">v{{ course.version }}</span>
+                <StatusBadge v-if="store.complete(selected)" status="complete" />
+                <span v-else class="status">{{ courseStatus(selected) }}</span>
+              </template>
             </div>
-            <PropertyList class="information-grid">
+            <div class="learning-course-actions">
+              <template v-if="showAssessments">
+                <StatusBadge v-if="store.complete(selected)" status="complete" />
+                <span v-else class="status">{{ courseStatus(selected) }}</span>
+              </template>
+              <RouterLink
+                v-if="!showAssessments && assignment.planId"
+                :to="`/plans/${assignment.planId}`"
+                class="text-link"
+                >일정 수정</RouterLink
+              >
+              <RouterLink
+                v-if="!showAssessments && !blocked"
+                :to="qualificationLocation('assessment', assignment.id, course.id)"
+                class="button secondary"
+                >평가로 이동<AppIcon name="arrow" :size="16"
+              /></RouterLink>
+            </div>
+          </div>
+          <p v-if="course.operationalStatus === 'retired'" class="notice-body">
+            <StatusBadge status="retired" /> 확정된 배정은 계속 진행할 수 있습니다.
+          </p>
+          <section v-if="!showAssessments" aria-label="내 학습 일정" class="learning-course-plan">
+            <dl class="learning-dates">
               <div>
-                <dt>학습 시작 예정일</dt>
-                <dd>{{ schedule?.learningStart || '미설정' }}</dd>
+                <dt>학습 기간</dt>
+                <dd>
+                  <time v-if="schedule?.learningStart" :datetime="schedule.learningStart">{{
+                    schedule.learningStart
+                  }}</time
+                  ><span v-else class="date-empty">미설정</span>
+                  <span aria-hidden="true">–</span>
+                  <time v-if="schedule?.learningEnd" :datetime="schedule.learningEnd">{{
+                    schedule.learningEnd
+                  }}</time
+                  ><span v-else class="date-empty">미설정</span>
+                </dd>
               </div>
-              <div>
-                <dt>학습 완료 예정일</dt>
-                <dd>{{ schedule?.learningEnd || '미설정' }}</dd>
-              </div>
-              <div>
+              <div class="learning-assessment-date">
                 <dt>평가 예정일</dt>
-                <dd>{{ schedule?.assessmentOn || '미설정' }}</dd>
+                <dd>
+                  <time v-if="schedule?.assessmentOn" :datetime="schedule.assessmentOn">{{
+                    schedule.assessmentOn
+                  }}</time
+                  ><span v-else class="date-empty">미설정</span>
+                </dd>
               </div>
-            </PropertyList>
-          </section>
-          <section
-            class="qualification-learning-scope text-stack"
-            aria-label="이 인증Set의 학습 범위"
-          >
-            <h3>이 인증Set의 학습 범위</h3>
-            <ol v-if="course.learningItems.length" class="learning-scope">
-              <li v-for="item in course.learningItems" :key="item.id">
-                <strong>{{ item.title }}</strong
-                ><span
-                  >{{ learningTypeLabels[item.type] }} ·
-                  {{ item.required ? '필수 학습 범위' : '선택 학습 범위' }}</span
-                >
-              </li>
-            </ol>
-            <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
-          </section>
-          <CourseMaterials
-            :materials="course.materials"
-            :context-key="`${store.actorId}:${assignment.id}:${course.id}`"
-          />
-          <section class="qualification-assessment-summary text-stack" aria-label="평가 현황">
-            <h3>평가 현황</h3>
-            <ul>
-              <li v-for="kind in kinds" :key="kind">
-                <div>
-                  <strong>{{ kindLabels[kind] }}</strong
-                  ><small>{{ count(kind) }}문항 · {{ threshold(kind) }}% 이상 통과</small>
-                </div>
-                <StatusBadge
-                  :status="selected[kind]"
-                  :label="selected[kind] === 'ready' ? '미응시' : undefined"
-                />
-              </li>
-            </ul>
-            <p class="muted">
-              내용을 학습한 뒤 평가하기로 이동해 주세요. 필수 평가를 모두 통과하면 인증Set이
-              수료됩니다.
-            </p>
-            <RouterLink
-              v-if="!assignment.excludedReason"
-              :to="{ query: { course: course.id, stage: 'assessment' } }"
-              class="button primary"
-              >평가하기<AppIcon name="arrow" :size="18" /></RouterLink
-            ><button v-else class="button primary" disabled>평가하기</button>
+            </dl>
           </section>
         </section>
-        <template v-if="showAssessments">
+        <section
+          v-if="!showAssessments"
+          class="qualification-learning course-learning-tabs"
+          aria-label="학습 안내"
+        >
+          <CompactTabs
+            ref="contentTabs"
+            :model-value="reading.contentTab"
+            @update:model-value="
+              reading.contentTab = $event === 'materials' ? 'materials' : 'scope'
+            "
+            :items="contentItems"
+            label="인증Set 학습 내용"
+            :panel-id="contentId"
+          />
+          <div
+            :id="contentId"
+            role="tabpanel"
+            :aria-labelledby="contentTabs?.tabId(reading.contentTab)"
+            class="learning-content-panel"
+            tabindex="0"
+          >
+            <section
+              v-if="reading.contentTab === 'scope'"
+              aria-label="이 인증Set의 학습 범위"
+              class="learning-scope-brief"
+            >
+              <ul
+                v-if="course.learningItems.length"
+                class="learning-scope-rows"
+                :class="{ 'is-expanded': reading.scopeExpanded }"
+                :tabindex="reading.scopeExpanded ? 0 : undefined"
+                :id="`learning-scope-${selected.id}`"
+              >
+                <li
+                  v-for="item in reading.scopeExpanded
+                    ? course.learningItems
+                    : course.learningItems.slice(0, 3)"
+                  :key="item.id"
+                >
+                  <span>{{ learningTypeLabels[item.type] }}</span
+                  ><strong>{{ item.title }}</strong
+                  ><span>{{ item.required ? '필수' : '선택' }}</span>
+                </li>
+              </ul>
+              <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
+              <button
+                v-if="course.learningItems.length > 3"
+                type="button"
+                class="text-link"
+                :aria-expanded="reading.scopeExpanded"
+                :aria-controls="`learning-scope-${selected.id}`"
+                @click="reading.scopeExpanded = !reading.scopeExpanded"
+              >
+                {{
+                  reading.scopeExpanded
+                    ? '학습 항목 접기'
+                    : `전체 학습 항목 보기 · ${course.learningItems.length}개`
+                }}
+              </button>
+            </section>
+            <LearningMaterialReader
+              v-else
+              :key="contextKey"
+              :materials="course.materials"
+              :context-key="contextKey"
+            />
+          </div>
+        </section>
+        <template v-else>
           <div class="qualification-assessment-heading">
             <h3>평가 유형 선택</h3>
-            <RouterLink :to="{ query: { course: course.id } }" class="button secondary"
-              >학습자료로 돌아가기</RouterLink
+            <span class="muted"
+              >{{ kinds.filter((k) => selected?.[k] === 'passed').length }} /
+              {{ kinds.length }} 통과</span
             >
           </div>
           <div class="assessment-grid">
@@ -250,21 +324,24 @@ function chooseCourse(id: string) {
               :class="{ recommended: recommended === kind }"
             >
               <div class="section-heading">
-                <span class="assessment-icon"
-                  ><AppIcon :name="kind === 'objective' ? 'clipboard' : 'users'" :size="24" /></span
-                ><StatusBadge
+                <h3>{{ kindLabels[kind] }}</h3>
+                <StatusBadge
                   :status="selected[kind]"
                   :label="selected[kind] === 'ready' ? '미응시' : undefined"
                 />
               </div>
-              <h3>{{ kindLabels[kind] }}</h3>
               <p class="assessment-metadata">
                 {{ count(kind) }}문항 · {{ threshold(kind) }}% 이상 통과
               </p>
               <div class="assessment-action">
-                <span v-if="assignment.excludedReason" class="muted">검증 제외</span
-                ><span v-else-if="selected[kind] === 'passed'" class="passed-caption"
-                  ><AppIcon name="check" :size="16" />통과 유지</span
+                <span v-if="blocked" class="muted">{{
+                  assignment.excludedReason ? '검증 제외' : '취득 대상자 Hold'
+                }}</span>
+                <RouterLink
+                  v-else-if="selected[kind] === 'passed'"
+                  :to="assessmentPath(kind)"
+                  class="button secondary"
+                  >결과 보기</RouterLink
                 >
                 <div v-else-if="prerequisite(kind)" class="assessment-locked">
                   <p><AppIcon name="lock" :size="16" />지식 평가를 먼저 통과해 주세요</p>
@@ -283,35 +360,48 @@ function chooseCourse(id: string) {
               </div>
             </section>
           </div>
+          <p v-if="!kinds.length" class="muted">
+            등록된 평가 유형이 없습니다. 관리자에게 확인해 주세요.
+          </p>
+          <section v-if="selected.completion" class="qualification-completion">
+            <div>
+              <StatusBadge status="complete" />
+              <p>수료일 {{ kstDate(selected.completion.date) }}</p>
+            </div>
+            <RouterLink
+              class="button secondary"
+              :to="{
+                path: `/completions/${selected.completion.id}`,
+                query: { stage: 'assessment' },
+              }"
+              >인증Set 수료증 보기</RouterLink
+            >
+          </section>
+          <details :key="selected.id" class="history qualification-history">
+            <summary>
+              평가 이력 <span>{{ selected.history.length }}건</span
+              ><AppIcon name="down" :size="16" />
+            </summary>
+            <div v-if="!selected.history.length" class="empty-inline">평가 이력이 없습니다.</div>
+            <ol v-else>
+              <li v-for="h in [...selected.history].reverse()" :key="h.id" class="history-row">
+                <span>{{ kindLabels[h.kind] }} · {{ h.round }}회</span
+                ><StatusBadge :status="h.result" /><time>{{ kstDate(h.date) }}</time
+                ><span class="muted">자동 채점 · {{ h.earned }} / {{ h.total }}점</span>
+              </li>
+            </ol>
+          </details>
         </template>
-        <section v-if="selected.completion" class="panel qualification-completion">
-          <div>
-            <StatusBadge status="complete" />
-            <p>수료일 {{ kstDate(selected.completion.date) }}</p>
-          </div>
-          <RouterLink class="button secondary" :to="`/completions/${selected.completion.id}`"
-            >인증Set 수료증 보기</RouterLink
-          >
-        </section>
-        <details :key="selected.id" class="history qualification-history">
-          <summary>
-            평가 이력 <span>{{ selected.history.length }}건</span><AppIcon name="down" :size="16" />
-          </summary>
-          <div v-if="!selected.history.length" class="empty-inline">평가 이력이 없습니다.</div>
-          <ol v-else>
-            <li v-for="h in [...selected.history].reverse()" :key="h.id" class="history-row">
-              <span>{{ kindLabels[h.kind] }} · {{ h.round }}회</span
-              ><StatusBadge :status="h.result" /><time>{{ kstDate(h.date) }}</time
-              ><span class="muted">자동 채점 · {{ h.earned }} / {{ h.total }}점</span>
-            </li>
-          </ol>
-        </details>
       </div>
     </div>
+    <p v-else class="empty-inline">등록된 인증Set이 없습니다.</p>
   </div>
   <div v-else class="container page empty-state">
-    <h1>자격 상세</h1>
-    <p>자격을 찾을 수 없습니다.</p>
-    <RouterLink class="button secondary" to="/qualifications">목록으로</RouterLink>
+    <h1>자격을 찾을 수 없습니다.</h1>
+    <RouterLink
+      class="button secondary"
+      :to="qualificationLocation(showAssessments ? 'assessment' : 'learning')"
+      >목록으로</RouterLink
+    >
   </div>
 </template>

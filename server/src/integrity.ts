@@ -391,6 +391,7 @@ export function validateState(
       "인증 수료 근거",
     );
   }
+  // Historical schema-13 compatibility only; comparison workflows are retired.
   for (const comp of s.comparisons) {
     const e = s.enrollments.find((e) => e.id === comp.enrollmentId),
       a = s.assignments.find((a) => a.id === e?.assignmentId);

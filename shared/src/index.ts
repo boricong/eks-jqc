@@ -289,6 +289,8 @@ export const AuditSchema = z.object({
   details: z.record(z.string(), z.json()),
 });
 export type AuditEvent = z.infer<typeof AuditSchema>;
+// Retired 2026-10-24: retained only to preserve schema-13 files and backups.
+// No application view or mutation API exposes these historical records.
 export const ComparisonSchema = z.object({
   id,
   enrollmentId: id,
@@ -321,13 +323,6 @@ export const ComparisonSchema = z.object({
   correctionReason: text,
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
-export const comparisonLabels = {
-  both_met: "양쪽 충족",
-  assessment_only: "평가만 충족",
-  performance_only: "실제 수행만 충족",
-  neither_met: "양쪽 미충족",
-  pending: "비교 보류",
-};
 export const StateSchema = z.object({
   schemaVersion: z.literal(13),
   qualificationTemplates: z.array(QualificationTemplateSchema),
@@ -437,7 +432,6 @@ export interface Workspace {
   assignments: Assignment[];
   notices: Notice[];
   homeNotices: Notice[];
-  comparisons: Comparison[];
   audits: AuditEvent[];
   planningRequests: PlanningRequest[];
   plans: PersonalPlan[];

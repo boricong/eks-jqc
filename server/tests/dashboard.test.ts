@@ -1439,6 +1439,7 @@ test("1,000명×100자격 조회 p95 1초 이내이며 매트릭스 응답은 25
   const f = await dashboardFixture(t, seed);
   await f.call("admin-1", "/dashboard?view=matrix");
   const samples: number[] = [];
+  let maxBytes = 0;
   for (let n = 0; n < 20; n++) {
     const start = performance.now();
     const v: DashboardResponse = await f.call(
@@ -1446,6 +1447,7 @@ test("1,000명×100자격 조회 p95 1초 이내이며 매트릭스 응답은 25
       `/dashboard?view=matrix&page=${(n % 4) + 1}&columnPage=${(n % 10) + 1}`,
     );
     samples.push(performance.now() - start);
+    maxBytes = Math.max(maxBytes, Buffer.byteLength(JSON.stringify(v)));
     assert.equal(v.matrix.members.items.length, 25);
     assert.equal(v.matrix.columns.items.length, 10);
     assert.equal(v.matrix.members.total, 1000);
@@ -1464,7 +1466,31 @@ test("1,000명×100자격 조회 p95 1초 이내이며 매트릭스 응답은 25
   samples.sort((a, b) => a - b);
   const p95 = samples[Math.ceil(samples.length * 0.95) - 1]!;
   t.diagnostic(
-    `dashboard matrix 1000×100, 배정1000/인증100, 20회 p95=${p95.toFixed(1)}ms, max=${samples.at(-1)!.toFixed(1)}ms`,
+    `dashboard matrix 1000×100, 배정1000/인증100, 20회 p95=${p95.toFixed(1)}ms, max=${samples.at(-1)!.toFixed(1)}ms, bytes=${maxBytes}`,
   );
   assert.ok(p95 < 1000, `p95 ${p95.toFixed(1)}ms >= 1000ms`);
+  const chartSamples: number[] = [];
+  let chartBytes = 0;
+  for (let n = 0; n < 20; n++) {
+    const start = performance.now();
+    const value: DashboardResponse = await f.call(
+      "admin-1",
+      "/dashboard?view=qualifications",
+    );
+    chartSamples.push(performance.now() - start);
+    chartBytes = Math.max(chartBytes, Buffer.byteLength(JSON.stringify(value)));
+    assert.equal(value.charts.length, 3);
+    assert.ok(value.charts.every((chart) => chart.groups.length === 100));
+    assert.equal(value.qualifications.items.length, 25);
+  }
+  chartSamples.sort((a, b) => a - b);
+  const chartP95 = chartSamples[18]!;
+  t.diagnostic(
+    "dashboard qualification charts 1000×100, 20회 p95=" +
+      chartP95.toFixed(1) +
+      "ms, bytes=" +
+      chartBytes,
+  );
+  assert.ok(chartP95 < 1000);
+  assert.ok(chartBytes < 300_000);
 });

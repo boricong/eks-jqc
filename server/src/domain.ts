@@ -16,7 +16,6 @@ import {
   CourseSchema,
   QualificationSchema,
   DraftSchema,
-  ComparisonSchema,
   requiredKinds,
   courseUseErrors,
   qualificationErrors,
@@ -236,16 +235,13 @@ export function authorize(
   }
   let a: StoredAssignment;
   if (action.startsWith("assignment.")) a = find(s.assignments, target);
-  else if (action === "attempt.start" || action === "comparison.create")
-    a = context(s, target).a;
+  else if (action === "attempt.start") a = context(s, target).a;
   else if (action.startsWith("attempt."))
     a = context(s, find(s.attempts, target).enrollmentId).a;
-  else if (action.startsWith("comparison."))
-    a = context(s, find(s.comparisons, target).enrollmentId).a;
   else {
     demand(false, 404, "지원하지 않는 요청입니다.");
   }
-  if (action.startsWith("assignment.") || action.startsWith("comparison."))
+  if (action.startsWith("assignment."))
     demand(
       managementLv1 && a.lv1OrganizationId === managementLv1,
       403,
@@ -823,130 +819,6 @@ export function execute(
     return { id: t.id, result: t.result };
   }
   if (action === "notice.save") return saveNotice(s, u, body, "team", scope);
-  if (action === "comparison.create") {
-    const { e, a, c } = context(s, target);
-    active(a);
-    const record = {
-      id: uid(),
-      enrollmentId: e.id,
-      courseId: c.id,
-      learnerId: a.learnerId,
-      ownerAdminId: u.id,
-      revision: 1,
-      status: "draft" as const,
-      attemptIds: [],
-      observedAt: "",
-      observer: "",
-      task: "",
-      criterion: "",
-      evidence: "",
-      evidenceUrl: "",
-      independence: "unknown" as const,
-      performance: "unknown" as const,
-      createdAt: now(),
-      correctionReason: "",
-    };
-    s.comparisons.push(record);
-    audit(s, u, action, record.id, "", a.id);
-    return { id: record.id };
-  }
-  if (action.startsWith("comparison.")) {
-    const record = find(s.comparisons, target),
-      { a, c } = context(s, record.enrollmentId);
-    active(a);
-    if (action === "comparison.correct") {
-      demand(
-        record.status === "final",
-        409,
-        "확정된 기록만 정정할 수 있습니다.",
-      );
-      demand(
-        !s.comparisons.some((x) => x.supersedesId === record.id),
-        409,
-        "이미 정정 기록이 있습니다.",
-      );
-      const next = {
-        ...structuredClone(record),
-        ownerAdminId: u.id,
-        id: uid(),
-        revision: 1,
-        status: "draft" as const,
-        createdAt: now(),
-        finalizedAt: undefined,
-        outcome: undefined,
-        supersedesId: record.id,
-        correctionReason: reasonSchema.parse(body.reason),
-      };
-      s.comparisons.push(next);
-      audit(s, u, action, next.id, next.correctionReason, a.id, {
-        supersedesId: record.id,
-      });
-      return { id: next.id };
-    }
-    demand(
-      record.status === "draft",
-      409,
-      "확정된 기록은 정정 기록을 만들어 변경해 주세요.",
-    );
-    expected(record, body.revision);
-    const fields = ComparisonSchema.pick({
-      attemptIds: true,
-      observedAt: true,
-      observer: true,
-      task: true,
-      criterion: true,
-      evidence: true,
-      evidenceUrl: true,
-      independence: true,
-      performance: true,
-    }).parse(body);
-    const selected = fields.attemptIds.map((id) => find(s.attempts, id));
-    demand(
-      selected.every(
-        (t) =>
-          t.enrollmentId === record.enrollmentId &&
-          t.courseId === record.courseId &&
-          t.learnerId === record.learnerId &&
-          t.status === "graded",
-      ) && new Set(selected.map((t) => t.kind)).size === selected.length,
-      422,
-      "동일 인증Set의 확정 회차를 평가별로 선택해 주세요.",
-    );
-    Object.assign(record, fields);
-    record.revision++;
-    if (action === "comparison.finalize") {
-      demand(
-        requiredKinds(c).every((kind) => selected.some((t) => t.kind === kind)),
-        422,
-        "필수 평가의 비교 회차를 모두 선택해 주세요.",
-      );
-      demand(
-        record.observedAt &&
-          record.observer.trim() &&
-          record.task.trim() &&
-          record.criterion.trim() &&
-          record.evidence.trim(),
-        422,
-        "관찰일·관찰자·작업·판정 기준·근거를 입력해 주세요.",
-      );
-      const passed = selected.every((t) => t.result === "passed");
-      record.outcome =
-        record.independence !== "independent" ||
-        record.performance === "unknown"
-          ? "pending"
-          : passed
-            ? record.performance === "met"
-              ? "both_met"
-              : "assessment_only"
-            : record.performance === "met"
-              ? "performance_only"
-              : "neither_met";
-      record.status = "final";
-      record.finalizedAt = now();
-    }
-    audit(s, u, action, record.id, record.correctionReason, a.id);
-    return { id: record.id, revision: record.revision };
-  }
   demand(false, 404, "지원하지 않는 요청입니다.");
 }
 
@@ -1292,15 +1164,6 @@ export function workspace(
       (n) =>
         n.published &&
         (n.scope === "system" || n.lv1OrganizationId === u.lv1OrganizationId),
-    ),
-    comparisons: s.comparisons.filter(
-      (c) =>
-        admin &&
-        s.enrollments.some(
-          (e) =>
-            e.id === c.enrollmentId &&
-            assignments.some((a) => a.id === e.assignmentId),
-        ),
     ),
     audits: s.audits.filter(
       (ev) =>

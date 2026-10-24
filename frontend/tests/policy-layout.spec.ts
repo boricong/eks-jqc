@@ -66,7 +66,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   await tree.locator(`[data-id="${own}"]`).click();
   await expect(page.locator('.policy-detail-stack > section > h2')).toHaveText(longName);
   await expect(
-    page.getByRole('link', { name: '팀 자격 등록·적용 관리', exact: true }),
+    page.getByRole('link', { name: '팀 자격 설정 · 등록·팀 적용', exact: true }),
   ).toBeVisible();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -117,6 +117,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   await tree.locator('[data-id="org-photo-pyeongtaek-2"]').click();
   await expect(tree).toBeHidden();
   await expect(page.locator('.policy-tree-toggle')).toBeFocused();
+  await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
   await expect(page.getByRole('region', { name: '세부 조직 관리자 지정' })).toContainText(
     '이 조직에 소속된 구성원이 없습니다',
   );
@@ -132,6 +133,7 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
   await page.goto('/admin/policies');
   const tree = page.getByRole('tree');
   await tree.locator(`[data-id="${own}"]`).click();
+  await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
   const admins = page.getByRole('region', { name: '세부 조직 관리자 지정' });
   const selected = admins.getByRole('region', { name: '선택한 관리자', exact: true });
   const search = admins.getByLabel('구성원 검색');
@@ -193,6 +195,7 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
   await expect(selected).toContainText('저장된 지정');
   await page.reload();
   await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
+  await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
   await expect(selected).toContainText('선택한 관리자 2명');
   await expect(admins.getByRole('checkbox', { name: '정하린', exact: true })).toBeChecked();
   await admins.getByRole('checkbox', { name: '박준호', exact: true }).uncheck();

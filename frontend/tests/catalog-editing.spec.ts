@@ -26,7 +26,7 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
   await expect(dialog).toContainText('기존 기록의 기준은 보존');
   await dialog.getByLabel('삭제 사유').fill('이전 자격 기준 목록 정리');
   await dialog.getByRole('button', { name: '선택 버전 삭제' }).click();
-  await expect(page.getByRole('heading', { name: '팀 자격 관리', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '팀 자격 설정', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '필수 인증Set' })).toHaveCount(0);
   await page.getByLabel('상태 필터').selectOption('deleted');
   await expect(page.getByRole('link', { name: '평가 흐름 체험', exact: true })).toBeVisible();

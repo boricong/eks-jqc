@@ -147,8 +147,8 @@ onMounted(async () => {
           >
         </fieldset>
         <p v-if="selected?.organizationAdministration" class="notice-body">
-          세부 조직 관리자 지정은 조직별 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재 지정이
-          해제되며 새 소속에서 다시 지정해야 합니다.
+          세부 조직 관리자 지정은 조직 필수 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재
+          지정이 해제되며 새 소속에서 다시 지정해야 합니다.
         </p>
         <p v-if="selected" class="muted">
           같은 Lv1 안에서 소속을 변경할 수 있습니다. 기존 기록의 배정 당시 소속은 유지됩니다.
@@ -181,7 +181,7 @@ onMounted(async () => {
     >
   </div>
 
-  <div class="table-wrap" :data-density="list.density">
+  <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -225,7 +225,6 @@ onMounted(async () => {
     :pages="list.pages"
     v-model:page="list.page"
     v-model:size="list.size"
-    v-model:density="list.density"
     v-model:sort="list.sort"
   />
   <p v-if="!listed.length" class="empty-state">해당하는 사용자가 없습니다.</p>

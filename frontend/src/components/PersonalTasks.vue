@@ -46,12 +46,20 @@ const alerts = computed(() =>
     </div>
     <RouterLink v-for="r in requests" :key="r.id" :to="`/plans?request=${r.id}`" class="simple-row"
       ><span
-        ><strong>개인 인증 계획 작성 요청</strong
+        ><strong>{{
+          store.data.planningOptions.find((v) => v.requestId === r.id)?.canComplete
+            ? '요청 전체 완료 확인'
+            : '개인 인증 계획 작성 요청'
+        }}</strong
         ><small
           >계획 작성 기한 {{ r.dueOn }}{{ r.dueOn < kstDate() ? ' · 기한 경과' : '' }} ·
           {{ r.message }}</small
         ></span
-      ><span>요청 확인 →</span></RouterLink
+      ><span>{{
+        store.data.planningOptions.find((v) => v.requestId === r.id)?.canComplete
+          ? '완료 확인 →'
+          : '요청 확인 →'
+      }}</span></RouterLink
     >
     <RouterLink v-for="p in plans" :key="p.id" :to="`/plans/${p.id}`" class="simple-row"
       ><span

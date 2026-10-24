@@ -300,16 +300,6 @@ test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명
     "org-photo-pyeongtaek-1",
   );
   await f.call(admin, "/assignments/assignment-1/results");
-  const comparison = await f.call(
-    admin,
-    `/enrollments/${encodeURIComponent(eid)}/comparisons`,
-    {},
-  );
-  assert.ok(
-    (await f.call("admin-1", "/comparisons")).some(
-      (c: any) => c.id === comparison.id,
-    ),
-  );
   assert.equal(f.store.snapshot().assignments[0]!.ownerAdminId, "admin-1");
   const attempt = await start(f, other.enrollment, "practical", other.learner);
   await f.call(
@@ -1391,167 +1381,6 @@ test("검증 제외 후 원본 보존과 모든 새 처리 차단", async (t) =>
   );
 });
 
-const comparisonData = {
-  attemptIds: ["attempt-1", "attempt-2"],
-  observedAt: "2026-10-16",
-  observer: "현장 관찰자",
-  task: "별도의 작업 수행",
-  criterion: "최소 요건을 독립 수행",
-  evidence: "동일 평가와 별개로 관찰한 수행 근거",
-  evidenceUrl: "https://example.com/evidence",
-  independence: "independent",
-  performance: "met",
-};
-test("실제 수행 비교: 선택 회차 고정·정정·권한·독립성", async (t) => {
-  const f = await fixture(t);
-  const result = await f.call(
-    "admin-1",
-    `/enrollments/${encodeURIComponent(eid)}/comparisons`,
-    {},
-  );
-  await f.call("admin-1", `/comparisons/${result.id}/finalize`, {
-    ...comparisonData,
-    revision: 1,
-  });
-  const fixed = structuredClone(f.store.snapshot().comparisons[0]!);
-  assert.equal(fixed.outcome, "performance_only");
-  await finish(f, eid, "practical");
-  assert.deepEqual(f.store.snapshot().comparisons[0], fixed);
-  await f.call("admin-2", `/comparisons/${result.id}`, undefined, 404);
-  await f.call(
-    "admin-2",
-    `/comparisons/${result.id}/corrections`,
-    { reason: "수정" },
-    403,
-  );
-  await f.call(
-    "admin-1",
-    `/comparisons/${result.id}`,
-    { ...fixed },
-    409,
-    randomUUID(),
-    "PUT",
-  );
-  const corrected = await f.call(
-    "admin-1",
-    `/comparisons/${result.id}/corrections`,
-    {
-      reason: "근거 출처 정정",
-    },
-  );
-  await f.call("admin-1", `/comparisons/${corrected.id}/finalize`, {
-    ...comparisonData,
-    revision: 1,
-    independence: "same_assessment",
-  });
-  const revised = f.store
-    .snapshot()
-    .comparisons.find((c) => c.id === corrected.id)!;
-  assert.equal(revised.outcome, "pending");
-  assert.equal(revised.supersedesId, fixed.id);
-  assert.deepEqual(f.store.snapshot().comparisons[0], fixed);
-  await f.call("admin-1", "/assignments/assignment-1/exclusion", {
-    revision: 1,
-    reason: "검증 제외",
-  });
-  await f.call(
-    "admin-1",
-    `/comparisons/${corrected.id}/corrections`,
-    { reason: "다시 정정" },
-    409,
-  );
-});
-
-test("비교 기록의 잘못된 근거 연결·필수 입력 차단", async (t) => {
-  const f = await fixture(t),
-    record = await f.call(
-      "admin-1",
-      `/enrollments/${encodeURIComponent(eid)}/comparisons`,
-      {},
-    );
-  await finish(f, "assignment-1:demo-course-2", "objective");
-  const wrong = f.store
-    .snapshot()
-    .attempts.find((t) => t.enrollmentId === "assignment-1:demo-course-2")!;
-  await f.call(
-    "admin-1",
-    `/comparisons/${record.id}/finalize`,
-    { ...comparisonData, attemptIds: [wrong.id, "attempt-2"], revision: 1 },
-    422,
-  );
-  await f.call(
-    "admin-1",
-    `/comparisons/${record.id}/finalize`,
-    { ...comparisonData, attemptIds: ["attempt-1"], revision: 1 },
-    422,
-  );
-  await f.call(
-    "admin-1",
-    `/comparisons/${record.id}/finalize`,
-    { ...comparisonData, observer: "", revision: 1 },
-    422,
-  );
-  await f.call(
-    "admin-1",
-    `/comparisons/${record.id}`,
-    {
-      ...comparisonData,
-      observer: "",
-      observedAt: "",
-      attemptIds: [],
-      revision: 1,
-    },
-    200,
-    randomUUID(),
-    "PUT",
-  );
-  assert.equal(f.store.snapshot().comparisons[0]!.status, "draft");
-});
-
-test("비교 결과 다섯 유형과 수료·인증 독립성", async (t) => {
-  const f = await fixture(t);
-  await finish(f, eid, "practical");
-  const passed = f.store
-    .snapshot()
-    .attempts.find(
-      (a) =>
-        a.enrollmentId === eid &&
-        a.kind === "practical" &&
-        a.result === "passed",
-    )!;
-  const before = f.store.snapshot();
-  for (const [attempt, performance, independence, expected] of [
-    [passed.id, "met", "independent", "both_met"],
-    [passed.id, "unmet", "independent", "assessment_only"],
-    ["attempt-2", "met", "independent", "performance_only"],
-    ["attempt-2", "unmet", "independent", "neither_met"],
-    [passed.id, "unknown", "independent", "pending"],
-    [passed.id, "met", "unknown", "pending"],
-  ]) {
-    const record = await f.call(
-      "admin-1",
-      `/enrollments/${encodeURIComponent(eid)}/comparisons`,
-      {},
-    );
-    await f.call("admin-1", `/comparisons/${record.id}/finalize`, {
-      ...comparisonData,
-      revision: 1,
-      attemptIds: ["attempt-1", attempt],
-      performance,
-      independence,
-    });
-    assert.equal(
-      f.store.snapshot().comparisons.find((c) => c.id === record.id)!.outcome,
-      expected,
-    );
-  }
-  assert.deepEqual(f.store.snapshot().completions, before.completions);
-  assert.deepEqual(f.store.snapshot().certifications, before.certifications);
-  const broken = f.store.snapshot();
-  broken.comparisons[0]!.outcome = "neither_met";
-  assert.throws(() => validateState(broken), /비교 판정 불일치/);
-});
-
 test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
   const f = await fixture(t, (s) => {
     for (const score of [66, 67]) {
@@ -1621,11 +1450,6 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
     "learner-1",
     "ft-2",
   );
-  await f.call(
-    "admin-1",
-    `/enrollments/${encodeURIComponent(eid)}/comparisons`,
-    {},
-  );
   const original = f.store.snapshot();
   assert.equal(original.certifications.length, 1);
   assert.ok(original.attempts.length > 0);
@@ -1640,7 +1464,7 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
     notifications: 3,
     completions: 2,
     certifications: 1,
-    comparisons: 1,
+    comparisons: 0,
   });
   const key = randomUUID(),
     body = {

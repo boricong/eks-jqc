@@ -5,7 +5,6 @@ import ValidityBadge from './ValidityBadge.vue';
 import { kindLabels, kstDate } from '@eks/contracts';
 import { computed, ref } from 'vue';
 import { useDemo } from '../stores/demo';
-import { comparisonLabels } from '@eks/contracts';
 import StatusBadge from './StatusBadge.vue';
 const store = useDemo();
 const root = ref(''),
@@ -14,18 +13,12 @@ const tabs = [
   { id: 'assignments', name: '배정·평가 결과' },
   { id: 'qualifications', name: '자격' },
   { id: 'courses', name: '인증Set·평가 기준' },
-  { id: 'comparisons', name: '실제 수행 비교' },
   { id: 'notices', name: '공지' },
   { id: 'audits', name: '변경 이력' },
 ];
 const matches = (id: string) => !root.value || id === root.value;
 const assignments = computed(() =>
   store.data.assignments.filter((a) => matches(a.lv1OrganizationId)),
-);
-const comparisons = computed(() =>
-  store.data.comparisons.filter((c) =>
-    assignments.value.some((a) => a.enrollments.some((e) => e.id === c.enrollmentId)),
-  ),
 );
 const audits = computed(() =>
   store.data.audits
@@ -246,24 +239,6 @@ const actionLabels: Record<string, string> = {
           </li>
         </ol>
       </article>
-    </details>
-  </section>
-  <section v-else-if="tab === 'comparisons'" class="system-records">
-    <p v-if="!comparisons.length" class="empty-state">비교 기록이 없습니다.</p>
-    <details v-for="c in comparisons" :key="c.id" class="panel record-detail">
-      <summary>
-        {{ store.username(c.learnerId) }} · {{ store.course(c.courseId).title }} ·
-        {{ c.outcome ? comparisonLabels[c.outcome] : '초안' }}
-      </summary>
-      <p>관찰일 {{ c.observedAt || '미입력' }} · 관찰자 {{ c.observer || '미입력' }}</p>
-      <p>작업: {{ c.task }}</p>
-      <p>기준: {{ c.criterion }}</p>
-      <p class="preserve-lines">근거: {{ c.evidence }}</p>
-      <a v-if="c.evidenceUrl" :href="c.evidenceUrl" target="_blank" rel="noopener noreferrer"
-        >근거 자료</a
-      >
-      <p v-if="c.correctionReason">정정 사유: {{ c.correctionReason }}</p>
-      <p class="muted">비교한 회차 ID: {{ c.attemptIds.join(', ') }}</p>
     </details>
   </section>
   <section v-else-if="tab === 'notices'" class="system-records">

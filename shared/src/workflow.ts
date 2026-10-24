@@ -22,7 +22,7 @@ export const workflowSteps = [
   ["invitation", "계획 수립 요청"],
   ["selection", "자격 선택"],
   ["schedule", "일정 수립"],
-  ["goals", "학습 목표 설정"],
+  ["goals", "학습 목표(선택)"],
   ["approval", "결재 생략"],
   ["plan", "계획 완료"],
   ["learning-assessment", "학습·평가"],
@@ -163,8 +163,6 @@ export function planErrors(
       errors.push(
         `${i + 1}번째 인증Set은 학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일 순서여야 합니다.`,
       );
-    if (!s.goal.trim())
-      errors.push(`${i + 1}번째 인증Set의 학습 목표를 입력해 주세요.`);
   });
   return errors;
 }

@@ -24,8 +24,8 @@ const rows = computed(() =>
 );
 </script>
 <template>
-  <section class="panel editor-panel lifecycle-panel" aria-label="개인 보유 자격 관리">
-    <h2>개인 보유 자격 관리</h2>
+  <section class="panel editor-panel lifecycle-panel" aria-label="보유 자격 관리">
+    <h2>효력·유효기간·이력</h2>
     <p>
       취득자의 자격 효력을 정지·해제·폐기하거나 갱신 이력을 확인합니다. 대상자 Hold와 별도로
       적용하며 최초 취득 근거는 유지합니다.

@@ -14,7 +14,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const id = useId(),
-  media = window.matchMedia('(max-width: 1023px)'),
+  media = window.matchMedia('(max-width: 1279px)'),
   compact = ref(media.matches),
   open = ref(false);
 const navigation = ref<HTMLElement>(),
@@ -85,8 +85,7 @@ watch([() => props.selected, visible], async () => {
         >
         <span
           ><strong>{{ course.title }}</strong
-          ><small>{{ course.status }}</small
-          ><small>{{ course.passed }} / {{ course.total }} 평가 통과</small></span
+          ><small>{{ course.status }}</small></span
         >
       </button>
     </nav>

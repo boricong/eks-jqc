@@ -1,23 +1,47 @@
 <script setup lang="ts">
 import { confirmAction } from '../composables/useConfirmation';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { kstDate, defaultPlanningDueOn, type Enrollment } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
 import AppDialog from './AppDialog.vue';
+import '../styles/planning.css';
 const store = useDemo(),
   open = ref(false),
   busy = ref(false),
   error = ref(''),
   filter = ref('all'),
-  dueEdited = ref(false);
+  search = ref(''),
+  dueEdited = ref(false),
+  detailsOpen = ref(false),
+  detailId = ref('');
 const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
+const context = computed(() => `${store.actorId}:${store.managementLv1}:${store.fullManagement}`);
+let disposed = false;
+let detailFocus: HTMLElement | null = null;
+let detailScroll = 0;
+let detailContext = '';
 const readiness = (id: string) => store.data.planningReadiness.find((r) => r.learnerId === id);
 const learners = computed(() =>
   store.data.users.filter(
     (u) => u.lv1OrganizationId === store.managementLv1 && u.roles.includes('learner'),
   ),
 );
+type Learner = (typeof learners.value)[number];
+const organizationName = (u: Learner) => u.organizationPath.at(-1)?.name || '소속 미정';
+const organizationPath = (u: Learner) => u.organizationPath.map((o) => o.name).join(' › ');
+function requestLabel(u: Learner) {
+  if (readiness(u.id)?.canRequest) return '요청 가능';
+  if (!u.organizationActive) return '소속 중지';
+  if (u.certificationEligibility === 'hold') return '대상자 Hold';
+  return '확인 필요';
+}
+const visibleLearners = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase('ko-KR');
+  return learners.value.filter((u) =>
+    `${u.name} ${organizationPath(u)}`.toLocaleLowerCase('ko-KR').includes(query),
+  );
+});
 const ready = computed(() => learners.value.some((u) => readiness(u.id)?.canRequest));
 function phase(e: Enrollment) {
   return e.completion
@@ -28,69 +52,115 @@ function phase(e: Enrollment) {
         ? '평가 중'
         : '평가 전';
 }
-const rows = computed(() =>
-  learners.value
-    .map((user) => {
-      const requests = store.data.planningRequests
-        .filter((r) => r.learnerId === user.id)
-        .slice()
-        .reverse();
-      const summaries = store.data.requestProgress.filter((p) => p.learnerId === user.id);
-      const plans = store.data.plans.filter((p) => p.learnerId === user.id);
-      const assignments = store.data.assignments.filter(
-        (a) => a.learnerId === user.id && !a.excludedReason,
-      );
-      const stage = summaries.find((p) => p.id === requests[0]?.id)?.stage || '미발송';
-      const late =
-        requests.some(
-          (r) =>
-            r.dueOn < kstDate() &&
-            !['계획 완료', '추가 계획 대상 없음'].includes(
-              summaries.find((p) => p.id === r.id)?.stage || '',
-            ),
-        ) ||
-        plans.some(
-          (p) =>
-            p.targetOn &&
-            p.targetOn < kstDate() &&
-            (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId && !a.certifiedAt)),
-        );
-      return { user, requests, summaries, plans, assignments, stage, late };
-    })
-    .filter(
+const allRows = computed(() =>
+  learners.value.map((user) => {
+    const requests = store.data.planningRequests
+      .filter((r) => r.learnerId === user.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+    const summaries = store.data.requestProgress.filter((p) => p.learnerId === user.id);
+    const plans = store.data.plans.filter((p) => p.learnerId === user.id);
+    const assignments = store.data.assignments.filter(
+      (a) => a.learnerId === user.id && !a.excludedReason,
+    );
+    const stage = summaries.find((p) => p.id === requests[0]?.id)?.stage || '미발송';
+    const unfinished = requests.filter(
       (r) =>
-        filter.value === 'all' ||
-        filter.value === r.stage ||
-        (filter.value === 'late' && r.late) ||
-        r.assignments.some((a) => a.enrollments.some((e) => phase(e) === filter.value)),
-    ),
+        !['계획 완료', '추가 계획 대상 없음'].includes(
+          summaries.find((p) => p.id === r.id)?.stage || '',
+        ),
+    );
+    const late =
+      unfinished.some((r) => r.dueOn < kstDate()) ||
+      plans.some(
+        (p) =>
+          p.targetOn &&
+          p.targetOn < kstDate() &&
+          (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId && !a.certifiedAt)),
+      );
+    return {
+      user,
+      requests,
+      summaries,
+      plans,
+      assignments,
+      stage,
+      late,
+      unfinished: unfinished.length,
+    };
+  }),
 );
+const rows = computed(() =>
+  allRows.value.filter(
+    (r) =>
+      filter.value === 'all' ||
+      filter.value === r.stage ||
+      (filter.value === 'late' && r.late) ||
+      r.assignments.some((a) => a.enrollments.some((e) => phase(e) === filter.value)),
+  ),
+);
+const detail = computed(() => allRows.value.find((r) => r.user.id === detailId.value));
+function showDetail(id: string, event: MouseEvent) {
+  if (open.value) return;
+  detailFocus = event.currentTarget as HTMLElement;
+  detailScroll = window.scrollY;
+  detailContext = context.value;
+  detailId.value = id;
+  detailsOpen.value = true;
+}
+function restoreDetailFocus() {
+  if (disposed || detailContext !== context.value) return;
+  window.scrollTo({ top: detailScroll });
+  if (detailFocus?.isConnected) detailFocus.focus({ preventScroll: true });
+  detailId.value = '';
+}
+watch(detail, (value) => {
+  if (!value) detailsOpen.value = false;
+});
+watch(context, () => {
+  detailFocus = null;
+  detailId.value = '';
+  detailsOpen.value = false;
+  open.value = false;
+  search.value = '';
+  error.value = '';
+  filter.value = 'all';
+  form.value = { learnerIds: [], dueOn: '', message: '' };
+});
+onBeforeUnmount(() => {
+  disposed = true;
+});
 function startRequest() {
+  if (busy.value || detailsOpen.value) return;
   form.value = {
     learnerIds: [],
     dueOn: defaultPlanningDueOn(store.data.serverDate + 'T00:00:00+09:00'),
     message: '',
   };
+  search.value = '';
   dueEdited.value = false;
   error.value = '';
   open.value = true;
 }
 async function send() {
+  if (busy.value || !form.value.learnerIds.length) return;
   if (!form.value.dueOn) {
     error.value = '계획 작성 기한을 입력해 주세요.';
     return;
   }
+  const scope = context.value;
   busy.value = true;
   error.value = '';
   try {
     await store.command('/planning-requests', {
       ...form.value,
+      learnerIds: [...form.value.learnerIds],
       ...(dueEdited.value ? {} : { dueOn: undefined }),
     });
+    if (disposed || scope !== context.value) return;
     open.value = false;
     store.notify('대상자별 계획 수립 요청을 저장했습니다.');
   } catch (e) {
-    error.value = (e as Error).message;
+    if (!disposed && scope === context.value) error.value = (e as Error).message;
   } finally {
     busy.value = false;
   }
@@ -107,9 +177,33 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 </script>
 <template>
-  <section class="panel planning-panel">
-    <div class="section-heading">
-      <h2>계획 요청 현황</h2>
+  <section class="panel planning-panel" aria-labelledby="planning-requests-heading">
+    <div class="planning-toolbar">
+      <h2 id="planning-requests-heading">계획 요청 현황</h2>
+      <label class="planning-filter"
+        >계획·진행 필터<select v-model="filter" aria-label="요청 현황 필터">
+          <option value="all">전체 대상자</option>
+          <option
+            v-for="state in [
+              '미발송',
+              '미착수',
+              '자격 준비 대기',
+              '확인 필요',
+              '추가 계획 대상 없음',
+              '작성 중',
+              '계획 완료',
+              '평가 전',
+              '평가 중',
+              '일부 통과',
+              '수료',
+            ]"
+            :key="state"
+          >
+            {{ state }}
+          </option>
+          <option value="late">목표일·기한 경과</option>
+        </select></label
+      >
       <button class="button primary" :disabled="busy || !ready" @click="startRequest">
         계획 수립 요청
       </button>
@@ -117,103 +211,63 @@ onBeforeRouteUpdate(leave);
     <p v-if="!ready" class="notice-body">
       요청할 대상이 없습니다. 아래 대상자의 소속·취득 대상자 상태를 확인해 주세요.
     </p>
-    <label class="field compact-field"
-      >계획·진행 필터<select v-model="filter">
-        <option value="all">전체 대상자</option>
-        <option
-          v-for="state in [
-            '미발송',
-            '미착수',
-            '자격 준비 대기',
-            '확인 필요',
-            '추가 계획 대상 없음',
-            '작성 중',
-            '계획 완료',
-            '평가 전',
-            '평가 중',
-            '일부 통과',
-            '수료',
-          ]"
-          :key="state"
-        >
-          {{ state }}
-        </option>
-        <option value="late">목표일·기한 경과</option>
-      </select></label
-    >
-    <div class="table-panel">
-      <table>
+    <div class="table-panel planning-target-table">
+      <table aria-label="계획 요청 대상자 현황">
+        <colgroup>
+          <col class="planning-name-col" />
+          <col class="planning-org-col" />
+          <col class="planning-ready-col" />
+          <col />
+          <col class="planning-date-col" />
+          <col class="planning-detail-col" />
+        </colgroup>
         <thead>
           <tr>
-            <th>대상자·소속</th>
-            <th>요청 준비</th>
-            <th>요청별 계획 현황</th>
-            <th>진행 상태</th>
+            <th scope="col">이름</th>
+            <th scope="col">소속</th>
+            <th scope="col">요청 가능</th>
+            <th scope="col">최근 요청 상태</th>
+            <th scope="col">최근 요청 기한</th>
+            <th scope="col">상세</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in rows" :key="row.user.id">
             <td>
-              {{ row.user.name
-              }}<small class="table-subtext">{{ row.user.organizationPath.at(-1)?.name }}</small>
+              <span class="planning-ellipsis" :title="row.user.name">{{ row.user.name }}</span>
             </td>
             <td>
-              {{ readiness(row.user.id)?.reason
-              }}<small class="table-subtext"
-                >필수 {{ readiness(row.user.id)?.requiredCount || 0 }} · 신규 가능
-                {{ readiness(row.user.id)?.count || 0 }} · 작성 중
-                {{ readiness(row.user.id)?.draftCount || 0 }}</small
+              <span
+                class="planning-ellipsis"
+                :title="organizationPath(row.user)"
+                :aria-label="organizationPath(row.user)"
+                >{{ organizationName(row.user) }}</span
               >
             </td>
             <td>
-              <span>{{ row.stage }}</span>
-              <details v-for="r in row.requests" :key="r.id">
-                <summary>
-                  {{ r.dueOn }} 기한 · {{ row.summaries.find((s) => s.id === r.id)?.stage }}
-                </summary>
-                <p v-for="s in row.summaries.filter((s) => s.id === r.id)" :key="s.id">
-                  대상 {{ s.total }}개 · 계획 확정 {{ s.planned }}개 · 유효 인증 {{ s.valid }}개 ·
-                </p>
-                <p>{{ r.message }}</p>
-                <p v-if="r.source === 'migration'" class="muted">
-                  이관 시 확보한 소속·계획 대상입니다. 당시 원본에 없는 요청 범위를 추정하지
-                  않았습니다.
-                </p>
-                <ul>
-                  <li
-                    v-for="target in [...(r.targets || []), ...r.selections]"
-                    :key="target.entityId"
-                  >
-                    {{ target.title }} · 요청 당시 v{{ target.version }}
-                  </li>
-                </ul>
-              </details>
-              <details v-if="row.plans.length">
-                <summary>개인 계획 {{ row.plans.length }}건</summary>
-                <div v-for="p in row.plans" :key="p.id">
-                  <strong>{{
-                    store.qualification(p.qualificationId, p.qualificationMetadata).title
-                  }}</strong>
-                  <p>목표 인증일 {{ p.targetOn || '미정' }}</p>
-                  <p v-for="s in p.schedules" :key="s.courseId">
-                    {{ store.course(s.courseId).title }} · {{ s.goal || '목표 미정' }} · 평가 예정
-                    {{ s.assessmentOn || '미정' }}
-                  </p>
-                </div>
-              </details>
+              <span :class="{ 'planning-unavailable': !readiness(row.user.id)?.canRequest }">{{
+                requestLabel(row.user)
+              }}</span>
             </td>
             <td>
-              <p v-for="a in row.assignments" :key="a.id">
-                {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
-                }}<span
-                  v-for="state in ['평가 전', '평가 중', '일부 통과', '수료']"
-                  :key="state"
-                  class="table-subtext"
-                  >{{ state }}
-                  {{ a.enrollments.filter((e) => phase(e) === state).length }}인증Set</span
+              <div class="planning-row-status">
+                <span>{{ row.stage }}</span
+                ><span v-if="row.requests.length > 1 && row.unfinished" class="planning-meta"
+                  >미완료 {{ row.unfinished }}건</span
+                ><span v-if="row.late" class="planning-late" title="목표일 또는 요청 기한 경과"
+                  >기한 경과</span
                 >
-              </p>
-              <p v-if="row.late">목표일·기한 경과</p>
+              </div>
+            </td>
+            <td>{{ row.requests[0]?.dueOn || '—' }}</td>
+            <td>
+              <button
+                class="button ghost small"
+                :aria-label="`${row.user.name} · ${organizationPath(row.user)} 계획 요청 상세`"
+                @click="showDetail(row.user.id, $event)"
+              >
+                상세
+              </button>
             </td>
           </tr>
         </tbody>
@@ -221,44 +275,156 @@ onBeforeRouteUpdate(leave);
       <p v-if="!rows.length" class="empty-state">해당 대상자가 없습니다.</p>
     </div>
   </section>
-  <AppDialog v-model:open="open" title="계획 수립 요청"
-    ><p>{{ store.managementOrganization?.name }}</p>
+  <AppDialog
+    v-model:open="detailsOpen"
+    :title="`${detail?.user.name || '대상자'} · 계획 요청 상세`"
+    class="planning-detail-dialog"
+    @closed="restoreDetailFocus"
+  >
+    <template v-if="detail">
+      <p class="planning-detail-org">{{ organizationPath(detail.user) }}</p>
+      <dl class="planning-detail-facts">
+        <div>
+          <dt>요청 가능 상태</dt>
+          <dd>{{ readiness(detail.user.id)?.reason || '확인 필요' }}</dd>
+        </div>
+        <div>
+          <dt>필수 자격</dt>
+          <dd>{{ readiness(detail.user.id)?.requiredCount || 0 }}개</dd>
+        </div>
+        <div>
+          <dt>새로 계획 가능</dt>
+          <dd>{{ readiness(detail.user.id)?.count || 0 }}개</dd>
+        </div>
+        <div>
+          <dt>작성 중 계획</dt>
+          <dd>{{ readiness(detail.user.id)?.draftCount || 0 }}개</dd>
+        </div>
+      </dl>
+      <section class="planning-detail-section" aria-label="요청 이력">
+        <h3>요청 이력 {{ detail.requests.length }}건</h3>
+        <section v-for="r in detail.requests" :key="r.id" class="planning-history-item">
+          <h4>
+            {{ r.dueOn }} 기한 ·
+            {{ detail.summaries.find((s) => s.id === r.id)?.stage || '확인 필요' }}
+          </h4>
+          <p
+            v-for="s in detail.summaries.filter((s) => s.id === r.id)"
+            :key="s.id"
+            class="planning-meta"
+          >
+            대상 {{ s.total }}개 · 계획 확정 {{ s.planned }}개 · 유효 인증 {{ s.valid }}개
+          </p>
+          <p v-if="r.message" class="preserve-lines">{{ r.message }}</p>
+          <p v-if="r.source === 'migration'" class="planning-meta">
+            이관 시 확보한 소속·계획 대상입니다. 당시 원본에 없는 요청 범위를 추정하지 않았습니다.
+          </p>
+          <ul>
+            <li v-for="target in [...(r.targets || []), ...r.selections]" :key="target.entityId">
+              {{ target.title }} · 요청 당시 v{{ target.version }}
+            </li>
+          </ul>
+        </section>
+        <p v-if="!detail.requests.length" class="planning-meta">발송한 요청이 없습니다.</p>
+      </section>
+      <section class="planning-detail-section" aria-label="개인 계획">
+        <h3>개인 계획 {{ detail.plans.length }}건</h3>
+        <section v-for="p in detail.plans" :key="p.id" class="planning-history-item">
+          <h4>{{ store.qualification(p.qualificationId, p.qualificationMetadata).title }}</h4>
+          <p>목표 인증일 {{ p.targetOn || '미정' }}</p>
+          <ul>
+            <li v-for="s in p.schedules" :key="s.courseId">
+              <strong>{{ store.course(s.courseId).title }}</strong>
+              <p v-if="s.goal.trim()" class="preserve-lines">{{ s.goal }}</p>
+              <p class="planning-meta">평가 예정 {{ s.assessmentOn || '미정' }}</p>
+            </li>
+          </ul>
+        </section>
+        <p v-if="!detail.plans.length" class="planning-meta">작성한 계획이 없습니다.</p>
+      </section>
+    </template>
+    <template #footer
+      ><button class="button secondary" @click="detailsOpen = false">닫기</button></template
+    >
+  </AppDialog>
+  <AppDialog
+    :open="open"
+    title="계획 수립 요청"
+    class="planning-request-dialog"
+    @update:open="
+      (value) => {
+        if (!busy) open = value;
+      }
+    "
+  >
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-    <fieldset class="template-list">
-      <legend>대상 학습자</legend>
-      <label v-for="u in learners" :key="u.id" class="choice"
-        ><input
-          v-model="form.learnerIds"
-          :aria-label="u.name"
-          :value="u.id"
-          type="checkbox"
-          :disabled="busy || !readiness(u.id)?.canRequest"
-        /><span
-          >{{ u.name }} · {{ u.organizationPath.at(-1)?.name
-          }}<small
-            >{{ readiness(u.id)?.reason }} · 필수 {{ readiness(u.id)?.requiredCount || 0 }} · 신규
-            가능 {{ readiness(u.id)?.count || 0 }} · 작성 중
-            {{ readiness(u.id)?.draftCount || 0 }}</small
-          ></span
-        ></label
-      >
-    </fieldset>
-    <label class="field"
-      >계획 작성 기한<input
-        v-model="form.dueOn"
-        @input="dueEdited = true"
-        type="date"
-        :disabled="busy"
-      /><span v-if="dueEdited && !form.dueOn" class="field-error"
-        >계획 작성 기한을 입력해 주세요.</span
-      ></label
-    ><label class="field"
-      >안내문<textarea v-model="form.message" rows="3" maxlength="2000" :disabled="busy" />
-    </label>
-    <p class="muted">
-      학습자가 팀 적용 자격을 선택합니다. 이번 요청의 필수 기준은 발송 시점에 고정하며, 필수 자격이
-      없어도 요청할 수 있습니다.
-    </p>
+    <div class="planning-request-layout">
+      <fieldset class="planning-request-targets">
+        <legend>대상 학습자</legend>
+        <div class="planning-target-tools">
+          <label class="field"
+            >이름·조직 검색<input
+              v-model="search"
+              type="search"
+              :disabled="busy"
+              autocomplete="off"
+          /></label>
+          <p class="planning-selection-count" role="status">
+            선택 {{ form.learnerIds.length }}명 <span>· 조회 {{ visibleLearners.length }}명</span>
+          </p>
+        </div>
+        <div class="planning-target-options">
+          <label
+            v-for="u in visibleLearners"
+            :key="u.id"
+            class="planning-target-option"
+            :class="{ 'is-unavailable': !readiness(u.id)?.canRequest }"
+          >
+            <input
+              v-model="form.learnerIds"
+              :aria-label="u.name"
+              :aria-describedby="`planning-target-${u.id}`"
+              :value="u.id"
+              type="checkbox"
+              :disabled="busy || !readiness(u.id)?.canRequest"
+            />
+            <span class="planning-option-person">
+              <span class="planning-ellipsis planning-option-name" :title="u.name">{{
+                u.name
+              }}</span>
+              <span class="planning-option-status">{{ requestLabel(u) }}</span>
+            </span>
+            <span class="planning-ellipsis planning-option-org" :title="organizationPath(u)">{{
+              organizationName(u)
+            }}</span>
+            <span :id="`planning-target-${u.id}`" class="sr-only"
+              >{{ organizationPath(u) }} · {{ readiness(u.id)?.reason || '확인 필요' }}</span
+            >
+          </label>
+          <p v-if="!visibleLearners.length" class="empty-state">검색 결과가 없습니다.</p>
+        </div>
+      </fieldset>
+      <div class="planning-request-fields">
+        <p class="planning-request-team">{{ store.managementOrganization?.name }}</p>
+        <label class="field"
+          >계획 작성 기한<input
+            v-model="form.dueOn"
+            @input="dueEdited = true"
+            type="date"
+            :disabled="busy"
+          /><span v-if="dueEdited && !form.dueOn" class="field-error"
+            >계획 작성 기한을 입력해 주세요.</span
+          ></label
+        >
+        <label class="field"
+          >안내문<textarea v-model="form.message" rows="5" maxlength="2000" :disabled="busy" />
+        </label>
+        <p class="planning-meta">
+          학습자가 팀 적용 자격을 선택합니다. 필수 기준은 발송 시점에 고정되며, 필수 자격이 없어도
+          요청할 수 있습니다.
+        </p>
+      </div>
+    </div>
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button
       ><button
@@ -268,6 +434,6 @@ onBeforeRouteUpdate(leave);
       >
         대상자에게 요청
       </button></template
-    ></AppDialog
-  >
+    >
+  </AppDialog>
 </template>

@@ -46,7 +46,10 @@ const cards = computed(() => {
       request,
       count: props.planningRequests.length,
       stage,
-      action: ['자격 준비 대기', '확인 필요'].includes(stage) ? '요청 상태 확인' : '계획 수립하기',
+      action:
+        stage === '자격 준비 대기' || stage.includes('확인 필요')
+          ? '요청 상태 확인'
+          : '계획 수립하기',
     },
     ...qualificationCards.value,
   ];

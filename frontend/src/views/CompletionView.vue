@@ -17,7 +17,7 @@ const back = computed(() =>
   route.query.lv1OrganizationId && store.canEnterManagement
     ? store.managementLink('/admin/results')
     : a.value?.learnerId === store.actorId
-      ? `/qualifications/${a.value?.id}?course=${e.value?.courseId}`
+      ? `/qualifications/${a.value?.id}?course=${e.value?.courseId}${route.query.stage === 'assessment' ? '&stage=assessment' : ''}`
       : store.hasRole('system_operator')
         ? '/system/overview'
         : store.hasRole('admin')

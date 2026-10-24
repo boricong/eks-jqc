@@ -59,8 +59,9 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await page.goto('/admin/policies');
   await page.getByLabel('조직 검색').fill('Photo 공정 검증 상세 조직');
   await page.getByRole('treeitem').filter({ hasText: 'Photo 공정 검증 상세 조직' }).click();
-  await page.getByLabel('조직 설명').fill('상황 대응 능력 검증 조직');
-  await page.getByLabel('담당 업무').fill('설비 정보와 결과 기록 검토');
+  await page.getByRole('button', { name: '조직 정보 펼치기', exact: true }).click();
+  await page.getByLabel('조직 설명', { exact: true }).fill('상황 대응 능력 검증 조직');
+  await page.getByLabel('담당 업무', { exact: true }).fill('설비 정보와 결과 기록 검토');
   await page.getByRole('checkbox', { name: /평가 흐름 체험 · v1/ }).check();
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
   await expect(page.getByRole('dialog')).toContainText('구성원 1명');
@@ -90,7 +91,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   for (const e of backend.store.snapshot().enrollments.filter((e) => e.assignmentId === a.id)) {
     const c = backend.store.snapshot().courses.find((c) => c.id === e.courseId)!;
     await page.goto(`/qualifications/${a.id}?course=${c.id}`);
-    await page.getByRole('link', { name: '평가하기', exact: true }).click();
+    await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
     await expect(page.locator('.assessment-grid')).toBeVisible();
     for (const kind of c.assessmentKinds) {
       await page.goto(`/qualifications/${a.id}/courses/${c.id}/${kind}`);
@@ -196,7 +197,6 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
         '/admin/courses/demo-course-1',
         '/admin/assignments',
         '/admin/results',
-        '/admin/comparisons',
         '/admin/notices',
         '/admin/catalog',
       ],

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PageHeading from '../components/PageHeading.vue';
+import { managementTitle } from '../management-navigation';
 import { confirmAction } from '../composables/useConfirmation';
 import { getDataGeneration } from '../data-generation';
 import { useProcessContext } from '../composables/useProcessContext';
@@ -752,11 +753,11 @@ async function backToList() {
   <div class="catalog-page" :class="{ 'has-catalog-draft': workbook && sheet }">
     <PageHeading class="page-heading">
       <div>
-        <h1>기준 일괄 관리</h1>
+        <h1>{{ managementTitle('catalog') }}</h1>
       </div>
-      <RouterLink :to="store.managementLink('/admin/qualifications')" class="button secondary"
-        >개별 기준 관리</RouterLink
-      >
+      <RouterLink :to="store.managementLink('/admin/qualifications')" class="button secondary">{{
+        managementTitle('qualifications')
+      }}</RouterLink>
     </PageHeading>
     <template v-if="store.managementReady">
       <div class="panel catalog-top-actions">
@@ -896,7 +897,7 @@ async function backToList() {
             </tbody>
           </table>
           <p v-if="!qualifications.length" class="empty-state">
-            팀 자격 관리에서 기본자격을 등록한 뒤 선택하세요.
+            {{ managementTitle('qualifications') }}에서 기본자격을 등록한 뒤 선택하세요.
           </p>
         </div>
       </section>
@@ -1251,8 +1252,10 @@ async function backToList() {
       <p v-if="!selected.length" class="muted">변경한 자격 또는 저장한 기준을 선택해 주세요.</p>
       <p>
         팀 적용 버전은 변경되지 않습니다. 저장한 버전은
-        <RouterLink :to="store.managementLink('/admin/policies')">조직별 자격 설정</RouterLink>에서
-        선택할 수 있습니다.
+        <RouterLink :to="store.managementLink('/admin/qualifications')">{{
+          managementTitle('qualifications')
+        }}</RouterLink
+        >의 팀 적용에서 선택할 수 있습니다.
       </p>
       <template #footer
         ><button class="button primary" :disabled="busy || !canSave" @click="save">

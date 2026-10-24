@@ -21,6 +21,132 @@ import { JsonStore } from "../src/storage.ts";
 import { migrateState } from "../src/migration.ts";
 import { validateState } from "../src/integrity.ts";
 
+for (const goals of [
+  ["", ""],
+  ["", "선택 입력한 목표"],
+  ["   ", "\n"],
+]) {
+  test(`선택 목표 ${JSON.stringify(goals)} 계획 확정·재시도·확정 후 삭제와 날짜/길이 제한`, async (t) => {
+    const f = await fixture(t);
+    const requestId = await invitation(f);
+    const created = await f.call("learner-2", "/plans", {
+      requestId,
+      requestRevision: f.store
+        .snapshot()
+        .planningRequests.find((r) => r.id === requestId)!.revision,
+      qualificationId: "demo-qualification",
+    });
+    const latest = () =>
+      f.store.snapshot().plans.find((p) => p.id === created.id)!;
+    const fields = {
+      targetOn: "2026-12-01",
+      schedules: latest().schedules.map((s, i) => ({
+        ...s,
+        learningStart: "2026-10-01",
+        learningEnd: "2026-10-15",
+        assessmentOn: "2026-11-01",
+        goal: goals[i]!,
+      })),
+    };
+    await f.call(
+      "learner-2",
+      `/plans/${created.id}`,
+      { ...fields, revision: latest().revision },
+      200,
+      "PUT",
+    );
+    const revision = latest().revision,
+      key = randomUUID();
+    const result = await f.call(
+      "learner-2",
+      `/plans/${created.id}/complete`,
+      { revision },
+      200,
+      "POST",
+      key,
+    );
+    assert.deepEqual(
+      await f.call(
+        "learner-2",
+        `/plans/${created.id}/complete`,
+        { revision },
+        200,
+        "POST",
+        key,
+      ),
+      result,
+    );
+    assert.deepEqual(
+      latest().schedules.map((s) => s.goal),
+      goals,
+    );
+    const assignment = f.store
+      .snapshot()
+      .assignments.find((a) => a.id === result.assignmentId)!;
+    const empty = {
+      ...fields,
+      schedules: fields.schedules.map((s) => ({ ...s, goal: "" })),
+    };
+    await f.call(
+      "learner-2",
+      `/plans/${created.id}`,
+      { ...empty, revision: latest().revision },
+      422,
+      "PUT",
+    );
+    await f.call(
+      "learner-2",
+      `/plans/${created.id}`,
+      { ...empty, revision: latest().revision, reason: "선택 목표 정리" },
+      200,
+      "PUT",
+    );
+    assert.ok(latest().schedules.every((s) => s.goal === ""));
+    const before = f.store.snapshot();
+    const invalid = {
+      ...empty,
+      schedules: empty.schedules.map((s) => ({ ...s, learningEnd: "" })),
+    };
+    await f.call(
+      "learner-2",
+      `/plans/${created.id}`,
+      { ...invalid, revision: latest().revision, reason: "날짜 누락" },
+      422,
+      "PUT",
+    );
+    await f.call(
+      "learner-2",
+      `/plans/${created.id}`,
+      {
+        ...empty,
+        schedules: empty.schedules.map((s) => ({
+          ...s,
+          goal: "가".repeat(2001),
+        })),
+        revision: latest().revision,
+        reason: "길이 초과",
+      },
+      422,
+      "PUT",
+    );
+    assert.deepEqual(f.store.snapshot(), before);
+    assert.deepEqual(
+      f.store.snapshot().assignments.find((a) => a.id === assignment.id),
+      assignment,
+    );
+    assert.equal(
+      f.store.snapshot().assignments.filter((a) => a.planId === created.id)
+        .length,
+      1,
+    );
+    assert.equal(
+      f.store.snapshot().planningRequests.find((r) => r.id === requestId)!
+        .completion,
+      undefined,
+    );
+  });
+}
+
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-workflow-"));
   const file = path.join(dir, "runtime", "state.json");

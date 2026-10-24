@@ -95,7 +95,7 @@ async function save() {
 <template>
   <section class="panel editor-panel lifecycle-panel">
     <div class="section-heading">
-      <h2>인증 대상자 관리</h2>
+      <h2>대상자 현황</h2>
       <span class="muted"
         >대상 {{ data?.users.filter((u) => u.eligibility === 'eligible').length || 0 }}명 · Hold
         제외 {{ data?.users.filter((u) => u.eligibility === 'hold').length || 0 }}명</span

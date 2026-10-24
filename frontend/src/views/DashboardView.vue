@@ -11,6 +11,7 @@ import CompactTabs from '../components/CompactTabs.vue';
 import DashboardMetricCard from '../components/dashboard/DashboardMetric.vue';
 import DashboardRatio from '../components/dashboard/DashboardRatio.vue';
 import DashboardPager from '../components/dashboard/DashboardPager.vue';
+import DashboardCharts from '../components/dashboard/DashboardCharts.vue';
 import DashboardMemberPanel from '../components/dashboard/DashboardMemberPanel.vue';
 import DashboardDetailsDialog from '../components/dashboard/DashboardDetailsDialog.vue';
 import {
@@ -24,6 +25,7 @@ import {
 } from '../components/dashboard/labels';
 import { useDashboard } from '../composables/useDashboard';
 import '../styles/dashboard.css';
+import '../styles/dashboard-charts.css';
 
 const route = useRoute(),
   router = useRouter();
@@ -39,7 +41,6 @@ const {
   member,
   detailLoading,
   detailError,
-  density,
   tab,
   matrix,
   query,
@@ -51,7 +52,6 @@ const {
   loadDetail,
   update,
   changeTab,
-  setDensity,
   setPageSize,
   openMetric,
   openMember,
@@ -445,6 +445,7 @@ function detailPage(page: number) {
                 @select="openMetric(metric.metric)"
               />
             </div>
+            <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
             <div class="dashboard-summary-layout">
               <section class="dashboard-section" aria-label="조직별 필수 충족 요약">
                 <div class="dashboard-section-heading">
@@ -588,6 +589,7 @@ function detailPage(page: number) {
             </section>
           </template>
           <template v-else-if="tab === 'organizations'">
+            <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
             <div
               v-if="data.organizations.items.length"
               class="dashboard-table-wrap"
@@ -595,7 +597,7 @@ function detailPage(page: number) {
               role="region"
               aria-label="조직별 인증 현황 표"
             >
-              <table class="dashboard-table" :data-density="density">
+              <table class="dashboard-table">
                 <thead>
                   <tr>
                     <th scope="col">조직</th>
@@ -647,6 +649,7 @@ function detailPage(page: number) {
             <p v-else class="dashboard-empty">조회할 조직 현황이 없습니다.</p>
           </template>
           <template v-else-if="tab === 'qualifications'">
+            <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
             <div
               v-if="data.qualifications.items.length"
               class="dashboard-table-wrap"
@@ -654,7 +657,7 @@ function detailPage(page: number) {
               role="region"
               aria-label="자격별 인증 현황 표"
             >
-              <table class="dashboard-table" :data-density="density">
+              <table class="dashboard-table">
                 <thead>
                   <tr>
                     <th scope="col">자격</th>
@@ -704,6 +707,7 @@ function detailPage(page: number) {
             <p v-else class="dashboard-empty">조건에 맞는 자격이 없습니다.</p>
           </template>
           <template v-else-if="tab === 'members'">
+            <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
             <div class="dashboard-view-toolbar">
               <div class="dashboard-view-switch" role="group" aria-label="구성원 표시 방식">
                 <button :aria-pressed="!matrix" @click="update({ mode: 'list' })">목록</button
@@ -739,11 +743,7 @@ function detailPage(page: number) {
                 role="region"
                 aria-label="구성원 자격 매트릭스"
               >
-                <table
-                  class="dashboard-table dashboard-matrix"
-                  data-testid="dashboard-matrix"
-                  :data-density="density"
-                >
+                <table class="dashboard-table dashboard-matrix" data-testid="dashboard-matrix">
                   <thead>
                     <tr>
                       <th scope="col">구성원 · 소속</th>
@@ -822,11 +822,7 @@ function detailPage(page: number) {
                 role="region"
                 aria-label="구성원 인증 현황 표"
               >
-                <table
-                  class="dashboard-table"
-                  data-testid="dashboard-members"
-                  :data-density="density"
-                >
+                <table class="dashboard-table" data-testid="dashboard-members">
                   <thead>
                     <tr>
                       <th scope="col">구성원</th>
@@ -928,6 +924,7 @@ function detailPage(page: number) {
             >
           </template>
           <template v-else-if="tab === 'renewals'">
+            <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
             <div
               v-if="data.renewals.items.length"
               class="dashboard-table-wrap"
@@ -935,7 +932,7 @@ function detailPage(page: number) {
               role="region"
               aria-label="만료 및 재인증 현황 표"
             >
-              <table class="dashboard-table" :data-density="density">
+              <table class="dashboard-table">
                 <thead>
                   <tr>
                     <th scope="col">구성원</th>
@@ -1000,12 +997,10 @@ function detailPage(page: number) {
             :total="currentPage.total"
             :page="currentPage.page"
             :page-size="currentPage.pageSize"
-            :density="density"
             :disabled="loading"
             :fixed-page-size="matrix"
             @page="update({ page: $event }, false)"
             @page-size="setPageSize"
-            @density="setDensity"
           />
         </template>
       </section>

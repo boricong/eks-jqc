@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { managementTitle } from '../management-navigation';
 import PageHeading from '../components/PageHeading.vue';
 import HomeNotices from '../components/HomeNotices.vue';
 import HomeQualificationCarousel from '../components/HomeQualificationCarousel.vue';
@@ -30,7 +31,9 @@ const planningRequests = computed(() => {
         request.learnerId === actor.id &&
         request.organizationId === actor.organizationId &&
         request.lv1OrganizationId === actor.lv1OrganizationId &&
-        !request.completion,
+        !request.completion &&
+        store.data.planningOptions.find((view) => view.requestId === request.id)?.canComplete !==
+          true,
     )
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
 });
@@ -203,10 +206,10 @@ const stats = computed(() =>
         v-if="store.fullManagement"
         :to="store.managementLink('/admin/catalog')"
         class="text-link"
-        >기준 일괄 관리<AppIcon name="chevron" :size="16"
+        >{{ managementTitle('catalog') }}<AppIcon name="chevron" :size="16"
       /></RouterLink>
       <RouterLink v-if="store.hasRole('organization_admin')" to="/admin/policies" class="text-link"
-        >조직별 자격 설정<AppIcon name="chevron" :size="16"
+        >{{ managementTitle('policies') }}<AppIcon name="chevron" :size="16"
       /></RouterLink>
     </nav>
     <div class="home-columns">

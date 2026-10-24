@@ -35,8 +35,11 @@ import {
   type DashboardCourseSummary,
   type DashboardExpiryBucket,
   type DashboardRenewalState,
+  type DashboardChartSelection,
+  type DashboardChartDetails,
 } from "@eks/contracts";
 import { demand, DomainError } from "./errors.ts";
+import { dashboardCharts } from "./dashboard-charts.ts";
 import { currentQualification } from "./qualification-templates.ts";
 
 const pairKey = (userId: string, entityId: string) =>
@@ -881,12 +884,16 @@ export function dashboardReader(
       qualifications: allOptions,
     };
   }
+  let chartModel: ReturnType<typeof dashboardCharts>;
   function dashboard(): DashboardResponse {
+    let fullOrganizations: DashboardOrganizationRow[] = [];
+    let fullQualifications: DashboardQualificationRow[] = [];
     const view = query.view || "summary";
     const response: DashboardResponse = {
       snapshot,
       view,
       summary,
+      charts: [],
       organizations: page([]),
       qualifications: page([]),
       members: page([]),
@@ -929,16 +936,13 @@ export function dashboardReader(
           overdueAssessments: sum.overdueAssessments,
         };
       });
-      response.organizations = page(
-        sortRows(
-          rows,
-          (r) =>
-            query.sort === "coverage"
-              ? (r.requiredCoverage.rate ?? -1)
-              : r.name,
-          (r) => r.organizationId,
-        ),
+      fullOrganizations = sortRows(
+        rows,
+        (r) =>
+          query.sort === "coverage" ? (r.requiredCoverage.rate ?? -1) : r.name,
+        (r) => r.organizationId,
       );
+      response.organizations = page(fullOrganizations);
     }
     if (view === "qualifications" || view === "summary") {
       const byEntity = group(
@@ -970,16 +974,13 @@ export function dashboardReader(
             expires0to30: cells.filter((c) => c.expiryBucket === "0_30").length,
           };
         });
-      response.qualifications = page(
-        sortRows(
-          rows,
-          (r) =>
-            query.sort === "coverage"
-              ? (r.requiredCoverage.rate ?? -1)
-              : r.title,
-          (r) => r.entityId,
-        ),
+      fullQualifications = sortRows(
+        rows,
+        (r) =>
+          query.sort === "coverage" ? (r.requiredCoverage.rate ?? -1) : r.title,
+        (r) => r.entityId,
       );
+      response.qualifications = page(fullQualifications);
     }
     if (view === "members") {
       response.members = page(sortRows(visibleMembers, personSort, personTie));
@@ -1022,7 +1023,39 @@ export function dashboardReader(
         ),
       );
     }
+    const chartMembers = ["members", "matrix", "renewals"].includes(view)
+      ? visibleMembers
+      : metricMembers;
+    const chartIds = new Set(chartMembers.map((p) => p.userId));
+    chartModel = dashboardCharts({
+      view,
+      scope,
+      members: chartMembers,
+      renewals: allRenewals.filter((r) => chartIds.has(r.userId)),
+      organizations: fullOrganizations,
+      qualifications: fullQualifications,
+    });
+    response.charts = chartModel.charts;
     return response;
+  }
+  function chartDetails(
+    selection: DashboardChartSelection,
+  ): DashboardChartDetails {
+    stale();
+    dashboard();
+    const selected = chartModel.details(selection);
+    const sorted = sortRows(
+      selected.rows,
+      (r) => r.expiresOn || r.organizationPath.map((o) => o.name).join("/"),
+      (r) => [r.title || "", r.name, r.key],
+    );
+    return {
+      snapshot,
+      title: selected.title,
+      unit: selected.unit,
+      selection,
+      rows: page(sorted),
+    };
   }
   function details(metric: DashboardMetric): DashboardDetails {
     stale();
@@ -1331,5 +1364,5 @@ export function dashboardReader(
       history,
     };
   }
-  return { options, dashboard, details, member };
+  return { options, dashboard, details, member, chartDetails };
 }

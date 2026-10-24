@@ -48,10 +48,12 @@ const reviewQualification = computed(() =>
 );
 const planRequest = computed(() => requests.value.find((r) => r.id === current.value?.requestId));
 const reviewOpen = ref<Record<string, boolean>>({});
+const reviewRequestOpen = ref(false);
 watch(
   () => `${store.actorId}:${route.params.id || ''}`,
   () => {
     reviewOpen.value = {};
+    reviewRequestOpen.value = false;
   },
 );
 useProcessContext(() =>
@@ -228,15 +230,6 @@ function scheduleErrors(): Record<string, string> {
   });
   return result;
 }
-function goalErrors(): Record<string, string> {
-  const result: Record<string, string> = {};
-  form.value?.schedules.forEach((s) => {
-    if (!s.goal.trim())
-      result[`${s.courseId}.goal`] =
-        `${store.course(s.courseId).title}: 학습 목표를 입력해 주세요.`;
-  });
-  return result;
-}
 async function focusFirstError() {
   await nextTick();
   const key = Object.keys(fieldErrors.value)[0];
@@ -267,14 +260,6 @@ async function moveTo(target: number) {
     step.value = 2;
     fieldErrors.value = schedules;
     error.value = '일정 단계의 필수 입력과 날짜 순서를 확인해 주세요.';
-    await focusFirstError();
-    return;
-  }
-  const goals = target >= 4 ? goalErrors() : {};
-  if (Object.keys(goals).length) {
-    step.value = 3;
-    fieldErrors.value = goals;
-    error.value = '모든 인증Set의 학습 목표를 입력해 주세요.';
     await focusFirstError();
     return;
   }
@@ -345,8 +330,8 @@ async function complete() {
     const errors = planErrors(form.value!);
     if (errors.length) {
       const schedules = scheduleErrors();
-      step.value = Object.keys(schedules).length ? 2 : 3;
-      fieldErrors.value = Object.keys(schedules).length ? schedules : goalErrors();
+      step.value = 2;
+      fieldErrors.value = schedules;
       await focusFirstError();
       throw new Error(errors.join('\n'));
     }
@@ -450,7 +435,7 @@ onBeforeRouteUpdate(leave);
       </div>
       <nav class="plan-steps" aria-label="계획 작성 단계">
         <button
-          v-for="(label, i) in ['자격 선택', '일정 수립', '학습 목표', '최종 확인']"
+          v-for="(label, i) in ['자격 선택', '일정 수립', '학습 목표(선택)', '최종 확인']"
           :key="label"
           :class="{ active: step === i + 1 }"
           :aria-current="step === i + 1 ? 'step' : undefined"
@@ -569,10 +554,14 @@ onBeforeRouteUpdate(leave);
           최초 일정은 오늘부터 1주 후 시작, 시작일부터 3주 후 완료·4주 후 평가로 채웁니다. 수정한
           날짜는 자동으로 바뀌지 않습니다. 예정일은 진행을 막지 않습니다.
         </p>
-        <button class="button primary" @click="moveTo(3)">학습 목표 설정</button>
+        <div class="actions">
+          <button class="button primary" @click="moveTo(4)">최종 확인</button>
+          <button class="button secondary" @click="moveTo(3)">학습 목표 입력(선택)</button>
+        </div>
       </section>
       <section v-else-if="step === 3" class="panel editor-panel">
-        <h2>학습 목표 설정</h2>
+        <h2>학습 목표(선택)</h2>
+        <p class="muted">필요한 경우에만 작성하세요. 입력하지 않아도 계획을 완료할 수 있습니다.</p>
         <label v-for="s in form.schedules" :key="s.courseId" class="field"
           ><span>{{ store.course(s.courseId).title }} · 학습 목표</span
           ><textarea
@@ -602,8 +591,8 @@ onBeforeRouteUpdate(leave);
           <p>
             {{
               current.status === 'completed'
-                ? '확정한 일정과 학습 목표를 확인하세요. 변경 시 사유를 남겨 저장합니다.'
-                : '목표 인증일과 인증Set별 일정·학습 목표를 확인한 뒤 계획을 완료해 주세요.'
+                ? '확정한 일정을 확인하세요. 일정이나 선택 입력한 목표를 변경하면 사유를 남겨 저장합니다.'
+                : '목표 인증일과 인증Set별 일정을 확인한 뒤 계획을 완료해 주세요.'
             }}
           </p>
         </header>
@@ -644,40 +633,6 @@ onBeforeRouteUpdate(leave);
               <dd>{{ reviewQualification?.description || '등록된 자격 설명이 없습니다.' }}</dd>
             </div>
           </PropertyList>
-        </section>
-        <section class="plan-review-request" aria-labelledby="plan-review-request-title">
-          <h2 id="plan-review-request-title">요청 기준</h2>
-          <PropertyList class="plan-review-facts">
-            <div>
-              <dt>현재 소속</dt>
-              <dd>
-                {{
-                  (
-                    store.data.requiredQualifications?.organizationPath ||
-                    store.actor.organizationPath
-                  )
-                    .map((p) => p.name)
-                    .join(' › ') || '확인할 수 없음'
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>요청 당시 필수 자격</dt>
-              <dd>
-                <ul v-if="planRequest?.targets?.length" class="plan-review-required">
-                  <li v-for="target in planRequest.targets" :key="target.qualificationId">
-                    {{ target.title }} · v{{ target.version }}
-                  </li>
-                </ul>
-                <template v-else>{{
-                  planRequest ? '없음' : '요청 정보를 확인할 수 없습니다.'
-                }}</template>
-              </dd>
-            </div>
-          </PropertyList>
-          <p class="plan-review-help">
-            이번 계획은 요청 당시의 필수 기준과 선택한 자격 버전을 따릅니다.
-          </p>
         </section>
         <div
           v-if="
@@ -724,9 +679,9 @@ onBeforeRouteUpdate(leave);
                 <dd>{{ reviewDate(s.assessmentOn) }}</dd>
               </div>
             </PropertyList>
-            <div class="plan-review-goal">
+            <div v-if="s.goal.trim()" class="plan-review-goal">
               <h3>학습 목표</h3>
-              <p>{{ s.goal.trim() ? s.goal : '학습 목표를 입력해 주세요.' }}</p>
+              <p>{{ s.goal }}</p>
             </div>
             <div class="plan-review-edit-actions">
               <button
@@ -743,7 +698,7 @@ onBeforeRouteUpdate(leave);
                 :disabled="busy"
                 @click="editReviewField(3, `${s.courseId}.goal`)"
               >
-                학습 목표 수정
+                {{ s.goal.trim() ? '학습 목표 수정' : '학습 목표 추가(선택)' }}
               </button>
             </div>
           </CollapsibleSection>
@@ -757,7 +712,7 @@ onBeforeRouteUpdate(leave);
           </h2>
           <template v-if="current.status === 'draft'">
             <p>
-              현재 운영정책에 따라 결재를 생략합니다. 이 자격의 계획을 완료하면 학습·평가 화면으로
+              현재 운영정책에 따라 결재를 생략합니다. 이 자격의 계획을 완료하면 학습 화면으로
               이동합니다.
             </p>
             <p>요청 전체의 계획 수립 완료는 내 계획에서 별도로 진행해 주세요.</p>
@@ -787,6 +742,44 @@ onBeforeRouteUpdate(leave);
           일정·목표 변경 저장
         </button>
       </section>
+      <CollapsibleSection
+        v-if="step === 4"
+        v-model:open="reviewRequestOpen"
+        title="요청 기준"
+        class="plan-review-request"
+      >
+        <PropertyList class="plan-review-facts">
+          <div>
+            <dt>현재 소속</dt>
+            <dd>
+              {{
+                (
+                  store.data.requiredQualifications?.organizationPath ||
+                  store.actor.organizationPath
+                )
+                  .map((p) => p.name)
+                  .join(' › ') || '확인할 수 없음'
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>요청 당시 필수 자격</dt>
+            <dd>
+              <ul v-if="planRequest?.targets?.length" class="plan-review-required">
+                <li v-for="target in planRequest.targets" :key="target.qualificationId">
+                  {{ target.title }} · v{{ target.version }}
+                </li>
+              </ul>
+              <template v-else>{{
+                planRequest ? '없음' : '요청 정보를 확인할 수 없습니다.'
+              }}</template>
+            </dd>
+          </div>
+        </PropertyList>
+        <p class="plan-review-help">
+          이번 계획은 요청 당시의 필수 기준과 선택한 자격 버전을 따릅니다.
+        </p>
+      </CollapsibleSection>
       <ActionBar class="actionbar" :class="{ 'plan-review-actionbar': step === 4 }">
         <div class="plan-action-feedback">
           <SaveFeedback
@@ -827,7 +820,7 @@ onBeforeRouteUpdate(leave);
             v-else
             :to="`/qualifications/${current.assignmentId}`"
             class="button secondary"
-            >학습·평가로 이동</RouterLink
+            >학습으로 이동</RouterLink
           >
         </template>
       </ActionBar>

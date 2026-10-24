@@ -153,7 +153,11 @@ async function apply() {
       <section>
         <h3>삭제할 진행·공지·이력</h3>
         <dl class="master-counts">
-          <div v-for="(label, key) in clearedDataLabels" :key="key">
+          <div
+            v-for="(label, key) in clearedDataLabels"
+            :key="key"
+            v-show="key !== 'comparisons' || resetPreview.deleted[key] > 0"
+          >
             <dt>{{ label }}</dt>
             <dd>{{ resetPreview.deleted[key] }}건</dd>
           </div>
@@ -225,7 +229,11 @@ async function apply() {
       <details>
         <summary>삭제될 현재 서버의 진행·공지·이력 보기</summary>
         <dl class="master-counts">
-          <div v-for="(label, key) in clearedDataLabels" :key="key">
+          <div
+            v-for="(label, key) in clearedDataLabels"
+            :key="key"
+            v-show="key !== 'comparisons' || importPreview.deleted[key] > 0"
+          >
             <dt>{{ label }}</dt>
             <dd>{{ importPreview.deleted[key] }}건</dd>
           </div>

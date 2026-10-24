@@ -148,7 +148,7 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   assert.equal(ws.management.canManagePolicies, true);
   assert.deepEqual(ws.management.editableOrganizationIds, [own]);
   assert.equal(ws.assignments.length, 0);
-  assert.equal(ws.comparisons.length, 0);
+  assert.equal("comparisons" in ws, false);
   assert.equal(ws.audits.length, 0);
   assert(
     ws.courses.every((c: any) =>

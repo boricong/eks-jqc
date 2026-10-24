@@ -35,7 +35,7 @@ const labels: Record<keyof ProgressSummary['counts'], string> = {
   notifications: '진행 관련 알림',
   completions: '인증Set 수료',
   certifications: '검증용 인증',
-  comparisons: '실제 수행 비교',
+  comparisons: '이전 수행 비교 기록(보존 자료)',
 };
 const total = computed(() =>
   Object.values(summary.value?.counts || {}).reduce((n, count) => n + count, 0),
@@ -123,7 +123,11 @@ watch(target, () => {
     </p>
     <div v-if="error" class="error-message" role="alert">{{ error }}</div>
     <dl v-if="summary" class="reset-counts">
-      <div v-for="(label, key) in labels" :key="key">
+      <div
+        v-for="(label, key) in labels"
+        :key="key"
+        v-show="key !== 'comparisons' || summary.counts[key] > 0"
+      >
         <dt>{{ label }}</dt>
         <dd>{{ summary.counts[key] }}건</dd>
       </div>
@@ -152,7 +156,7 @@ watch(target, () => {
     "
   >
     <p>
-      선택한 대상의 응시·평가·수료·인증·비교 기록이 삭제됩니다. 조직정보·사용자 소속·역할과
+      선택한 대상의 응시·평가·수료·인증과 이전 보존 자료가 삭제됩니다. 조직정보·사용자 소속·역할과
       자격·인증Set·배정 설정은 유지됩니다.
     </p>
     <p>다른 탭에서 평가 중인 사용자도 영향을 받습니다. 초기화 후 해당 화면을 새로고침해 주세요.</p>

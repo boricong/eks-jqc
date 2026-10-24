@@ -54,7 +54,7 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
   await noPageOverflow(page);
 });
 
-test('계획 단계 탭과 다음 버튼이 날짜·목표·저장 실패를 함께 검사한다', async ({ page }) => {
+test('계획 단계는 날짜·저장을 검사하고 목표 없이 최종 확인을 허용한다', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
@@ -74,16 +74,16 @@ test('계획 단계 탭과 다음 버튼이 날짜·목표·저장 실패를 함
     await field.fill('2026-10-15');
   for (const field of await page.getByLabel('평가 예정일').all()) await field.fill('2026-12-01');
   await page.getByRole('button', { name: '4. 최종 확인' }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표 설정', exact: true })).toBeVisible();
-  await expect(page.getByText(/학습 목표를 입력해 주세요/).first()).toBeVisible();
-  await expect(page.getByRole('textbox').first()).toBeFocused();
+  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
+  await expect(page.locator('.plan-review-goal')).toHaveCount(0);
+  await page.getByRole('button', { name: '3. 학습 목표(선택)', exact: true }).click();
   for (const field of await page.locator('[data-plan-field$=".goal"]').all())
     await field.fill('독립적으로 기준을 확인하고 결과를 기록한다.');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '2. 일정 수립' }).click();
   await page.getByLabel('목표 인증일').fill('2026-11-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
   await expect(
     page.getByText('목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.'),
   ).toBeVisible();
@@ -93,7 +93,7 @@ test('계획 단계 탭과 다음 버튼이 날짜·목표·저장 실패를 함
     else await route.continue();
   });
   await page.getByLabel('목표 인증일').fill('2027-03-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
   await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();
   await expect(page.getByRole('alert').first()).toContainText(
     '저장되지 않아 다음 단계로 이동할 수 없습니다.',

@@ -267,7 +267,6 @@ export async function buildApp(
     "qualifications",
     "assignments",
     "notices",
-    "comparisons",
     "audits",
     "plans",
     "planningRequests",
@@ -887,10 +886,6 @@ export async function buildApp(
   mutation("POST", "/api/notifications/:id/read", "notification.read");
   mutation("POST", "/api/notices", "notice.save", () => "");
   mutation("POST", "/api/testing/progress/reset", "progress.reset", () => "");
-  mutation("POST", "/api/enrollments/:id/comparisons", "comparison.create");
-  mutation("PUT", "/api/comparisons/:id", "comparison.save");
-  mutation("POST", "/api/comparisons/:id/finalize", "comparison.finalize");
-  mutation("POST", "/api/comparisons/:id/corrections", "comparison.correct");
   if (options.serveFrontend) {
     const root = fileURLToPath(new URL("../../frontend/dist", import.meta.url));
     if (existsSync(root)) {

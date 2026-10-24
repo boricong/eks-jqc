@@ -145,7 +145,7 @@ async function createVersion() {
   <AppDialog v-model:open="createOpen" title="폐기 기준의 새 버전 작성">
     <p>
       기존 Revoke 버전과 취득 근거는 그대로 보존하고 동일한 내용의 새 Active 버전을 만듭니다. 기준을
-      보완한 뒤 팀 자격 관리의 팀 적용에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지
+      보완한 뒤 팀 자격 설정의 팀 적용에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지
       않습니다.
     </p>
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>

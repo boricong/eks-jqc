@@ -58,15 +58,28 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
         }).length,
     ),
   ).toBeGreaterThanOrEqual(14);
-  await page.getByLabel('목록 밀도').selectOption('roomy');
+  await expect(page.getByLabel('목록 밀도')).toHaveCount(0);
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'eks-list-admin',
+      JSON.stringify({ density: 'roomy', size: 50, sort: 'desc' }),
+    ),
+  );
+  await page.reload();
+  await expect(page.getByLabel('목록 밀도')).toHaveCount(0);
+  await expect(page.getByLabel('페이지 크기')).toHaveValue('50');
+  await expect(page.getByLabel('목록 정렬')).toHaveValue('desc');
   expect(
     await page
       .locator('.table-panel tbody tr')
       .first()
       .evaluate((e) => e.getBoundingClientRect().height),
-  ).toBe(48);
-  await page.reload();
-  await expect(page.getByLabel('목록 밀도')).toHaveValue('roomy');
+  ).toBe(40);
+  await page.getByLabel('목록 정렬').selectOption('asc');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('eks-list-admin')!))).toEqual({
+    size: 50,
+    sort: 'asc',
+  });
   await actor(page, 'operator-1');
   await page.goto('/system/users');
   await page.getByRole('button', { name: '김민서 수정', exact: true }).click();
@@ -197,7 +210,10 @@ test('표 범위 붙여넣기·오류 이동·미저장 전환 보호와 좁은 
   await expect(page.getByRole('tab', { name: '지식 평가 2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
   await expect(page.getByRole('tab', { name: '지식 평가 4', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '개별 기준 관리', exact: true }).click();
+  await page
+    .locator('.catalog-page .page-heading')
+    .getByRole('link', { name: '팀 자격 설정', exact: true })
+    .click();
   await answerConfirmation(page, false);
   await expect(page).toHaveURL(/admin\/catalog/);
   for (const width of [1920, 1440, 768, 390]) {

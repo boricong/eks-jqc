@@ -1,3 +1,4 @@
+import { showLearningMaterials } from './learning-helpers';
 import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { test, expect, actor } from './fixtures';
@@ -55,19 +56,22 @@ test('1920×900 화면 구성과 독립 메뉴', async ({ page }) => {
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
-  await expect(page.locator('.course-workspace')).toContainText('통과 유지');
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await expect(page.locator('.assessment-card').first()).toContainText('통과');
+  await expect(
+    page.locator('.assessment-card').first().getByRole('link', { name: '결과 보기' }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: '다시 응시' })).toBeVisible();
   await screenshot(page, 'qualification');
   await page.getByRole('button', { name: /02 기록 작성/ }).click();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
+  await expect(page).toHaveURL(/stage=assessment/);
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
   await screenshot(page, 'objective');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page.getByRole('heading', { name: '인증 현황', exact: true })).toBeVisible();
   await screenshot(page, 'admin');
-  await page.getByRole('link', { name: '인증Set 관리', exact: true }).click();
+  await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
   await screenshot(page, 'admin-courses');
   await noOverflow(page);
   expect(errors).toEqual([]);
@@ -84,14 +88,15 @@ test('작은 화면과 키보드 접근', async ({ page }) => {
   }
   await page.getByRole('link', { name: '상세정보 보기' }).click();
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
-  await page.getByRole('link', { name: '평가하기', exact: true }).click();
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
   await noOverflow(page);
   await page.getByRole('link', { name: '다시 응시' }).click();
   await noOverflow(page);
-  await page.getByRole('button', { name: '학습자료', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('link', { name: '학습으로 이동', exact: true }).click();
+  await showLearningMaterials(page);
+  await expect(page.getByRole('region', { name: '학습자료', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '평가로 이동', exact: true }).click();
+  await page.getByRole('link', { name: '답안 이어 쓰기', exact: true }).click();
   await actor(page, 'admin-1');
   await page.getByRole('button', { name: '메뉴', exact: true }).click();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();

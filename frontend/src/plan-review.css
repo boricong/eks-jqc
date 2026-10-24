@@ -8,7 +8,6 @@
 }
 .plan-review-heading h2,
 .plan-review-summary > h2,
-.plan-review-request > h2,
 .plan-review-completion > h2 {
   margin: 0 0 12px;
   font-size: var(--text-section);
@@ -88,9 +87,23 @@
   overflow-wrap: anywhere;
 }
 .plan-review-request {
-  padding: 20px 24px;
-  background: var(--surface-tint);
-  border-block: 1px solid var(--line);
+  padding: 0;
+  background: var(--surface);
+}
+.plans-page .plan-review-request .collapsible-section-heading {
+  margin: 0;
+}
+.plans-page .plan-review-request .collapsible-section-toggle {
+  min-height: 40px;
+  padding: 8px 12px;
+  background: transparent;
+}
+.plans-page .plan-review-request .collapsible-section-title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-control);
+}
+.plans-page .plan-review-request .collapsible-section-body {
+  padding: 12px;
 }
 .plan-review-required {
   display: grid;
@@ -198,12 +211,14 @@
   scroll-margin-block: 80px 160px;
 }
 @media (max-width: 768px) {
+  .plans-page .plan-review-request .collapsible-section-toggle {
+    min-height: 44px;
+  }
   .plan-review-facts,
   .plan-review-schedule {
     grid-template-columns: minmax(0, 1fr);
   }
   .plan-review-summary,
-  .plan-review-request,
   .plan-review-warning,
   .plan-review-completion {
     padding: 20px 16px;

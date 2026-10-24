@@ -53,7 +53,6 @@ export const useDemo = defineStore('workspace', () => {
     assignments: [],
     notices: [],
     homeNotices: [],
-    comparisons: [],
     audits: [],
     planningRequests: [],
     plans: [],
@@ -266,11 +265,8 @@ export const useDemo = defineStore('workspace', () => {
   });
   async function command(path: string, body: unknown = {}, method = 'POST') {
     const managed =
-      /^\/(courses|qualifications|assignments|notices|comparisons|qualification-templates)(\/|$)/.test(
-        path,
-      ) ||
-      (path === '/planning-requests' && method === 'POST') ||
-      /^\/enrollments\/[^/]+\/comparisons$/.test(path);
+      /^\/(courses|qualifications|assignments|notices|qualification-templates)(\/|$)/.test(path) ||
+      (path === '/planning-requests' && method === 'POST');
     if (managed) path = managementPath(path);
     const scope = actorId.value;
     const signature = JSON.stringify({ path, body, method, scope });

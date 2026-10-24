@@ -48,7 +48,6 @@ export function useDashboard() {
     member = ref<DashboardMemberDetail | null>(null);
   const detailLoading = ref(false),
     detailError = ref('');
-  const density = ref('compact');
   const tab = computed(() => {
     const selected = choice(
       one(route.query.tab),
@@ -353,6 +352,17 @@ export function useDashboard() {
       delete next.page;
       delete next.columnPage;
     }
+    for (const key of [
+      'chart',
+      'chartPage',
+      'chartDisplay',
+      'chartGroup',
+      'chartSeries',
+      'chartDetailPage',
+      'chartMember',
+      'chartMemberEntity',
+    ])
+      delete next[key];
     delete next.member;
     delete next.metric;
     delete next.detailEntity;
@@ -363,6 +373,17 @@ export function useDashboard() {
     remember();
     const next = { ...route.query };
     for (const key of filterKeys) delete next[key];
+    for (const key of [
+      'chart',
+      'chartPage',
+      'chartDisplay',
+      'chartGroup',
+      'chartSeries',
+      'chartDetailPage',
+      'chartMember',
+      'chartMemberEntity',
+    ])
+      delete next[key];
     delete next.member;
     delete next.metric;
     delete next.detailEntity;
@@ -371,20 +392,9 @@ export function useDashboard() {
     next.tab = value;
     await router.push({ query: next });
   }
-  function setDensity(value: string) {
-    density.value = value;
-    try {
-      localStorage.setItem(
-        prefsKey(),
-        JSON.stringify({ density: value, pageSize: pageSize.value }),
-      );
-    } catch {
-      /* Browser storage is optional. */
-    }
-  }
   function setPageSize(value: number) {
     try {
-      localStorage.setItem(prefsKey(), JSON.stringify({ density: density.value, pageSize: value }));
+      localStorage.setItem(prefsKey(), JSON.stringify({ pageSize: value }));
     } catch {
       /* The URL retains the current setting. */
     }
@@ -445,7 +455,6 @@ export function useDashboard() {
   watch(
     [tab, context],
     () => {
-      density.value = preferences().density === 'roomy' ? 'roomy' : 'compact';
       rememberedKey = `${context.value}:${tab.value}`;
     },
     { immediate: true },
@@ -503,7 +512,6 @@ export function useDashboard() {
     member,
     detailLoading,
     detailError,
-    density,
     tab,
     matrix,
     query,
@@ -515,7 +523,6 @@ export function useDashboard() {
     loadDetail,
     update,
     changeTab,
-    setDensity,
     setPageSize,
     openMetric,
     openMember,

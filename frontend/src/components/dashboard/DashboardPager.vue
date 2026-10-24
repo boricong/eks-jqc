@@ -3,29 +3,17 @@ defineProps<{
   total: number;
   page: number;
   pageSize: number;
-  density: string;
   disabled?: boolean;
   fixedPageSize?: boolean;
 }>();
 const emit = defineEmits<{
   page: [number];
   pageSize: [number];
-  density: [string];
 }>();
 </script>
 <template>
   <div class="dashboard-pager" aria-label="현황 목록 조작">
     <span class="dashboard-count">전체 {{ total.toLocaleString('ko-KR') }}건</span>
-    <label
-      >밀도<select
-        aria-label="목록 밀도"
-        :value="density"
-        @change="emit('density', ($event.target as HTMLSelectElement).value)"
-      >
-        <option value="compact">촘촘하게</option>
-        <option value="roomy">여유 있게</option>
-      </select></label
-    >
     <label
       >페이지 크기<select
         aria-label="페이지 크기"

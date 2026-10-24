@@ -6,7 +6,7 @@ import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ organizationId: string; canManage: boolean }>();
-const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean] }>();
+const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean]; error: [] }>();
 const store = useDemo(),
   view = ref<OrganizationAdministratorsView>(),
   chosen = ref<string[]>([]),
@@ -27,6 +27,9 @@ const context = () => `${store.actorId}:${store.managementLv1}:${props.organizat
 let generation = 0;
 watch(dirty, (value) => emit('dirty', value));
 watch(busy, (value) => emit('busy', value));
+watch(error, (value) => {
+  if (value) emit('error');
+});
 async function load() {
   const key = context(),
     seq = ++generation;
@@ -98,7 +101,7 @@ watch(
 <template>
   <section class="organization-administrators text-stack" aria-label="세부 조직 관리자 지정">
     <div class="section-heading">
-      <h3>세부 조직 관리자</h3>
+      <h3>관리자 지정 현황</h3>
       <button v-if="canManage" class="button secondary small" :disabled="busy" @click="reload">
         지정 현황 새로고침
       </button>

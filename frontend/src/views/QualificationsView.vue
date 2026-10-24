@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { learningStage, qualificationLocation } from '../learner-navigation';
 import PageHeading from '../components/PageHeading.vue';
 import { computed, ref } from 'vue';
 import {
@@ -17,6 +18,7 @@ import ValidityBadge from '../components/ValidityBadge.vue';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
+const assessments = computed(() => learningStage(route) === 'assessment');
 const search = ref(''),
   validity = ref('all');
 const filter = computed(() =>
@@ -54,7 +56,7 @@ const list = computed(() =>
       취득 대상자 Hold · 새 취득·평가·재인증은 중단됩니다. 기록과 자료는 확인할 수 있습니다.
     </p>
     <PageHeading class="page-heading">
-      <h1>자격 취득</h1>
+      <h1>{{ filter === 'certified' ? '보유 자격' : assessments ? '평가' : '학습' }}</h1>
       <span class="muted">{{ store.actor.name }}</span>
     </PageHeading>
     <div class="list-toolbar">
@@ -62,7 +64,7 @@ const list = computed(() =>
         <button
           :class="{ active: filter === 'active' }"
           :aria-pressed="filter === 'active'"
-          @click="router.replace({ query: {} })"
+          @click="router.replace({ query: { stage: assessments ? 'assessment' : undefined } })"
         >
           진행 중
           <span>{{
@@ -78,7 +80,11 @@ const list = computed(() =>
         <button
           :class="{ active: filter === 'excluded' }"
           :aria-pressed="filter === 'excluded'"
-          @click="router.replace({ query: { filter: 'excluded' } })"
+          @click="
+            router.replace({
+              query: { filter: 'excluded', stage: assessments ? 'assessment' : undefined },
+            })
+          "
         >
           검증 제외
         </button>
@@ -103,7 +109,11 @@ const list = computed(() =>
       <RouterLink
         v-for="a in list"
         :key="a.id"
-        :to="a.certifiedAt ? `/certifications/${a.id}` : `/qualifications/${a.id}`"
+        :to="
+          a.certifiedAt
+            ? `/certifications/${a.id}`
+            : qualificationLocation(assessments ? 'assessment' : 'learning', a.id)
+        "
         class="qualification-row"
         ><span class="qualification-icon"
           ><AppIcon :name="a.certifiedAt ? 'award' : 'book'" :size="26" /></span
@@ -141,23 +151,32 @@ const list = computed(() =>
             >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification)!) }} · 상태와 이력
             보기</span
           ></span
-        ><span v-if="a.planId" class="qualification-target"
+        ><span v-if="a.planId && !assessments" class="qualification-target"
           ><span class="small-label">목표일</span
           ><time>{{
             store.data.plans.find((p) => p.id === a.planId)?.targetOn || '미설정'
           }}</time></span
         ><span class="qualification-progress"
           ><span class="progress-label"
-            ><span>인증Set 수료</span
-            ><span>{{ store.completedCount(a) }} / {{ a.enrollments.length }}</span></span
+            ><span>{{ assessments ? '평가 통과' : '인증Set 수료' }}</span
+            ><span
+              >{{ assessments ? store.passedCount(a) : store.completedCount(a) }} /
+              {{ assessments ? store.assessmentCount(a) : a.enrollments.length }}</span
+            ></span
           ><span class="progress-track"
             ><span
-              :style="{ width: `${(store.completedCount(a) / a.enrollments.length) * 100}%` }"
+              :style="{
+                width: `${assessments ? (store.assessmentCount(a) ? (store.passedCount(a) / store.assessmentCount(a)) * 100 : 0) : a.enrollments.length ? (store.completedCount(a) / a.enrollments.length) * 100 : 0}%`,
+              }"
             ></span></span></span
         ><StatusBadge v-if="a.excludedReason" status="excluded" /><ValidityBadge
           v-else-if="a.certification"
           :certification="a.certification" /><span v-else class="inline-action"
-          >진행하기<AppIcon name="arrow" :size="18" /></span
+          >{{
+            assessments
+              ? `평가 선택 · ${Math.max(0, store.assessmentCount(a) - store.passedCount(a))}개 남음`
+              : '학습하기'
+          }}<AppIcon name="arrow" :size="18" /></span
       ></RouterLink>
     </div>
     <div v-if="!list.length" class="panel empty-state spacious">

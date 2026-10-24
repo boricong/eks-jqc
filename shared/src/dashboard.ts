@@ -75,6 +75,9 @@ export interface DashboardQuery {
   expectedStateRevision?: number;
   expectedOrganizationRevision?: number;
   expectedDate?: string;
+  chartId?: DashboardChartId;
+  groupKey?: string;
+  seriesKey?: string;
 }
 export interface DashboardScope {
   lv1OrganizationId: string;
@@ -253,6 +256,7 @@ export interface DashboardResponse {
   snapshot: DashboardSnapshot;
   view: DashboardView;
   summary: DashboardSummary;
+  charts: DashboardChart[];
   organizations: DashboardPage<DashboardOrganizationRow>;
   qualifications: DashboardPage<DashboardQualificationRow>;
   members: DashboardPage<DashboardMemberRow>;
@@ -279,6 +283,54 @@ export interface DashboardDetailRow extends DashboardPerson {
   dueOn?: string;
   expiresOn?: string;
   acquisitionBlockCodes?: string[];
+  requiredCoverage?: DashboardCoverage;
+}
+export type DashboardChartId =
+  | "required-coverage"
+  | "progress"
+  | "organization-coverage"
+  | "organization-people"
+  | "qualification-coverage"
+  | "qualification-efficacy"
+  | "qualification-progress"
+  | "member-coverage"
+  | "expiry"
+  | "renewal";
+export type DashboardChartTone =
+  "success" | "neutral" | "primary" | "warning" | "danger" | "navy";
+export interface DashboardChartSeries {
+  key: string;
+  label: string;
+  tone: DashboardChartTone;
+}
+export interface DashboardChartGroup {
+  key: string;
+  label: string;
+  values: number[];
+  denominator?: number;
+}
+export interface DashboardChart {
+  id: DashboardChartId;
+  title: string;
+  kind: "donut" | "bar" | "stacked" | "grouped";
+  unit: DashboardDetails["unit"];
+  comparison: boolean;
+  percentage?: boolean;
+  series: DashboardChartSeries[];
+  groups: DashboardChartGroup[];
+  emptyLabel: string;
+}
+export interface DashboardChartSelection {
+  chartId: DashboardChartId;
+  groupKey: string;
+  seriesKey: string;
+}
+export interface DashboardChartDetails {
+  snapshot: DashboardSnapshot;
+  title: string;
+  selection: DashboardChartSelection;
+  unit: DashboardDetails["unit"];
+  rows: DashboardPage<DashboardDetailRow>;
 }
 export interface DashboardDetails {
   snapshot: DashboardSnapshot;

@@ -66,6 +66,55 @@ async function aligned(page: Page) {
     .toBeLessThan(2);
 }
 
+test('작성이 끝난 요청은 수와 기한에서 제외하고 남은 작성·확인 요청과 현재 자격을 보존', async ({
+  page,
+  backend,
+}) => {
+  let phase = 0;
+  await mock(page, (view) => {
+    view.planningRequests = [
+      request('confirmed', { dueOn: '2026-01-01' }),
+      request('no-additional', { dueOn: '2026-02-01' }),
+      request('optional-draft'),
+      request('waiting', { dueOn: '2027-01-01' }),
+      request('missing', { dueOn: '2027-02-01' }),
+    ];
+    options(view);
+    for (const item of view.planningOptions) {
+      item.canComplete = ['confirmed', 'no-additional'].includes(item.requestId) || phase >= 2;
+      item.noAdditional = item.requestId === 'no-additional';
+      if (item.requestId === 'optional-draft') {
+        item.stage = '작성 중';
+        item.canComplete = phase >= 1;
+      }
+      if (item.requestId === 'waiting') item.stage = '자격 준비 대기';
+    }
+    if (phase === 0)
+      view.planningOptions = view.planningOptions.filter((v) => v.requestId !== 'missing');
+  });
+  await page.goto('/');
+  await actor(page, 'learner-1');
+  const before = backend.store.snapshot();
+  await expect(current(page)).toHaveAttribute('data-request-id', 'optional-draft');
+  await expect(current(page)).toContainText('3건');
+  await expect(current(page)).toContainText('2026-12-01');
+  await expect(
+    page.locator('.personal-tasks').getByRole('link', { name: /요청 전체 완료 확인/ }),
+  ).toHaveCount(2);
+  phase = 1;
+  await refresh(page);
+  await expect(current(page)).toHaveAttribute('data-request-id', 'waiting');
+  await expect(action(page)).toHaveText('요청 상태 확인');
+  await carousel(page).getByRole('button', { name: '다음 항목' }).click();
+  await expect(current(page)).toHaveAttribute('data-assignment-id', 'assignment-1');
+  phase = 2;
+  await refresh(page);
+  await expect(planning(page)).toHaveCount(0);
+  await expect(current(page)).toHaveAttribute('data-assignment-id', 'assignment-1');
+  await aligned(page);
+  expect(backend.store.snapshot()).toEqual(before);
+});
+
 test('요청과 자격의 첫 화면·기한 우선/동률 순서·정확한 이동·조회 불변', async ({
   page,
   backend,
@@ -229,7 +278,7 @@ test('갱신 시 항목 선택·대표 요청 변경·요청 모두 완료/자�
   await expect(current(page)).toHaveAttribute('data-request-id', 'arrived');
 });
 
-test('실제 요청·알림 읽음·초안·자격별 확정까지 유지하고 요청 전체 완료 뒤 제거', async ({
+test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 숨김·요청 전체 완료는 별도 확인', async ({
   page,
   backend,
 }) => {
@@ -273,8 +322,8 @@ test('실제 요청·알림 읽음·초안·자격별 확정까지 유지하고 
     await el.fill('2026-10-15');
   for (const el of await page.getByLabel('평가 예정일', { exact: true }).all())
     await el.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표 설정', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
   for (const el of await page.getByRole('textbox').all())
     await el.fill('판단 근거를 설명하고 독립적으로 수행한다.');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
@@ -283,9 +332,10 @@ test('실제 요청·알림 읽음·초안·자격별 확정까지 유지하고 
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
   expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
   await page.goto('/');
-  await expect(current(page)).toHaveAttribute('data-request-id', id);
-  await expect(carousel(page).getByRole('status')).toHaveText('1 / 2');
-  await action(page).click();
+  await expect(planning(page)).toHaveCount(0);
+  await expect(action(page)).toHaveText('상세정보 보기');
+  expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
+  await page.getByRole('link', { name: /요청 전체 완료 확인/ }).click();
   const finish = page
     .getByRole('region', { name: '이번 요청의 계획 현황' })
     .getByRole('button', { name: '계획 수립 완료', exact: true });

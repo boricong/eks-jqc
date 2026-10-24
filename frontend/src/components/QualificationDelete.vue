@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { managementTitle } from '../management-navigation';
 import { confirmAction } from '../composables/useConfirmation';
 import { ref, watch, nextTick } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -143,9 +144,9 @@ async function remove() {
         다른 자격 버전과 연결된 인증Set은 삭제하지 않습니다.
       </p>
       <p v-else class="error-message">{{ impact.blockers.join(' ') }}</p>
-      <RouterLink v-if="!impact.canDelete" :to="store.managementLink('/admin/policies')"
-        >조직별 자격 설정</RouterLink
-      >
+      <RouterLink v-if="!impact.canDelete" :to="store.managementLink('/admin/policies')">{{
+        managementTitle('policies')
+      }}</RouterLink>
       <label v-if="impact.canDelete" class="field"
         ><span>삭제 사유</span
         ><textarea v-model="reason" rows="3" maxlength="2000" :disabled="busy" />

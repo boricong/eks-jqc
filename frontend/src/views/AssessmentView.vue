@@ -15,7 +15,9 @@ import CompactTabs from '../components/CompactTabs.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
 import AppIcon from '../components/AppIcon.vue';
-import CourseMaterials from '../components/CourseMaterials.vue';
+import LearnerNav from '../components/LearnerNav.vue';
+import { qualificationLocation } from '../learner-navigation';
+import { useLearnerMemory } from '../composables/useLearnerMemory';
 const store = useDemo(),
   route = useRoute(),
   uid = useId();
@@ -34,7 +36,6 @@ const selected = ref(''),
   stage = ref<'edit' | 'review' | 'result'>('edit'),
   busy = ref(false),
   error = ref(''),
-  materialOpen = ref(false),
   tabs = ref<InstanceType<typeof CompactTabs>>();
 const noticeOpen = ref(false),
   noticeType = ref<'last' | 'missing'>('last'),
@@ -51,6 +52,7 @@ const {
   changed,
   canLeave,
 } = useAttemptDraft(() => store.actorId);
+const memory = useLearnerMemory();
 const current = computed(() => questions.value.find((q) => q.id === selected.value)),
   position = computed(() => questions.value.findIndex((q) => q.id === selected.value));
 const missing = computed(() =>
@@ -70,7 +72,12 @@ const options = computed(() =>
     invalid: !!error.value && missingSet.value.has(q.id),
   })),
 );
-const returnPath = computed(() => `/qualifications/${a.value?.id}?course=${c.value?.id}`);
+const returnPath = computed(() => qualificationLocation('assessment', a.value?.id, c.value?.id));
+const learningPath = computed(() => qualificationLocation('learning', a.value?.id, c.value?.id));
+const qualificationTitle = computed(
+  () =>
+    a.value && store.qualification(a.value.qualificationId, a.value.qualificationMetadata).title,
+);
 const knowledgePath = computed(
   () => `/qualifications/${a.value?.id}/courses/${c.value?.id}/objective`,
 );
@@ -119,7 +126,11 @@ async function prepare() {
     }
     if (result.value !== 'passed') {
       const value = await store.startAttempt(a.value.id, c.value.id, kind.value);
-      if (seq === generation) load(value);
+      if (seq === generation) {
+        load(value);
+        const remembered = memory.attempt(value.id).question;
+        if (questions.value.some((q) => q.id === remembered)) selected.value = remembered;
+      }
     }
   } catch (err) {
     if (seq === generation) error.value = (err as Error).message;
@@ -229,6 +240,9 @@ async function changeReviewPage(page: number) {
   await nextTick();
   document.querySelector<HTMLElement>('.assessment-review h2')?.focus();
 }
+watch(selected, (value) => {
+  if (!busy.value && attempt.value) memory.attempt(attempt.value.id).question = value;
+});
 watch(() => [route.fullPath, store.actorId], prepare, { immediate: true });
 watch(
   () => prerequisite.value?.code,
@@ -236,8 +250,12 @@ watch(
     if (previous && !value && !isResult.value && !busy.value) void prepare();
   },
 );
-onBeforeRouteLeave(canLeave);
-onBeforeRouteUpdate(canLeave);
+async function leave() {
+  if (busy.value) return false;
+  return canLeave();
+}
+onBeforeRouteLeave(leave);
+onBeforeRouteUpdate(leave);
 </script>
 <template>
   <div
@@ -245,12 +263,13 @@ onBeforeRouteUpdate(canLeave);
     class="container page assessment-page"
     :class="{ 'is-assessment-result': isResult }"
   >
-    <RouterLink :to="returnPath" class="back-link">← 자격 상세 · {{ c.title }}</RouterLink>
+    <LearnerNav :assignment-id="a.id" :course-id="c.id" />
+    <RouterLink :to="returnPath" class="back-link">← 평가 선택 · {{ c.title }}</RouterLink>
     <PageHeading class="page-heading">
       <div>
         <h1>{{ isResult ? '평가 결과' : kindLabels[kind] }}</h1>
         <p>
-          {{ c.title }} ·
+          {{ qualificationTitle }} · {{ c.title }} ·
           {{
             kind === 'practical'
               ? '가상 상황의 대응 선택을 평가합니다.'
@@ -258,9 +277,7 @@ onBeforeRouteUpdate(canLeave);
           }}
         </p>
       </div>
-      <button v-if="c.materials.length" class="button secondary" @click="materialOpen = true">
-        학습자료
-      </button>
+      <RouterLink :to="learningPath" class="button secondary">학습으로 이동</RouterLink>
     </PageHeading>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <section
@@ -322,23 +339,19 @@ onBeforeRouteUpdate(canLeave);
           >
             다시 응시
           </button>
-          <button
-            v-if="result === 'failed' && c.materials.length"
-            class="button secondary"
-            @click="materialOpen = true"
+          <RouterLink v-if="result === 'failed'" :to="learningPath" class="button secondary"
+            >학습자료 확인</RouterLink
           >
-            학습자료 확인
-          </button>
           <RouterLink
             v-if="e.completion"
-            :to="`/completions/${e.completion.id}`"
+            :to="{ path: `/completions/${e.completion.id}`, query: { stage: 'assessment' } }"
             class="button secondary"
             >인증Set 수료증 보기</RouterLink
           >
           <RouterLink v-if="a.certifiedAt" :to="`/certifications/${a.id}`" class="button primary"
             >인증서 보기</RouterLink
           >
-          <RouterLink :to="returnPath" class="button secondary">자격 상세로</RouterLink>
+          <RouterLink :to="returnPath" class="button secondary">평가 선택으로</RouterLink>
         </div>
         <p class="outcome-credit">
           배경:
@@ -497,7 +510,7 @@ onBeforeRouteUpdate(canLeave);
               @click="stage = 'edit'"
             >
               계속 풀기</button
-            ><RouterLink v-else :to="returnPath" class="button secondary">자격 상세로</RouterLink
+            ><RouterLink v-else :to="returnPath" class="button secondary">평가 선택으로</RouterLink
             ><button
               class="button primary"
               :disabled="busy || !attempt || conflict || !!prerequisite"
@@ -509,9 +522,6 @@ onBeforeRouteUpdate(canLeave);
         </div>
       </ActionBar>
     </template>
-    <AppDialog v-model:open="materialOpen" :title="`${c.title} · 학습자료`"
-      ><CourseMaterials :materials="c.materials" :context-key="`${store.actorId}:${a.id}:${c.id}`"
-    /></AppDialog>
     <AppDialog
       v-model:open="noticeOpen"
       :title="noticeType === 'last' ? '마지막 문항입니다' : '모든 문항에 답해야 제출할 수 있습니다'"

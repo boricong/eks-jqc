@@ -5,7 +5,6 @@ export function useListView<T>(items: Ref<T[]>, key: string, label: (item: T) =>
     saved = JSON.parse(localStorage.getItem(`eks-list-${key}`) || '{}');
   } catch {}
   const size = ref([25, 50, 100].includes(saved.size) ? saved.size : 25),
-    density = ref(saved.density === 'roomy' ? 'roomy' : 'compact'),
     sort = ref(saved.sort || 'original'),
     page = ref(1);
   const ordered = computed(() =>
@@ -19,12 +18,9 @@ export function useListView<T>(items: Ref<T[]>, key: string, label: (item: T) =>
   const rows = computed(() =>
     ordered.value.slice((page.value - 1) * size.value, page.value * size.value),
   );
-  watch([size, density, sort], () => {
+  watch([size, sort], () => {
     page.value = 1;
-    localStorage.setItem(
-      `eks-list-${key}`,
-      JSON.stringify({ size: size.value, density: density.value, sort: sort.value }),
-    );
+    localStorage.setItem(`eks-list-${key}`, JSON.stringify({ size: size.value, sort: sort.value }));
   });
   watch(
     () => items.value.length,
@@ -34,7 +30,6 @@ export function useListView<T>(items: Ref<T[]>, key: string, label: (item: T) =>
   );
   return reactive({
     size,
-    density,
     sort,
     page,
     pages,

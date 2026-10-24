@@ -170,7 +170,7 @@ test('기준 상태 영향 확인·사유·Revoke 이력과 신규 인증Set 명
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications/demo-qualification');
-  await expect(page.getByRole('link', { name: '인증Set 관리', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '인증Set 설정', exact: true })).toBeVisible();
   await expect(page.getByLabel('재인증 시작 · 만료 전 개월', { exact: true })).toHaveValue('3');
   await page.getByRole('button', { name: '운영 상태 변경', exact: true }).click();
   const dialog = page.getByRole('dialog');

@@ -83,8 +83,8 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
     await field.fill('2026-10-15');
   for (const field of await page.getByLabel('평가 예정일', { exact: true }).all())
     await field.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 설정', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표 설정', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
   for (const field of await page.getByRole('textbox').all()) await field.fill('독립 수행 학습');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await page.getByRole('button', { name: '계획 완료', exact: true }).click();
