@@ -48,6 +48,8 @@
 
 ## 1 현재 상태
 
+2026-10-25 홈 진행 자격 카드에 생성한 웨이퍼·반도체 설비 배경을 추가했다. 이미지 레이어만35%/모바일22%이며 좌우·하단 마스크로 글자와 버튼의 가독성을 유지한다. 로컬 자산2종 약102KB/43KB, 상단 히어로·업무 동작·API·실행 데이터 보존. 임시 JSON 전체 Playwright220/220·TypeScript/Vite와 합성 대비/네 화면 폭을 검증했다.
+
 2026-10-24 후속 사용자 선택으로 학습 히어로를 흰 배경·네이비 본문·회색1px 외곽선·왼쪽4px 인디고 강조선으로 변경했다. 링크/진행 막대/내부 구분선을 기존 토큰으로 통일하고 정보 배치·접기·모바일 조작을 유지한다. 임시 JSON 관련 Playwright5/5·TypeScript/Vite·3파일 Prettier·diff·네 폭 캡처와 실제 대비를 확인했다.
 
 2026-10-24 홈 계획 카드는 필요한 계획 확정이 끝나면 숨기고 요청 전체 완료는 내 계획에서 별도로 확인한다. 학습/평가 메뉴를 분리하고 같은 자격·인증Set의 이동을 유지한다. 학습은 화이트·인디고 라인 요약과 자료 목록/단일 본문, 평가는 최소 정보·응시·결과·이력이다. 저장 답안/마지막 문항과 계정 세션의 읽기 위치를 보존하며 업무 스키마·채점은 유지했다. 기존 미커밋 작업을 포함한 임시 JSON 전체 서버185/185·Playwright176/176(3.9분)·빌드·형식을 검증했다.
@@ -77,7 +79,7 @@
 | 기준 일괄 관리 | 등록된 팀 자격의 설정 수정만 허용. Excel v7 출력/v3~v6 읽기. 공통 정보 변경·연결 위조·신규 시트 차단, 미저장 입력·부분 저장·응답 유실/복구 유지 |
 | 설정·기준 이전 | 기본자격 포함 JSON 형식3/업무13·조직2. 형식3/업무12 및 형식1·2 보존 호환. 새 요청 선택/완료는 업무 진행이며 설정·기준 이전 본문은 변경 없음 |
 | Photo팀 시험 기준 | 완성된 자격15종·고유 인증Set75개·지식225+상황225=450문항·100%·정답 공개·36개월 유지. 재인증 시작3개월, 사전 알림7일 전1회. 원래 알림 배열은 과거 근거로 보존 |
-| 마지막 코드 검증 | 2026-10-24 히어로 색상: 관련 Playwright5/5·빌드·3파일 형식·diff·네 화면 폭/실제 대비 통과. 앞선 홈/학습·평가: Node24.22.0 임시 JSON 전체 서버185/185·전체 Playwright176/176(3.9분), 모바일 왕복10/10·TypeScript/Vite·29파일 Prettier·diff 통과. 기존 관리/밀도/계획 변경을 포함 |
+| 마지막 코드 검증 | 2026-10-25 반도체 카드 배경: Node24.19.0 TypeScript/Vite·관련14/14·전체 Playwright220/220(5.2분)·3파일 형식/diff 통과. 합성 배경 대비·4폭·이미지 로드 실패/레이아웃과 기존 전체 회귀 확인. 서버 단위 시험은 이번 UI 변경에서 재실행하지 않음 |
 | 저장소 | [boricong/eks-jqc](https://github.com/boricong/eks-jqc), 작업 브랜치 `main` |
 | 최근 기능 커밋 | `0150cae` — 인증 현황 대시보드·전용 조회 API·시험·문서31개 파일. 2026-10-23 `origin/main` 푸시 성공. 후속 기록 커밋은 `git log -1` 참조 |
 | 이번 변경 | 균형형160px 자격 히어로·32px 구역 간격·인증Set 목표 미노출/일정 한 줄·학습범위/자료 가로 탭(범위 기본). 이전 높이 상한 해제·탭/자료/위치 기억·기존 미커밋/서버/shared/실행 데이터 보존 |
@@ -1199,6 +1201,16 @@ EKS_DATA_FILE="$PWD/data/runtime/local-20261022/state.json" EKS_ORGANIZATIONS_FI
 
 - 반영/보존: 실행 중 화면의160px 요약/기본 범위·목표 미노출과 Vite 모듈/최종 빌드·API health200을 확인했다. 업무13 revision46/조직2 revision4/maintenance의 착수·최종 해시가 동일하다. 기존 미커밋을 보존했으며 API 재기동·실행 데이터 수정·이관·커밋·푸시 없음. 기존 Zod 주석/500kB 번들 권고는 유지한다.
 - 근거: 시작 소스/업무 해시·diff `/private/tmp/eks-learning-tabs-baseline/`, 전후 `/private/tmp/eks-learning-tabs-before/frontend/test-results/`·`/private/tmp/eks-learning-tabs-final/frontend/test-results/`, 첫900px 캡처 `/private/tmp/eks-learning-tabs-captures/`, 시험/빌드/형식 `/private/tmp/eks-learning-tabs-{targeted,fixed,full,guide,final-build,format}.log`, 실행 확인 `/private/tmp/eks-learning-tabs-runtime-final.json`. 전체186개 최종 사본과 마지막 두 안내 문구만 다른 소스를 별도 안내 사본에서6개 재검증했다. UX·프런트 안내·루트 인수인계를 갱신했으며 아래 압축 상한/목표 표시 설명은 과거 이력이다.
+
+### 2026-10-25 진행 자격 카드의 웨이퍼·설비 배경
+
+- 2026-10-25 승인 구현 완료. 홈 `진행 중인 자격` 제목 아래 프레임에 오른쪽 웨이퍼·흐릿한 클린룸 설비 전용 생성 이미지를 적용했다. 상단 이름/조직 히어로·배치·글자·업무는 유지한다. 계획 요청/진행 자격/빈 카드 모두 같은 배경이며 프레임에 고정해 슬라이드와 함께 움직이지 않는다.
+- 장식 가상 요소만 데스크톱35%/768px 미만22% 불투명도·pointer-events:none이다. 좌우/하단 마스크를 교차 적용해 왼쪽 정보와 하단 버튼 주변을 밝게 유지하며 탐색 영역은96% 틴트 배경이다. 실제 픽셀 대비에서 초기 버튼 주변이3:1 미만으로 확인되어 하단 마스크를 강화했다. 글자/버튼은 불투명하고 이미지 로드 실패 시 기존 단색·정보·크기가 유지된다.
+- Imagegen으로 새로 생성했으며 외부 사진을 사용하지 않았다. 로컬 WebP는1774×887/104,562바이트, 모바일960×480/43,938바이트다. 생성 출처/지시·단순 크기/형식 변환은 `frontend/src/assets/semiconductor-card.SOURCE.md`에 기록한다. 새 라이브러리·API·공유 타입·JSON·업무 정책 변경 없음.
+- 검증: Node24.19.0 TypeScript/Vite·변경 코드/시험3파일 Prettier·diff 통과. 합성 픽셀 검사로 보완한 홈 관련14/14(29.9초), 최종 전체 Playwright **220/220(5.2분)** 통과.1920/1440/768/390px·긴 내용/계획 혼합/빈 상태/역할/키보드/스와이프/계정 전환·로드 실패/로드 전후 크기·외부 호출 없음·본문4.5:1/조작 및 초점3:1을 확인하고 전후/모바일 캡처를 검토했다. 서버 변경이 없어 서버 단위 시험은 재실행하지 않았다. 기존 Zod 주석/500kB 주 번들 경고 유지.
+- 반영/보존: 실행 Vite5186의 이미지 파일이 프로젝트 자산과 같은 SHA256이고 분리 CSS의 이미지·마스크 반영을 확인했다. API health200 revision67. 시작/최종 업무·조직·maintenance JSON 해시 동일, API 재기동·실제 업무 명령·이관·초기화·커밋/푸시 없음.
+- 병행 작업 경계: 완료 정리 중 별도 공통 헤더/푸터 그라데이션 작업(DESIGN.md·design-tokens.css·style.css)이 시작된 것을 확인했다. 해당 변경과 착수 기록을 보존한다. 위 검증은 이번 반도체 카드의 최종 소스 기준이며 별도 헤더/푸터 작업의 완료 검증을 대신하지 않는다.
+- 근거: `/private/tmp/eks-wafer-targeted-final.log`, `/private/tmp/eks-wafer-full.log`, `/private/tmp/eks-wafer-build-complete.log`, 캡처 `/private/tmp/eks-wafer-targeted-final/`와 `/private/tmp/eks-wafer-full/`, 착수 `/private/tmp/eks-wafer-baseline/`, 보존 `/private/tmp/eks-wafer-preservation.json`, 소스 `/private/tmp/eks-wafer-source-final.json`, 실행 확인 `/private/tmp/eks-wafer-live-style.js`·`eks-wafer-health.json`. UX와 인수인계 진입점을 갱신했다.
 
 ## 4 코드 위치와 실행
 

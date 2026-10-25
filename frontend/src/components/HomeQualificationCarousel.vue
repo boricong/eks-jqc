@@ -326,8 +326,28 @@ onBeforeUnmount(() => {
   min-height: 44px;
 }
 .home-qualification-frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   background: var(--tint);
   border: 1px solid var(--line);
+}
+.home-qualification-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: url('../assets/semiconductor-card.webp') right center / cover no-repeat;
+  opacity: 0.35;
+  mask-image:
+    linear-gradient(90deg, transparent, rgb(0 0 0 / 25%) 45%, #000 85%),
+    linear-gradient(180deg, #000 35%, rgb(0 0 0 / 35%) 80%, rgb(0 0 0 / 20%));
+  mask-composite: intersect;
+}
+.home-qualification-frame > * {
+  position: relative;
+  z-index: 1;
 }
 .home-qualification-frame.empty-state {
   padding: 24px;
@@ -405,6 +425,7 @@ onBeforeUnmount(() => {
   outline-offset: 1px;
 }
 .home-qualification-controls {
+  background: rgb(240 237 255 / 96%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,6 +453,10 @@ onBeforeUnmount(() => {
   font-weight: var(--weight-heading);
 }
 @media (max-width: 767px) {
+  .home-qualification-frame::before {
+    background-image: url('../assets/semiconductor-card-mobile.webp');
+    opacity: 0.22;
+  }
   .home-qualification-slide,
   .home-qualification-frame.empty-state {
     padding: 16px;
