@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import { ref } from 'vue';
 import {
   masterCountLabels,
@@ -89,7 +90,7 @@ async function apply() {
   if (!preview || confirmation.value !== phrase || busy.value) return;
   busy.value = true;
   dialogError.value = '';
-  const key = operationKey.value || crypto.randomUUID();
+  const key = operationKey.value || randomUUID();
   operationKey.value = key;
   retainMaintenance(key);
   try {

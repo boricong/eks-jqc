@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import { computed, nextTick, ref, useId, watch } from 'vue';
 import { kindLabels, type Course, type Kind } from '@eks/contracts';
 import { courseIssues, type CourseIssue } from '../course-editor';
@@ -104,7 +105,7 @@ async function focusIssue(issue: CourseIssue) {
 }
 async function add() {
   if (props.disabled || !activeKind.value) return;
-  const id = crypto.randomUUID(),
+  const id = randomUUID(),
     kind = activeKind.value;
   const question = { id, prompt: '', choices: ['', '', '', ''], correct: null, points: 1 };
   if (kind === 'objective') props.course.questions.push(question);

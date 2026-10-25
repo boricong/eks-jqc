@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import PageHeading from '../components/PageHeading.vue';
 import CompactTabs from '../components/CompactTabs.vue';
 import { withCriteriaType, managementTitle } from '../management-navigation';
@@ -547,7 +548,7 @@ function editNotice(n?: Notice) {
   noticeDraft.value = n
     ? plain(n)
     : {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         scope: 'team',
         lv1OrganizationId: store.managementLv1,
         title: '',

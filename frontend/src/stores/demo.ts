@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid';
 import { pendingMaintenance, clearMaintenance } from '../maintenance-operation';
 import { DATASET_EVENT } from '../data-generation';
 import { defineStore } from 'pinia';
@@ -304,7 +305,7 @@ export const useDemo = defineStore('workspace', () => {
     if (managed) path = managementPath(path);
     const scope = actorId.value;
     const signature = JSON.stringify({ path, body, method, scope });
-    const pending = pendingCommands.get(signature) || { key: crypto.randomUUID() };
+    const pending = pendingCommands.get(signature) || { key: randomUUID() };
     pendingCommands.set(signature, pending);
     writing.value++;
     try {

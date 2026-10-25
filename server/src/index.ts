@@ -1,7 +1,20 @@
+import {
+  connectionCandidates,
+  createNetworkPolicy,
+  listenHost,
+  listenPort,
+} from "./network.ts";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { JsonStore } from "./storage.ts";
 import { buildApp } from "./app.ts";
+
+const host = listenHost(process.env.API_HOST, "0.0.0.0");
+const port = listenPort(process.env.API_PORT, 5187);
+const origins = process.env.FRONTEND_ORIGIN
+  ? [process.env.FRONTEND_ORIGIN]
+  : [];
+createNetworkPolicy(origins);
 
 export const dataFile = path.resolve(
   process.env.EKS_DATA_FILE ||
@@ -13,15 +26,16 @@ try {
   app = await buildApp(store, {
     logger: true,
     serveFrontend: true,
-    origins: [
-      process.env.FRONTEND_ORIGIN || "http://127.0.0.1:5186",
-      "http://127.0.0.1:5187",
-    ],
+    origins,
   });
   await app.listen({
-    host: "127.0.0.1",
-    port: Number(process.env.API_PORT || 5187),
+    host,
+    port,
   });
+  app.log.info(
+    { host, port, urls: connectionCandidates(host, port) },
+    "접속 후보 주소 (방화벽·WSL 전달 설정 별도 확인)",
+  );
 } catch (error) {
   if (app) await app.close();
   else await store.close();

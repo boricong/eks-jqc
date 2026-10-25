@@ -1,3 +1,4 @@
+import { createNetworkPolicy } from "./network.ts";
 import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
 import {
@@ -66,6 +67,7 @@ export async function buildApp(
     documentsRoot?: string;
   } = {},
 ) {
+  const network = createNetworkPolicy(options.origins);
   const app = Fastify({
     logger: options.logger ?? false,
     bodyLimit: 2 * 1024 * 1024,
@@ -84,10 +86,6 @@ export async function buildApp(
     string,
     { actorId: string; expires: number; generation: string }
   >();
-  const origins = options.origins || [
-    "http://127.0.0.1:5186",
-    "http://127.0.0.1:5187",
-  ];
   function sessionCookie(request: FastifyRequest) {
     const tab = request.headers["x-session-tab"];
     if (tab === undefined) return "eks_session";
@@ -121,13 +119,22 @@ export async function buildApp(
   const requestGenerations = new WeakMap<FastifyRequest, string>();
   app.addHook("onRequest", async (request, reply) => {
     requestGenerations.set(request, store.generation);
+    demand(
+      network.acceptsHost(request.headers.host),
+      403,
+      "허용되지 않은 접속 주소입니다.",
+    );
     reply.header("X-EKS-Data-Generation", store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      request.headers.origin
+      request.headers.origin !== undefined
     )
       demand(
-        origins.includes(request.headers.origin),
+        network.acceptsOrigin(
+          request.headers.host!,
+          request.protocol,
+          request.headers.origin,
+        ),
         403,
         "허용되지 않은 요청 출처입니다.",
       );

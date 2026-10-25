@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid';
 import {
   catalogTables,
   columnsFor,
@@ -10,7 +11,7 @@ export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 export const rowKey = (r: CatalogRow) => String(r.__row);
 export function decorate(w: CatalogWorkbook) {
   for (const s of w.sheets)
-    for (const t of catalogTables) for (const r of s.tables[t]) r.__row ||= crypto.randomUUID();
+    for (const t of catalogTables) for (const r of s.tables[t]) r.__row ||= randomUUID();
   return w;
 }
 export function clean(w: CatalogWorkbook): CatalogWorkbook {
@@ -30,8 +31,8 @@ export const fingerprint = (s: CatalogSheet) =>
 export function newRow(table: CatalogTable, rows: CatalogRow[], courseCode = ''): CatalogRow {
   const r: CatalogRow = Object.fromEntries(columnsFor(table, rows).map(([k]) => [k, '']));
   Object.assign(r, {
-    code: crypto.randomUUID(),
-    __row: crypto.randomUUID(),
+    code: randomUUID(),
+    __row: randomUUID(),
     order:
       Math.max(
         0,
@@ -61,7 +62,7 @@ export function newSheet(): CatalogSheet {
   return {
     sheetName: '새 자격',
     mode: 'new',
-    code: crypto.randomUUID(),
+    code: randomUUID(),
     title: '',
     englishName: '',
     description: '',
@@ -90,8 +91,8 @@ export function duplicateRows(s: CatalogSheet, table: CatalogTable, keys: string
   for (const r of selected) {
     const c: CatalogRow = {
       ...clone(r),
-      code: crypto.randomUUID(),
-      __row: crypto.randomUUID(),
+      code: randomUUID(),
+      __row: randomUUID(),
       order: Math.max(0, ...s.tables[table].map((v) => Number(v.order) || 0)) + copies.length + 1,
     };
     if (table === 'courses') {
@@ -104,8 +105,8 @@ export function duplicateRows(s: CatalogSheet, table: CatalogTable, keys: string
             .filter((v) => v.courseCode === r.code)
             .map((v) => ({
               ...clone(v),
-              code: crypto.randomUUID(),
-              __row: crypto.randomUUID(),
+              code: randomUUID(),
+              __row: randomUUID(),
               courseCode: c.code,
             })),
         );

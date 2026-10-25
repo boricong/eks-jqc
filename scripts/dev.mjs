@@ -11,8 +11,9 @@ const viteBin = path.join(
 const children = [
   spawn(process.execPath, ["--import", "tsx", "server/src/index.ts"], {
     stdio: "inherit",
+    env: { ...process.env, API_HOST: process.env.API_HOST ?? "127.0.0.1" },
   }),
-  spawn(process.execPath, [viteBin, "--host", "127.0.0.1"], {
+  spawn(process.execPath, [viteBin], {
     cwd: new URL("../frontend/", import.meta.url),
     stdio: "inherit",
   }),

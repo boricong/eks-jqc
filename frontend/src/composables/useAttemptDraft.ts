@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid';
 import { confirmAction } from './useConfirmation';
 import { computed, ref, onBeforeUnmount } from 'vue';
 import type { AssessmentAttempt, Draft } from '@eks/contracts';
@@ -43,7 +44,7 @@ export function useAttemptDraft(actorId: () => string) {
         const request = pending || {
           ...JSON.parse(JSON.stringify(draft.value)),
           revision: attempt.value.revision,
-          key: crypto.randomUUID(),
+          key: randomUUID(),
         };
         pending = request;
         status.value = 'saving';

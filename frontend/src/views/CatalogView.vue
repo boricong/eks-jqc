@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import PageHeading from '../components/PageHeading.vue';
 import { managementTitle } from '../management-navigation';
 import { confirmAction } from '../composables/useConfirmation';
@@ -81,7 +82,7 @@ let epoch = 0,
   localTimer: ReturnType<typeof setTimeout> | undefined,
   validationTimer: ReturnType<typeof setTimeout> | undefined;
 const editorGeneration = getDataGeneration();
-let workId: string = crypto.randomUUID(),
+let workId: string = randomUUID(),
   owner = { actorId: '', lv1: '' },
   pending: CatalogRecovery['pending'];
 const sheet = computed(() => workbook.value?.sheets[sheetIndex.value]);
@@ -273,7 +274,7 @@ function startWork(w: CatalogWorkbook, imported = false, p?: CatalogPreview) {
   releaseRecovery(workId);
   workbook.value = decorate(clone(w));
   owner = { actorId: store.actorId, lv1: store.managementLv1 };
-  workId = crypto.randomUUID();
+  workId = randomUUID();
   void claimRecovery(workId);
   if (!imported) {
     importName.value = '';
@@ -687,7 +688,7 @@ async function commit(path: string, body: unknown, token: number) {
     throw new Error(
       '응답을 확인하지 못한 저장이 있습니다. 먼저 저장 결과 확인·재시도를 실행해 주세요.',
     );
-  pending ||= { key: crypto.randomUUID(), path, body: clone(body) };
+  pending ||= { key: randomUUID(), path, body: clone(body) };
   await retain();
   store.writing++;
   try {

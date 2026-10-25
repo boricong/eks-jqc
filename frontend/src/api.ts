@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid';
 import {
   getDataGeneration,
   getDataEpoch,
@@ -18,7 +19,7 @@ const pending = new Map<string, string>();
 window.addEventListener(DATASET_EVENT, () => pending.clear());
 // sessionStorage survives reloads and keeps independently opened tabs separate.
 const tabStorageKey = 'eks-session-tab';
-const sessionTab = sessionStorage.getItem(tabStorageKey) || crypto.randomUUID();
+const sessionTab = sessionStorage.getItem(tabStorageKey) || randomUUID();
 sessionStorage.setItem(tabStorageKey, sessionTab);
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const epoch = getDataEpoch();
@@ -68,7 +69,7 @@ export async function mutate<T = { id: string; revision: number }>(
   explicitKey?: string,
 ): Promise<T> {
   const fingerprint = JSON.stringify({ path, body, method, scope }),
-    key = explicitKey || pending.get(fingerprint) || crypto.randomUUID();
+    key = explicitKey || pending.get(fingerprint) || randomUUID();
   pending.set(fingerprint, key);
   try {
     const result = await api<T>(path, {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, nextTick, ref, useId, watch } from 'vue';
 import CompactTabs from './CompactTabs.vue';
@@ -23,7 +24,7 @@ const options = computed(() =>
     invalid: !value.title.trim(),
   })),
 );
-const newId = () => crypto.randomUUID();
+const newId = () => randomUUID();
 
 watch(
   () => [props.course.id, ...props.course.learningItems.map((value) => value.id)],

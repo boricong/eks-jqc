@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { randomUUID } from '../uuid';
 import { confirmAction } from '../composables/useConfirmation';
 import { ref, computed, watch, nextTick } from 'vue';
 import { materialTypeLabels, type Course, type LearningMaterial } from '@eks/contracts';
@@ -21,7 +22,7 @@ async function add() {
   )
     return;
   editing.value = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     type: 'text',
     title: '',
     content: '',
