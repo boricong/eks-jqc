@@ -4,21 +4,12 @@ import { useRoute } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 import ManagementContext from './ManagementContext.vue';
-import { managementGroups, managementSections, managementTitle } from '../management-navigation';
+import { visibleManagementGroups, managementTitle } from '../management-navigation';
 const store = useDemo(),
   route = useRoute(),
   menuOpen = ref(false),
   menuToggle = ref<HTMLButtonElement>();
-const groups = computed(() =>
-  managementGroups
-    .map((group) => ({
-      ...group,
-      sections: managementSections.filter(
-        (section) => section.group === group.id && store.canManageSection(section.id),
-      ),
-    }))
-    .filter((group) => group.sections.length),
-);
+const groups = computed(() => visibleManagementGroups(store.canManageSection));
 const section = computed(() => String(route.meta.managementSection || route.params.section));
 const current = computed(() => managementTitle(section.value));
 function closeMenu(event: KeyboardEvent) {

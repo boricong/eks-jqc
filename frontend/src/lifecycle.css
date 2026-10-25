@@ -88,17 +88,6 @@
   padding: 4px 16px;
   margin-top: 12px;
 }
-.lifecycle-renewal-link {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink);
-}
-.lifecycle-renewal-link > span {
-  font-size: var(--text-caption);
-}
 @media (max-width: 767px) {
   .lifecycle-target-table table {
     min-width: 580px;

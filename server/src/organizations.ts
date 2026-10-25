@@ -177,15 +177,6 @@ export function changeOrganization(
         (before?.parentId === parentId ? before.order : siblings.length));
   siblings.splice(Math.min(position, siblings.length), 0, node);
   validateOrganizations(doc);
-  doc.audits.push({
-    id: randomUUID(),
-    actorId: actor.id,
-    date: new Date().toISOString(),
-    targetId: node.id,
-    action: before ? "organization.update" : "organization.create",
-    before: before ? JSON.parse(JSON.stringify(before)) : null,
-    after: JSON.parse(JSON.stringify(organization(doc, node.id))),
-  });
   return { id: node.id, revision: doc.revision + 1 };
 }
 export function changeUser(

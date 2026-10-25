@@ -243,6 +243,14 @@ components:
     padding: 64px 24px
 ---
 
+## EKS 승인 적용 — 홈 코발트 자격 카드 (2026-10-25)
+
+홈 하단 자격/계획/빈 카드의 작업면은 사용자 승인 옅은 코발트 `#E8F0FF`, 탐색 바는 같은 색96%다. 기존 반도체 이미지 레이어는 데스크톱55%·768px 미만38%이며 좌측/상단/하단 마스크로 본문4.5:1·조작/초점3:1을 유지한다. 네이비 글자/인디고 버튼/상단 메시·Pretendard와 전역 토큰은 유지한다. 홈 공지는 흰 작업면과 얇은 구분선의 하단2열/모바일1열이며 새 장식이나 그림자는 추가하지 않는다.
+
+## EKS 승인 적용 — 펄 그레이 헤더·푸터 (2026-10-25)
+
+공통 헤더와 푸터는 사용자 승인 색상 `#F6F7F9`를 전용 `--shell-surface` 토큰으로 적용한다. 본문의 흰 작업면, 기존 네이비 글자·인디고 선택 표시·구분선·Pretendard와 반응형 배치는 유지한다. 아래 원본의 흰 탐색/푸터 배경은 EKS에서 이 승인 변형으로 대체한다.
+
 ## Overview
 
 Stripi's design language opens with the gradient mesh. A wide horizontal band of pastel cream, sherbet orange, lavender, electric indigo, and ruby pink occupies the upper third of nearly every marketing page — the brand's instantly-recognizable atmospheric backdrop. Type and product UI mockups float above it on `{colors.canvas}` (white), with the gradient acting as both decoration and visual anchor. The lower portion of the page returns to white, with feature explanations on `{colors.canvas-soft}` (a barely-tinted cool off-white) and dashboard product mockups composited as faux IDE/console panels in deep navy.

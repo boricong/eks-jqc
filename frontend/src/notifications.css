@@ -16,6 +16,11 @@
   font-size: var(--text-caption);
   line-height: 1.65;
 }
+.notifications-target-missing {
+  margin: 12px 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+}
 .notifications-toolbar {
   display: flex;
   align-items: center;

@@ -9,13 +9,8 @@ import { useHomeRole } from '../composables/useHomeRole';
 import { useHomeSummary } from '../composables/useHomeSummary';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
-import PersonalTasks from '../components/PersonalTasks.vue';
-import {
-  certificationStatus,
-  latestPeriod,
-  renewalOpensOn,
-  credentialCurrent,
-} from '@eks/contracts';
+import HomeRecentNotifications from '../components/HomeRecentNotifications.vue';
+import { certificationStatus } from '@eks/contracts';
 const store = useDemo();
 const { items: homeRoles, selected: homeRole, select: selectHome } = useHomeRole();
 const summary = useHomeSummary(homeRole);
@@ -60,28 +55,9 @@ const planningRequests = computed(() => {
     )
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
 });
-const renewables = computed(() =>
-  store.actor.certificationEligibility === 'hold'
-    ? []
-    : store.myAssignments
-        .filter(
-          (a) =>
-            a.certification &&
-            latestPeriod(a.certification) &&
-            renewalOpensOn(latestPeriod(a.certification)!) &&
-            ['valid', 'expiring'].includes(certificationStatus(a.certification)),
-        )
-        .slice(0, 3),
-);
 const eligibleAssignment = (a: { learnerId: string; acquisitionClosedAt?: string }) =>
   !a.acquisitionClosedAt &&
   store.data.users.find((u) => u.id === a.learnerId)?.certificationEligibility !== 'hold';
-const upcoming = computed(() =>
-  store.data.plans
-    .filter((p) => p.learnerId === store.actorId && p.targetOn)
-    .sort((a, b) => a.targetOn.localeCompare(b.targetOn))
-    .slice(0, 2),
-);
 const attention = computed(() => [
   {
     label: '자격 설정 필요',
@@ -259,10 +235,7 @@ const stats = computed(() =>
         취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은
         별도로 유지됩니다.
       </p>
-      <nav class="home-shortcuts" aria-label="업무 바로가기">
-        <RouterLink v-if="homeRole === 'learner'" to="/plans" class="text-link"
-          >내 계획<AppIcon name="chevron" :size="16"
-        /></RouterLink>
+      <nav v-if="summary.managed.value" class="home-shortcuts" aria-label="업무 바로가기">
         <template v-if="summary.managed.value">
           <RouterLink :to="summary.link('/admin/dashboard')" class="text-link"
             >인증 현황<AppIcon name="chevron" :size="16"
@@ -277,11 +250,8 @@ const stats = computed(() =>
             >{{ managementTitle('policies') }}<AppIcon name="chevron" :size="16"
           /></RouterLink>
         </template>
-        <RouterLink to="/notifications" class="text-link"
-          >알림함<AppIcon name="chevron" :size="16"
-        /></RouterLink>
       </nav>
-      <div class="home-columns">
+      <div class="home-columns" :class="{ 'home-columns--learning': homeRole === 'learner' }">
         <div class="home-primary">
           <HomeQualificationCarousel
             v-if="homeRole === 'learner'"
@@ -289,26 +259,6 @@ const stats = computed(() =>
             :assignments="active"
             :planning-requests="planningRequests"
           />
-          <PersonalTasks v-if="homeRole === 'learner'" />
-          <section
-            v-if="homeRole === 'learner' && renewables.length"
-            class="home-card lifecycle-panel"
-          >
-            <div class="section-heading"><h2>보유 자격 · 재인증</h2></div>
-            <RouterLink
-              v-for="a in renewables"
-              :key="a.id"
-              class="lifecycle-renewal-link"
-              :to="`/certifications/${a.id}`"
-              ><strong>{{
-                store.qualification(a.qualificationId, a.qualificationMetadata).title
-              }}</strong
-              ><span
-                >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification!)!) }} · 만료
-                {{ credentialCurrent(a.certification!).expiresOn }}</span
-              ><span class="text-link">상태·재인증 확인 →</span></RouterLink
-            >
-          </section>
           <section v-if="homeRole !== 'learner'" class="home-card">
             <div class="section-heading">
               <h2>
@@ -389,24 +339,10 @@ const stats = computed(() =>
           </section>
         </div>
         <aside class="home-secondary">
-          <HomeNotices />
-          <section v-if="homeRole === 'learner' && upcoming.length" class="home-card">
-            <h2>나의 인증 일정</h2>
-            <RouterLink v-for="p in upcoming" :key="p.id" :to="`/plans/${p.id}`" class="simple-row">
-              <span
-                ><strong>{{
-                  store.qualification(p.qualificationId, p.qualificationMetadata).title
-                }}</strong
-                ><small
-                  >목표 인증일 {{ p.targetOn }} ·
-                  {{ p.status === 'draft' ? '계획 작성 중' : '계획 완료' }}</small
-                ></span
-              >
-              <AppIcon name="chevron" :size="16" />
-            </RouterLink>
-          </section>
+          <HomeRecentNotifications />
         </aside>
       </div>
+      <HomeNotices />
     </div>
   </div>
 </template>

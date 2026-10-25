@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from './stores/demo';
+import HeaderNavigation from './components/HeaderNavigation.vue';
 import AppIcon from './components/AppIcon.vue';
 import MaintenanceResult from './components/MaintenanceResult.vue';
 import ProcessGuide from './components/ProcessGuide.vue';
 import ConfirmationHost from './components/ConfirmationHost.vue';
 import { roleLabels, type Role } from '@eks/contracts';
-import { primaryNavigationSection, ownedQualificationsLocation } from './learner-navigation';
+import { primaryNavigationSection } from './learner-navigation';
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
-const menuOpen = ref(false);
-const menuButton = ref<HTMLButtonElement>();
 const documentAssignment = computed(() =>
   route.name === 'certificate'
     ? store.assignment(String(route.params.id))
@@ -25,24 +24,11 @@ const documentAssignment = computed(() =>
 const navigationSection = computed(() =>
   primaryNavigationSection(route, store.actor, documentAssignment.value),
 );
-function closeMenu(event: KeyboardEvent) {
-  if (event.key !== 'Escape' || !menuOpen.value) return;
-  event.preventDefault();
-  event.stopPropagation();
-  menuOpen.value = false;
-  menuButton.value?.focus();
-}
 const isHome = computed(() => route.name === 'home');
 const isWide = computed(
   () => route.path.startsWith('/system') || (route.path.startsWith('/admin') && !route.params.id),
 );
 const roles = roleLabels;
-watch(
-  () => route.fullPath,
-  () => {
-    menuOpen.value = false;
-  },
-);
 
 watch(
   [
@@ -75,7 +61,6 @@ async function changeActor(event: Event) {
     store.notify((error as Error).message);
     select.value = store.actorId;
   }
-  menuOpen.value = false;
 }
 async function refreshOnFocus() {
   if (store.signedIn && !store.loading)
@@ -121,82 +106,13 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
 <template>
   <div class="app" :class="{ 'home-page-shell': isHome, 'app-wide': isWide }">
     <a class="skip-link" href="#main">본문으로 이동</a>
-    <header class="topbar" @keydown="closeMenu">
+    <header class="topbar">
       <div class="topbar-inner">
         <RouterLink to="/" class="brand" aria-label="EKS 직무자격인증 홈"
           ><span class="brand-symbol"><i></i><i></i><i></i></span
           ><span>EKS<span class="brand-label">직무자격인증</span></span></RouterLink
         >
-        <button
-          ref="menuButton"
-          class="icon-button mobile-menu"
-          aria-controls="primary-navigation"
-          :aria-expanded="menuOpen"
-          aria-label="메뉴"
-          @click="menuOpen = !menuOpen"
-        >
-          <AppIcon name="menu" />
-        </button>
-        <nav
-          id="primary-navigation"
-          class="primary-nav"
-          :class="{ expanded: menuOpen }"
-          aria-label="주 메뉴"
-        >
-          <RouterLink
-            to="/"
-            :class="{ active: isHome }"
-            :aria-current="isHome ? 'page' : undefined"
-            @click="menuOpen = false"
-            >홈</RouterLink
-          >
-          <RouterLink
-            v-if="store.hasRole('learner')"
-            to="/qualifications"
-            :class="{ active: navigationSection === 'learning' }"
-            :aria-current="navigationSection === 'learning' ? 'page' : undefined"
-            @click="menuOpen = false"
-            >자격 취득</RouterLink
-          >
-          <RouterLink
-            v-if="store.hasRole('learner')"
-            :to="ownedQualificationsLocation"
-            :class="{ active: navigationSection === 'owned' }"
-            :aria-current="navigationSection === 'owned' ? 'page' : undefined"
-            @click="menuOpen = false"
-            >보유 자격</RouterLink
-          >
-          <RouterLink
-            v-if="store.canEnterManagement"
-            to="/admin"
-            :class="{ active: navigationSection === 'management' }"
-            :aria-current="navigationSection === 'management' ? 'page' : undefined"
-            @click="menuOpen = false"
-            >인증 업무 관리</RouterLink
-          >
-          <RouterLink
-            v-if="store.hasRole('system_operator')"
-            to="/system/organizations"
-            :class="{ active: navigationSection === 'system' }"
-            :aria-current="navigationSection === 'system' ? 'page' : undefined"
-            @click="menuOpen = false"
-            >시스템 운영</RouterLink
-          >
-          <RouterLink
-            v-if="store.signedIn"
-            to="/notifications"
-            :class="{ active: navigationSection === 'notifications' }"
-            :aria-current="navigationSection === 'notifications' ? 'page' : undefined"
-            @click="menuOpen = false"
-          >
-            알림
-            <span
-              v-if="store.data.notifications.some((n) => !n.readAt)"
-              class="notification-count"
-              >{{ store.data.notifications.filter((n) => !n.readAt).length }}</span
-            >
-          </RouterLink>
-        </nav>
+        <HeaderNavigation :section="navigationSection" />
         <div class="account">
           <span class="prototype-label" title="로컬 계정 선택으로 사용하는 검증용 MVP입니다."
             >검증용 MVP</span

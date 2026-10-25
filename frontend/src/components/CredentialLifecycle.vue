@@ -5,8 +5,10 @@ import { useRoute } from 'vue-router';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import AppDialog from './AppDialog.vue';
+import CollapsibleSection from './CollapsibleSection.vue';
 import {
   lifecycleLabels,
+  kstDate,
   renewalNoticeOn,
   type Certification,
   type CertificationPeriod,
@@ -37,7 +39,11 @@ type History = {
   };
 };
 const data = ref<History>(),
+  eventsOpen = ref(false),
+  periodsOpen = ref(false),
   error = ref(''),
+  loadError = ref(''),
+  loading = ref(false),
   busy = ref(false),
   dialog = ref(false),
   mode = ref<'renew' | 'status' | 'correct'>('renew'),
@@ -59,43 +65,69 @@ const dates = (v: string) => new Date(v).toLocaleString('ko-KR', { timeZone: 'As
 let sequence = 0;
 const path = (suffix: string) =>
   `/certifications/${props.certification.id}/${suffix}${route.query.lv1OrganizationId ? `?lv1OrganizationId=${encodeURIComponent(String(route.query.lv1OrganizationId))}` : ''}`;
+const context = () =>
+  `${props.certification.id}|${store.actorId}|${route.query.lv1OrganizationId || ''}`;
 async function load() {
   const seq = ++sequence;
+  loading.value = true;
   try {
     const result = await api<History>(path('history'));
-    if (seq === sequence) data.value = result;
+    if (seq === sequence) {
+      data.value = result;
+      loadError.value = '';
+      return true;
+    }
   } catch (e) {
-    if (seq === sequence) error.value = (e as Error).message;
+    if (seq === sequence) loadError.value = (e as Error).message;
+  } finally {
+    if (seq === sequence) loading.value = false;
   }
+  return false;
 }
 watch(
-  () => [
-    props.certification.id,
-    props.certification.revision,
-    store.actorId,
-    route.query.lv1OrganizationId,
+  [
+    () => props.certification.id,
+    () => props.certification.revision,
+    () => store.actorId,
+    () => route.query.lv1OrganizationId,
   ],
   () => {
     data.value = undefined;
+    error.value = '';
+    loadError.value = '';
     dialog.value = false;
     void load();
   },
   { immediate: true },
 );
+watch(
+  [() => props.certification.id, () => store.actorId, () => route.query.lv1OrganizationId],
+  () => {
+    eventsOpen.value = false;
+    periodsOpen.value = false;
+  },
+);
+watch(
+  () => props.certification,
+  (next, previous) => {
+    if (next.id === previous.id && next.revision === previous.revision) void load();
+  },
+);
 onBeforeUnmount(() => sequence++);
 async function start() {
-  if (!data.value) return;
+  if (!data.value || busy.value || loading.value || loadError.value) return;
+  const currentContext = context();
   busy.value = true;
   error.value = '';
   try {
     await store.command(path('renewals'), {
       certificationRevision: data.value.certification.revision,
     });
-    await load();
+    if (currentContext !== context() || !(await load())) return;
     mode.value = 'renew';
     dialog.value = true;
   } catch (e) {
-    error.value = (e as Error).message;
+    if (currentContext === context()) error.value = (e as Error).message;
   } finally {
     busy.value = false;
   }
@@ -108,7 +140,8 @@ function edit(next: 'status' | 'correct') {
   dialog.value = true;
 }
 async function save() {
-  if (!data.value) return;
+  if (!data.value || busy.value) return;
+  const currentContext = context();
   busy.value = true;
   error.value = '';
   try {
@@ -140,10 +173,11 @@ async function save() {
           reminderDays: [],
         },
       });
+    if (currentContext !== context()) return;
     dialog.value = false;
     await load();
   } catch (e) {
-    error.value = (e as Error).message;
+    if (currentContext === context()) error.value = (e as Error).message;
   } finally {
     busy.value = false;
   }
@@ -160,70 +194,54 @@ const eventLabels: Record<string, string> = {
 <template>
   <section class="panel editor-panel lifecycle-panel" aria-label="자격 상태와 재인증">
     <template v-if="data">
-      <div class="section-heading">
-        <h2>현재 효력과 재인증</h2>
-        <span class="lifecycle-badge" :data-status="data.effectiveStatus">{{
-          lifecycleLabels[data.effectiveStatus]
-        }}</span>
-      </div>
-      <PropertyList class="lifecycle-facts">
-        <div>
-          <dt>최초 취득일</dt>
-          <dd>{{ dates(certification.date) }}</dd>
-        </div>
-        <div>
-          <dt>현재 만료일</dt>
-          <dd>
-            {{
-              data.current.expiresOn ||
-              (data.current.validity?.type === 'unlimited' ? '무기한' : '확인 필요')
-            }}
-          </dd>
-        </div>
-        <div>
-          <dt>재인증 시작일</dt>
-          <dd>{{ data.renewal.opensOn || '정기 재인증 대상 아님' }}</dd>
-        </div>
-        <div v-if="data.periods.at(-1) && renewalNoticeOn(data.periods.at(-1)!)">
-          <dt>재인증 사전 알림 · 1회</dt>
-          <dd>{{ renewalNoticeOn(data.periods.at(-1)!) }}</dd>
-        </div>
-      </PropertyList>
-      <p>
-        최초 취득 근거는 보존되며 갱신은 기존 만료일부터 새 기간을 이어 갑니다. Hold 중에도 만료일은
-        연장되지 않습니다.
-      </p>
-      <template v-if="data.canRenew">
+      <section class="certificate-current" aria-labelledby="certificate-current-title">
+        <div class="section-heading"><h2 id="certificate-current-title">현재 효력</h2></div>
+        <PropertyList class="certificate-current-facts">
+          <div>
+            <dt>현재 상태</dt>
+            <dd>
+              <span class="lifecycle-badge" :data-status="data.effectiveStatus">{{
+                data.effectiveStatus !== 'Revoke' &&
+                (data.current.validity?.type === 'unknown' || !data.current.validity)
+                  ? '유효기간 미설정'
+                  : lifecycleLabels[data.effectiveStatus]
+              }}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>최초 취득일</dt>
+            <dd>
+              <time>{{ kstDate(certification.date) }}</time>
+            </dd>
+          </div>
+          <div>
+            <dt>현재 만료일</dt>
+            <dd>
+              {{
+                data.current.expiresOn ||
+                (data.current.validity?.type === 'unlimited' ? '무기한' : '미설정')
+              }}
+            </dd>
+          </div>
+        </PropertyList>
+        <p v-if="data.effectiveStatus === 'Hold'" class="certificate-state-notice">
+          자격 효력이 정지되어 있습니다. 정지 중에도 기존 만료일은 유지됩니다.
+        </p>
         <p v-if="data.effectiveStatus === 'Revoke'" class="error-message">
           폐기된 자격입니다. 현재 팀 적용 자격과 관리자의 새 요청을 확인하여 인증Set 평가부터 다시
           취득해 주세요.
         </p>
-        <p v-else-if="!data.renewal.canStart" class="muted">
-          {{ data.renewal.reasons.join(' · ') }}
-        </p>
-        <button v-if="data.renewal.canStart" class="button primary" :disabled="busy" @click="start">
-          {{ data.renewal.renewal ? '재인증 이어서 진행' : '재인증 시작' }}
-        </button>
-        <RouterLink v-if="data.effectiveStatus === 'Revoke'" class="button secondary" to="/plans"
-          >재취득 계획·요청 확인</RouterLink
+      </section>
+      <slot name="evidence" />
+      <CollapsibleSection
+        v-model:open="eventsOpen"
+        title="취득·변경 이력"
+        class="lifecycle-history certificate-disclosure"
+      >
+        <template #summary
+          >{{ data.events.length }}건 · {{ eventsOpen ? '접기' : '펼쳐 보기' }}</template
         >
-      </template>
-      <div v-if="data.canManage && data.effectiveStatus !== 'Revoke'" class="actions">
-        <button class="button secondary" :disabled="busy" @click="edit('status')">
-          개인 자격 상태 변경</button
-        ><button
-          v-if="data.certification.validityNeedsCorrection"
-          class="button secondary"
-          :disabled="busy"
-          @click="edit('correct')"
-        >
-          유효기간 근거 확인·정정
-        </button>
-      </div>
-      <p v-if="error && !dialog" class="error-message" role="alert">{{ error }}</p>
-      <button class="text-link" :disabled="busy" @click="load">최신 상태 확인</button>
-      <details class="lifecycle-history">
-        <summary>취득·변경·갱신·정지·폐기 이력 {{ data.events.length }}건</summary>
+        <p v-if="!data.events.length" class="muted">기록된 취득·변경 이력이 없습니다.</p>
         <ol>
           <li v-for="e in data.events" :key="e.id">
             <strong>{{ eventLabels[e.action] || e.action }}</strong>
@@ -247,9 +265,16 @@ const eventLabels: Record<string, string> = {
             </PropertyList>
           </li>
         </ol>
-      </details>
-      <details class="lifecycle-history">
-        <summary>유효기간과 갱신 근거 {{ data.periods.length }}건</summary>
+      </CollapsibleSection>
+      <CollapsibleSection
+        v-model:open="periodsOpen"
+        title="유효기간·갱신 근거"
+        class="lifecycle-history certificate-disclosure"
+      >
+        <template #summary
+          >{{ data.periods.length }}건 · {{ periodsOpen ? '접기' : '펼쳐 보기' }}</template
+        >
+        <p v-if="!data.periods.length" class="muted">등록된 유효기간·갱신 근거가 없습니다.</p>
         <ol>
           <li v-for="p in data.periods" :key="p.id">
             <strong
@@ -264,10 +289,70 @@ const eventLabels: Record<string, string> = {
             <p v-if="p.kind === 'renewal'">MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음</p>
           </li>
         </ol>
-      </details>
+      </CollapsibleSection>
+      <section
+        v-if="data.canManage && data.effectiveStatus !== 'Revoke'"
+        class="certificate-management"
+        aria-label="인증 관리"
+      >
+        <h2>인증 관리</h2>
+        <div class="actions">
+          <button
+            class="button secondary"
+            :disabled="busy || loading || !!loadError"
+            @click="edit('status')"
+          >
+            개인 자격 상태 변경
+          </button>
+          <button
+            v-if="data.certification.validityNeedsCorrection"
+            class="button secondary"
+            :disabled="busy || loading || !!loadError"
+            @click="edit('correct')"
+          >
+            유효기간 근거 확인·정정
+          </button>
+        </div>
+      </section>
+      <p v-if="error && !dialog" class="error-message" role="alert">{{ error }}</p>
+      <section
+        v-if="data.canRenew"
+        class="certificate-renewal"
+        aria-labelledby="certificate-renewal-title"
+      >
+        <h2 id="certificate-renewal-title">재인증</h2>
+        <PropertyList class="lifecycle-facts">
+          <div>
+            <dt>재인증 시작일</dt>
+            <dd>{{ data.renewal.opensOn || '정기 재인증 대상 아님' }}</dd>
+          </div>
+          <div v-if="data.periods.at(-1) && renewalNoticeOn(data.periods.at(-1)!)">
+            <dt>재인증 사전 알림 · 1회</dt>
+            <dd>{{ renewalNoticeOn(data.periods.at(-1)!) }}</dd>
+          </div>
+        </PropertyList>
+        <p class="muted">최초 취득 근거는 보존되며 갱신은 기존 만료일부터 새 기간을 이어 갑니다.</p>
+        <p v-if="!data.renewal.canStart && data.effectiveStatus !== 'Revoke'" class="muted">
+          {{ data.renewal.reasons.join(' · ') }}
+        </p>
+        <button
+          v-if="data.renewal.canStart"
+          class="button primary"
+          :disabled="busy || loading || !!loadError"
+          @click="start"
+        >
+          {{ data.renewal.renewal ? '재인증 이어서 진행' : '재인증 시작' }}
+        </button>
+        <RouterLink v-if="data.effectiveStatus === 'Revoke'" class="button secondary" to="/plans"
+          >재취득 계획·요청 확인</RouterLink
+        >
+      </section>
     </template>
-    <p v-else-if="error" role="alert" class="error-message">{{ error }}</p>
-    <p v-else class="muted">자격 이력을 불러오고 있습니다.</p>
+    <div v-if="loadError" class="certificate-load-error">
+      <p role="alert" class="error-message">{{ loadError }}</p>
+      <button class="button secondary" :disabled="loading" @click="load">다시 불러오기</button>
+    </div>
+    <p v-else-if="!data" class="muted">자격 이력을 불러오고 있습니다.</p>
   </section>
   <AppDialog
     v-model:open="dialog"

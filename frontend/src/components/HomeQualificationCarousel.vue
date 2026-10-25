@@ -73,10 +73,12 @@ function select(next: number) {
     region.value?.focus({ preventScroll: true });
   selectedId.value = card.id;
 }
+let alignedWidth = 0;
 function align(smooth = false) {
   const el = viewport.value;
   const slide = el?.children[index.value];
   if (!el || !slide) return;
+  alignedWidth = el.clientWidth;
   const left = slide.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
   el.scrollTo({
     left,
@@ -99,6 +101,11 @@ function onKeydown(event: KeyboardEvent) {
 function readPosition() {
   const el = viewport.value;
   if (!el?.clientWidth) return;
+  // A resize can dispatch scroll before ResizeObserver restores the selected ID.
+  if (el.clientWidth !== alignedWidth) {
+    realign();
+    return;
+  }
   const left = el.getBoundingClientRect().left;
   const distances = Array.from(el.children, (slide) =>
     Math.abs(slide.getBoundingClientRect().left - left),
@@ -299,13 +306,15 @@ onBeforeUnmount(() => {
     </div>
     <div v-else class="home-qualification-frame empty-state">
       <AppIcon name="book" :size="28" /><span>진행 중인 자격이 없습니다.</span>
-      <RouterLink
-        v-if="store.myAssignments.some((a) => a.certifiedAt)"
-        class="button secondary"
-        to="/qualifications?filter=certified"
-        >인증 보기</RouterLink
-      >
-      <RouterLink to="/plans" class="button primary">내 계획 확인</RouterLink>
+      <div class="home-qualification-empty-actions">
+        <RouterLink
+          v-if="store.myAssignments.some((a) => a.certifiedAt)"
+          class="button secondary"
+          to="/qualifications?filter=certified"
+          >인증 보기</RouterLink
+        >
+        <RouterLink to="/plans" class="button primary">내 계획 확인</RouterLink>
+      </div>
     </div>
   </section>
 </template>
@@ -329,7 +338,7 @@ onBeforeUnmount(() => {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--tint);
+  background: #e8f0ff;
   border: 1px solid var(--line);
 }
 .home-qualification-frame::before {
@@ -339,10 +348,10 @@ onBeforeUnmount(() => {
   z-index: 0;
   pointer-events: none;
   background: url('../assets/semiconductor-card.webp') right center / cover no-repeat;
-  opacity: 0.35;
+  opacity: 0.55;
   mask-image:
     linear-gradient(90deg, transparent, rgb(0 0 0 / 25%) 45%, #000 85%),
-    linear-gradient(180deg, #000 35%, rgb(0 0 0 / 35%) 80%, rgb(0 0 0 / 20%));
+    linear-gradient(180deg, rgb(0 0 0 / 55%) 45%, #000 65%, rgb(0 0 0 / 35%) 80%, rgb(0 0 0 / 20%));
   mask-composite: intersect;
 }
 .home-qualification-frame > * {
@@ -352,6 +361,12 @@ onBeforeUnmount(() => {
 .home-qualification-frame.empty-state {
   padding: 24px;
   color: var(--ink-secondary);
+}
+.home-qualification-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
 }
 .home-qualification-slides {
   display: flex;
@@ -421,11 +436,20 @@ onBeforeUnmount(() => {
 .home-qualification-carousel .button {
   min-height: 44px;
 }
+.home-qualification-carousel .button.primary {
+  border-color: var(--primary-press);
+}
+.home-qualification-carousel .button.secondary {
+  border-color: var(--ink-secondary);
+}
+.home-qualification-carousel .button:focus-visible {
+  outline-color: var(--primary-press);
+}
 .home-qualification-action .button:focus-visible {
   outline-offset: 1px;
 }
 .home-qualification-controls {
-  background: rgb(240 237 255 / 96%);
+  background: rgb(232 240 255 / 96%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -455,7 +479,7 @@ onBeforeUnmount(() => {
 @media (max-width: 767px) {
   .home-qualification-frame::before {
     background-image: url('../assets/semiconductor-card-mobile.webp');
-    opacity: 0.22;
+    opacity: 0.38;
   }
   .home-qualification-slide,
   .home-qualification-frame.empty-state {
@@ -463,6 +487,11 @@ onBeforeUnmount(() => {
   }
   .home-qualification-controls {
     padding-inline: 16px;
+  }
+  .home-qualification-empty-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 480px) {

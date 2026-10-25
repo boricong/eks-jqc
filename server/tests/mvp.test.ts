@@ -224,7 +224,7 @@ test("조직 CRUD 권한·레벨·이동·중복 이름·충돌·재시도·재�
     view.entries.find((e: any) => e.id === "org-photo-pyeongtaek-1").parentId,
     "org-photo-hwaseong",
   );
-  assert.ok(view.audits.length >= 5);
+  assert.deepEqual(view.audits, []);
 });
 
 test("Lv1 데이터 격리·동일 조직 관리자 공동 관리·운영자 명시적 관리 대상 필수", async (t) => {

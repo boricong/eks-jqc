@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { type Notification } from '@eks/contracts';
 import PageHeading from '../components/PageHeading.vue';
 import CollapsibleSection from '../components/CollapsibleSection.vue';
@@ -9,9 +9,23 @@ import { useNotificationReading } from '../composables/useNotificationReading';
 import '../notifications.css';
 
 const store = useDemo(),
+  route = useRoute(),
   router = useRouter();
-const { unreadOnly, unreadCount, list, expanded, errors, pending, observeBody, read, context } =
-  useNotificationReading();
+const targetId = computed(() =>
+  typeof route.query.notification === 'string' ? route.query.notification : undefined,
+);
+const {
+  unreadOnly,
+  unreadCount,
+  list,
+  expanded,
+  errors,
+  pending,
+  observeBody,
+  read,
+  context,
+  targetMissing,
+} = useNotificationReading(targetId);
 const navigating = ref<string>();
 const navigationError = ref<Record<string, string>>({});
 watch(
@@ -54,6 +68,9 @@ async function view(notification: Notification) {
         화면에 표시된 알림은 읽음으로 처리됩니다. 업무 완료는 별도로 관리됩니다.
       </p>
     </PageHeading>
+    <p v-if="targetMissing" class="notifications-target-missing" role="status">
+      선택한 알림을 찾을 수 없습니다.
+    </p>
     <div class="notifications-toolbar">
       <p class="notifications-count" aria-live="polite" aria-atomic="true">
         <span

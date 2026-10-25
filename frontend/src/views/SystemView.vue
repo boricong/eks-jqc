@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { systemSections as sections } from '../system-navigation';
 import QualificationTemplates from '../components/QualificationTemplates.vue';
 import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
@@ -17,14 +18,6 @@ watch(
     menuOpen.value = false;
   },
 );
-const sections = [
-  { id: 'qualification-templates', name: '기본자격 관리' },
-  { id: 'organizations', name: '조직 관리' },
-  { id: 'users', name: '사용자 관리' },
-  { id: 'overview', name: '전체 업무 조회' },
-  { id: 'testing', name: '테스트 관리' },
-  { id: 'notices', name: '시스템 공지 관리' },
-];
 </script>
 <template>
   <div class="container page admin-shell system-shell management-layout">
@@ -42,7 +35,7 @@ const sections = [
         <RouterLink
           v-for="item in sections"
           :key="item.id"
-          :to="`/system/${item.id}`"
+          :to="item.path"
           :class="{ active: section === item.id }"
           :aria-current="section === item.id ? 'page' : undefined"
           >{{ item.name }}</RouterLink

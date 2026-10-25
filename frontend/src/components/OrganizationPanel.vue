@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import type { OrganizationView, OrganizationEntry } from '@eks/contracts';
@@ -9,6 +9,7 @@ const doc = shallowRef<OrganizationView | null>(null),
   selectedId = ref(''),
   query = ref('');
 const collapsed = ref(new Set<string>()),
+  searchCollapsed = ref(new Set<string>()),
   error = ref(''),
   busy = ref(false),
   creating = ref(false),
@@ -23,61 +24,6 @@ const dirty = computed(
       form.value.parentId !== selected.value.parentId ||
       form.value.active !== selected.value.active),
 );
-function historyLabel(action: string) {
-  switch (action) {
-    case 'organization.create':
-      return '조직 추가';
-    case 'organization.update':
-      return '조직 정보 변경';
-    case 'organization.policy':
-      return '조직별 자격 설정 변경';
-    case 'organization.pool':
-      return '팀 적용 자격 변경';
-    default:
-      return '조직 변경';
-  }
-}
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-function describe(action: string, value: unknown): string {
-  if (value === null) return action === 'organization.create' ? '신규 조직' : '기록 없음';
-  // Audit payloads differ by action; policy and pool snapshots have no organization path.
-  if (action === 'organization.pool' && Array.isArray(value))
-    return `팀 적용 자격 ${value.length}개`;
-  if (isRecord(value)) {
-    if (action === 'organization.policy') {
-      const required = value.requiredQualifications;
-      return [
-        `조직 설명: ${typeof value.description === 'string' && value.description ? value.description : '미설정'}`,
-        `담당 업무: ${typeof value.duties === 'string' && value.duties ? value.duties : '미설정'}`,
-        Array.isArray(required)
-          ? required.length
-            ? `필수 자격 ${required.length}개`
-            : '필수 자격 없음'
-          : required === null
-            ? '필수 자격 없음'
-            : '필수 자격 기록 없음',
-      ].join(' · ');
-    }
-    if (action === 'organization.create' || action === 'organization.update') {
-      const path = Array.isArray(value.path)
-        ? value.path
-            .filter(isRecord)
-            .map((part) => (typeof part.name === 'string' ? part.name : ''))
-            .filter(Boolean)
-            .join(' › ')
-        : '';
-      const parts = [
-        path || (typeof value.name === 'string' ? value.name : ''),
-        typeof value.active === 'boolean' ? (value.active ? '사용' : '사용 중지') : '',
-        typeof value.order === 'number' ? `표시 순서 ${value.order + 1}` : '',
-      ].filter(Boolean);
-      if (parts.length) return parts.join(' · ');
-    }
-  }
-  return '상세 표시를 지원하지 않는 이력입니다.';
-}
 const level = computed(() =>
   creating.value
     ? (doc.value?.entries.find((e) => e.id === form.value.parentId)?.level ?? 0) + 1
@@ -92,45 +38,79 @@ const parents = computed(
         (e.effectiveActive || e.id === selected.value?.parentId),
     ) ?? [],
 );
+const parentIds = computed(
+  () => new Set(doc.value?.entries.flatMap((entry) => (entry.parentId ? [entry.parentId] : []))),
+);
+const search = computed(() => query.value.trim().toLowerCase());
+const activeCollapsed = computed(() => (search.value ? searchCollapsed.value : collapsed.value));
+watch(
+  search,
+  () => {
+    searchCollapsed.value = new Set();
+  },
+  { flush: 'sync' },
+);
 const visible = computed(() => {
-  const entries = doc.value?.entries ?? [],
-    search = query.value.trim().toLowerCase();
-  if (search) {
+  const entries = doc.value?.entries ?? [];
+  let candidates = entries;
+  if (search.value) {
     const ids = new Set(
       entries
-        .filter((e) =>
-          e.path
-            .map((p) => p.name)
+        .filter((entry) =>
+          entry.path
+            .map((part) => part.name)
             .join(' ')
             .toLowerCase()
-            .includes(search),
+            .includes(search.value),
         )
-        .flatMap((e) => e.path.map((p) => p.id)),
+        .flatMap((entry) => entry.path.map((part) => part.id)),
     );
-    return entries.filter((e) => ids.has(e.id));
+    candidates = entries.filter((entry) => ids.has(entry.id));
   }
-  return entries.filter((e) => !e.path.slice(0, -1).some((p) => collapsed.value.has(p.id)));
+  return candidates.filter(
+    (entry) => !entry.path.slice(0, -1).some((part) => activeCollapsed.value.has(part.id)),
+  );
 });
-const history = computed(
-  () =>
-    doc.value?.audits
-      .filter((ev) => ev.targetId === selectedId.value)
-      .slice()
-      .reverse() ?? [],
-);
+function setCollapsed(value: Set<string>) {
+  if (search.value) searchCollapsed.value = value;
+  else collapsed.value = value;
+}
+function collapseAll() {
+  setCollapsed(new Set(parentIds.value));
+}
 function select(entry: OrganizationEntry) {
   selectedId.value = entry.id;
   creating.value = false;
   error.value = '';
   form.value = { name: entry.name, parentId: entry.parentId, active: entry.active };
 }
-async function load(id = selectedId.value) {
+let contextVersion = 0,
+  loadVersion = 0;
+async function load(id = selectedId.value, reset = false, reveal = false) {
+  const context = contextVersion,
+    request = ++loadVersion;
   try {
-    doc.value = await api<OrganizationView>('/system/organizations');
-    const entry = doc.value.entries.find((e) => e.id === id) ?? doc.value.entries[0];
-    if (entry) select(entry);
+    const result = await api<OrganizationView>('/system/organizations');
+    if (context !== contextVersion || request !== loadVersion) return false;
+    const previousParents = parentIds.value;
+    doc.value = result;
+    collapsed.value = reset
+      ? new Set(parentIds.value)
+      : new Set(
+          [
+            ...collapsed.value,
+            ...[...parentIds.value].filter((key) => !previousParents.has(key)),
+          ].filter((key) => parentIds.value.has(key)),
+        );
+    const entry = result.entries.find((entry) => entry.id === id) ?? result.entries[0];
+    if (entry) {
+      select(entry);
+      if (reveal) await revealSelected();
+    }
+    return context === contextVersion && request === loadVersion;
   } catch (err) {
-    error.value = (err as Error).message;
+    if (context === contextVersion && request === loadVersion) error.value = (err as Error).message;
+    return false;
   }
 }
 function add(parentId: string | null) {
@@ -139,21 +119,22 @@ function add(parentId: string | null) {
   form.value = { name: '', parentId, active: true };
 }
 function toggle(id: string) {
-  const next = new Set(collapsed.value);
+  const next = new Set(activeCollapsed.value);
   if (next.has(id)) next.delete(id);
   else next.add(id);
-  collapsed.value = next;
+  setCollapsed(next);
 }
 async function revealSelected() {
   query.value = '';
   const next = new Set(collapsed.value);
-  selected.value?.path.forEach((p) => next.delete(p.id));
+  selected.value?.path.slice(0, -1).forEach((p) => next.delete(p.id));
   collapsed.value = next;
   await nextTick();
   document.querySelector('.tree-node[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 async function save(order?: number) {
   if (!doc.value || busy.value) return;
+  const context = contextVersion;
   busy.value = true;
   error.value = '';
   try {
@@ -166,40 +147,61 @@ async function save(order?: number) {
       },
       creating.value ? 'POST' : 'PATCH',
     );
+    if (context !== contextVersion) return;
     confirm.value = false;
     query.value = '';
-    await load(result.id);
-    store.notify('조직정보를 저장했습니다.');
+    if (await load(result.id, false, true)) store.notify('조직정보를 저장했습니다.');
   } catch (err) {
-    error.value = (err as Error).message;
+    if (context === contextVersion) error.value = (err as Error).message;
   } finally {
-    busy.value = false;
+    if (context === contextVersion) busy.value = false;
   }
 }
 function reviewSave() {
   if (!creating.value && selected.value?.active && !form.value.active) confirm.value = true;
   else void save();
 }
-onMounted(() => load());
+watch(
+  () => store.actorId,
+  () => {
+    contextVersion++;
+    doc.value = null;
+    selectedId.value = '';
+    query.value = '';
+    collapsed.value = new Set();
+    searchCollapsed.value = new Set();
+    error.value = '';
+    busy.value = false;
+    creating.value = false;
+    confirm.value = false;
+    form.value = { name: '', parentId: null, active: true };
+    void load('', true);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  contextVersion++;
+  loadVersion++;
+});
 </script>
 <template>
-  <div class="section-heading">
+  <div class="section-heading organization-heading">
     <h1>조직 관리</h1>
     <button class="button primary" :disabled="busy" @click="add(null)">Lv1 조직 추가</button>
-    <button class="button secondary" :disabled="busy" @click="load()">다시 불러오기</button>
   </div>
-  <p class="muted">
-    Lv1 단위로 자격 인증 업무를 관리합니다. 조직정보는 진행 초기화 후에도 유지됩니다.
-  </p>
   <div v-if="error && !confirm" class="error-message" role="alert">{{ error }}</div>
   <div v-if="doc" class="organization-layout">
     <section class="panel organization-tree" aria-label="조직 트리">
-      <label class="field"
-        ><span>조직 검색</span><input v-model="query" placeholder="조직명 또는 경로"
-      /></label>
-      <div class="actions">
-        <button class="text-link" @click="collapsed = new Set()">모두 펼치기</button>
-        <button class="text-link" @click="revealSelected">선택 조직으로 이동</button>
+      <div class="organization-tree-toolbar">
+        <div class="organization-tree-tools">
+          <button class="text-link" @click="setCollapsed(new Set())">모두 펼치기</button>
+          <button class="text-link" @click="collapseAll">모두 접기</button>
+          <button class="text-link" @click="revealSelected">선택 조직으로 이동</button>
+        </div>
+        <label class="organization-search"
+          ><span>조직 검색</span>
+          <input v-model="query" type="search" placeholder="조직명 또는 경로" />
+        </label>
       </div>
       <ul class="organization-nodes">
         <li
@@ -208,13 +210,13 @@ onMounted(() => load());
           :style="{ paddingLeft: `${Math.min(entry.level - 1, 5) * 14}px` }"
         >
           <button
-            v-if="doc.entries.some((e) => e.parentId === entry.id)"
+            v-if="parentIds.has(entry.id)"
             class="tree-toggle"
-            :aria-label="`${entry.name} ${collapsed.has(entry.id) ? '펼치기' : '접기'}`"
-            :aria-expanded="!collapsed.has(entry.id)"
+            :aria-label="`${entry.name} ${activeCollapsed.has(entry.id) ? '펼치기' : '접기'}`"
+            :aria-expanded="!activeCollapsed.has(entry.id)"
             @click="toggle(entry.id)"
           >
-            {{ collapsed.has(entry.id) ? '+' : '−' }}
+            {{ activeCollapsed.has(entry.id) ? '+' : '−' }}
           </button>
           <span v-else class="tree-toggle-placeholder"></span>
           <button
@@ -230,6 +232,7 @@ onMounted(() => load());
           </button>
         </li>
       </ul>
+      <p v-if="!visible.length" class="organization-search-empty">검색 결과가 없습니다.</p>
     </section>
     <section class="panel editor-panel organization-detail">
       <div class="section-heading">
@@ -301,18 +304,6 @@ onMounted(() => load());
           아래로 이동
         </button>
       </div>
-      <details v-if="!creating" class="organization-history">
-        <summary>변경 이력 {{ history.length }}건</summary>
-        <p v-if="!history.length" class="muted">최초 등록 이후 변경이 없습니다.</p>
-        <article v-for="event in history" :key="event.id">
-          <p>{{ historyLabel(event.action) }}</p>
-          <p>
-            {{ new Date(event.date).toLocaleString('ko-KR') }} · {{ store.username(event.actorId) }}
-          </p>
-          <p>이전: {{ describe(event.action, event.before) }}</p>
-          <p>이후: {{ describe(event.action, event.after) }}</p>
-        </article>
-      </details>
     </section>
   </div>
   <AppDialog
@@ -333,9 +324,3 @@ onMounted(() => load());
     >
   </AppDialog>
 </template>
-<style scoped>
-.organization-history article {
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
-</style>

@@ -12,6 +12,7 @@ import {
   credentialCurrent,
   latestPeriod,
   renewalOpensOn,
+  type Assignment,
 } from '@eks/contracts';
 import { useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
@@ -34,6 +35,9 @@ const filter = computed(() =>
       ? 'certified'
       : 'active',
 );
+const title = (a: Assignment) =>
+  (filter.value === 'certified' && a.certification?.snapshot?.title) ||
+  store.qualification(a.qualificationId, a.qualificationMetadata).title;
 watch(
   () => filter.value === 'certified',
   () => {
@@ -55,10 +59,7 @@ const list = computed(() =>
           (validity.value === 'valid'
             ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
             : certificationStatus(a.certification) === validity.value))) &&
-      store
-        .qualification(a.qualificationId, a.qualificationMetadata)
-        .title.toLowerCase()
-        .includes(search.value.toLowerCase()),
+      title(a).toLowerCase().includes(search.value.toLowerCase()),
   ),
 );
 </script>
@@ -112,7 +113,52 @@ const list = computed(() =>
           placeholder="자격 검색"
       /></label>
     </div>
-    <div class="qualification-list">
+    <div v-if="filter === 'certified'" class="qualification-list owned-qualification-list">
+      <div v-if="list.length" class="owned-list-heading" aria-hidden="true">
+        <span>자격명</span><span>취득일</span><span>만료일</span><span>상태</span><span></span>
+      </div>
+      <RouterLink
+        v-for="a in list"
+        :key="a.id"
+        :to="ownedCertificateLocation(a.id)"
+        class="qualification-row owned-qualification-row"
+      >
+        <span class="owned-title row-title">{{ title(a) }}</span>
+        <span class="owned-acquired owned-date"
+          ><span class="owned-mobile-label">취득일</span
+          ><time>{{ kstDate(a.certification?.date || a.certifiedAt!) }}</time></span
+        >
+        <span class="owned-expires owned-date"
+          ><span class="owned-mobile-label">만료일</span
+          ><time v-if="a.certification && credentialCurrent(a.certification).expiresOn">{{
+            credentialCurrent(a.certification).expiresOn
+          }}</time
+          ><span v-else>{{
+            a.certification && credentialCurrent(a.certification).validity?.type === 'unlimited'
+              ? '무기한'
+              : '미설정'
+          }}</span></span
+        >
+        <span class="owned-status"
+          ><ValidityBadge
+            v-if="a.certification"
+            :certification="a.certification"
+            :show-renewal-phase="false"
+          /><span v-else class="muted">기존 기록</span
+          ><span
+            v-if="
+              store
+                .qualification(a.qualificationId, a.qualificationMetadata)
+                .description.includes('프로세스 검증용')
+            "
+            class="test-data-tag"
+            >시험 데이터</span
+          ></span
+        >
+        <AppIcon class="owned-arrow" name="arrow" :size="18" />
+      </RouterLink>
+    </div>
+    <div v-else class="qualification-list">
       <RouterLink
         v-for="a in list"
         :key="a.id"

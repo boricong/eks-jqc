@@ -100,13 +100,13 @@ test('계획 단계는 날짜·저장을 검사하고 목표 없이 최종 확�
   );
 });
 
-test('학습자 홈 할 일·알림·공지의 본문 대비와 읽음 상태', async ({ page }) => {
+test('학습자 홈 최근 알림·공지의 본문 대비와 읽음 상태', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
-  await expect(page.locator('.personal-tasks')).toBeVisible();
+  await expect(page.locator('.home-recent-notifications')).toBeVisible();
   const ratios = await page.evaluate(() => {
     const secondary = document.createElement('button');
     secondary.className = 'button secondary';
@@ -127,12 +127,12 @@ test('학습자 홈 할 일·알림·공지의 본문 대비와 읽음 상태', 
     };
     const values = {
       task: ratio(
-        '.personal-tasks .simple-row strong',
-        getComputedStyle(document.querySelector('.personal-tasks')!).backgroundColor,
+        '.home-notification-row strong',
+        getComputedStyle(document.querySelector('.home-recent-notifications')!).backgroundColor,
       ),
       taskDetail: ratio(
-        '.personal-tasks .simple-row small',
-        getComputedStyle(document.querySelector('.personal-tasks')!).backgroundColor,
+        '.home-notification-row time',
+        getComputedStyle(document.querySelector('.home-recent-notifications')!).backgroundColor,
       ),
       notice: ratio(
         '.notice-row',

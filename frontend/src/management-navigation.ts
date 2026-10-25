@@ -22,3 +22,14 @@ export const managementSections = [
 export function managementTitle(id: string) {
   return managementSections.find((section) => section.id === id)?.name || '인증 업무 관리';
 }
+
+export function visibleManagementGroups(canManage: (section: string) => boolean) {
+  return managementGroups
+    .map((group) => ({
+      ...group,
+      sections: managementSections.filter(
+        (section) => section.group === group.id && canManage(section.id),
+      ),
+    }))
+    .filter((group) => group.sections.length);
+}

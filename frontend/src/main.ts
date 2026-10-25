@@ -11,6 +11,7 @@ import './policies.css';
 import './process-guide.css';
 import './qualification-detail.css';
 import './lifecycle.css';
+import './certificate.css';
 import './assessment-flow.css';
 import App from './App.vue';
 import { router } from './router';

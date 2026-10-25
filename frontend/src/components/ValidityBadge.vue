@@ -6,7 +6,10 @@ import {
   renewalPhase,
   type Certification,
 } from '@eks/contracts';
-const props = defineProps<{ certification: Certification }>();
+const props = withDefaults(
+  defineProps<{ certification: Certification; showRenewalPhase?: boolean }>(),
+  { showRenewalPhase: true },
+);
 const status = computed(() => certificationStatus(props.certification)),
   phase = computed(() => renewalPhase(props.certification));
 </script>
@@ -14,7 +17,9 @@ const status = computed(() => certificationStatus(props.certification)),
   <span class="validity-badge" :class="status">{{
     status === 'expiring' ? '유효' : certificationStatusLabels[status]
   }}</span
-  ><span v-if="phase?.state === 'upcoming' || phase?.state === 'open'" class="renewal-phase-label"
+  ><span
+    v-if="showRenewalPhase && (phase?.state === 'upcoming' || phase?.state === 'open')"
+    class="renewal-phase-label"
     >{{ phase.state === 'open' ? '재인증 가능' : '재인증 예정' }} · {{ phase.opensOn }}</span
   >
 </template>

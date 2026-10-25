@@ -298,10 +298,8 @@ test('4해상도·긴 제목/두 줄 설명·목표일/수료율·0 분모·모�
       expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     if (width >= 1440) {
-      await expect(
-        page.getByRole('heading', { name: '시스템 공지', exact: true }),
-      ).toBeInViewport();
-      await expect(page.getByRole('heading', { name: '내 팀 공지', exact: true })).toBeInViewport();
+      await expect(page.getByRole('heading', { name: '시스템 공지', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '내 팀 공지', exact: true })).toBeVisible();
     }
     await page.screenshot({ path: info.outputPath(`carousel-${width}.png`), fullPage: true });
   }

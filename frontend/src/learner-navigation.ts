@@ -21,6 +21,22 @@ export function qualificationLocation(
   };
 }
 
+export function learnerNavigationItems(assignmentId?: string, courseId?: string) {
+  return [
+    { path: '/plans', label: '내 계획', key: 'plans' },
+    {
+      path: qualificationLocation('learning', assignmentId, assignmentId ? courseId : undefined),
+      label: '학습',
+      key: 'learning',
+    },
+    {
+      path: qualificationLocation('assessment', assignmentId, assignmentId ? courseId : undefined),
+      label: '평가',
+      key: 'assessment',
+    },
+  ];
+}
+
 // URL hints choose a presentation context; ownership and roles remain authoritative.
 export const ownedQualificationsLocation = '/qualifications?filter=certified';
 type NavigationActor = { id: string; roles: readonly string[] };

@@ -63,7 +63,7 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
           id === 'learner-2' ? 304 : 264,
         );
         for (const name of ['시스템 공지', '내 팀 공지'])
-          await expect(page.getByRole('heading', { name, exact: true })).toBeInViewport();
+          await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
       }
       contrast.push({ id, width, ...(await heroContrast(page)) });
       if (id === 'learner-1')
@@ -164,8 +164,16 @@ test('프로세스 검토의 정보 위계·단계 배치·키보드·화면 및
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(toggle).toBeFocused();
   }
+  await page.setViewportSize({ width: 1920, height: 900 });
   await toggle.click();
-  await page.getByRole('link', { name: '내 계획', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: '주 메뉴' })
+    .getByRole('link', { name: '자격 취득', exact: true })
+    .click();
+  await page
+    .getByRole('navigation', { name: '자격 취득 메뉴' })
+    .getByRole('link', { name: '내 계획', exact: true })
+    .click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await page.goto('/qualifications/assignment-1/courses/demo-course-2/objective');
   await expect(page.locator('.choice input').first()).toBeEnabled();

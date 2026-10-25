@@ -1,0 +1,321 @@
+/* Personal credential lists and the shared digital certificate work surface. */
+.owned-list-heading,
+.qualification-row.owned-qualification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 120px 180px 20px;
+  gap: 20px;
+  align-items: center;
+}
+.owned-list-heading {
+  padding: 12px 16px;
+  background: var(--surface-tint);
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+  border-bottom: 1px solid var(--line);
+}
+.qualification-row.owned-qualification-row {
+  padding: 20px 16px;
+  min-height: 88px;
+  color: var(--ink);
+}
+.owned-qualification-row > * {
+  min-width: 0;
+}
+.owned-title {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.owned-date {
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+.owned-status {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+}
+.owned-mobile-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.owned-qualification-row:focus-visible {
+  outline: 2px solid var(--primary-press);
+  outline-offset: -2px;
+}
+.certificate-page.container {
+  max-width: 1120px;
+}
+.certificate-page .page-heading {
+  margin-bottom: 24px;
+}
+.certificate-page h2 {
+  font-size: var(--text-section);
+  font-weight: var(--weight-heading);
+  margin: 0;
+}
+.certificate-document {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-bottom: 24px;
+}
+.certificate-record {
+  padding: 20px 24px;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--line);
+}
+.certificate-record-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+.certificate-record-heading h2 {
+  font-size: var(--text-title);
+}
+.certificate-record-heading > span {
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+  margin-left: auto;
+}
+.certificate-record-facts,
+.certificate-identity-facts,
+.certificate-current-facts,
+.certificate-attempt-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
+  margin: 0;
+}
+.certificate-page .property-list > div {
+  min-width: 0;
+}
+.certificate-page .property-list dt {
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+  margin-bottom: 6px;
+}
+.certificate-page .property-list dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.certificate-page .certificate-record-facts dd {
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+.certificate-identifier dd {
+  user-select: text;
+}
+.certificate-identity {
+  padding: 28px 24px;
+}
+.certificate-eyebrow {
+  margin: 0 0 8px;
+  color: var(--primary-press);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-heading);
+}
+.certificate-page .certificate-title {
+  font-size: var(--text-display);
+  font-weight: var(--weight-heading);
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.certificate-english-name {
+  color: var(--ink-secondary);
+  font-size: var(--text-heading);
+  font-weight: var(--weight-control);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  margin: 0 0 24px;
+}
+.certificate-english-empty {
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+  margin: 0 0 24px;
+}
+.certificate-page .property-list .certificate-recipient {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-heading);
+}
+.certificate-page .lifecycle-panel {
+  padding: 0;
+  gap: 24px;
+}
+.certificate-page .certificate-current-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 20px 0;
+}
+.certificate-current,
+.certificate-evidence,
+.certificate-management,
+.certificate-renewal {
+  min-width: 0;
+}
+.certificate-page .section-heading {
+  margin-bottom: 0;
+}
+.certificate-page .certificate-evidence .section-heading {
+  padding-bottom: 16px;
+}
+.certificate-state-notice {
+  color: var(--warning);
+  background: var(--warning-bg);
+  padding: 12px 16px;
+}
+.certificate-page .evidence-course summary {
+  min-height: 56px;
+  gap: 12px;
+  padding: 16px 0;
+  font-size: var(--text-title);
+  flex-wrap: wrap;
+}
+.evidence-course-name {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+.evidence-course-name small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+}
+.certificate-evidence-body {
+  padding: 0 0 20px;
+}
+.certificate-attempt {
+  padding: 16px;
+  background: var(--surface-tint);
+  margin-bottom: 12px;
+}
+.certificate-attempt > strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: var(--text-body);
+  font-weight: var(--weight-control);
+}
+.certificate-attempt-facts {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+.certificate-page .lifecycle-history {
+  padding-top: 0;
+}
+.certificate-page .certificate-disclosure .collapsible-section-summary {
+  color: var(--ink-secondary);
+}
+.certificate-page .certificate-disclosure .collapsible-section-toggle:hover {
+  background: var(--tint);
+}
+.certificate-page .certificate-disclosure .collapsible-section-toggle:focus-visible {
+  outline-color: var(--primary-press);
+}
+.certificate-page .evidence-course summary {
+  list-style: none;
+}
+.certificate-page .evidence-course summary::-webkit-details-marker {
+  display: none;
+}
+.certificate-detail-action {
+  color: var(--primary-press);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+.certificate-page .evidence-course summary > svg.is-open {
+  transform: rotate(180deg);
+}
+.certificate-page summary:focus-visible {
+  outline: 2px solid var(--primary-press);
+  outline-offset: -2px;
+}
+.certificate-management,
+.certificate-renewal {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.certificate-management h2 {
+  margin-bottom: 16px;
+}
+.certificate-renewal .button {
+  margin-top: 16px;
+  min-height: 48px;
+}
+.certificate-load-error .button {
+  margin-top: 12px;
+}
+@media (max-width: 768px) {
+  .owned-list-heading {
+    display: none;
+  }
+  .qualification-row.owned-qualification-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 20px;
+    grid-template-areas: 'title title arrow' 'status status status' 'acquired expires expires';
+    gap: 12px 16px;
+    padding: 20px 8px;
+  }
+  .owned-title {
+    grid-area: title;
+  }
+  .owned-status {
+    grid-area: status;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .owned-acquired {
+    grid-area: acquired;
+  }
+  .owned-expires {
+    grid-area: expires;
+  }
+  .owned-arrow {
+    grid-area: arrow;
+  }
+  .owned-mobile-label {
+    display: block;
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    margin-bottom: 4px;
+    color: var(--ink-secondary);
+    font-size: var(--text-caption);
+  }
+  .certificate-record,
+  .certificate-identity {
+    padding: 20px 16px;
+  }
+  .certificate-record-heading > span {
+    margin-left: 0;
+  }
+  .certificate-record-facts,
+  .certificate-identity-facts,
+  .certificate-page .certificate-current-facts,
+  .certificate-attempt-facts {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .certificate-page .evidence-course summary {
+    align-items: center;
+  }
+  .certificate-evidence-body .text-link {
+    min-height: 44px;
+  }
+  .certificate-renewal .button {
+    width: 100%;
+    min-height: 48px;
+  }
+}

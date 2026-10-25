@@ -80,18 +80,18 @@ test('본인 종합평가 재인증·갱신 이력·원본 근거 유지와 반�
   expect(after.attempts).toEqual(before.attempts);
   expect(after.completions).toEqual(before.completions);
   expect(after.certifications[0]!.periods).toHaveLength(2);
-  await page.locator('summary').filter({ hasText: '유효기간과 갱신 근거' }).click();
+  await page.getByRole('button', { name: '유효기간·갱신 근거 펼치기', exact: true }).click();
   await expect(
     page
-      .locator('details')
-      .filter({ has: page.locator('summary').filter({ hasText: '유효기간과 갱신 근거' }) })
+      .locator('.lifecycle-history')
+      .filter({ has: page.getByRole('heading', { name: '유효기간·갱신 근거', exact: true }) })
       .getByText('MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음', { exact: true }),
   ).toBeVisible();
-  await page.locator('summary').filter({ hasText: '취득·변경·갱신·정지·폐기 이력' }).click();
+  await page.getByRole('button', { name: '취득·변경 이력 펼치기', exact: true }).click();
   await expect(page.getByText('갱신 완료', { exact: true })).toBeVisible();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('heading', { name: '현재 효력과 재인증' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '현재 효력' })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     ).toBeTruthy();

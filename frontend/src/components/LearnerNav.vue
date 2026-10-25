@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { learningStage, qualificationLocation } from '../learner-navigation';
+import { learningStage, learnerNavigationItems } from '../learner-navigation';
 const props = defineProps<{ assignmentId?: string; courseId?: string }>();
 const route = useRoute();
 const assignmentId = computed(
@@ -20,27 +20,7 @@ const courseId = computed(
         ? route.query.course
         : undefined),
 );
-const items = computed(() => [
-  { path: '/plans', label: '내 계획', key: 'plans' },
-  {
-    path: qualificationLocation(
-      'learning',
-      assignmentId.value,
-      assignmentId.value ? courseId.value : undefined,
-    ),
-    label: '학습',
-    key: 'learning',
-  },
-  {
-    path: qualificationLocation(
-      'assessment',
-      assignmentId.value,
-      assignmentId.value ? courseId.value : undefined,
-    ),
-    label: '평가',
-    key: 'assessment',
-  },
-]);
+const items = computed(() => learnerNavigationItems(assignmentId.value, courseId.value));
 function active(key: string) {
   return route.path.startsWith('/plans') ? key === 'plans' : key === learningStage(route);
 }

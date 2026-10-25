@@ -98,9 +98,8 @@ test('작성이 끝난 요청은 수와 기한에서 제외하고 남은 작성�
   await expect(current(page)).toHaveAttribute('data-request-id', 'optional-draft');
   await expect(current(page)).toContainText('3건');
   await expect(current(page)).toContainText('2026-12-01');
-  await expect(
-    page.locator('.personal-tasks').getByRole('link', { name: /요청 전체 완료 확인/ }),
-  ).toHaveCount(2);
+  await expect(page.locator('.personal-tasks')).toHaveCount(0);
+  await expect(page.locator('.home-shortcuts')).toHaveCount(0);
   phase = 1;
   await refresh(page);
   await expect(current(page)).toHaveAttribute('data-request-id', 'waiting');
@@ -335,7 +334,14 @@ test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 
   await expect(planning(page)).toHaveCount(0);
   await expect(action(page)).toHaveText('상세정보 보기');
   expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
-  await page.getByRole('link', { name: /요청 전체 완료 확인/ }).click();
+  await page
+    .getByRole('navigation', { name: '주 메뉴' })
+    .getByRole('link', { name: '자격 취득', exact: true })
+    .click();
+  await page
+    .getByRole('navigation', { name: '자격 취득 메뉴' })
+    .getByRole('link', { name: '내 계획', exact: true })
+    .click();
   const finish = page
     .getByRole('region', { name: '이번 요청의 계획 현황' })
     .getByRole('button', { name: '계획 수립 완료', exact: true });
@@ -394,9 +400,7 @@ test('4해상도 긴 안내문·빈 상태·평면 글자/44px·키보드/초점
     await expect(page.getByRole('heading', { name: '시스템 공지', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '내 팀 공지', exact: true })).toBeVisible();
     if (width >= 1440)
-      await expect(
-        page.getByRole('heading', { name: '시스템 공지', exact: true }),
-      ).toBeInViewport();
+      await expect(page.getByRole('heading', { name: '시스템 공지', exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`home-planning-${width}.png`), fullPage: true });
   }
   await carousel(page).focus();

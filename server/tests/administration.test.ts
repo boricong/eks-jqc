@@ -513,3 +513,169 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
   assert.deepEqual(await readdir(store.backupDir), backups);
   assert((await readdir(store.organizations.backupDir)).length > 0);
 });
+
+test("조직 추가·수정·이동·사용 상태는 새 감사 이력 없이 저장하고 기존 이력/재시도/충돌/권한을 보존", async (t) => {
+  const { store, app, call } = await fixture(t);
+  const legacy = {
+    id: randomUUID(),
+    actorId: "operator-1",
+    date: "2026-10-01T00:00:00Z",
+    targetId: root,
+    action: "organization.update",
+    before: { name: "종전 팀" },
+    after: { name: "현재 팀" },
+  };
+  await store.organizations.transact(
+    "operator-1",
+    randomUUID(),
+    "legacy-fixture",
+    () => {},
+    (doc) => {
+      doc.audits.push(legacy);
+      return {};
+    },
+  );
+  const auditBefore = store.organizations.snapshot().audits;
+  const payload = {
+    revision: store.organizations.snapshot().revision,
+    parentId: root,
+    name: "이력 없는 조직",
+  };
+  const key = randomUUID();
+  const added = await call(
+    "operator-1",
+    "/system/organizations",
+    payload,
+    200,
+    "POST",
+    key,
+  );
+  const afterAdd = store.organizations.snapshot();
+  assert.equal(afterAdd.revision, payload.revision + 1);
+  assert.deepEqual(afterAdd.audits, auditBefore);
+  assert.deepEqual(
+    await call(
+      "operator-1",
+      "/system/organizations",
+      payload,
+      200,
+      "POST",
+      key,
+    ),
+    added,
+  );
+  assert.deepEqual(store.organizations.snapshot(), afterAdd);
+  await call(
+    "operator-1",
+    "/system/organizations",
+    { ...payload, name: "다른 요청" },
+    409,
+    "POST",
+    key,
+  );
+  await call(
+    "operator-1",
+    `/system/organizations/${added.id}`,
+    { revision: payload.revision, name: "오래된 수정" },
+    409,
+    "PATCH",
+  );
+  await call(
+    "learner-1",
+    `/system/organizations/${added.id}`,
+    { revision: afterAdd.revision, name: "권한 없는 수정" },
+    403,
+    "PATCH",
+  );
+  assert.deepEqual(store.organizations.snapshot(), afterAdd);
+  for (const change of [{ name: "이름 변경" }, { parentId: "org-etch" }]) {
+    // Lv1 간 이동은 기존 정책대로 차단한다.
+    const status = "parentId" in change ? 422 : 200;
+    await call(
+      "operator-1",
+      `/system/organizations/${added.id}`,
+      { revision: store.organizations.snapshot().revision, ...change },
+      status,
+      "PATCH",
+    );
+    assert.deepEqual(store.organizations.snapshot().audits, auditBefore);
+  }
+  const sub = await call("operator-1", "/system/organizations", {
+    revision: store.organizations.snapshot().revision,
+    parentId: added.id,
+    name: "하위 조직",
+  });
+  await call(
+    "operator-1",
+    `/system/organizations/${sub.id}`,
+    {
+      revision: store.organizations.snapshot().revision,
+      parentId: "org-photo-fmg",
+    },
+    200,
+    "PATCH",
+  );
+  await call(
+    "operator-1",
+    `/system/organizations/${added.id}`,
+    { revision: store.organizations.snapshot().revision, order: 0 },
+    200,
+    "PATCH",
+  );
+  await call(
+    "operator-1",
+    `/system/organizations/${added.id}`,
+    { revision: store.organizations.snapshot().revision, active: false },
+    200,
+    "PATCH",
+  );
+  assert.deepEqual(store.organizations.snapshot().audits, auditBefore);
+  const returned = await call("operator-1", "/system/organizations");
+  assert.deepEqual(returned.audits, auditBefore);
+  await call(
+    "admin-1",
+    `/organization-policies/${root}`,
+    {
+      revision: store.organizations.snapshot().revision,
+      description: "보존할 정책 이력",
+      duties: "",
+      requiredQualifications: [],
+    },
+    200,
+    "PUT",
+  );
+  assert.equal(
+    store.organizations.snapshot().audits.at(-1)!.action,
+    "organization.policy",
+  );
+  assert.deepEqual(
+    store.organizations.snapshot().audits.slice(0, -1),
+    auditBefore,
+  );
+  const usersBefore = store.snapshot().audits.length;
+  await call("operator-1", "/system/users", {
+    name: "사용자 이력 유지",
+    organizationId: root,
+    roles: ["learner"],
+  });
+  assert.equal(store.snapshot().audits.length, usersBefore + 1);
+  await app.close();
+  const reopened = await new JsonStore(store.file).load();
+  assert.deepEqual(
+    reopened.organizations.snapshot().audits.slice(0, -1),
+    auditBefore,
+  );
+  assert.equal(
+    reopened.organizations.snapshot().audits.at(-1)!.action,
+    "organization.policy",
+  );
+  assert.equal(
+    reopened.organizations.snapshot().roots[0]!.children[0]!.id,
+    added.id,
+  );
+  assert.equal(
+    reopened.organizations.snapshot().roots[0]!.children[0]!.active,
+    false,
+  );
+  await reopened.close();
+});

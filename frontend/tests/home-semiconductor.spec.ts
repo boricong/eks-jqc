@@ -23,7 +23,7 @@ test('반도체 배경의 독립 투명도·네 폭 합성 대비·고정 배치
         foreground: getComputedStyle(el).opacity,
       };
     });
-    expect(style.opacity).toBe(width < 768 ? '0.22' : '0.35');
+    expect(style.opacity).toBe(width < 768 ? '0.38' : '0.55');
     expect(style.foreground).toBe('1');
     expect(style.pointer).toBe('none');
     expect(style.image).toContain(

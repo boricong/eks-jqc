@@ -59,25 +59,34 @@ async function headerContrast(page: Page) {
         .map((v) => v / 255)
         .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
         .reduce((n, v, i) => n + v * [0.2126, 0.7152, 0.0722][i]!, 0);
-    const contrast = (fg: string, bg: string) => {
-      const background = rgb(bg),
-        alpha = background[3] ?? 1;
-      const b = luminance(background.slice(0, 3).map((v) => v * alpha + 255 * (1 - alpha)));
+    const background = (element: Element | null): number[] => {
+      if (!element) return [255, 255, 255];
+      const color = rgb(getComputedStyle(element).backgroundColor);
+      const alpha = color[3] ?? 1;
+      if (alpha === 1) return color.slice(0, 3);
+      const parent = background(element.parentElement);
+      return color.slice(0, 3).map((v, i) => v * alpha + parent[i]! * (1 - alpha));
+    };
+    const contrast = (fg: string, element: Element) => {
+      const b = luminance(background(element));
       const f = luminance(rgb(fg));
       return (Math.max(f, b) + 0.05) / (Math.min(f, b) + 0.05);
     };
     const minima = { text: 100, indicator: 100, focus: 100 };
+    const footer = document.querySelector('.site-footer');
+    if (footer)
+      minima.text = Math.min(minima.text, contrast(getComputedStyle(footer).color, footer));
     for (const link of el.querySelectorAll<HTMLElement>('.primary-nav a')) {
       if (!link.getBoundingClientRect().height) continue;
       const style = getComputedStyle(link);
-      minima.text = Math.min(minima.text, contrast(style.color, style.backgroundColor));
+      minima.text = Math.min(minima.text, contrast(style.color, link));
       if (link.classList.contains('active'))
-        minima.indicator = contrast(style.borderBottomColor, style.backgroundColor);
+        minima.indicator = contrast(style.borderBottomColor, link);
     }
     for (const focused of el.querySelectorAll<HTMLElement>(':focus-visible')) {
       const style = getComputedStyle(focused);
       if (style.outlineStyle !== 'none')
-        minima.focus = Math.min(minima.focus, contrast(style.outlineColor, style.backgroundColor));
+        minima.focus = Math.min(minima.focus, contrast(style.outlineColor, focused));
     }
     return minima;
   });
@@ -158,6 +167,7 @@ test('관리자 겸 학습자의 개인 인증서·수료증 왕복과 기존 �
     'href',
     '/qualifications?filter=certified',
   );
+  await page.getByRole('button', { name: '수료 근거 펼치기', exact: true }).click();
   await page.locator('.evidence-course summary').first().click();
   await page.getByRole('link', { name: '인증Set 수료증 보기 →', exact: true }).first().click();
   await expect(page).toHaveURL(/\/completions\/.*from=owned$/);

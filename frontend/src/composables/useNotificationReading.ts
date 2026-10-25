@@ -1,4 +1,13 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  toValue,
+  type MaybeRefOrGetter,
+} from 'vue';
 import { useDemo } from '../stores/demo';
 
 type ReadRequest = {
@@ -22,8 +31,16 @@ const inFlight = new WeakMap<
 >();
 
 /** View-scoped expansion, filter membership and serialized, retry-safe read requests. */
-export function useNotificationReading() {
+export function useNotificationReading(targetId?: MaybeRefOrGetter<string | undefined>) {
   const store = useDemo();
+  const requestedTarget = computed(() => toValue(targetId));
+  const selectedTarget = computed(() =>
+    store.data.notifications.some((n) => n.id === requestedTarget.value)
+      ? requestedTarget.value
+      : undefined,
+  );
+  const targetMissing = computed(() => !!requestedTarget.value && !selectedTarget.value);
+  const positioning = ref(false);
   const unreadOnly = ref(false);
   const expanded = ref<Record<string, boolean>>({});
   const errors = ref<Record<string, string>>({});
@@ -52,6 +69,7 @@ export function useNotificationReading() {
     const element = bodies.get(id);
     if (
       !active ||
+      positioning.value ||
       document.visibilityState !== 'visible' ||
       !expanded.value[id] ||
       !element?.isConnected
@@ -167,12 +185,12 @@ export function useNotificationReading() {
     } else bodies.delete(id);
   }
 
-  function initializePresentation() {
+  function initializePresentation(selected?: string) {
     admitted.clear();
     expanded.value = {};
     for (const n of store.data.notifications) {
-      expanded.value[n.id] = !n.readAt;
-      if (!n.readAt) admitted.add(n.id);
+      expanded.value[n.id] = selected ? n.id === selected : !n.readAt;
+      if (!n.readAt || n.id === selected) admitted.add(n.id);
     }
   }
 
@@ -183,23 +201,6 @@ export function useNotificationReading() {
     queue.length = 0;
     pending.value.clear();
   }
-
-  watch(
-    () => store.actorId,
-    () => {
-      cancelRequests();
-      observer?.disconnect();
-      errors.value = {};
-      unreadOnly.value = false;
-      initializePresentation();
-      void nextTick(() => {
-        if (!active) return;
-        for (const element of bodies.values()) observer?.observe(element);
-        scanVisible();
-      });
-    },
-    { flush: 'sync' },
-  );
 
   watch(
     () => store.data.notifications,
@@ -213,14 +214,45 @@ export function useNotificationReading() {
         }
       }
       for (const n of notifications) {
-        if (!(n.id in expanded.value)) expanded.value[n.id] = !n.readAt;
+        if (!(n.id in expanded.value))
+          expanded.value[n.id] = selectedTarget.value ? n.id === selectedTarget.value : !n.readAt;
         if (!n.readAt) admitted.add(n.id);
       }
     },
     { immediate: true, flush: 'sync' },
   );
 
-  watch(unreadOnly, initializePresentation, { flush: 'sync' });
+  watch(
+    [() => store.actorId, requestedTarget, selectedTarget],
+    async () => {
+      cancelRequests();
+      const token = generation;
+      observer?.disconnect();
+      errors.value = {};
+      positioning.value = !!selectedTarget.value;
+      unreadOnly.value = false;
+      initializePresentation(selectedTarget.value);
+      await nextTick();
+      // Let the router restore page position/focus before locating the requested body.
+      // While positioning, observers cannot mark unrelated notifications as read.
+      if (selectedTarget.value)
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      if (!active || token !== generation) return;
+      const body = selectedTarget.value ? bodies.get(selectedTarget.value) : undefined;
+      const row = body?.closest('.notification-row');
+      row
+        ?.querySelector<HTMLButtonElement>('.collapsible-section-toggle')
+        ?.focus({ preventScroll: true });
+      row?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      positioning.value = false;
+      for (const element of bodies.values()) observer?.observe(element);
+      scanVisible();
+    },
+    { immediate: true, flush: 'sync' },
+  );
+  watch(unreadOnly, () => initializePresentation(), { flush: 'sync' });
   watch(
     expanded,
     () => {
@@ -249,5 +281,16 @@ export function useNotificationReading() {
     return () => active && token === generation && actorId === store.actorId;
   }
 
-  return { unreadOnly, unreadCount, list, expanded, errors, pending, observeBody, read, context };
+  return {
+    unreadOnly,
+    unreadCount,
+    list,
+    expanded,
+    errors,
+    pending,
+    observeBody,
+    read,
+    context,
+    targetMissing,
+  };
 }

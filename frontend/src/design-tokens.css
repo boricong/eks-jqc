@@ -32,6 +32,7 @@
   /* Surfaces and text */
   --canvas: #ffffff;
   --surface: #ffffff;
+  --shell-surface: #f6f7f9;
   --surface-tint: #f6f9fc;
   --table-header: #f6f9fc;
   --ink: #0d253d;

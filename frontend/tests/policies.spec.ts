@@ -110,7 +110,9 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
     }
   }
   await page.getByRole('link', { name: '인증서 보기', exact: true }).click();
-  await expect(page.locator('.cert-header')).toContainText('정하린');
+  await expect(
+    page.getByRole('region', { name: '발급 당시 자격 정보', exact: true }),
+  ).toContainText('정하린');
   expect(backend.store.snapshot().learningRecords).toHaveLength(0);
   expect(
     backend.store.snapshot().certifications.filter((c) => c.assignmentId === a.id),

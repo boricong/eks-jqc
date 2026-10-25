@@ -138,7 +138,7 @@ export async function carouselContrast(page: Page) {
     },
     { image: `data:image/png;base64,${png!.toString('base64')}`, samples },
   );
-  expect(result.text).toBeGreaterThanOrEqual(4.5);
+  expect(result.text, JSON.stringify(result.worst)).toBeGreaterThanOrEqual(4.5);
   expect(result.controls, JSON.stringify(result.worst)).toBeGreaterThanOrEqual(3);
   expect(result.focus).toBeGreaterThanOrEqual(3);
   return result;
