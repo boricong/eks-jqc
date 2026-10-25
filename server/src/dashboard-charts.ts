@@ -17,6 +17,8 @@ import { demand } from "./errors.ts";
 const progress: DashboardChartSeries[] = [
   { key: "unplanned", label: "계획 미작성", tone: "neutral" },
   { key: "draft", label: "계획 작성", tone: "primary" },
+  { key: "learning_wait", label: "학습 확인 대기", tone: "warning" },
+  { key: "learning_progress", label: "학습 확인 중", tone: "navy" },
   { key: "assessment_wait", label: "평가 대기", tone: "warning" },
   { key: "assessment_progress", label: "평가 진행", tone: "navy" },
   { key: "partial_completion", label: "일부 수료", tone: "success" },

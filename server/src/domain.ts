@@ -1,6 +1,10 @@
+import { canContinueType, canReadPersonal } from "./personal-access.ts";
+import { courseTypeEditing } from "./course-types.ts";
 import { planningView } from "./planning.ts";
 import {
+  requireQualificationProcess,
   currentQualification,
+  metadata,
   checkCommonFields,
 } from "./qualification-templates.ts";
 import { saveCatalogItem, deleteQualification } from "./catalog-editing.ts";
@@ -14,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   CourseSchema,
+  QualificationTypeSchema,
   QualificationSchema,
   DraftSchema,
   requiredKinds,
@@ -77,7 +82,9 @@ export function canRead(a: StoredAssignment, u: User) {
     u.roles.includes("system_operator") ||
     owner(a, u) ||
     (a.lv1OrganizationId === u.lv1OrganizationId &&
-      u.roles.includes("learner") &&
+      (u.roles.includes("learner") ||
+        u.roles.includes("evaluator") ||
+        a.qualificationMetadata?.qualificationType === "auditor") &&
       a.learnerId === u.id)
   );
 }
@@ -187,6 +194,23 @@ export function authorize(
     "폐지된 평가/자료 필드입니다. 새 화면을 불러와 주세요.",
     "OBSOLETE_FIELDS",
   );
+  if (action === "checklist.update") {
+    const { a, c } = context(s, target);
+    const p = s.plans.find(
+      (p) => p.id === a.planId && p.status === "completed",
+    );
+    const r = s.planningRequests.find((r) => r.id === p?.requestId);
+    demand(
+      a.learnerId === u.id &&
+        a.lv1OrganizationId === u.lv1OrganizationId &&
+        c.qualificationType === "auditor" &&
+        r?.qualificationType === "auditor" &&
+        r.learnerId === u.id,
+      403,
+      "본인의 Auditor 계획으로 배정된 학습항목만 확인할 수 있습니다.",
+    );
+    return;
+  }
   if (isWorkflowAction(action))
     return authorizeWorkflow(s, u, action, target, body, managementLv1);
   if (action === "progress.reset") {
@@ -280,6 +304,7 @@ function reconcile(
     version: catalog.version,
     source: "issued" as const,
   });
+  requireQualificationProcess(q);
   let newCompletion: string | undefined;
   const evidence = requiredKinds(c).map((kind) => ({
     kind,
@@ -288,12 +313,24 @@ function reconcile(
         t.enrollmentId === e.id && t.kind === kind && t.result === "passed",
     )?.id,
   }));
-  if (
-    evidence.every((ev) => ev.attemptId) &&
-    !s.completions.some((co) => co.enrollmentId === e.id)
-  ) {
+  const checklist = s.learningChecklists.find((v) => v.enrollmentId === e.id);
+  const requiredItems = c.learningItems.filter((i) => i.required);
+  const complete =
+    c.qualificationType === "auditor"
+      ? requiredItems.length > 0 &&
+        requiredItems.every((i) =>
+          checklist?.items.some((v) => v.itemId === i.id),
+        )
+      : evidence.length > 0 && evidence.every((ev) => ev.attemptId);
+  if (complete && !s.completions.some((co) => co.enrollmentId === e.id)) {
     newCompletion = uid();
     s.completions.push({
+      method:
+        c.qualificationType === "auditor" ? "self_confirmation" : "assessment",
+      learningEvidence:
+        c.qualificationType === "auditor"
+          ? structuredClone(checklist!.items)
+          : [],
       id: newCompletion,
       enrollmentId: e.id,
       learnerId: a.learnerId,
@@ -321,7 +358,7 @@ function reconcile(
       qualificationId: a.qualificationId,
       date: at,
       snapshot: snapshot({ ...q, ...a.qualificationMetadata }),
-      qualificationMetadata: a.qualificationMetadata,
+      qualificationMetadata: a.qualificationMetadata || metadata(q),
       validity: structuredClone(q.validity),
       ...(q.validity.type === "months"
         ? { expiresOn: expirationDate(at, q.validity) }
@@ -419,6 +456,67 @@ export function execute(
       details,
       scope,
     );
+  if (action === "checklist.update") {
+    const { e, a, c } = context(s, target);
+    requireEligible(u);
+    active(a);
+    demand(
+      u.organizationActive,
+      409,
+      "사용 중인 소속에서 학습을 확인해 주세요.",
+    );
+    demand(
+      c.qualificationType === "auditor",
+      409,
+      "Auditor 학습 확인만 지원합니다.",
+    );
+    const input = z
+      .object({
+        revision: z.number().int().nonnegative(),
+        itemId: z.string(),
+        checked: z.boolean(),
+      })
+      .strict()
+      .parse(body);
+    demand(
+      !s.completions.some((v) => v.enrollmentId === e.id),
+      409,
+      "수료한 인증Set의 학습 확인 기록은 변경할 수 없습니다.",
+      "CHECKLIST_COMPLETED",
+    );
+    const item = c.learningItems.find((v) => v.id === input.itemId);
+    demand(item, 422, "배정된 인증Set의 학습항목을 확인해 주세요.");
+    let checklist = s.learningChecklists.find((v) => v.enrollmentId === e.id);
+    expected(checklist || { revision: 0 }, input.revision);
+    if (!checklist) {
+      checklist = { enrollmentId: e.id, revision: 0, items: [] };
+      s.learningChecklists.push(checklist);
+    }
+    const before = structuredClone(checklist);
+    checklist.items = checklist.items.filter((v) => v.itemId !== item.id);
+    if (input.checked)
+      checklist.items.push({
+        itemId: item.id,
+        title: item.title,
+        type: item.type,
+        required: item.required,
+        confirmedBy: u.id,
+        confirmedAt: at,
+      });
+    checklist.revision++;
+    reconcile(s, e.id, organizations, at);
+    audit(s, u, action, e.id, "본인 학습 완료 확인", a.id, {
+      before,
+      after: checklist,
+    });
+    return {
+      enrollmentId: e.id,
+      revision: checklist.revision,
+      completionId: s.completions.find((v) => v.enrollmentId === e.id)?.id,
+      certificationId: s.certifications.find((v) => v.assignmentId === a.id)
+        ?.id,
+    };
+  }
   if (action === "progress.reset") {
     const input = z
       .object({
@@ -446,6 +544,9 @@ export function execute(
         .map((e) => e.id),
     );
     s.attempts = s.attempts.filter((r) => !enrollments.has(r.enrollmentId));
+    s.learningChecklists = s.learningChecklists.filter(
+      (r) => !enrollments.has(r.enrollmentId),
+    );
     s.learningRecords = s.learningRecords.filter(
       (r) => !enrollments.has(r.enrollmentId),
     );
@@ -581,8 +682,16 @@ export function execute(
         s.courses.push(
           CourseSchema.parse({
             ...base,
+            qualificationType: QualificationTypeSchema.parse(
+              body.qualificationType ?? "auditee",
+            ),
+            title:
+              body.title === undefined
+                ? ""
+                : z.string().trim().min(1).max(300).parse(body.title),
             operationalStatus: "active",
-            assessmentKinds: ["objective"],
+            assessmentKinds:
+              body.qualificationType === "auditor" ? [] : ["objective"],
             passScore: null,
             practicalPassScore: null,
             materials: [],
@@ -707,6 +816,13 @@ export function execute(
   if (action === "attempt.start") {
     const { e, a, c } = context(s, target);
     active(a);
+    demand(
+      c.qualificationType === "auditee",
+      409,
+      "Auditor는 평가 없이 학습항목 완료 확인으로 수료합니다.",
+      "ASSESSMENT_NOT_APPLICABLE",
+    );
+    requireQualificationProcess(find(s.qualifications, a.qualificationId));
     const kind = KindSchema.parse(body.kind);
     const prerequisite = assessmentPrerequisite(
       c,
@@ -758,6 +874,13 @@ export function execute(
     const t = find(s.attempts, target),
       { a, c } = context(s, t.enrollmentId);
     active(a);
+    demand(
+      c.qualificationType === "auditee",
+      409,
+      "Auditor는 평가 없이 학습항목 완료 확인으로 수료합니다.",
+      "ASSESSMENT_NOT_APPLICABLE",
+    );
+    requireQualificationProcess(find(s.qualifications, a.qualificationId));
     expected(t, body.revision);
     demand(t.status === "in_progress", 409, "이미 확정된 평가입니다.");
     const prerequisite = assessmentPrerequisite(
@@ -867,6 +990,9 @@ export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
       practicalAttempts: s.attempts.filter(
         (t) => enrollments.has(t.enrollmentId) && t.kind === "practical",
       ).length,
+      learningChecklists: s.learningChecklists.filter((r) =>
+        enrollments.has(r.enrollmentId),
+      ).length,
       learningRecords: s.learningRecords.filter((r) =>
         enrollments.has(r.enrollmentId),
       ).length,
@@ -929,7 +1055,7 @@ export function workspace(
       !p.deletedAt &&
       visibleScope(p.lv1OrganizationId) &&
       (admin ||
-        (u.roles.includes("learner") && p.learnerId === u.id) ||
+        (canReadPersonal(s, u) && p.learnerId === u.id) ||
         assignments.some((a) => a.planId === p.id)),
   );
   const qids = new Set(assignments.map((a) => a.qualificationId)),
@@ -939,10 +1065,10 @@ export function workspace(
         .map((e) => e.courseId),
     );
   for (const p of plans) qids.add(p.qualificationId);
-  const requiredView = u.roles.includes("learner")
+  const requiredView = canReadPersonal(s, u)
     ? requiredQualifications(s, organizations, u, at)
     : null;
-  if (u.roles.includes("learner") && u.organizationActive)
+  if (canReadPersonal(s, u) && u.organizationActive)
     for (const q of s.qualifications)
       if (
         requiredView?.items.some((i) => i.qualificationId === q.id) ||
@@ -987,7 +1113,7 @@ export function workspace(
           visibleScope(r.lv1OrganizationId) && (admin || r.learnerId === u.id),
       )
       .map((r) => requestProgress(s, organizations, r.id, at)),
-    planningOptions: u.roles.includes("learner")
+    planningOptions: canReadPersonal(s, u)
       ? s.planningRequests
           .filter(
             (r) =>
@@ -1002,9 +1128,14 @@ export function workspace(
           .filter(
             (user) =>
               visibleScope(user.lv1OrganizationId) &&
-              user.roles.includes("learner"),
+              (user.roles.includes("learner") ||
+                user.roles.includes("evaluator")),
           )
-          .map((user) => planningReadiness(s, organizations, user, at))
+          .flatMap((user) =>
+            (["auditee", "auditor"] as const).map((type) =>
+              planningReadiness(s, organizations, user, at, type),
+            ),
+          )
       : [],
     planEligibility: plans
       .filter((p) => p.status === "draft")
@@ -1023,7 +1154,7 @@ export function workspace(
     planningRequests: s.planningRequests.filter(
       (r) =>
         visibleScope(r.lv1OrganizationId) &&
-        (admin || (u.roles.includes("learner") && r.learnerId === u.id)),
+        (admin || (canReadPersonal(s, u) && r.learnerId === u.id)),
     ),
     notifications: s.notifications.filter(
       (n) =>
@@ -1108,7 +1239,7 @@ export function workspace(
             copy.practicalQuestions = [];
           }
         }
-        return copy;
+        return admin ? { ...copy, typeEditing: courseTypeEditing(s, c) } : copy;
       }),
     assignments: assignments.map((a) => {
       const cert = s.certifications.find((c) => c.assignmentId === a.id);
@@ -1140,6 +1271,9 @@ export function workspace(
               practical: state("practical"),
               answers: activeAttempts.objective?.answers || {},
               activeAttempts,
+              checklist: s.learningChecklists.find(
+                (v) => v.enrollmentId === e.id,
+              ),
               completion: s.completions.find((c) => c.enrollmentId === e.id),
               history: ts
                 .filter((t) => t.status === "graded")

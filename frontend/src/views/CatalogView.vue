@@ -393,6 +393,9 @@ async function recover(record: CatalogRecovery) {
       'eks-catalog-v5',
       'eks-catalog-v6',
       'eks-catalog-v7',
+      'eks-catalog-v8',
+      'eks-catalog-v9',
+      'eks-catalog-v10',
     ].includes(record.workbook.format)
   ) {
     error.value =
@@ -518,6 +521,14 @@ function addItem(t = table.value) {
   }
   checkpoint();
   const r = newRow(t, sheet.value.tables[t], courseCode.value);
+  if (t === 'courses') {
+    r.qualificationType = sheet.value.qualificationType || 'auditee';
+    if (r.qualificationType === 'auditor') {
+      r.kinds = '';
+      r.passScore = '';
+      r.practicalPassScore = '';
+    }
+  }
   sheet.value.tables[t].push(r);
   if (t === 'courses') {
     courseCode.value = String(r.code);
@@ -635,6 +646,7 @@ async function refreshCommon() {
           englishName: latest.englishName,
           description: latest.description,
           templateRevision: latest.templateRevision,
+          qualificationType: latest.qualificationType,
         });
     }
     compareOpen.value = false;
@@ -809,6 +821,9 @@ async function backToList() {
                 'eks-catalog-v5',
                 'eks-catalog-v6',
                 'eks-catalog-v7',
+                'eks-catalog-v8',
+                'eks-catalog-v9',
+                'eks-catalog-v10',
               ].includes(v.workbook.format),
           )"
           :key="r.id + '-download'"
@@ -1027,7 +1042,11 @@ async function backToList() {
             </div>
             <div class="bulk-tabs" role="tablist" aria-label="인증Set 편집">
               <button
-                v-for="t in catalogTables"
+                v-for="t in catalogTables.filter(
+                  (t) =>
+                    sheet?.qualificationType !== 'auditor' ||
+                    !['objective', 'practical'].includes(t),
+                )"
                 :key="t"
                 role="tab"
                 :aria-selected="table === t"

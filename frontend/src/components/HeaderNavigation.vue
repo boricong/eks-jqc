@@ -13,7 +13,7 @@ import {
   learningStage,
   ownedQualificationsLocation,
 } from '../learner-navigation';
-import { visibleManagementGroups } from '../management-navigation';
+import { withCriteriaType, visibleManagementGroups } from '../management-navigation';
 import { systemSections } from '../system-navigation';
 import AppIcon from './AppIcon.vue';
 
@@ -36,7 +36,7 @@ let removeNavigationHook: (() => void) | undefined;
 const unread = computed(() => store.data.notifications.filter((item) => !item.readAt).length);
 const items = computed<Item[]>(() => {
   const result: Item[] = [{ id: 'home', label: '홈', to: '/' }];
-  if (store.hasRole('learner'))
+  if (store.canEnterPersonal)
     result.push(
       {
         id: 'learning',
@@ -45,7 +45,11 @@ const items = computed<Item[]>(() => {
         groups: [
           {
             id: 'learning',
-            links: learnerNavigationItems().map((item) => ({
+            links: learnerNavigationItems(
+              undefined,
+              undefined,
+              store.hasRole('learner') ? 'auditee' : 'auditor',
+            ).map((item) => ({
               key: item.key,
               label: item.label,
               to: item.path,
@@ -71,7 +75,12 @@ const items = computed<Item[]>(() => {
         links: group.sections.map((item) => ({
           key: item.id,
           label: item.name,
-          to: store.managementLink(item.path),
+          to: withCriteriaType(
+            store.managementLink(item.path),
+            /^\/admin\/(qualifications|courses)(\/|$)/.test(route.path)
+              ? route.query.type
+              : undefined,
+          ),
           current:
             props.section === 'management' &&
             String(route.meta.managementSection || route.params.section) === item.id,

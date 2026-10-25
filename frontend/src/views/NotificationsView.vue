@@ -64,9 +64,6 @@ async function view(notification: Notification) {
   <div class="container page notifications-page">
     <PageHeading>
       <h1>내 알림</h1>
-      <p class="notifications-help">
-        화면에 표시된 알림은 읽음으로 처리됩니다. 업무 완료는 별도로 관리됩니다.
-      </p>
     </PageHeading>
     <p v-if="targetMissing" class="notifications-target-missing" role="status">
       선택한 알림을 찾을 수 없습니다.

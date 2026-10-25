@@ -22,7 +22,7 @@ const documentAssignment = computed(() =>
       : undefined,
 );
 const navigationSection = computed(() =>
-  primaryNavigationSection(route, store.actor, documentAssignment.value),
+  primaryNavigationSection(route, store.actor, documentAssignment.value, store.canEnterPersonal),
 );
 const isHome = computed(() => route.name === 'home');
 const isWide = computed(
@@ -34,6 +34,7 @@ watch(
   [
     () => store.signedIn,
     () => store.actor.roles.join(','),
+    () => store.canEnterPersonal,
     () => route.meta.role,
     () => route.meta.management,
   ],
@@ -41,7 +42,7 @@ watch(
     const required = route.meta.role as Role | undefined;
     if (
       store.signedIn &&
-      ((required && !store.hasRole(required)) ||
+      ((required && !(required === 'learner' ? store.canEnterPersonal : store.hasRole(required))) ||
         (route.meta.management && !store.managementAccess && route.params.section !== 'policies'))
     )
       void router.replace('/');

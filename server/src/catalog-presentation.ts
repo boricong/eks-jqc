@@ -11,6 +11,7 @@ import {
 const metadataLabels: Record<string, string> = {
   templateId: "기본자격 연결",
   templateRevision: "공통 정보 수정 번호",
+  qualificationType: "인증 유형",
   title: "자격명",
   englishName: "영문명",
   description: "자격 설명",

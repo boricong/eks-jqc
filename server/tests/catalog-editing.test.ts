@@ -286,7 +286,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 13);
+  assert.equal(next.state.schemaVersion, 16);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));

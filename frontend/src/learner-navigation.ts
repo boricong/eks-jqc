@@ -1,3 +1,4 @@
+import type { QualificationType } from '@eks/contracts';
 import type { RouteLocationNormalizedLoaded, RouteLocationRaw } from 'vue-router';
 export type LearningStage = 'learning' | 'assessment';
 export function learningStage(
@@ -11,21 +12,32 @@ export function qualificationLocation(
   stage: LearningStage,
   assignmentId?: string,
   courseId?: string,
+  type: QualificationType = 'auditee',
 ): RouteLocationRaw {
   return {
     path: assignmentId ? `/qualifications/${assignmentId}` : '/qualifications',
     query: {
+      ...(type === 'auditor' ? { type } : {}),
       ...(stage === 'assessment' ? { stage } : {}),
       ...(courseId ? { course: courseId } : {}),
     },
   };
 }
 
-export function learnerNavigationItems(assignmentId?: string, courseId?: string) {
+export function learnerNavigationItems(
+  assignmentId?: string,
+  courseId?: string,
+  type: QualificationType = 'auditee',
+) {
   return [
-    { path: '/plans', label: '내 계획', key: 'plans' },
+    { path: type === 'auditor' ? '/plans?type=auditor' : '/plans', label: '내 계획', key: 'plans' },
     {
-      path: qualificationLocation('learning', assignmentId, assignmentId ? courseId : undefined),
+      path: qualificationLocation(
+        'learning',
+        assignmentId,
+        assignmentId ? courseId : undefined,
+        type,
+      ),
       label: '학습',
       key: 'learning',
     },
@@ -34,19 +46,27 @@ export function learnerNavigationItems(assignmentId?: string, courseId?: string)
       label: '평가',
       key: 'assessment',
     },
-  ];
+  ].filter((item) => type === 'auditee' || item.key !== 'assessment');
 }
 
 // URL hints choose a presentation context; ownership and roles remain authoritative.
 export const ownedQualificationsLocation = '/qualifications?filter=certified';
+export const ownedQualificationsForType = (type: QualificationType) =>
+  ownedQualificationsLocation + (type === 'auditor' ? '&type=auditor' : '');
 type NavigationActor = { id: string; roles: readonly string[] };
 type OwnedRecord = { learnerId: string; certifiedAt?: string } | undefined;
 type NavigationRoute = Pick<RouteLocationNormalizedLoaded, 'name' | 'path' | 'query'>;
 export function isOwnedQualificationsRoute(route: Pick<NavigationRoute, 'name' | 'query'>) {
   return route.name === 'qualifications' && route.query.filter === 'certified';
 }
-export function ownedCertificateLocation(id: string): RouteLocationRaw {
-  return { path: `/certifications/${id}`, query: { from: 'owned' } };
+export function ownedCertificateLocation(
+  id: string,
+  type: QualificationType = 'auditee',
+): RouteLocationRaw {
+  return {
+    path: `/certifications/${id}`,
+    query: { from: 'owned', ...(type === 'auditor' ? { type } : {}) },
+  };
 }
 export function isOwnedRecordContext(
   route: Pick<NavigationRoute, 'query'>,
@@ -56,7 +76,6 @@ export function isOwnedRecordContext(
   return (
     route.query.from === 'owned' &&
     !route.query.lv1OrganizationId &&
-    actor.roles.includes('learner') &&
     !!record?.certifiedAt &&
     record.learnerId === actor.id
   );
@@ -65,16 +84,24 @@ export function documentContextQuery(
   route: Pick<NavigationRoute, 'query'>,
   record: OwnedRecord,
   actor: NavigationActor,
+  type: QualificationType = 'auditee',
 ) {
   if (route.query.lv1OrganizationId) return { lv1OrganizationId: route.query.lv1OrganizationId };
-  return isOwnedRecordContext(route, record, actor) ? { from: 'owned' } : {};
+  return isOwnedRecordContext(route, record, actor)
+    ? { from: 'owned', ...(type === 'auditor' ? { type } : {}) }
+    : {};
 }
 export function primaryNavigationSection(
   route: NavigationRoute,
   actor: NavigationActor,
   record?: OwnedRecord,
+  personalAccess = false,
 ) {
-  const learner = actor.roles.includes('learner');
+  const learner =
+    personalAccess ||
+    actor.roles.includes('learner') ||
+    actor.roles.includes('evaluator') ||
+    (!!record && record.learnerId === actor.id);
   const operator = actor.roles.includes('system_operator');
   const admin = actor.roles.includes('admin');
   if (route.name === 'home') return 'home';

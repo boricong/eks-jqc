@@ -62,7 +62,7 @@ test('보유 역할·기존 최초 홈·사용자별 세션 복원과 새 접속
   await actor(page, 'alice');
   await expect(roles(page)).toHaveCount(0);
   await actor(page, 'admin-1');
-  await expect(roles(page).getByRole('tab')).toHaveText(['나의 학습', '팀 관리']);
+  await expect(roles(page).getByRole('tab')).toHaveText(['학습자 인증 · Auditee', '팀 관리']);
   await expect(roles(page).getByRole('tab', { name: '팀 관리' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -71,7 +71,7 @@ test('보유 역할·기존 최초 홈·사용자별 세션 복원과 새 접속
   const menu = await page.getByRole('navigation', { name: '주 메뉴', exact: true }).innerText();
   const url = page.url();
   const history = await page.evaluate(() => window.history.length);
-  await roles(page).getByRole('tab', { name: '나의 학습' }).click();
+  await roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' }).click();
   await expect(page.getByRole('heading', { name: '진행 중인 자격', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '기준 관리', exact: true })).toHaveCount(0);
   expect(page.url()).toBe(url);
@@ -80,7 +80,7 @@ test('보유 역할·기존 최초 홈·사용자별 세션 복원과 새 접속
     menu,
   );
   await page.reload();
-  await expect(roles(page).getByRole('tab', { name: '나의 학습' })).toHaveAttribute(
+  await expect(roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -92,18 +92,18 @@ test('보유 역할·기존 최초 홈·사용자별 세션 복원과 새 접속
     .getByRole('navigation', { name: '주 메뉴', exact: true })
     .getByRole('link', { name: '홈', exact: true })
     .click();
-  await expect(roles(page).getByRole('tab', { name: '나의 학습' })).toHaveAttribute(
+  await expect(roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await actor(page, 'learner-2');
-  await expect(roles(page).getByRole('tab', { name: '나의 학습' })).toHaveAttribute(
+  await expect(roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await roles(page).getByRole('tab', { name: '조직 관리' }).click();
   await actor(page, 'admin-1');
-  await expect(roles(page).getByRole('tab', { name: '나의 학습' })).toHaveAttribute(
+  await expect(roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -141,7 +141,7 @@ test('전체 역할의 순서·팀/직속 집계·이동 범위·학습 개인 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await expect(roles(page).getByRole('tab')).toHaveText([
-    '나의 학습',
+    '학습자 인증 · Auditee',
     '팀 관리',
     '조직 관리',
     '시스템 운영',
@@ -182,7 +182,7 @@ test('전체 역할의 순서·팀/직속 집계·이동 범위·학습 개인 �
       roles(page).getByRole('tab', { name: direct ? '조직 관리' : '팀 관리', exact: true }),
     ).toHaveAttribute('aria-selected', 'true');
   }
-  await roles(page).getByRole('tab', { name: '나의 학습' }).click();
+  await roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' }).click();
   await expect(stats(page)).toHaveText(['0', '0', '0']);
   await expect(page.locator('.home-scope')).toHaveCount(0);
   await expect(page.locator('.home-primary')).not.toContainText('대시보드에 노출하면 안 되는');
@@ -202,7 +202,7 @@ test('관리 요약 실패는 0건을 만들지 않고 재시도·빈 분모를 
   await page.unroute('**/api/dashboard?**');
   await page.getByRole('button', { name: '현황 다시 조회' }).click();
   await expect(stats(page)).toHaveCount(3);
-  await roles(page).getByRole('tab', { name: '나의 학습' }).click();
+  await roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await actor(page, 'admin-1');
   await roles(page).getByRole('tab', { name: '팀 관리' }).click();
@@ -237,7 +237,7 @@ test('늦은 역할·계정 응답 무시와 역할 회수 시 유효 홈 복귀
   });
   await roles(page).getByRole('tab', { name: '팀 관리' }).click();
   await expect.poll(() => intercepted).toBe(true);
-  await roles(page).getByRole('tab', { name: '나의 학습' }).click();
+  await roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' }).click();
   await expect(stats(page)).toHaveText(['0', '0', '0']);
   release();
   await page.unroute('**/api/dashboard?**');
@@ -273,7 +273,7 @@ test('네 화면 폭·키보드·패널 연결·실제 대비와 네 역할 화�
   await actor(page, 'admin-1');
   await roles(page).getByRole('tab', { name: '시스템 운영' }).focus();
   await page.keyboard.press('Home');
-  await expect(roles(page).getByRole('tab', { name: '나의 학습' })).toBeFocused();
+  await expect(roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(roles(page).getByRole('tab', { name: '팀 관리' })).toBeFocused();
   await page.keyboard.press('End');
@@ -281,7 +281,7 @@ test('네 화면 폭·키보드·패널 연결·실제 대비와 네 역할 화�
   const metrics = [];
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const label of ['나의 학습', '팀 관리', '조직 관리', '시스템 운영']) {
+    for (const label of ['학습자 인증 · Auditee', '팀 관리', '조직 관리', '시스템 운영']) {
       await roles(page).getByRole('tab', { name: label, exact: true }).click();
       await expect(stats(page)).toHaveCount(3);
       const active = roles(page).getByRole('tab', { name: label, exact: true });
@@ -416,13 +416,13 @@ test('긴 이름·소속·Hold·잘못된 기억과 비어 있는 역할 화면�
   );
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const label of ['조직 관리', '나의 학습']) {
+    for (const label of ['조직 관리', '학습자 인증 · Auditee']) {
       await roles(page).getByRole('tab', { name: label }).click();
       await expect(stats(page)).toHaveCount(3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
-      if (label === '나의 학습') {
+      if (label === '학습자 인증 · Auditee') {
         await expect(page.locator('#home-role-content > .error-message')).toContainText('Hold');
         await expect(stats(page)).toHaveText(['0', '0', '0']);
       } else {

@@ -1,3 +1,4 @@
+import { auditorAssessmentChanged } from "./course-types.ts";
 import { currentQualification } from "./qualification-templates.ts";
 import {
   referencedCatalog,
@@ -11,6 +12,7 @@ import {
   QualificationSchema,
   catalogTables,
   courseUseErrors,
+  qualificationReadinessErrors,
   qualificationUseErrors,
   type CatalogWorkbook,
   type CatalogSheet,
@@ -61,7 +63,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v7",
+    format: "eks-catalog-v10",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const original = s.qualifications.find((q) => q.id === id);
@@ -90,6 +92,7 @@ export function exportCatalog(
           practicalPassScore: c.practicalPassScore,
           sourceId: c.id,
           sourceRevision: c.revision,
+          qualificationType: c.qualificationType,
         });
         c.learningItems.forEach((i, n) =>
           tables.learning.push({
@@ -151,6 +154,7 @@ export function exportCatalog(
         sourceRevision: q.revision,
         templateId: q.templateId,
         templateRevision: q.templateRevision,
+        qualificationType: q.qualificationType,
         title: q.title,
         englishName: q.englishName,
         description: q.description,
@@ -167,7 +171,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v7",
+    format: "eks-catalog-v10",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -257,6 +261,9 @@ export function prepareCatalog(
         "eks-catalog-v5",
         "eks-catalog-v6",
         "eks-catalog-v7",
+        "eks-catalog-v8",
+        "eks-catalog-v9",
+        "eks-catalog-v10",
       ].includes(raw?.format) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
@@ -401,6 +408,17 @@ export function prepareCatalog(
         return;
       } else {
         const common = currentQualification(s, original);
+        if (
+          sheet.qualificationType !== undefined &&
+          sheet.qualificationType !== common.qualificationType
+        )
+          issue(
+            "metadata",
+            0,
+            "qualificationType",
+            "인증 유형은 기본자격에서 상속되며 일괄 입력으로 변경할 수 없습니다.",
+          );
+        sheet.qualificationType ??= common.qualificationType;
         if (sheet.templateId && sheet.templateId !== original.templateId)
           issue(
             "metadata",
@@ -629,6 +647,34 @@ export function prepareCatalog(
           "sourceRevision",
           "인증Set 원본이 변경되었습니다. 다시 내보내 주세요.",
         );
+      const expectedType =
+        source?.qualificationType ??
+        original?.qualificationType ??
+        sheet.qualificationType ??
+        "auditee";
+      if (
+        source &&
+        source.qualificationType !==
+          (original?.qualificationType ?? sheet.qualificationType)
+      )
+        issue(
+          "courses",
+          ri,
+          "qualificationType",
+          "다른 인증 유형의 인증Set은 연결할 수 없습니다.",
+        );
+      if (
+        r.qualificationType !== undefined &&
+        r.qualificationType !== "" &&
+        r.qualificationType !== expectedType
+      )
+        issue(
+          "courses",
+          ri,
+          "qualificationType",
+          "인증 유형은 읽기 전용입니다. 자격과 같은 유형을 사용해 주세요.",
+        );
+      r.qualificationType = expectedType;
       const shared =
         source &&
         s.qualifications.some(
@@ -675,6 +721,7 @@ export function prepareCatalog(
         );
       const raw = {
         ...(source || {}),
+        qualificationType: expectedType,
         id: source?.id || randomUUID(),
         entityId: source?.entityId || randomUUID(),
         lv1OrganizationId: scope,
@@ -737,6 +784,15 @@ export function prepareCatalog(
         continue;
       }
       let c = parsed.data;
+      if (auditorAssessmentChanged(c, source)) {
+        issue(
+          "courses",
+          ri,
+          "kinds",
+          "Auditor 인증Set은 평가 설정을 변경할 수 없습니다.",
+        );
+        continue;
+      }
       if (
         source &&
         same(courseContent(c), courseContent(source)) &&
@@ -844,7 +900,10 @@ export function prepareCatalog(
       } else if (original) q.revision++;
       qualifications.push(q);
     }
-    qualificationUseErrors(q, builtCourses).forEach((m) =>
+    (q.qualificationType === "auditor"
+      ? qualificationReadinessErrors(q, builtCourses)
+      : qualificationUseErrors(q, builtCourses)
+    ).forEach((m) =>
       issue(
         "metadata",
         0,

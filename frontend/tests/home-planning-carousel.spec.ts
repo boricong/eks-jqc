@@ -15,6 +15,7 @@ const completed: PlanningRequest['completion'] = {
 };
 function request(id: string, overrides: Partial<PlanningRequest> = {}): PlanningRequest {
   return {
+    qualificationType: 'auditee',
     id,
     learnerId: 'learner-1',
     lv1OrganizationId: 'org-photo',

@@ -156,10 +156,26 @@ export function addQualification(
     title: `가상 자격 ${id}`,
     ...options,
   };
+  q.courseIds = q.courseIds.map((id) => {
+    const source = seed.state.courses.find((c) => c.id === id)!;
+    if (source.qualificationType === q.qualificationType) return id;
+    const copy = {
+      ...structuredClone(source),
+      id: `${q.id}-${id}`,
+      entityId: `${q.id}-${id}`,
+      qualificationType: q.qualificationType,
+      parentId: undefined,
+      version: 1,
+      revision: 1,
+    };
+    seed.state.courses.push(copy);
+    return copy.id;
+  });
   seed.state.qualifications.push(q);
   if (!seed.state.qualificationTemplates.some((t) => t.id === q.templateId))
     seed.state.qualificationTemplates.push({
       id: q.templateId,
+      qualificationType: q.qualificationType,
       revision: 1,
       title: q.title,
       englishName: "",
@@ -182,6 +198,7 @@ export function addRequest(
     (o) => o.id === (organizationId || user.organizationId),
   )!;
   const request: State["planningRequests"][number] = {
+    qualificationType: "auditee",
     id,
     learnerId,
     lv1OrganizationId: TEAM,
@@ -266,6 +283,7 @@ export function addAssignment(
     organizationSource: "assigned",
     qualificationMetadata: {
       templateId: q.templateId,
+      qualificationType: q.qualificationType,
       templateRevision: q.templateRevision,
       title: `당시 ${q.title}`,
       englishName: q.englishName,
@@ -318,7 +336,9 @@ export function addCertification(
   )) {
     const c = seed.state.courses.find((c) => c.id === e.courseId)!;
     const completionEvidence: State["completions"][number]["evidence"] = [];
-    for (const kind of c.assessmentKinds) {
+    for (const kind of c.qualificationType === "auditor"
+      ? []
+      : c.assessmentKinds) {
       const questions = assessmentQuestions(c, kind),
         attemptId = `${e.id}:${kind}`;
       const total = questions.reduce((sum, q) => sum + q.points, 0);
@@ -348,7 +368,29 @@ export function addCertification(
       completionEvidence.push({ kind, attemptId });
     }
     const completionId = `completion-${e.id}`;
+    const learningEvidence =
+      c.qualificationType === "auditor"
+        ? c.learningItems
+            .filter((i) => i.required)
+            .map((i) => ({
+              itemId: i.id,
+              title: i.title,
+              type: i.type,
+              required: i.required,
+              confirmedBy: learnerId,
+              confirmedAt: date,
+            }))
+        : [];
+    if (c.qualificationType === "auditor")
+      seed.state.learningChecklists.push({
+        enrollmentId: e.id,
+        revision: 1,
+        items: learningEvidence,
+      });
     seed.state.completions.push({
+      method:
+        c.qualificationType === "auditor" ? "self_confirmation" : "assessment",
+      learningEvidence,
       id: completionId,
       enrollmentId: e.id,
       learnerId,

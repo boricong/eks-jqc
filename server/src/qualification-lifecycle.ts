@@ -1,4 +1,7 @@
-import { currentQualification } from "./qualification-templates.ts";
+import {
+  currentQualification,
+  requireQualificationProcess,
+} from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -14,6 +17,7 @@ import {
   expiryEffectiveAt,
   kstDate,
   qualificationUseErrors,
+  qualificationProcessErrors,
   organizationEntries,
   type State,
   type UserView,
@@ -85,6 +89,7 @@ export function initializeCertification(
   at: string,
   migration = false,
 ) {
+  if (!migration) requireQualificationProcess(q);
   const a = find(s.assignments, c.assignmentId);
   const validity = structuredClone(
     c.validity || { type: "unknown" as const, months: null, reminderDays: [] },
@@ -246,7 +251,10 @@ function readCredential(
   const c = find(s.certifications, id),
     a = find(s.assignments, c.assignmentId);
   if (
-    u.roles.includes("learner") &&
+    (u.roles.includes("learner") ||
+      u.roles.includes("evaluator") ||
+      find(s.qualifications, c.qualificationId).qualificationType ===
+        "auditor") &&
     c.learnerId === u.id &&
     a.lv1OrganizationId === u.lv1OrganizationId
   )
@@ -263,7 +271,14 @@ function eligibilityUsers(
   const scope = policyScope(u, doc, requested);
   const users = s.users.filter(
     (x) =>
-      x.roles.includes("learner") &&
+      (x.roles.includes("learner") ||
+        x.roles.includes("evaluator") ||
+        s.assignments.some(
+          (a) =>
+            a.learnerId === x.id &&
+            s.qualifications.find((q) => q.id === a.qualificationId)
+              ?.qualificationType === "auditor",
+        )) &&
       userView(x, doc).lv1OrganizationId === scope &&
       (fullManager(u) || x.organizationId === u.organizationId),
   );
@@ -362,7 +377,20 @@ export function renewalAvailability(
   const q = s.qualifications.find((q) => q.id === pool?.qualificationId),
     p = latestPeriod(c);
   const opensOn = p && renewalOpensOn(p);
-  const errors: string[] = [];
+  if (original.qualificationType === "auditor")
+    return {
+      canStart: false,
+      reasons: [
+        "Auditor 재인증은 준비 중입니다. 최초 취득과 만료 상태 조회만 제공합니다.",
+      ],
+      opensOn: undefined,
+      periodId: p?.id,
+      appliedQualification: null,
+      nextExpiresOn: undefined,
+      renewal: undefined,
+    };
+  const errors: string[] = qualificationProcessErrors(original);
+
   if (!learner.roles.includes("learner") || !learner.organizationActive)
     errors.push("사용 중인 조직의 학습자 권한이 필요합니다.");
   if (learner.certificationEligibility === "hold")
@@ -688,6 +716,13 @@ export function executeLifecycle(
   const r = action === "renewal.complete" ? find(s.renewals, id) : undefined;
   const c = find(s.certifications, r?.certificationId || id),
     a = find(s.assignments, c.assignmentId);
+  demand(
+    find(s.qualifications, c.qualificationId).qualificationType !== "auditor",
+    409,
+    "Auditor 재인증은 준비 중입니다.",
+    "QUALIFICATION_PROCESS_UNAVAILABLE",
+  );
+  requireQualificationProcess(find(s.qualifications, c.qualificationId));
   requireEligible(find(s.users, c.learnerId));
   checkRevision(c.revision || 1, body.certificationRevision);
   const available = renewalAvailability(s, doc, c, at);

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useDemo } from '../stores/demo';
 import { useRoute } from 'vue-router';
 import { learningStage, learnerNavigationItems } from '../learner-navigation';
 const props = defineProps<{ assignmentId?: string; courseId?: string }>();
-const route = useRoute();
+const route = useRoute(),
+  store = useDemo();
 const assignmentId = computed(
   () =>
     props.assignmentId ||
@@ -20,7 +22,20 @@ const courseId = computed(
         ? route.query.course
         : undefined),
 );
-const items = computed(() => learnerNavigationItems(assignmentId.value, courseId.value));
+const type = computed(() => {
+  const a = assignmentId.value && store.assignment(assignmentId.value);
+  const p = store.data.plans.find((p) => p.id === route.params.id);
+  return a
+    ? store.qualification(a.qualificationId).qualificationType
+    : p
+      ? store.qualification(p.qualificationId).qualificationType
+      : route.query.type === 'auditor' || !store.personalTypes.includes('auditee')
+        ? 'auditor'
+        : 'auditee';
+});
+const items = computed(() =>
+  learnerNavigationItems(assignmentId.value, courseId.value, type.value),
+);
 function active(key: string) {
   return route.path.startsWith('/plans') ? key === 'plans' : key === learningStage(route);
 }

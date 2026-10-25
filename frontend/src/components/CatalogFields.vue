@@ -79,7 +79,10 @@ const choiceErrors = computed(() =>
         field="title"
     /></label>
     <template v-if="table === 'courses'">
-      <fieldset class="catalog-kinds">
+      <p class="muted">
+        인증 유형 · {{ row.qualificationType === 'auditor' ? 'Auditor' : 'Auditee' }} (읽기 전용)
+      </p>
+      <fieldset v-if="row.qualificationType !== 'auditor'" class="catalog-kinds">
         <legend>필수 평가 유형</legend>
         <label
           v-for="[key, label] in [
@@ -90,7 +93,7 @@ const choiceErrors = computed(() =>
           ><input v-model="kinds" type="checkbox" :value="key" />{{ label }}</label
         >
       </fieldset>
-      <div class="form-grid">
+      <div v-if="row.qualificationType !== 'auditor'" class="form-grid">
         <label v-if="kinds.includes('objective')" class="field"
           >객관식 합격 기준 (%)<input
             v-model.number="row.passScore"

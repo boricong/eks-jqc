@@ -105,7 +105,13 @@ const history = computed(
           </li>
         </ul>
         <details v-if="q.courses.length">
-          <summary>인증Set·평가 통과 현황</summary>
+          <summary>
+            {{
+              q.courses[0]?.qualificationType === 'auditor'
+                ? '인증Set·학습 확인 현황'
+                : '인증Set·평가 통과 현황'
+            }}
+          </summary>
           <div
             class="dashboard-table-wrap"
             tabindex="0"
@@ -117,9 +123,17 @@ const history = computed(
                 <tr>
                   <th scope="col">인증Set</th>
                   <th scope="col">수료</th>
-                  <th scope="col">지식 평가</th>
-                  <th scope="col">상황 대응 평가</th>
-                  <th scope="col">평가 예정일</th>
+                  <th scope="col">
+                    {{
+                      q.courses[0]?.qualificationType === 'auditor' ? '필수 학습 확인' : '지식 평가'
+                    }}
+                  </th>
+                  <th v-if="q.courses[0]?.qualificationType !== 'auditor'" scope="col">
+                    상황 대응 평가
+                  </th>
+                  <th v-if="q.courses[0]?.qualificationType !== 'auditor'" scope="col">
+                    평가 예정일
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -131,9 +145,19 @@ const history = computed(
                       displayDate(c.completedOn)
                     }}</small>
                   </td>
-                  <td>{{ assessmentLabels[c.objective] }}</td>
-                  <td>{{ assessmentLabels[c.practical] }}</td>
-                  <td class="dashboard-date">{{ c.assessmentOn || '—' }}</td>
+                  <td>
+                    {{
+                      c.qualificationType === 'auditor'
+                        ? `${c.confirmedItems} / ${c.requiredItems}`
+                        : assessmentLabels[c.objective]
+                    }}
+                  </td>
+                  <td v-if="c.qualificationType !== 'auditor'">
+                    {{ assessmentLabels[c.practical] }}
+                  </td>
+                  <td v-if="c.qualificationType !== 'auditor'" class="dashboard-date">
+                    {{ c.assessmentOn || '—' }}
+                  </td>
                 </tr>
               </tbody>
             </table>

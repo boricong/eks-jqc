@@ -5,7 +5,11 @@ import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 
 const props = withDefaults(
-  defineProps<{ assignments: Assignment[]; planningRequests?: PlanningRequest[] }>(),
+  defineProps<{
+    qualificationType?: 'auditee' | 'auditor';
+    assignments: Assignment[];
+    planningRequests?: PlanningRequest[];
+  }>(),
   { planningRequests: () => [] },
 );
 const store = useDemo();
@@ -218,7 +222,13 @@ onBeforeUnmount(() => {
             </dl>
             <div class="home-qualification-action home-planning-action">
               <RouterLink
-                :to="{ path: '/plans', query: { request: card.request.id } }"
+                :to="{
+                  path: '/plans',
+                  query: {
+                    request: card.request.id,
+                    type: props.qualificationType === 'auditor' ? 'auditor' : undefined,
+                  },
+                }"
                 class="button primary"
                 >{{ card.action }}<AppIcon name="arrow" :size="18"
               /></RouterLink>
@@ -244,7 +254,7 @@ onBeforeUnmount(() => {
                 <dt>인증Set 수료</dt>
                 <dd>{{ card.completed }} / {{ card.total }}</dd>
               </div>
-              <div>
+              <div v-if="props.qualificationType !== 'auditor'">
                 <dt>평가 통과</dt>
                 <dd>{{ card.passed }} / {{ card.assessments }}</dd>
               </div>
@@ -305,15 +315,25 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div v-else class="home-qualification-frame empty-state">
-      <AppIcon name="book" :size="28" /><span>진행 중인 자격이 없습니다.</span>
+      <div class="home-qualification-empty-summary">
+        <AppIcon name="book" :size="28" /><span>진행 중인 자격이 없습니다.</span>
+      </div>
       <div class="home-qualification-empty-actions">
         <RouterLink
           v-if="store.myAssignments.some((a) => a.certifiedAt)"
           class="button secondary"
-          to="/qualifications?filter=certified"
+          :to="
+            props.qualificationType === 'auditor'
+              ? '/qualifications?filter=certified&type=auditor'
+              : '/qualifications?filter=certified'
+          "
           >인증 보기</RouterLink
         >
-        <RouterLink to="/plans" class="button primary">내 계획 확인</RouterLink>
+        <RouterLink
+          :to="props.qualificationType === 'auditor' ? '/plans?type=auditor' : '/plans'"
+          class="button primary"
+          >내 계획 확인</RouterLink
+        >
       </div>
     </div>
   </section>
@@ -359,10 +379,20 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 .home-qualification-frame.empty-state {
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
   padding: 24px;
   color: var(--ink-secondary);
 }
+.home-qualification-empty-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
 .home-qualification-empty-actions {
+  margin-top: auto;
   display: flex;
   justify-content: center;
   gap: 12px;

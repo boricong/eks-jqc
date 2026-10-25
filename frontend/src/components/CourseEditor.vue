@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue';
-import type { Course, Kind } from '@eks/contracts';
+import { qualificationTypeLabels, type Course, type Kind } from '@eks/contracts';
 import CompactTabs from './CompactTabs.vue';
 import CourseMaterialsEditor from './CourseMaterialsEditor.vue';
 import CourseLearningEditor from './CourseLearningEditor.vue';
@@ -8,6 +8,7 @@ import CourseAssessmentEditor from './CourseAssessmentEditor.vue';
 import type { CourseIssue } from '../course-editor';
 const props = defineProps<{
   course: Course;
+  typeEditing?: { canChangeType: boolean; typeChangeReason: string };
   disabled: boolean;
   issues: CourseIssue[];
   showErrors: boolean;
@@ -24,10 +25,12 @@ const sections = computed(() =>
     { id: 'basic', label: '기본정보' },
     { id: 'materials', label: '학습자료' },
     { id: 'learning', label: '학습 항목' },
-    ...(props.course.assessmentKinds.includes('objective')
+    ...(props.course.qualificationType !== 'auditor' &&
+    props.course.assessmentKinds.includes('objective')
       ? [{ id: 'objective', label: '지식 평가' }]
       : []),
-    ...(props.course.assessmentKinds.includes('practical')
+    ...(props.course.qualificationType !== 'auditor' &&
+    props.course.assessmentKinds.includes('practical')
       ? [{ id: 'practical', label: '상황 대응 평가' }]
       : []),
   ].map((s) => ({ ...s, invalid: props.issues.some((i) => i.kind === s.id) })),
@@ -74,13 +77,38 @@ defineExpose({
       <div v-show="section === 'basic'" class="course-basic-fields">
         <header>
           <h2>기본정보</h2>
-          <p class="muted">인증Set의 이름과 평가 유형을 설정합니다.</p>
+          <p class="muted">
+            {{
+              course.qualificationType === 'auditor'
+                ? '필수 학습항목을 본인이 모두 확인하면 수료됩니다.'
+                : '인증Set의 이름과 평가 유형을 설정합니다.'
+            }}
+          </p>
         </header>
         <label class="field"
           ><span>인증Set명</span
           ><input v-model="course.title" data-course-field="title" :disabled="disabled"
         /></label>
-        <fieldset class="assessment-kind-group">
+        <div class="field">
+          <label :for="`${uid}-type`">인증 유형</label>
+          <select
+            v-if="typeEditing?.canChangeType"
+            :id="`${uid}-type`"
+            v-model="course.qualificationType"
+            :disabled="disabled"
+            :aria-describedby="`${uid}-type-help`"
+          >
+            <option value="auditee">Auditee(피심사자)</option>
+            <option value="auditor">Auditor(심사자)</option>
+          </select>
+          <p v-else class="criteria-type-value">
+            {{ qualificationTypeLabels[course.qualificationType] }}
+          </p>
+          <small :id="`${uid}-type-help`" class="muted">{{
+            typeEditing?.typeChangeReason || '인증 유형은 연결된 자격과 같아야 합니다.'
+          }}</small>
+        </div>
+        <fieldset v-if="course.qualificationType !== 'auditor'" class="assessment-kind-group">
           <legend>필수 평가</legend>
           <div class="assessment-kind-options">
             <label class="checkbox-label"
@@ -102,10 +130,13 @@ defineExpose({
             >
           </div>
         </fieldset>
-        <p class="muted">
+        <p v-if="course.qualificationType !== 'auditor'" class="muted">
           상황 대응 평가에는 지식 평가가 필요합니다. 유형을 해제해도 작성한 문항은 보존됩니다.
         </p>
-        <p v-if="!course.assessmentKinds.length" class="muted">
+        <p
+          v-if="course.qualificationType !== 'auditor' && !course.assessmentKinds.length"
+          class="muted"
+        >
           평가 유형을 선택하면 해당 편집 항목이 나타납니다.
         </p>
       </div>
@@ -122,7 +153,10 @@ defineExpose({
         :disabled="disabled"
         :issues="issues"
       />
-      <div v-show="section === 'objective' || section === 'practical'">
+      <div
+        v-if="course.qualificationType !== 'auditor'"
+        v-show="section === 'objective' || section === 'practical'"
+      >
         <header class="course-evaluation-heading">
           <h2>{{ kind === 'objective' ? '지식 평가' : '상황 대응 평가' }}</h2>
           <p class="muted">번호를 선택해 문항을 편집합니다. 정답은 관리자에게만 공개됩니다.</p>

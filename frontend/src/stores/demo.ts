@@ -73,11 +73,32 @@ export const useDemo = defineStore('workspace', () => {
       ? 'system_operator'
       : sessionActor.value?.roles.includes('admin')
         ? 'admin'
-        : 'learner',
+        : sessionActor.value?.roles.includes('learner')
+          ? 'learner'
+          : sessionActor.value?.roles.includes('evaluator')
+            ? 'evaluator'
+            : 'organization_admin',
   }));
   const actorId = computed(() => actor.value.id),
     signedIn = computed(() => !!sessionActor.value);
   const hasRole = (role: User['roles'][number]) => actor.value.roles.includes(role);
+  const personalTypes = computed(() =>
+    (['auditee', 'auditor'] as const).filter(
+      (type) =>
+        hasRole(type === 'auditee' ? 'learner' : 'evaluator') ||
+        (type === 'auditor' &&
+          (data.value.planningRequests.some(
+            (r) => r.learnerId === actorId.value && r.qualificationType === type,
+          ) ||
+            data.value.assignments.some(
+              (a) =>
+                a.learnerId === actorId.value &&
+                data.value.qualifications.find((q) => q.id === a.qualificationId)
+                  ?.qualificationType === type,
+            ))),
+    ),
+  );
+  const canEnterPersonal = computed(() => personalTypes.value.length > 0);
   const workspaceScope = ref(''),
     contextLoading = ref(false),
     writing = ref(0);
@@ -229,7 +250,12 @@ export const useDemo = defineStore('workspace', () => {
   const enrollmentFor = (aid: string, cid: string) =>
     assignment(aid)?.enrollments.find((e) => e.courseId === cid);
   const myAssignments = computed(() =>
-    data.value.assignments.filter((a) => a.learnerId === actorId.value && !a.excludedReason),
+    data.value.assignments.filter(
+      (a) =>
+        a.learnerId === actorId.value &&
+        !a.excludedReason &&
+        qualification(a.qualificationId, a.qualificationMetadata).qualificationType === 'auditee',
+    ),
   );
   const notices = computed(() =>
     data.value.homeNotices.filter((n) => n.published).sort((a, b) => b.date.localeCompare(a.date)),
@@ -302,8 +328,8 @@ export const useDemo = defineStore('workspace', () => {
     await command(`/enrollments/${encodeURIComponent(e.id)}/attempts`, { kind });
     return enrollmentFor(aid, cid)!.activeAttempts[kind]!;
   }
-  async function createCatalog(section: string) {
-    return command(`/${section}`);
+  async function createCatalog(section: string, body: Record<string, unknown> = {}) {
+    return command(`/${section}`, body);
   }
   async function saveCatalog(
     section: string,
@@ -354,6 +380,8 @@ export const useDemo = defineStore('workspace', () => {
     connectionError,
     signedIn,
     hasRole,
+    personalTypes,
+    canEnterPersonal,
     workspaceScope,
     contextLoading,
     writing,

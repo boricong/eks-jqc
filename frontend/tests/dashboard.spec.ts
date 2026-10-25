@@ -359,6 +359,7 @@ test('많은 인원·긴 이름·11개 이상 자격에서 명세와 매트릭�
           templateId = `many-template-${i}`;
         s.qualificationTemplates.push({
           id: templateId,
+          qualificationType: 'auditee',
           revision: 1,
           title: `표준 가상 자격 ${String(i).padStart(2, '0')} 긴 이름과 기준 정보`,
           englishName: '',

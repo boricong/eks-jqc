@@ -51,6 +51,20 @@
   min-width: 16px;
   line-height: 14px;
 }
+.compact-tabs.certification-type-tabs {
+  padding: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.compact-tabs.certification-type-tabs > button {
+  min-height: 44px;
+  max-width: none;
+  padding: 8px 16px;
+}
+.compact-tabs.certification-type-tabs > button:focus-visible {
+  outline: 2px solid var(--primary-press);
+  outline-offset: -2px;
+}
 .assessment-type-tabs {
   padding: 0 24px;
   gap: 8px;

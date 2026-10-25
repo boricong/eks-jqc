@@ -29,6 +29,7 @@ const host = ref<HTMLElement>(),
 let grid: Tabulator | undefined,
   alive = true;
 const maps: Record<string, Record<string, string>> = {
+  qualificationType: { auditee: 'Auditee', auditor: 'Auditor' },
   type: { mtc: 'MTC교육', team: '팀 특화 교육', ojt: '현업 OJT' },
   required: { true: '필수', false: '선택' },
 };
@@ -106,7 +107,13 @@ onMounted(async () => {
           : values
             ? { values, listOnEmpty: true, autocomplete: field === 'courseCode' }
             : undefined,
-      editable: () => !props.disabled,
+      editable: (cell) =>
+        !props.disabled &&
+        field !== 'qualificationType' &&
+        !(
+          cell.getRow().getData().qualificationType === 'auditor' &&
+          ['kinds', 'passScore', 'practicalPassScore'].includes(field)
+        ),
       formatter: (cell) =>
         textNode(
           field === 'kinds'

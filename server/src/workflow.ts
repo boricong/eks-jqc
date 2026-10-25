@@ -1,10 +1,15 @@
+import { canContinueType } from "./personal-access.ts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
   requiredQualifications,
   planPolicyErrors,
   planningReadiness,
 } from "./organization-policies.ts";
-import { currentQualification, metadata } from "./qualification-templates.ts";
+import {
+  currentQualification,
+  metadata,
+  requireQualificationProcess,
+} from "./qualification-templates.ts";
 export { qualificationTemplates } from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -13,6 +18,8 @@ import {
   PlanStartInputSchema,
   LearningRecordSchema,
   QualificationSchema,
+  QualificationTypeSchema,
+  hasQualificationRole,
   qualificationPolicySnapshot,
   qualificationUseErrors,
   planErrors,
@@ -88,13 +95,30 @@ export function authorizeWorkflow(
     );
     return;
   }
-  demand(u.roles.includes("learner"), 403, "학습자 권한이 필요합니다.");
+
   let record: { learnerId: string; lv1OrganizationId: string };
   if (action.startsWith("planning.")) record = find(s.planningRequests, target);
   else if (action === "plan.create")
     record = find(s.planningRequests, body.requestId);
   else if (action.startsWith("plan.")) record = find(s.plans, target);
   else record = find(s.assignments, find(s.enrollments, target).assignmentId);
+  const request =
+    action.startsWith("planning.") || action === "plan.create"
+      ? (record as import("@eks/contracts").PlanningRequest)
+      : s.planningRequests.find(
+          (r) =>
+            r.id ===
+            s.plans.find(
+              (p) =>
+                p.id ===
+                (action.startsWith("plan.") ? target : (record as any).planId),
+            )?.requestId,
+        );
+  demand(
+    canContinueType(s, u, request?.qualificationType || "auditee"),
+    403,
+    "해당 인증 유형의 권한이나 기존 요청이 필요합니다.",
+  );
   demand(
     record.learnerId === u.id &&
       record.lv1OrganizationId === u.lv1OrganizationId,
@@ -163,11 +187,20 @@ export function executeWorkflow(
       "사용 중인 Lv1을 선택해 주세요.",
     );
     const ids = z.array(z.string()).min(1).max(1000).parse(body.templateIds);
+    const expectedType = QualificationTypeSchema.optional().parse(
+      body.qualificationType,
+    );
     demand(new Set(ids).size === ids.length, 422, "자격이 중복되었습니다.");
     const imported: string[] = [],
       existing: string[] = [];
     for (const templateId of ids) {
       const template = find(s.qualificationTemplates, templateId);
+      demand(
+        !expectedType || template.qualificationType === expectedType,
+        409,
+        "선택한 기본자격의 인증 유형이 변경되었습니다. 등록 목록을 다시 확인해 주세요.",
+        "QUALIFICATION_TYPE_CHANGED",
+      );
       const previous = s.qualifications
         .filter(
           (q) => q.lv1OrganizationId === scope && q.templateId === templateId,
@@ -201,6 +234,7 @@ export function executeWorkflow(
             : 1,
           revision: 1,
           lv1OrganizationId: scope,
+          qualificationType: template.qualificationType,
           title: template.title,
           englishName: template.englishName,
           templateId,
@@ -219,6 +253,7 @@ export function executeWorkflow(
   if (action === "planning.request") {
     const input = z
       .object({
+        qualificationType: QualificationTypeSchema.default("auditee"),
         learnerIds: z.array(z.string()).min(1).max(200),
         dueOn: z.iso.date().optional(),
         message: z.string().max(2000),
@@ -234,20 +269,27 @@ export function executeWorkflow(
     for (const learnerId of input.learnerIds) {
       const learner = userView(find(s.users, learnerId), organizations);
       demand(
-        learner.roles.includes("learner") &&
+        hasQualificationRole(learner.roles, input.qualificationType) &&
           learner.lv1OrganizationId === scope &&
           learner.organizationActive,
         422,
-        "같은 Lv1의 사용 중인 학습자를 선택해 주세요.",
+        "같은 Lv1에서 요청 유형에 맞는 역할을 가진 사용 중인 대상자를 선택해 주세요.",
       );
       requireEligible(learner);
-      const readiness = planningReadiness(s, organizations, learner, at);
+      const readiness = planningReadiness(
+        s,
+        organizations,
+        learner,
+        at,
+        input.qualificationType,
+      );
       demand(readiness.canRequest, 422, `${learner.name}: ${readiness.reason}`);
       const targets = requiredQualifications(
         s,
         organizations,
         learner,
         at,
+        input.qualificationType,
       ).items.map((i) => ({
         entityId: i.entityId,
         qualificationId: i.qualificationId,
@@ -260,6 +302,7 @@ export function executeWorkflow(
       const id = randomUUID();
       ids.push(id);
       s.planningRequests.push({
+        qualificationType: input.qualificationType,
         id,
         lv1OrganizationId: scope,
         learnerId,
@@ -282,16 +325,21 @@ export function executeWorkflow(
           recipientId: learnerId,
           lv1OrganizationId: scope,
           type: "planning",
+          qualificationType: input.qualificationType,
           title: "개인 인증 계획을 수립해 주세요",
           body: `계획 작성 기한 ${input.dueOn} · ${input.message}`.slice(
             0,
             2000,
           ),
-          href: `/plans?request=${id}`,
+          href: `/plans?request=${id}${input.qualificationType === "auditor" ? "&type=auditor" : ""}`,
         },
         at,
       );
-      audit(id, "계획 수립 요청", undefined, { learnerId });
+      audit(id, "계획 수립 요청", undefined, {
+        learnerId,
+        qualificationType: input.qualificationType,
+        recipientRoles: learner.roles,
+      });
     }
     return { ids };
   }
@@ -435,6 +483,7 @@ export function executeWorkflow(
     );
     const row = candidate(s, organizations, u, q.entityId, at, request);
     demand(row.canStart, 409, row?.reason || "선택한 자격을 확인해 주세요.");
+    requireQualificationProcess(q);
     const errors = qualificationUseErrors(
       currentQualification(s, q),
       s.courses,
@@ -498,6 +547,7 @@ export function executeWorkflow(
       schedules: q.courseIds.map((courseId) => ({
         courseId,
         ...defaultPlanSchedule(at),
+        ...(q.qualificationType === "auditor" ? { assessmentOn: "" } : {}),
         goal: "",
       })),
     });
@@ -509,6 +559,7 @@ export function executeWorkflow(
   if (action.startsWith("plan.")) {
     const p = find(s.plans, target),
       q = find(s.qualifications, p.qualificationId);
+    requireQualificationProcess(q);
     demand(
       !p.deletedAt,
       410,
@@ -566,6 +617,7 @@ export function executeWorkflow(
           return { id: p.id, revision: p.revision };
         for (const schedule of p.schedules) {
           const defaults = defaultPlanSchedule(at, schedule.learningStart);
+          if (q.qualificationType === "auditor") defaults.assessmentOn = "";
           // Existing values are never changed; initialization happens only once.
           schedule.learningStart ||= defaults.learningStart;
           schedule.learningEnd ||= defaults.learningEnd;
@@ -592,7 +644,7 @@ export function executeWorkflow(
           422,
           "계획 변경 사유를 입력해 주세요.",
         );
-        const errors = planErrors(value);
+        const errors = planErrors(value, q.qualificationType);
         demand(!errors.length, 422, errors.join("\n"));
         demand(
           !find(s.assignments, p.assignmentId!).excludedReason,
@@ -600,6 +652,8 @@ export function executeWorkflow(
           "제외된 계획입니다.",
         );
       }
+      if (q.qualificationType === "auditor")
+        value.schedules.forEach((s) => (s.assessmentOn = ""));
       Object.assign(p, value);
     } else if (action === "plan.complete") {
       demand(p.status === "draft", 409, "이미 완료한 계획입니다.");
@@ -616,7 +670,7 @@ export function executeWorkflow(
         "POLICY_CHANGED",
       );
       const errors = [
-        ...planErrors(p),
+        ...planErrors(p, q.qualificationType),
         ...qualificationUseErrors(currentQualification(s, q), s.courses),
       ];
       demand(

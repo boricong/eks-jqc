@@ -4,7 +4,11 @@ import { useRoute } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 import ManagementContext from './ManagementContext.vue';
-import { visibleManagementGroups, managementTitle } from '../management-navigation';
+import {
+  withCriteriaType,
+  visibleManagementGroups,
+  managementTitle,
+} from '../management-navigation';
 const store = useDemo(),
   route = useRoute(),
   menuOpen = ref(false),
@@ -59,7 +63,14 @@ watch(
           <ul>
             <li v-for="s in group.sections" :key="s.id">
               <RouterLink
-                :to="store.managementLink(s.path)"
+                :to="
+                  withCriteriaType(
+                    store.managementLink(s.path),
+                    /^\/admin\/(qualifications|courses)(\/|$)/.test(route.path)
+                      ? route.query.type
+                      : undefined,
+                  )
+                "
                 :class="{ active: section === s.id }"
                 :aria-current="section === s.id ? 'page' : undefined"
                 ><AppIcon :name="s.icon" :size="18" /><span>{{ s.name }}</span></RouterLink

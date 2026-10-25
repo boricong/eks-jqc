@@ -1,6 +1,6 @@
 import type { Locator } from '@playwright/test';
 import { test, expect, actor, answerConfirmation } from './fixtures';
-import { courseSection, openSavedCourse, saveCriterion } from './catalog-helpers';
+import { createCourse, courseSection, openSavedCourse, saveCriterion } from './catalog-helpers';
 
 test('자료 목록·상단 탭·연결형 세로 번호의 네 화면 폭과 실제 정렬·글자 크기', async ({
   page,
@@ -347,7 +347,7 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   await page.getByLabel('목록 정렬').selectOption('desc');
   await page.getByLabel('페이지 크기').selectOption('50');
   const count = backend.store.snapshot().courses.length;
-  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await createCourse(page);
   await page.getByLabel('인증Set명', { exact: true }).fill('새 인증Set 저장 확인');
   await saveCriterion(page);
   await expect(page).toHaveURL(/\/admin\/courses\?lv1OrganizationId=org-photo$/);

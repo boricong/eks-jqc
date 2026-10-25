@@ -68,6 +68,7 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
     '전체 업무 조회',
     '테스트 관리',
     '시스템 공지 관리',
+    '문서 조회',
   ]);
   await page.mouse.move(20, 400);
   await expect(panel(page, 'system')).toHaveCount(0);

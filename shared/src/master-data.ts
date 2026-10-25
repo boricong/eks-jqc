@@ -26,6 +26,7 @@ export const clearedDataLabels = {
   renewals: "재인증",
   comparisons: "이전 수행 비교 기록(보존 자료)",
   learningRecords: "과거 학습 기록",
+  learningChecklists: "Auditor 학습 확인",
   notices: "시스템·팀 공지",
   notifications: "개인 알림",
   audits: "업무 변경 이력",
@@ -45,8 +46,8 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 3;
-  stateSchemaVersion: 13;
+  formatVersion: 6;
+  stateSchemaVersion: 16;
   organizationSchemaVersion: 2;
   createdAt: string;
   counts: MasterCounts;

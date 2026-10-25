@@ -3,7 +3,13 @@ import {
   QualificationMetadataSchema,
 } from "./qualification-templates.ts";
 export * from "./qualification-templates.ts";
+export * from "./documents.ts";
 import { z } from "zod";
+import {
+  QualificationTypeSchema,
+  qualificationProcessErrors,
+} from "./qualification-types.ts";
+export * from "./qualification-types.ts";
 import { CatalogBatchSchema } from "./catalog.ts";
 import {
   LifecycleStatusSchema,
@@ -42,9 +48,15 @@ import {
 } from "./organizations.ts";
 export * from "./organizations.ts";
 
-export const BaseRoleSchema = z.enum(["learner", "admin", "system_operator"]);
+export const BaseRoleSchema = z.enum([
+  "learner",
+  "evaluator",
+  "admin",
+  "system_operator",
+]);
 export const RoleSchema = z.enum([
   "learner",
+  "evaluator",
   "admin",
   "system_operator",
   "organization_admin",
@@ -52,6 +64,7 @@ export const RoleSchema = z.enum([
 export type Role = z.infer<typeof RoleSchema>;
 export const roleLabels: Record<Role, string> = {
   learner: "학습자",
+  evaluator: "평가자",
   admin: "팀 조직 관리자",
   organization_admin: "세부 조직 관리자",
   system_operator: "시스템 운영자",
@@ -151,6 +164,7 @@ const revision = {
   deletionReason: z.string().trim().min(1).max(2000).optional(),
 };
 export const CourseSchema = z.object({
+  qualificationType: QualificationTypeSchema.default("auditee"),
   ...revision,
   operationalStatus: z.enum(["active", "retired"]),
   retiredAt: z.iso.datetime().optional(),
@@ -166,6 +180,7 @@ export const CourseSchema = z.object({
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
+  qualificationType: QualificationTypeSchema.default("auditee"),
   ...revision,
   lifecycleStatus: LifecycleStatusSchema.optional(),
   renewalLeadMonths: RenewalLeadSchema.optional(),
@@ -271,14 +286,30 @@ export const AssignmentSchema = z.object({
   excludedAt: z.iso.datetime().optional(),
 });
 export type StoredAssignment = z.infer<typeof AssignmentSchema>;
+export const LearningConfirmationSchema = z.object({
+  itemId: id,
+  title: z.string().max(300),
+  type: LearningItemSchema.shape.type,
+  required: z.boolean(),
+  confirmedBy: id,
+  confirmedAt: z.iso.datetime(),
+});
+export const LearningChecklistSchema = z.object({
+  enrollmentId: id,
+  revision: z.number().int().nonnegative(),
+  items: z.array(LearningConfirmationSchema).max(100),
+});
+export type LearningChecklist = z.infer<typeof LearningChecklistSchema>;
 export const CompletionSchema = z.object({
+  method: z.enum(["assessment", "self_confirmation"]).default("assessment"),
+  learningEvidence: z.array(LearningConfirmationSchema).max(100).default([]),
   id,
   enrollmentId: id,
   learnerId: id,
   courseId: id,
   date: z.iso.datetime(),
   snapshot: AwardSnapshotSchema.optional(),
-  evidence: z.array(z.object({ kind: KindSchema, attemptId: id })).min(1),
+  evidence: z.array(z.object({ kind: KindSchema, attemptId: id })),
 });
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
@@ -362,7 +393,7 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(13),
+  schemaVersion: z.literal(16),
   qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
@@ -380,6 +411,7 @@ export const StateSchema = z.object({
   planningRequests: z.array(PlanningRequestSchema),
   plans: z.array(PersonalPlanSchema),
   learningRecords: z.array(LearningRecordSchema),
+  learningChecklists: z.array(LearningChecklistSchema).default([]),
   notifications: z.array(NotificationSchema),
   catalogBatches: z.array(CatalogBatchSchema).default([]),
   renewals: z.array(RenewalSchema).default([]),
@@ -403,6 +435,7 @@ export interface ProgressSummary {
     objectiveAttempts: number;
     practicalAttempts: number;
     learningRecords: number;
+    learningChecklists: number;
     notifications: number;
     completions: number;
     certifications: number;
@@ -433,6 +466,7 @@ export interface Enrollment {
   history: Attempt[];
   activeAttempts: Partial<Record<Kind, AssessmentAttempt>>;
   completion?: Completion;
+  checklist?: LearningChecklist;
 }
 export interface Assignment extends StoredAssignment {
   enrollments: Enrollment[];
@@ -446,6 +480,7 @@ export interface Workspace {
   requestProgress: import("./organizations.ts").RequestProgress[];
   planningOptions: import("./organizations.ts").PlanningRequestView[];
   planningReadiness: {
+    qualificationType: import("./qualification-types.ts").QualificationType;
     learnerId: string;
     canRequest: boolean;
     reason: string;
@@ -465,7 +500,9 @@ export interface Workspace {
   };
   organizations: OrganizationEntry[];
   users: UserView[];
-  courses: Course[];
+  courses: (Course & {
+    typeEditing?: { canChangeType: boolean; typeChangeReason: string };
+  })[];
   qualifications: Qualification[];
   assignments: Assignment[];
   notices: Notice[];
@@ -497,8 +534,10 @@ export interface CourseUsage {
 }
 export type DemoState = Workspace;
 export const requiredKinds = (
-  course: Pick<Course, "assessmentKinds">,
-): Kind[] => course.assessmentKinds;
+  course: Pick<Course, "assessmentKinds"> &
+    Partial<Pick<Course, "qualificationType">>,
+): Kind[] =>
+  course.qualificationType === "auditor" ? [] : course.assessmentKinds;
 export function assessmentPrerequisite(
   course: Pick<Course, "assessmentKinds">,
   kind: Kind,
@@ -516,8 +555,9 @@ export function courseErrors(course: Course): string[] {
   const errors: string[] = [];
   if (!course.title.trim()) errors.push("인증Set명을 입력해 주세요.");
   if (
-    !course.assessmentKinds.length ||
-    new Set(course.assessmentKinds).size !== course.assessmentKinds.length
+    course.qualificationType !== "auditor" &&
+    (!course.assessmentKinds.length ||
+      new Set(course.assessmentKinds).size !== course.assessmentKinds.length)
   )
     errors.push("필수 평가 유형을 중복 없이 선택해 주세요.");
   if (
@@ -566,7 +606,8 @@ export function courseErrors(course: Course): string[] {
 export function courseUseErrors(course: Course): string[] {
   return [
     ...courseErrors(course),
-    ...(course.assessmentKinds.includes("practical") &&
+    ...(course.qualificationType !== "auditor" &&
+    course.assessmentKinds.includes("practical") &&
     !course.assessmentKinds.includes("objective")
       ? ["상황 대응 평가를 사용하려면 지식 평가도 필수로 설정해 주세요."]
       : []),
@@ -617,6 +658,7 @@ export function qualificationUseErrors(
   courses: Course[],
 ): string[] {
   return [
+    ...qualificationProcessErrors(q),
     ...(q.deletedAt
       ? ["삭제된 자격으로 신규 계획·재인증을 시작할 수 없습니다."]
       : []),

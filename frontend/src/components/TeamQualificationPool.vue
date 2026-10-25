@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
+import { qualificationProcessErrors } from '@eks/contracts';
 import type { OrganizationPoliciesView, Qualification } from '@eks/contracts';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import { confirmAction } from '../composables/useConfirmation';
 import AppDialog from './AppDialog.vue';
+const props = defineProps<{ qualificationType?: 'auditee' | 'auditor' }>();
 const store = useDemo(),
   open = ref(false),
   busy = ref(false),
@@ -18,7 +20,10 @@ const dirty = computed(() => open.value && JSON.stringify(chosen.value) !== base
 const groups = computed(() => {
   const map = new Map<string, Qualification[]>();
   for (const q of store.data.qualifications.filter(
-    (q) => q.lv1OrganizationId === store.managementLv1 && !q.deletedAt,
+    (q) =>
+      q.lv1OrganizationId === store.managementLv1 &&
+      !q.deletedAt &&
+      q.qualificationType === (props.qualificationType || 'auditee'),
   ))
     map.set(q.entityId, [...(map.get(q.entityId) || []), q]);
   return [...map]
@@ -30,6 +35,7 @@ const affected = computed(
     doc.value?.entries.filter((e) =>
       e.requiredQualifications?.some(
         (id) =>
+          Object.hasOwn(chosen.value, id) &&
           doc.value!.pool.find((p) => p.entityId === id)?.qualificationId !== chosen.value[id],
       ),
     ) || [],
@@ -78,7 +84,12 @@ async function save() {
       store.managementPath(`/organization-policies/${store.managementLv1}/qualification-pool`),
       {
         revision: doc.value.revision,
-        qualificationIds: Object.values(chosen.value).filter(Boolean),
+        qualificationIds: [
+          ...doc.value.pool
+            .filter((p) => !Object.hasOwn(chosen.value, p.entityId))
+            .map((p) => p.qualificationId),
+          ...Object.values(chosen.value).filter(Boolean),
+        ],
       },
       'PUT',
     );
@@ -92,7 +103,7 @@ async function save() {
   }
 }
 watch(
-  () => [store.actorId, store.managementLv1],
+  () => [store.actorId, store.managementLv1, props.qualificationType],
   () => {
     generation++;
     open.value = false;
@@ -122,9 +133,13 @@ onBeforeRouteUpdate(leave);
             v-for="q in g.versions"
             :key="q.id"
             :value="q.id"
-            :disabled="store.qualificationErrors(q).length > 0 && chosen[g.id] !== q.id"
+            :disabled="
+              !!qualificationProcessErrors(q).length ||
+              (store.qualificationErrors(q).length > 0 && chosen[g.id] !== q.id)
+            "
           >
-            v{{ q.version }} · {{ store.qualificationErrors(q).length ? '설정 필요' : '적용 가능' }}
+            v{{ q.version }} ·
+            {{ store.qualificationErrors(q).length ? '설정 필요' : '적용 가능' }}
           </option>
         </select></label
       >

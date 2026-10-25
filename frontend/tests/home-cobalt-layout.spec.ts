@@ -22,6 +22,17 @@ test('빈 자격 카드의 코발트·두 버튼 좌우/단일 버튼과 320px �
         organizationId: 'org-photo',
         revision: 1,
       });
+      s.notifications = Array.from({ length: 4 }, (_, index) => ({
+        id: `empty-alert-${index}`,
+        key: `empty-alert-${index}`,
+        type: 'result' as const,
+        recipientId: 'alice',
+        lv1OrganizationId: 'org-photo',
+        title: '빈 상태에서도 좌상단 안내와 하단 버튼을 유지합니다. '.repeat(3),
+        body: '표시 시험',
+        href: '/qualifications',
+        createdAt: '2026-10-23T00:00:00Z',
+      }));
       return {};
     },
   );
@@ -46,6 +57,28 @@ test('빈 자격 카드의 코발트·두 버튼 좌우/단일 버튼과 320px �
     expect(boxes[1]!.x - boxes[0]!.x - boxes[0]!.width).toBeCloseTo(12, 0);
     expect(boxes.every((b) => b.height >= 44)).toBe(true);
     if (width < 768) expect(Math.abs(boxes[0]!.width - boxes[1]!.width)).toBeLessThan(1);
+    const placement = await card.evaluate((el) => {
+      const box = el.getBoundingClientRect(),
+        style = getComputedStyle(el);
+      const summary = el
+        .querySelector('.home-qualification-empty-summary')!
+        .getBoundingClientRect();
+      const text = el
+        .querySelector('.home-qualification-empty-summary span')!
+        .getBoundingClientRect();
+      const actions = el
+        .querySelector('.home-qualification-empty-actions')!
+        .getBoundingClientRect();
+      return {
+        top: summary.top - box.top,
+        left: text.left - box.left,
+        bottom: box.bottom - actions.bottom,
+        padding: parseFloat(style.paddingTop) + parseFloat(style.borderTopWidth),
+      };
+    });
+    expect(placement.top).toBeCloseTo(placement.padding, 0);
+    expect(placement.left).toBeCloseTo(placement.padding, 0);
+    expect(placement.bottom).toBeCloseTo(placement.padding, 0);
     await actions.last().focus();
     const contrast = await carouselContrast(page);
     metrics.push({ width, boxes, contrast });
@@ -67,7 +100,7 @@ test('빈 자격 카드의 코발트·두 버튼 좌우/단일 버튼과 320px �
   await writeFile(info.outputPath('empty-cobalt-metrics.json'), JSON.stringify(metrics, null, 2));
 });
 
-test('공지 하단2열·최신3개·제목/날짜 행과 최근5개·모달/초점·네 화면 폭', async ({
+test('공지 하단2열·최신3개·제목/날짜 행과 최근4개·모달/초점·네 화면 폭', async ({
   page,
   backend,
 }, info) => {
@@ -115,7 +148,7 @@ test('공지 하단2열·최신3개·제목/날짜 행과 최근5개·모달/초
   const notices = page.getByRole('region', { name: '홈 공지', exact: true });
   const panels = notices.locator(':scope > section');
   await expect(page.locator('.home-secondary > section h2')).toHaveText(['최근 알림']);
-  await expect(page.locator('.home-secondary .home-notification-row')).toHaveCount(5);
+  await expect(page.locator('.home-secondary .home-notification-row')).toHaveCount(4);
   await expect(page.locator('.home-shortcuts')).toHaveCount(0);
   for (const scope of ['system', 'team']) {
     const panel = page.getByRole('region', {

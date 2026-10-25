@@ -8,10 +8,10 @@ import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import CredentialLifecycle from '../components/CredentialLifecycle.vue';
 import CollapsibleSection from '../components/CollapsibleSection.vue';
-import { kindLabels } from '@eks/contracts';
+import { kindLabels, recordQualificationType, qualificationTypeLabels } from '@eks/contracts';
 import {
   isOwnedRecordContext,
-  ownedQualificationsLocation,
+  ownedQualificationsForType,
   documentContextQuery,
 } from '../learner-navigation';
 const store = useDemo(),
@@ -25,6 +25,11 @@ const a = computed(() => {
 });
 const qualification = computed(() =>
   a.value ? store.qualification(a.value.qualificationId, a.value.qualificationMetadata) : undefined,
+);
+const qualificationType = computed(() =>
+  a.value && qualification.value
+    ? recordQualificationType(qualification.value, a.value)
+    : 'auditee',
 );
 const snapshot = computed(() => a.value?.certification?.snapshot);
 const englishName = computed(() => {
@@ -80,20 +85,22 @@ const evidence = computed(() => {
 });
 const back = computed(() =>
   isOwnedRecordContext(route, a.value, store.actor)
-    ? ownedQualificationsLocation
+    ? ownedQualificationsForType(qualificationType.value)
     : store.canEnterManagement && route.query.lv1OrganizationId
       ? store.managementLink('/admin/results')
       : store.hasRole('system_operator')
         ? '/system/overview'
         : store.hasRole('admin')
           ? '/admin/results'
-          : '/qualifications?filter=certified',
+          : ownedQualificationsForType(qualificationType.value),
 );
 </script>
 <template>
   <div v-if="a" class="container page certificate-page">
     <RouterLink :to="back" class="back-link"><AppIcon name="back" :size="16" />목록으로</RouterLink>
-    <PageHeading class="page-heading"><h1>자격 인증서</h1></PageHeading>
+    <PageHeading class="page-heading"
+      ><h1>{{ qualificationTypeLabels[qualificationType] }} 자격 인증서</h1></PageHeading
+    >
     <article class="certificate-document" aria-label="자격 발급 기록과 인증서">
       <section class="certificate-record" aria-label="발급 기록">
         <div class="certificate-record-heading">
@@ -113,7 +120,9 @@ const back = computed(() =>
         </PropertyList>
       </section>
       <section class="certificate-identity" aria-label="발급 당시 자격 정보">
-        <p class="certificate-eyebrow">직무 자격 인증서</p>
+        <p class="certificate-eyebrow">
+          {{ qualificationTypeLabels[qualificationType] }} 자격 인증서
+        </p>
         <h2 class="certificate-title">{{ snapshot?.title || qualification?.title }}</h2>
         <p v-if="englishName" class="certificate-english-name" lang="en">{{ englishName }}</p>
         <p v-else class="certificate-english-empty">영문 자격명 미등록</p>
@@ -175,6 +184,20 @@ const back = computed(() =>
               ><AppIcon name="down" :size="16" :class="{ 'is-open': evidenceItemOpen[item.id] }" />
             </summary>
             <div class="certificate-evidence-body">
+              <p v-if="item.completion?.method === 'self_confirmation'" class="muted">
+                본인 학습 확인으로 수료 · 필수 항목 모두 완료
+              </p>
+              <div
+                v-for="entry in item.completion?.learningEvidence || []"
+                :key="entry.itemId"
+                class="certificate-attempt"
+              >
+                <strong>{{ entry.title }}</strong>
+                <p class="muted">
+                  {{ entry.required ? '필수' : '선택' }} · 본인 확인 ·
+                  {{ dates(entry.confirmedAt) }}
+                </p>
+              </div>
               <div v-for="entry in item.attempts" :key="entry.kind" class="certificate-attempt">
                 <strong>{{ kindLabels[entry.kind] }}</strong>
                 <PropertyList class="certificate-attempt-facts">
@@ -204,7 +227,7 @@ const back = computed(() =>
                 class="text-link"
                 :to="{
                   path: `/completions/${item.completion.id}`,
-                  query: documentContextQuery(route, a, store.actor),
+                  query: documentContextQuery(route, a, store.actor, qualificationType),
                 }"
                 >인증Set 수료증 보기 →</RouterLink
               >

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { kstDate, defaultPlanningDueOn, type Enrollment } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
+import CompactTabs from './CompactTabs.vue';
 import AppDialog from './AppDialog.vue';
 import '../styles/planning.css';
 const store = useDemo(),
@@ -15,16 +16,30 @@ const store = useDemo(),
   dueEdited = ref(false),
   detailsOpen = ref(false),
   detailId = ref('');
+const selectedType = ref<'auditee' | 'auditor'>('auditee');
+const typeItems = [
+  { id: 'auditee', label: 'Auditee · 학습자' },
+  { id: 'auditor', label: 'Auditor · 평가자' },
+];
 const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
 const context = computed(() => `${store.actorId}:${store.managementLv1}:${store.fullManagement}`);
 let disposed = false;
 let detailFocus: HTMLElement | null = null;
 let detailScroll = 0;
 let detailContext = '';
-const readiness = (id: string) => store.data.planningReadiness.find((r) => r.learnerId === id);
+const readiness = (id: string) =>
+  store.data.planningReadiness.find(
+    (r) => r.learnerId === id && r.qualificationType === selectedType.value,
+  );
 const learners = computed(() =>
   store.data.users.filter(
-    (u) => u.lv1OrganizationId === store.managementLv1 && u.roles.includes('learner'),
+    (u) =>
+      u.lv1OrganizationId === store.managementLv1 &&
+      (u.roles.includes(selectedType.value === 'auditor' ? 'evaluator' : 'learner') ||
+        (selectedType.value === 'auditor' &&
+          store.data.planningRequests.some(
+            (r) => r.learnerId === u.id && r.qualificationType === 'auditor',
+          ))),
   ),
 );
 type Learner = (typeof learners.value)[number];
@@ -44,6 +59,8 @@ const visibleLearners = computed(() => {
 });
 const ready = computed(() => learners.value.some((u) => readiness(u.id)?.canRequest));
 function phase(e: Enrollment) {
+  if (selectedType.value === 'auditor')
+    return e.completion ? '수료' : e.checklist?.items.length ? '학습 확인 중' : '학습 미확인';
   return e.completion
     ? '수료'
     : [e.objective, e.practical].includes('passed')
@@ -55,12 +72,21 @@ function phase(e: Enrollment) {
 const allRows = computed(() =>
   learners.value.map((user) => {
     const requests = store.data.planningRequests
-      .filter((r) => r.learnerId === user.id)
+      .filter((r) => r.learnerId === user.id && r.qualificationType === selectedType.value)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
-    const summaries = store.data.requestProgress.filter((p) => p.learnerId === user.id);
-    const plans = store.data.plans.filter((p) => p.learnerId === user.id);
+    const summaries = store.data.requestProgress.filter(
+      (p) => p.learnerId === user.id && requests.some((r) => r.id === p.id),
+    );
+    const plans = store.data.plans.filter(
+      (p) =>
+        p.learnerId === user.id &&
+        store.qualification(p.qualificationId).qualificationType === selectedType.value,
+    );
     const assignments = store.data.assignments.filter(
-      (a) => a.learnerId === user.id && !a.excludedReason,
+      (a) =>
+        a.learnerId === user.id &&
+        store.qualification(a.qualificationId).qualificationType === selectedType.value &&
+        !a.excludedReason,
     );
     const stage = summaries.find((p) => p.id === requests[0]?.id)?.stage || '미발송';
     const unfinished = requests.filter(
@@ -116,6 +142,13 @@ function restoreDetailFocus() {
 watch(detail, (value) => {
   if (!value) detailsOpen.value = false;
 });
+watch(selectedType, () => {
+  form.value.learnerIds = [];
+  search.value = '';
+  error.value = '';
+  filter.value = 'all';
+  detailsOpen.value = false;
+});
 watch(context, () => {
   detailFocus = null;
   detailId.value = '';
@@ -152,6 +185,7 @@ async function send() {
   error.value = '';
   try {
     await store.command('/planning-requests', {
+      qualificationType: selectedType.value,
       ...form.value,
       learnerIds: [...form.value.learnerIds],
       ...(dueEdited.value ? {} : { dueOn: undefined }),
@@ -177,7 +211,19 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 </script>
 <template>
-  <section class="panel planning-panel" aria-labelledby="planning-requests-heading">
+  <CompactTabs
+    class="certification-type-tabs"
+    :items="typeItems"
+    :model-value="selectedType"
+    panel-id="planning-type-panel"
+    label="요청 인증 유형"
+    @update:model-value="selectedType = $event === 'auditor' ? 'auditor' : 'auditee'"
+  />
+  <section
+    id="planning-type-panel"
+    class="panel planning-panel"
+    aria-labelledby="planning-requests-heading"
+  >
     <div class="planning-toolbar">
       <h2 id="planning-requests-heading">계획 요청 현황</h2>
       <label class="planning-filter"
@@ -336,7 +382,9 @@ onBeforeRouteUpdate(leave);
             <li v-for="s in p.schedules" :key="s.courseId">
               <strong>{{ store.course(s.courseId).title }}</strong>
               <p v-if="s.goal.trim()" class="preserve-lines">{{ s.goal }}</p>
-              <p class="planning-meta">평가 예정 {{ s.assessmentOn || '미정' }}</p>
+              <p v-if="selectedType === 'auditee'" class="planning-meta">
+                평가 예정 {{ s.assessmentOn || '미정' }}
+              </p>
             </li>
           </ul>
         </section>
@@ -349,7 +397,7 @@ onBeforeRouteUpdate(leave);
   </AppDialog>
   <AppDialog
     :open="open"
-    title="계획 수립 요청"
+    :title="`${selectedType === 'auditor' ? 'Auditor' : 'Auditee'} 계획 수립 요청`"
     class="planning-request-dialog"
     @update:open="
       (value) => {
@@ -358,9 +406,17 @@ onBeforeRouteUpdate(leave);
     "
   >
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <fieldset :disabled="busy" class="choice-group">
+      <legend>요청 인증 유형</legend>
+      <label v-for="item in typeItems" :key="item.id" class="choice"
+        ><input v-model="selectedType" type="radio" name="request-type" :value="item.id" />{{
+          item.label
+        }}</label
+      >
+    </fieldset>
     <div class="planning-request-layout">
       <fieldset class="planning-request-targets">
-        <legend>대상 학습자</legend>
+        <legend>{{ selectedType === 'auditor' ? '대상 평가자' : '대상 학습자' }}</legend>
         <div class="planning-target-tools">
           <label class="field"
             >이름·조직 검색<input

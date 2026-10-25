@@ -11,6 +11,8 @@ export type DashboardEfficacy = "Active" | "Hold" | "Revoke" | "none";
 export type DashboardProgress =
   | "unplanned"
   | "draft"
+  | "learning_wait"
+  | "learning_progress"
   | "assessment_wait"
   | "assessment_progress"
   | "partial_completion"
@@ -46,6 +48,7 @@ export type DashboardMetric =
   | "overdueAssessments"
   | "excludedPeople";
 export interface DashboardQuery {
+  qualificationType?: "auditee" | "auditor";
   lv1OrganizationId?: string;
   organizationId?: string;
   includeDescendants?: boolean;
@@ -346,6 +349,9 @@ export interface DashboardDetails {
   rows: DashboardPage<DashboardDetailRow>;
 }
 export interface DashboardCourseSummary {
+  qualificationType?: "auditee" | "auditor";
+  confirmedItems?: number;
+  requiredItems?: number;
   courseId: string;
   title: string;
   version: number;

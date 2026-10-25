@@ -33,13 +33,20 @@
   color: var(--ink-secondary);
   line-height: 1.45;
 }
+.home-hero .home-personal-type {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
 .home-hero .home-date {
   display: block;
   flex-shrink: 0;
   padding-top: 4px;
   font-size: var(--text-caption);
-  font-weight: var(--weight-body);
-  color: var(--ink-secondary);
+  font-weight: var(--weight-heading);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .hero-eligibility {

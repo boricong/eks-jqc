@@ -6,9 +6,6 @@
 .policy-workspace > button {
   justify-self: start;
 }
-.policy-workspace > .policy-reload {
-  justify-self: end;
-}
 .policy-pool-list {
   max-height: 360px;
   overflow-y: auto;
@@ -44,11 +41,11 @@
   display: block;
   flex: 0 0 auto;
   text-align: left;
-  padding: 8px;
+  padding: 4px 8px;
   border: 0;
   border-left: 2px solid transparent;
   border-radius: 0;
-  min-height: 38px;
+  min-height: 28px;
   font-size: var(--text-table);
   line-height: 20px;
   width: 100%;
@@ -165,6 +162,37 @@
 }
 .policy-selection-layout .field {
   margin: 0;
+}
+.policy-selection-layout .policy-qualification-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.policy-qualification-search > input {
+  min-width: 0;
+}
+.policy-qualification-list {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.policy-qualification-list > .choice {
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+}
+.policy-qualification-list > .choice + .choice {
+  border-top: 1px solid var(--line);
+}
+.policy-qualification-list > .choice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.policy-qualification-list > p {
+  padding: 12px;
 }
 .policy-tree-panel {
   min-width: 0;

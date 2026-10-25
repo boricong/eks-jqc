@@ -67,7 +67,7 @@ test('계획 요청 기본 기한 → 전 FT 학습자의 학습·독립 평가�
     ).toBeVisible();
   }
   await page.getByRole('link', { name: '인증서 보기' }).click();
-  await expect(page.locator('.cert-header')).toContainText('박준호');
+  await expect(page.locator('.certificate-recipient')).toHaveText('박준호');
   expect(
     backend.store.snapshot().certifications.filter((c) => c.assignmentId === assignment.id),
   ).toHaveLength(1);

@@ -1,3 +1,4 @@
+import { migrateQualificationTypes } from "./qualification-type-migration.ts";
 import { randomUUID } from "node:crypto";
 import { validateState } from "./integrity.ts";
 import { validateOrganizations } from "./organizations.ts";
@@ -7,11 +8,11 @@ export function migratePlanning(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![12, 13].includes(raw?.schemaVersion))
+  if (![12, 13, 14, 15, 16].includes(raw?.schemaVersion))
     throw new Error("계획 요청 이관에는 업무12·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput),
     next = structuredClone(raw);
-  const alreadyApplied = raw.schemaVersion === 13;
+  const alreadyApplied = raw.schemaVersion >= 13;
   if (!alreadyApplied) {
     next.schemaVersion = 13;
     next.revision++;
@@ -31,12 +32,12 @@ export function migratePlanning(
       details: { fromSchema: 12, progressReset: false },
     });
   }
-  const state = validateState(next, organizations);
+  const state = migrateQualificationTypes(next, organizations, at).state;
   return {
     state,
     organizations,
     report: {
-      alreadyApplied,
+      alreadyApplied: raw.schemaVersion === 16,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       requests: state.planningRequests.length,

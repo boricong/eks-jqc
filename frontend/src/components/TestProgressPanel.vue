@@ -32,6 +32,7 @@ const labels: Record<keyof ProgressSummary['counts'], string> = {
   objectiveAttempts: '지식 평가 응시',
   practicalAttempts: '상황 대응 평가 응시',
   learningRecords: '과거 학습 완료 기록',
+  learningChecklists: 'Auditor 학습 확인',
   notifications: '진행 관련 알림',
   completions: '인증Set 수료',
   certifications: '검증용 인증',

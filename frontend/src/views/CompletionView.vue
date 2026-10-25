@@ -2,7 +2,7 @@
 import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { kindLabels } from '@eks/contracts';
+import { kindLabels, recordQualificationType } from '@eks/contracts';
 import {
   isOwnedRecordContext,
   ownedCertificateLocation,
@@ -16,11 +16,16 @@ const a = computed(() =>
     a.enrollments.some((e) => e.completion?.id === route.params.id),
   ),
 );
+const qualificationType = computed(() =>
+  a.value
+    ? recordQualificationType(store.qualification(a.value.qualificationId), a.value)
+    : 'auditee',
+);
 const e = computed(() => a.value?.enrollments.find((e) => e.completion?.id === route.params.id));
 const record = computed(() => e.value?.completion);
 const back = computed(() =>
   isOwnedRecordContext(route, a.value, store.actor)
-    ? ownedCertificateLocation(a.value!.id)
+    ? ownedCertificateLocation(a.value!.id, qualificationType.value)
     : route.query.lv1OrganizationId && store.canEnterManagement
       ? store.managementLink('/admin/results')
       : a.value?.learnerId === store.actorId
@@ -58,6 +63,14 @@ const back = computed(() =>
     </section>
     <section class="panel editor-panel">
       <h2>수료 근거</h2>
+      <p v-if="record.method === 'self_confirmation'">필수 학습항목 본인 확인으로 수료</p>
+      <div v-for="item in record.learningEvidence" :key="item.itemId" class="certificate-attempt">
+        <strong>{{ item.title }}</strong>
+        <p class="muted">
+          {{ item.required ? '필수' : '선택' }} · 본인 확인 ·
+          {{ new Date(item.confirmedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) }}
+        </p>
+      </div>
       <p v-for="item in record.evidence" :key="item.kind">
         {{ kindLabels[item.kind] }} 통과 · 자동 채점 ·
         {{ e.history.find((h) => h.id === item.attemptId)?.earned }} /
@@ -76,7 +89,7 @@ const back = computed(() =>
         v-if="a.certification"
         :to="{
           path: `/certifications/${a.id}`,
-          query: documentContextQuery(route, a, store.actor),
+          query: documentContextQuery(route, a, store.actor, qualificationType),
         }"
         class="button secondary"
         >자격 인증서 보기</RouterLink

@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { QualificationTypeSchema } from "./qualification-types.ts";
 export const QualificationMetadataSchema = z.object({
+  qualificationType: QualificationTypeSchema.default("auditee"),
   templateId: z.string().min(1).max(160),
   templateRevision: z.number().int().positive(),
   title: z.string().max(300),
@@ -8,6 +10,7 @@ export const QualificationMetadataSchema = z.object({
 });
 export type QualificationMetadata = z.infer<typeof QualificationMetadataSchema>;
 export const QualificationTemplateSchema = z.object({
+  qualificationType: QualificationTypeSchema.default("auditee"),
   id: z.string().min(1).max(160),
   revision: z.number().int().positive(),
   title: z.string().trim().min(1).max(300),

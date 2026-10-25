@@ -57,11 +57,11 @@ test('밝은 역할별 홈·관리 목록 밀도·오른쪽 사용자 패널·�
           return b.top > 0 && b.bottom < innerHeight;
         }).length,
     ),
-  ).toBeGreaterThanOrEqual(14);
+  ).toBeGreaterThanOrEqual(13);
   await expect(page.getByLabel('목록 밀도')).toHaveCount(0);
   await page.evaluate(() =>
     localStorage.setItem(
-      'eks-list-admin',
+      'eks-admin-filter-admin-1-org-photo-courses-auditee',
       JSON.stringify({ density: 'roomy', size: 50, sort: 'desc' }),
     ),
   );

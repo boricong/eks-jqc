@@ -193,6 +193,7 @@ test('많은 자격의 차트8개 미리보기·20개 확대 페이지·URL 복�
           templateId = 'chart-template-' + i;
         s.qualificationTemplates.push({
           id: templateId,
+          qualificationType: 'auditee',
           revision: 1,
           title: '차트 검증 자격 ' + i + ' 긴 이름과 줄바꿈',
           englishName: '',

@@ -54,9 +54,13 @@ const assessmentSummary = computed(
             </dd>
           </div>
           <div>
-            <dt>필수 평가</dt>
+            <dt>{{ course.qualificationType === 'auditor' ? '수료 방식' : '필수 평가' }}</dt>
             <dd>
-              {{ assessmentSummary }}
+              {{
+                course.qualificationType === 'auditor'
+                  ? '필수 학습항목 본인 확인'
+                  : assessmentSummary
+              }}
             </dd>
           </div>
         </dl>
@@ -75,7 +79,7 @@ const assessmentSummary = computed(
         </ul>
         <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
       </section>
-      <section aria-label="평가 요약">
+      <section v-if="course.qualificationType !== 'auditor'" aria-label="평가 요약">
         <h3>평가 요약</h3>
         <dl v-if="course.assessmentKinds.length" class="course-preview-assessments">
           <div v-for="kind in course.assessmentKinds" :key="kind">

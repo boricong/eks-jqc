@@ -22,7 +22,23 @@ export function notify(
     )
   )
     return;
-  s.notifications.push({ ...input, id: randomUUID(), createdAt: at });
+  const a = s.assignments.find((a) => a.id === input.assignmentId);
+  const type =
+    input.qualificationType ||
+    (a &&
+      s.qualifications.find((q) => q.id === a.qualificationId)
+        ?.qualificationType);
+  s.notifications.push({
+    ...input,
+    ...(type
+      ? {
+          qualificationType: type,
+          title: `[${type === "auditor" ? "Auditor" : "Auditee"}] ${input.title}`,
+        }
+      : {}),
+    id: randomUUID(),
+    createdAt: at,
+  });
 }
 export function periodAlreadyNotified(
   s: State,
@@ -49,6 +65,11 @@ export function reconcileNotifications(
   const before = s.notifications.length;
   const lifecycleChanged = reconcileLifecycle(s, at);
   for (const original of s.certifications) {
+    if (
+      s.qualifications.find((q) => q.id === original.qualificationId)
+        ?.qualificationType === "auditor"
+    )
+      continue;
     const c = { ...original, ...credentialCurrent(original) },
       a = s.assignments.find((a) => a.id === c.assignmentId)!,
       held =

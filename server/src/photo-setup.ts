@@ -57,6 +57,7 @@ const count = (state: State): Counts =>
         "plans",
         "planningRequests",
         "learningRecords",
+        "learningChecklists",
         "notifications",
         "comparisons",
         "audits",
@@ -243,6 +244,7 @@ export function preparePhotoSetup(
   state.enrollments = [];
   state.attempts = [];
   state.completions = [];
+  state.learningChecklists = [];
   state.certifications = [];
   state.plans = [];
   state.planningRequests = [];
@@ -384,6 +386,7 @@ export function preparePhotoSetup(
           "plans",
           "planningRequests",
           "learningRecords",
+          "learningChecklists",
           "notifications",
           "comparisons",
         ].map((key) => [key, before[key] || 0]),

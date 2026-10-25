@@ -28,6 +28,7 @@ const meta: [string, string][] = [
   ["sourceRevision", "변경 확인"],
   ["templateId", "기본자격 ID"],
   ["templateRevision", "공통 정보 수정 번호"],
+  ["qualificationType", "인증 유형 · 읽기 전용"],
 ];
 const systemKeys = [
   "code",
@@ -85,10 +86,13 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v7";
+  book.subject = "eks-catalog-v10";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 등록된 팀 자격 양식 v7"],
+    ["EKS 자격 기준 · 등록된 팀 자격 양식 v10"],
+    [
+      "Auditor는 필수 학습항목 본인 확인으로 수료합니다. 기존 평가 칸은 비활성 보존용이며 변경할 수 없습니다.",
+    ],
     [
       "1. 등록된 팀 자격의 기간·인증Set을 수정합니다. 공통 이름·영문명·설명은 참고용입니다.",
     ],
@@ -166,7 +170,7 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v7",
+      format: "eks-catalog-v10",
       lv1OrganizationId: data.lv1OrganizationId,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
@@ -234,6 +238,7 @@ export async function writeCatalogV3(
           "description",
           "templateId",
           "templateRevision",
+          "qualificationType",
         ].includes(k)
       ) {
         cell.fill = {
@@ -340,6 +345,28 @@ export async function writeCatalogV3(
               showErrorMessage: true,
               error: "허용 범위의 정수를 입력해 주세요.",
             };
+          if (
+            q.qualificationType === "auditor" &&
+            (["objective", "practical"].includes(table) ||
+              ["kinds", "passScore", "practicalPassScore"].includes(k))
+          ) {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFE3E8EE" },
+            };
+            cell.note = "Auditor 비활성 평가 정보 · 변경 불가";
+            cell.protection = { locked: true };
+          }
+          if (k === "qualificationType") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFE3E8EE" },
+            };
+            cell.note =
+              "인증 유형은 읽기 전용입니다. 연결된 기본자격의 유형을 사용합니다.";
+          }
           if (systemKeys.includes(k))
             cell.numFmt = k === "sourceRevision" ? "0" : "@";
           for (const issue of issues.filter(
@@ -393,7 +420,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v7",
+    format: "eks-catalog-v10",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -474,6 +501,9 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
         "eks-catalog-v5",
         "eks-catalog-v6",
         "eks-catalog-v7",
+        "eks-catalog-v8",
+        "eks-catalog-v9",
+        "eks-catalog-v10",
       ].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
@@ -487,6 +517,9 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
     );
     const mode = internal("mode", m.mode) as CatalogSheet["mode"];
     q = {
+      ...(m.qualificationType !== undefined && m.qualificationType !== ""
+        ? { qualificationType: m.qualificationType }
+        : {}),
       sheetName: ws.name,
       mode,
       code: String(m.code || `Q-${seed}-${workbook.sheets.length + 1}`),

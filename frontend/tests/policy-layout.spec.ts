@@ -2,6 +2,7 @@ import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import type { JsonStore } from '../../server/src/storage';
 import { nodeFor } from '../../server/src/organizations';
+import { configureTestPolicies } from '../../server/tests/policy-helpers';
 
 const own = 'org-photo-pyeongtaek-1';
 
@@ -32,6 +33,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   backend,
 }) => {
   const longName = '설비 구성 및 공정 기준의 변경 대응 능력을 검증하는 상세 운영 조직';
+  await configureTestPolicies(backend.store);
   await backend.store.organizations.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -48,6 +50,8 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   const tree = page.getByRole('tree', { name: '설정 가능한 조직', includeHidden: true });
   await expect(tree).toBeVisible();
   await expect(page.getByText('관리할 조직을 먼저 선택한 뒤', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '다시 불러오기', exact: true })).toHaveCount(0);
+  await expect(page.getByText('선택하지 않으면 필수 자격 없음', { exact: false })).toHaveCount(0);
   expect((await tree.innerText()).match(/Lv\d|직속|미설정|개 필수/)).toBeNull();
   const root = tree.locator('[data-id="org-photo"]');
   await root.focus();
@@ -79,6 +83,11 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       expect(left.width).toBeGreaterThanOrEqual(240);
       expect(left.width).toBeLessThanOrEqual(300);
       expect(right.x - (left.x + left.width)).toBeGreaterThanOrEqual(23);
+      expect((await tree.locator('[data-id="org-photo-pyeongtaek-2"]').boundingBox())!.height).toBe(
+        28,
+      );
+      await expect(root).toHaveCSS('padding-top', '4px');
+      await expect(root).toHaveCSS('padding-bottom', '4px');
       const row = tree.locator(`[data-id="${own}"]`);
       const rowBox = (await row.boundingBox())!,
         textBox = (await row.locator('.policy-tree-name').boundingBox())!;
@@ -100,6 +109,20 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       await expect(tree).toBeHidden();
     }
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('font-size', '14px');
+    const search = page.getByLabel('자격 검색', { exact: true }),
+      searchLabel = page.locator('.policy-qualification-search > span'),
+      list = page.locator('.policy-qualification-list');
+    const searchBox = (await search.boundingBox())!,
+      labelBox = (await searchLabel.boundingBox())!,
+      listBox = (await list.boundingBox())!;
+    expect(
+      Math.abs(labelBox.y + labelBox.height / 2 - searchBox.y - searchBox.height / 2),
+    ).toBeLessThan(1);
+    expect(searchBox.x).toBeGreaterThan(labelBox.x + labelBox.width);
+    expect(listBox.y - searchBox.y - searchBox.height).toBeGreaterThanOrEqual(12);
+    await expect(list).toHaveCSS('border-top-width', '1px');
+    await expect(list).toHaveCSS('border-color', 'rgb(227, 232, 238)');
+    await expect(list.getByRole('checkbox').first()).toBeChecked();
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-radius', '0px');
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS(
       'border-left-color',
@@ -113,6 +136,12 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       fullPage: true,
     });
   }
+  await page.getByLabel('자격 검색', { exact: true }).fill('검색 결과 없는 자격');
+  await expect(page.locator('.policy-qualification-list')).toHaveText('검색 결과가 없습니다.');
+  await page.getByLabel('자격 검색', { exact: true }).fill('');
+  await expect(
+    page.locator('.policy-qualification-list').getByRole('checkbox').first(),
+  ).toBeChecked();
   await page.locator('.policy-tree-toggle').click();
   await tree.locator('[data-id="org-photo-pyeongtaek-2"]').click();
   await expect(tree).toBeHidden();
@@ -221,7 +250,7 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
   await answerConfirmation(page, true);
   await saving;
   await expect(tree.locator('[data-id="org-photo-pyeongtaek-2"]')).toBeDisabled();
-  await expect(page.getByRole('button', { name: '다시 불러오기', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '다시 불러오기', exact: true })).toHaveCount(0);
   release();
   await expect(save).toBeDisabled();
   await expect(selected).toContainText('저장된 지정');

@@ -30,7 +30,7 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 13,
+    schemaVersion: 16,
     qualificationTemplates: initialTemplates(),
     renewals: [],
     lifecycleEvents: [],
@@ -84,6 +84,7 @@ export function seedState(testFixture = false): State {
     qualifications: (testFixture ? source.qualifications : []).map(
       (q: any) => ({
         ...q,
+        qualificationType: "auditee",
         templateId: `fixture-${q.id}`,
         templateRevision: 1,
         englishName: "",
@@ -127,10 +128,12 @@ export function seedState(testFixture = false): State {
     planningRequests: [],
     plans: [],
     learningRecords: [],
+    learningChecklists: [],
     notifications: [],
   };
   for (const q of state.qualifications)
     state.qualificationTemplates.push({
+      qualificationType: q.qualificationType,
       id: q.templateId,
       revision: 1,
       title: q.title,

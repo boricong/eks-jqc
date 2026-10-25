@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PersonalTypeTabs from '../components/PersonalTypeTabs.vue';
 import RequestPlanning from '../components/RequestPlanning.vue';
 import PageHeading from '../components/PageHeading.vue';
 import PropertyList from '../components/PropertyList.vue';
@@ -28,10 +29,28 @@ const initializing = ref(false),
   deleteDialog = ref<HTMLDialogElement | null>(null),
   activePlanId = ref('');
 let loadGeneration = 0;
-const plans = computed(() => store.data.plans.filter((p) => p.learnerId === store.actorId));
+const selectedType = computed(() => {
+  const p = store.data.plans.find((p) => p.id === route.params.id),
+    r = store.data.planningRequests.find((r) => r.id === route.query.request);
+  return p
+    ? store.qualification(p.qualificationId).qualificationType
+    : r
+      ? r.qualificationType
+      : route.query.type === 'auditor' || !store.personalTypes.includes('auditee')
+        ? 'auditor'
+        : 'auditee';
+});
+const auditor = computed(() => selectedType.value === 'auditor');
+const plans = computed(() =>
+  store.data.plans.filter(
+    (p) =>
+      p.learnerId === store.actorId &&
+      store.qualification(p.qualificationId).qualificationType === selectedType.value,
+  ),
+);
 const requests = computed(() =>
   store.data.planningRequests
-    .filter((r) => r.learnerId === store.actorId)
+    .filter((r) => r.learnerId === store.actorId && r.qualificationType === selectedType.value)
     .slice()
     .reverse(),
 );
@@ -221,14 +240,16 @@ function scheduleErrors(): Record<string, string> {
       result[`${s.courseId}.learningStart`] = `${title}: 학습 시작 예정일을 입력해 주세요.`;
     if (!s.learningEnd)
       result[`${s.courseId}.learningEnd`] = `${title}: 학습 완료 예정일을 입력해 주세요.`;
-    if (!s.assessmentOn)
+    if (!auditor.value && !s.assessmentOn)
       result[`${s.courseId}.assessmentOn`] = `${title}: 평가 예정일을 입력해 주세요.`;
     if (s.learningStart && s.learningEnd && s.learningStart > s.learningEnd)
       result[`${s.courseId}.learningEnd`] = `${title}: 학습 완료 예정일은 시작일 이후여야 합니다.`;
-    if (s.learningEnd && s.assessmentOn && s.learningEnd > s.assessmentOn)
+    if (!auditor.value && s.learningEnd && s.assessmentOn && s.learningEnd > s.assessmentOn)
       result[`${s.courseId}.assessmentOn`] =
         `${title}: 평가 예정일은 학습 완료 예정일 이후여야 합니다.`;
-    if (fields.targetOn && s.assessmentOn && s.assessmentOn > fields.targetOn)
+    if (auditor.value && fields.targetOn && s.learningEnd > fields.targetOn)
+      result.targetOn = '목표 인증일은 학습 완료 예정일 이후여야 합니다.';
+    if (!auditor.value && fields.targetOn && s.assessmentOn && s.assessmentOn > fields.targetOn)
       result.targetOn = '목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.';
   });
   return result;
@@ -338,7 +359,7 @@ async function complete() {
   busy.value = true;
   error.value = '';
   try {
-    const errors = planErrors(form.value!);
+    const errors = planErrors(form.value!, selectedType.value);
     if (errors.length) {
       const schedules = scheduleErrors();
       step.value = 2;
@@ -382,10 +403,18 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 </script>
 <template>
-  <div class="container page plans-page" :class="{ 'is-plan-review': current && step === 4 }">
+  <div
+    id="personal-content"
+    class="container page plans-page"
+    :class="{ 'is-plan-review': current && step === 4 }"
+  >
     <LearnerNav />
+    <PersonalTypeTabs panel-id="personal-content" v-if="!route.params.id" />
     <div v-if="current && policyErrors.length" class="error-message" role="alert">
-      {{ policyErrors.join(' · ') }}<RouterLink to="/plans">내 계획에서 현재 요청 확인</RouterLink>
+      {{ policyErrors.join(' · ')
+      }}<RouterLink :to="auditor ? '/plans?type=auditor' : '/plans'"
+        >내 계획에서 현재 요청 확인</RouterLink
+      >
     </div>
     <PageHeading class="page-heading">
       <h1>{{ current ? '개인 인증 계획' : '내 계획' }}</h1>
@@ -401,7 +430,9 @@ onBeforeRouteUpdate(leave);
     <section v-if="draft.terminal.value" class="panel empty-state" role="alert">
       <h2>삭제된 계획입니다</h2>
       <p>{{ draft.terminal.value }}</p>
-      <RouterLink to="/plans" class="button primary">내 계획으로 이동</RouterLink>
+      <RouterLink :to="auditor ? '/plans?type=auditor' : '/plans'" class="button primary"
+        >내 계획으로 이동</RouterLink
+      >
     </section>
     <section v-else-if="initializing" class="panel empty-state" role="status">
       기본 일정을 준비하고 있습니다.
@@ -411,7 +442,12 @@ onBeforeRouteUpdate(leave);
       <button class="button secondary" @click="load">다시 불러오기</button>
     </section>
     <template v-else-if="current && form">
-      <RouterLink :to="{ path: '/plans', query: { request: requestId } }" class="back-link"
+      <RouterLink
+        :to="{
+          path: '/plans',
+          query: { request: requestId, type: auditor ? 'auditor' : undefined },
+        }"
+        class="back-link"
         >내 계획으로</RouterLink
       >
       <div v-if="step !== 4" class="panel plan-context">
@@ -470,10 +506,10 @@ onBeforeRouteUpdate(leave);
             >{{ fieldErrors.targetOn }}</small
           ></label
         >
-        <div class="schedule-table">
+        <div class="schedule-table" :class="{ 'auditor-schedules': auditor }">
           <div class="schedule-header" aria-hidden="true">
             <span>인증Set</span><span>학습 시작 예정일</span><span>학습 완료 예정일</span
-            ><span>평가 예정일</span>
+            ><span v-if="!auditor">평가 예정일</span>
           </div>
           <div v-for="(s, index) in form.schedules" :key="s.courseId" class="schedule-row">
             <h3 :title="store.course(s.courseId).title">
@@ -522,7 +558,7 @@ onBeforeRouteUpdate(leave);
                 role="alert"
                 >{{ fieldErrors[`${s.courseId}.learningEnd`] }}</small
               ></label
-            ><label class="field"
+            ><label v-if="!auditor" class="field"
               ><span>평가 예정일</span
               ><input
                 v-model="s.assessmentOn"
@@ -547,8 +583,9 @@ onBeforeRouteUpdate(leave);
           </div>
         </div>
         <p class="muted schedule-help">
-          최초 일정은 오늘부터 1주 후 시작, 시작일부터 3주 후 완료·4주 후 평가로 채웁니다. 수정한
-          날짜는 자동으로 바뀌지 않습니다. 예정일은 진행을 막지 않습니다.
+          최초 일정은 오늘부터 1주 후 시작, 시작일부터 3주 후 완료{{
+            auditor ? '' : '·4주 후 평가'
+          }}로 채웁니다. 수정한 날짜는 자동으로 바뀌지 않습니다. 예정일은 진행을 막지 않습니다.
         </p>
         <div class="actions">
           <button class="button primary" @click="moveTo(4)">최종 확인</button>
@@ -659,7 +696,10 @@ onBeforeRouteUpdate(leave);
             <template #summary
               ><span class="plan-review-course-meta"
                 ><span>v{{ store.course(s.courseId)?.version ?? '확인 필요' }}</span
-                ><span>평가 예정일 {{ reviewDate(s.assessmentOn) }}</span></span
+                ><span
+                  >{{ auditor ? '학습 완료일' : '평가 예정일' }}
+                  {{ reviewDate(auditor ? s.learningEnd : s.assessmentOn) }}</span
+                ></span
               ></template
             >
             <PropertyList class="plan-review-schedule">
@@ -671,7 +711,7 @@ onBeforeRouteUpdate(leave);
                 <dt>학습 완료 예정일</dt>
                 <dd>{{ reviewDate(s.learningEnd) }}</dd>
               </div>
-              <div>
+              <div v-if="!auditor">
                 <dt>평가 예정일</dt>
                 <dd>{{ reviewDate(s.assessmentOn) }}</dd>
               </div>
@@ -716,11 +756,11 @@ onBeforeRouteUpdate(leave);
           </template>
           <p v-else>완료된 계획은 이 화면에서 변경할 수 없습니다.</p>
           <ul
-            v-if="current.status === 'draft' && planErrors(form).length"
+            v-if="current.status === 'draft' && planErrors(form, selectedType).length"
             class="validation-list"
             aria-label="계획 확인 필요 항목"
           >
-            <li v-for="message in planErrors(form)" :key="message">{{ message }}</li>
+            <li v-for="message in planErrors(form, selectedType)" :key="message">{{ message }}</li>
           </ul>
         </aside>
       </div>
@@ -788,7 +828,10 @@ onBeforeRouteUpdate(leave);
             v-if="current.status === 'draft'"
             class="button primary"
             :disabled="
-              busy || !!planErrors(form).length || !!policyErrors.length || draft.conflict.value
+              busy ||
+              !!planErrors(form, selectedType).length ||
+              !!policyErrors.length ||
+              draft.conflict.value
             "
             @click="complete"
           >
@@ -947,3 +990,12 @@ onBeforeRouteUpdate(leave);
     </dialog>
   </div>
 </template>
+
+<style scoped>
+@media (min-width: 769px) {
+  .auditor-schedules .schedule-row,
+  .auditor-schedules .schedule-header {
+    grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(150px, 1fr));
+  }
+}
+</style>

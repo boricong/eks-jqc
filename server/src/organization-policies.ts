@@ -1,9 +1,14 @@
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
-import { currentQualification } from "./qualification-templates.ts";
+import {
+  currentQualification,
+  requireQualificationProcess,
+} from "./qualification-templates.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   organizationEntries,
+  hasQualificationRole,
+  type QualificationType,
   qualificationUseErrors,
   qualificationReadinessErrors,
   certificationStatus,
@@ -36,6 +41,7 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
       422,
       "팀 자격 목록의 조직·게시 버전 참조를 확인해 주세요.",
     );
+    requireQualificationProcess(q!);
     const key = `${p.lv1OrganizationId}:${p.entityId}`;
     demand(!seen.has(key), 422, "팀 자격 목록이 중복되었습니다.");
     seen.add(key);
@@ -72,6 +78,7 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
                 q.id === t.qualificationId &&
                 q.entityId === t.entityId &&
                 q.version === t.version &&
+                q.qualificationType === r.qualificationType &&
                 q.lv1OrganizationId === r.lv1OrganizationId,
             ),
           ),
@@ -97,131 +104,144 @@ export function requiredQualifications(
   doc: OrganizationDocument,
   u: UserView,
   at = new Date().toISOString(),
+  type?: QualificationType,
 ): RequiredQualificationsView {
   const org = organization(doc, u.organizationId);
-  const items = (org.requiredQualifications || []).map((entityId) => {
-    const pool = doc.qualificationPools.find(
-      (p) =>
-        p.lv1OrganizationId === org.lv1OrganizationId &&
-        p.entityId === entityId,
-    )!;
-    const q = currentQualification(
-      s,
-      s.qualifications.find((q) => q.id === pool.qualificationId)!,
-    );
-    const all = s.assignments.filter(
-      (a) =>
-        a.learnerId === u.id &&
-        !a.excludedReason &&
-        s.qualifications.find((q) => q.id === a.qualificationId)?.entityId ===
-          entityId,
-    );
-    const assignments = all.filter((a) => openAssignment(s, a, at));
-    const certs = s.certifications.filter((c) =>
-      all.some((a) => a.id === c.assignmentId),
-    );
-    const valid = certs.find(
-      (c) => effectiveCredentialStatus(c, at) === "Active",
-    );
-    const held = certs.find((c) => effectiveCredentialStatus(c, at) === "Hold");
-    const previous = lastRevoked(s, u.id, entityId, at);
-    const plan = [...s.plans]
-      .reverse()
-      .find(
+  const items = (org.requiredQualifications || [])
+    .filter((entityId) => {
+      const q = s.qualifications.find((q) => q.entityId === entityId);
+      return (
+        q &&
+        (type
+          ? q.qualificationType === type
+          : hasQualificationRole(u.roles, q.qualificationType))
+      );
+    })
+    .map((entityId) => {
+      const pool = doc.qualificationPools.find(
         (p) =>
-          p.learnerId === u.id &&
-          !p.deletedAt &&
-          s.qualifications.find((q) => q.id === p.qualificationId)?.entityId ===
-            entityId &&
-          (p.assignmentId
-            ? assignments.some((a) => a.id === p.assignmentId)
-            : p.previousCertificationId === previous?.id),
+          p.lv1OrganizationId === org.lv1OrganizationId &&
+          p.entityId === entityId,
+      )!;
+      const q = currentQualification(
+        s,
+        s.qualifications.find((q) => q.id === pool.qualificationId)!,
       );
-    const request = [...s.planningRequests]
-      .reverse()
-      .find(
-        (r) =>
-          r.learnerId === u.id &&
-          r.organizationId === org.id &&
-          !r.completion &&
-          [...(r.targets || []), ...(r.selections || [])].some(
-            (t) =>
-              t.entityId === entityId &&
-              t.previousCertificationId === previous?.id,
-          ),
+      const all = s.assignments.filter(
+        (a) =>
+          a.learnerId === u.id &&
+          !a.excludedReason &&
+          s.qualifications.find((q) => q.id === a.qualificationId)?.entityId ===
+            entityId,
       );
-    const errors = qualificationUseErrors(q, s.courses);
-    const row: RequiredQualification = {
-      entityId,
-      qualificationId: q.id,
-      title: q.title,
-      version: q.version,
-      status: "waiting",
-      reason: previous
-        ? "Revoke · 다시 취득하려면 관리자의 새 계획 요청이 필요합니다."
-        : "관리자의 계획 요청을 기다리고 있습니다.",
-      canStart: false,
-      ...(previous ? { previousCertificationId: previous.id } : {}),
-      ...(request
-        ? {
-            requestId: request.id,
-            requestedVersion: [
-              ...(request.targets || []),
-              ...request.selections,
-            ].find((t) => t.entityId === entityId)!.version,
-          }
-        : {}),
-      ...(plan ? { planId: plan.id } : {}),
-      ...(assignments[0] ? { assignmentId: assignments[0].id } : {}),
-    };
-    if (u.certificationEligibility === "hold")
-      Object.assign(row, {
-        status: "blocked",
-        reason: "취득 대상자 Hold · 대상자 통계에서 제외됩니다.",
-      });
-    else if (valid)
-      Object.assign(row, {
-        status: "fulfilled",
-        reason: "같은 자격의 유효한 인증을 보유하고 있습니다.",
-        assignmentId: valid.assignmentId,
-        certificationId: valid.id,
-      });
-    else if (held)
-      Object.assign(row, {
-        status: "unknown",
-        reason: held.validityNeedsCorrection
-          ? "Hold · 기존 인증의 유효기간을 확인해야 합니다."
-          : "Hold · 개인 자격 효력이 정지되었습니다. 관리자 확인이 필요합니다.",
-        assignmentId: held.assignmentId,
-        certificationId: held.id,
-      });
-    else if (assignments.length)
-      Object.assign(row, {
-        status: "progress",
-        reason: "확정한 계획의 기준으로 계속 진행할 수 있습니다.",
-      });
-    else if (plan)
-      Object.assign(row, {
-        status: "draft",
-        reason: "작성 중인 계획을 확인해 주세요.",
-      });
-    else if (!org.effectiveActive || errors.length)
-      Object.assign(row, {
-        status: "blocked",
-        reason: !org.effectiveActive
-          ? "사용 중지된 조직입니다."
-          : errors.join(" · "),
-      });
-    else if (request)
-      Object.assign(row, {
-        status: "ready",
+      const assignments = all.filter((a) => openAssignment(s, a, at));
+      const certs = s.certifications.filter((c) =>
+        all.some((a) => a.id === c.assignmentId),
+      );
+      const valid = certs.find(
+        (c) => effectiveCredentialStatus(c, at) === "Active",
+      );
+      const held = certs.find(
+        (c) => effectiveCredentialStatus(c, at) === "Hold",
+      );
+      const previous = lastRevoked(s, u.id, entityId, at);
+      const plan = [...s.plans]
+        .reverse()
+        .find(
+          (p) =>
+            p.learnerId === u.id &&
+            !p.deletedAt &&
+            s.qualifications.find((q) => q.id === p.qualificationId)
+              ?.entityId === entityId &&
+            (p.assignmentId
+              ? assignments.some((a) => a.id === p.assignmentId)
+              : p.previousCertificationId === previous?.id),
+        );
+      const request = [...s.planningRequests]
+        .reverse()
+        .find(
+          (r) =>
+            r.learnerId === u.id &&
+            r.organizationId === org.id &&
+            !r.completion &&
+            [...(r.targets || []), ...(r.selections || [])].some(
+              (t) =>
+                t.entityId === entityId &&
+                t.previousCertificationId === previous?.id,
+            ),
+        );
+      const errors = qualificationUseErrors(q, s.courses);
+      const row: RequiredQualification = {
+        entityId,
+        qualificationId: q.id,
+        title: q.title,
+        version: q.version,
+        status: "waiting",
         reason: previous
-          ? "새 요청으로 재취득 계획을 작성할 수 있습니다."
-          : "요청받은 필수 자격의 계획을 작성할 수 있습니다.",
-        canStart: true,
-      });
-    return row;
-  });
+          ? "Revoke · 다시 취득하려면 관리자의 새 계획 요청이 필요합니다."
+          : "관리자의 계획 요청을 기다리고 있습니다.",
+        canStart: false,
+        ...(previous ? { previousCertificationId: previous.id } : {}),
+        ...(request
+          ? {
+              requestId: request.id,
+              requestedVersion: [
+                ...(request.targets || []),
+                ...request.selections,
+              ].find((t) => t.entityId === entityId)!.version,
+            }
+          : {}),
+        ...(plan ? { planId: plan.id } : {}),
+        ...(assignments[0] ? { assignmentId: assignments[0].id } : {}),
+      };
+      if (u.certificationEligibility === "hold")
+        Object.assign(row, {
+          status: "blocked",
+          reason: "취득 대상자 Hold · 대상자 통계에서 제외됩니다.",
+        });
+      else if (valid)
+        Object.assign(row, {
+          status: "fulfilled",
+          reason: "같은 자격의 유효한 인증을 보유하고 있습니다.",
+          assignmentId: valid.assignmentId,
+          certificationId: valid.id,
+        });
+      else if (held)
+        Object.assign(row, {
+          status: "unknown",
+          reason: held.validityNeedsCorrection
+            ? "Hold · 기존 인증의 유효기간을 확인해야 합니다."
+            : "Hold · 개인 자격 효력이 정지되었습니다. 관리자 확인이 필요합니다.",
+          assignmentId: held.assignmentId,
+          certificationId: held.id,
+        });
+      else if (assignments.length)
+        Object.assign(row, {
+          status: "progress",
+          reason: "확정한 계획의 기준으로 계속 진행할 수 있습니다.",
+        });
+      else if (plan)
+        Object.assign(row, {
+          status: "draft",
+          reason: "작성 중인 계획을 확인해 주세요.",
+        });
+      else if (!org.effectiveActive || errors.length)
+        Object.assign(row, {
+          status: "blocked",
+          reason: !org.effectiveActive
+            ? "사용 중지된 조직입니다."
+            : errors.join(" · "),
+        });
+      else if (request)
+        Object.assign(row, {
+          status: "ready",
+          reason: previous
+            ? "새 요청으로 재취득 계획을 작성할 수 있습니다."
+            : "요청받은 필수 자격의 계획을 작성할 수 있습니다.",
+          canStart: true,
+        });
+      return row;
+    });
   return {
     revision: doc.revision,
     organizationId: org.id,
@@ -248,31 +268,46 @@ export function planningReadiness(
   doc: OrganizationDocument,
   u: UserView,
   at: string,
+  type: QualificationType = "auditee",
 ) {
   const org = organization(doc, u.organizationId);
   const rows = doc.qualificationPools
-    .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
+    .filter(
+      (p) =>
+        p.lv1OrganizationId === u.lv1OrganizationId &&
+        s.qualifications.find((q) => q.id === p.qualificationId)
+          ?.qualificationType === type,
+    )
     .map((p) => candidate(s, doc, u, p.entityId, at));
   return {
+    qualificationType: type,
     learnerId: u.id,
     canRequest:
-      u.roles.includes("learner") &&
+      hasQualificationRole(u.roles, type) &&
       u.organizationActive &&
       u.certificationEligibility !== "hold",
     count: rows.filter((c) => c.status === "available").length,
-    requiredCount: (org.requiredQualifications || []).length,
+    requiredCount: (org.requiredQualifications || []).filter((id) =>
+      s.qualifications.some(
+        (q) => q.entityId === id && q.qualificationType === type,
+      ),
+    ).length,
     draftCount: s.plans.filter(
       (p) =>
         p.learnerId === u.id &&
+        s.qualifications.find((q) => q.id === p.qualificationId)
+          ?.qualificationType === type &&
         p.lv1OrganizationId === u.lv1OrganizationId &&
         p.status === "draft" &&
         !p.deletedAt,
     ).length,
-    reason: !u.organizationActive
-      ? "사용 중지된 소속"
-      : u.certificationEligibility === "hold"
-        ? "취득 대상자 Hold"
-        : "계획 요청 가능",
+    reason: !hasQualificationRole(u.roles, type)
+      ? "요청 유형에 맞는 역할이 필요합니다."
+      : !u.organizationActive
+        ? "사용 중지된 소속"
+        : u.certificationEligibility === "hold"
+          ? "취득 대상자 Hold"
+          : "계획 요청 가능",
   };
 }
 
@@ -394,6 +429,7 @@ export function changePolicy(
     );
     const next = input.qualificationIds.map((id) => {
       const q = s.qualifications.find((q) => q.id === id);
+      if (q) requireQualificationProcess(q);
       demand(
         q &&
           !q.deletedAt &&

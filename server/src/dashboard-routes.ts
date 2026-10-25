@@ -21,6 +21,7 @@ const booleanQuery = z.preprocess(
 );
 const querySchema = z
   .object({
+    qualificationType: z.enum(["auditee", "auditor"]).optional(),
     lv1OrganizationId: z.string().min(1).max(160).optional(),
     organizationId: z.string().min(1).max(160).optional(),
     includeDescendants: booleanQuery.optional(),
@@ -43,6 +44,8 @@ const querySchema = z
       .enum([
         "unplanned",
         "draft",
+        "learning_wait",
+        "learning_progress",
         "assessment_wait",
         "assessment_progress",
         "partial_completion",

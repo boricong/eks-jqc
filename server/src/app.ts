@@ -1,3 +1,4 @@
+import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
 import {
   prepareCatalogSave,
@@ -33,10 +34,14 @@ import {
 } from "./organization-administrators.ts";
 import { authorizeNotice, saveNotice } from "./notices.ts";
 import { courseUsage } from "./course-lifecycle.ts";
-import { saveTemplate } from "./qualification-templates.ts";
+import {
+  saveTemplate,
+  templateTypeEditing,
+} from "./qualification-templates.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
 import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
 import { registerDashboardRoutes } from "./dashboard-routes.ts";
+import { registerDocumentRoutes } from "./documents.ts";
 import {
   policiesView,
   changePolicy,
@@ -58,6 +63,7 @@ export async function buildApp(
     origins?: string[];
     serveFrontend?: boolean;
     clock?: () => string;
+    documentsRoot?: string;
   } = {},
 ) {
   const app = Fastify({
@@ -381,6 +387,7 @@ export async function buildApp(
   registerCatalogRoutes(app, store, actor);
   registerLifecycleRoutes(app, store, actor, clock);
   registerDashboardRoutes(app, store, actor, clock);
+  registerDocumentRoutes(app, actor, options.documentsRoot);
   const mutation = (
     method: "POST" | "PUT" | "DELETE",
     url: string,
@@ -485,7 +492,12 @@ export async function buildApp(
     });
   app.get("/api/me/required-qualifications", async (request) => {
     const u = actor(request);
-    demand(u.roles.includes("learner"), 403, "학습자 권한이 필요합니다.");
+    demand(
+      canContinueType(store.snapshot(), u, "auditee") ||
+        canContinueType(store.snapshot(), u, "auditor"),
+      403,
+      "개인 인증 조회 권한이 필요합니다.",
+    );
     return requiredQualifications(
       store.snapshot(),
       store.organizations.snapshot(),
@@ -618,7 +630,10 @@ export async function buildApp(
     systemOperator(actor(request));
     const s = store.snapshot();
     return {
-      items: s.qualificationTemplates,
+      items: s.qualificationTemplates.map((t) => ({
+        ...t,
+        ...templateTypeEditing(s, t.id),
+      })),
       audits: s.audits.filter((a) =>
         a.action.startsWith("qualification-template."),
       ),
@@ -824,6 +839,7 @@ export async function buildApp(
   mutation("POST", "/api/assignments", "assignment.create", () => "");
   mutation("POST", "/api/assignments/:id/ft", "assignment.ft");
   mutation("POST", "/api/assignments/:id/exclusion", "assignment.exclude");
+  mutation("PUT", "/api/enrollments/:id/checklist", "checklist.update");
   mutation("POST", "/api/enrollments/:id/attempts", "attempt.start");
   mutation("PUT", "/api/attempts/:id/draft", "attempt.save");
   mutation("POST", "/api/attempts/:id/submit", "attempt.submit");
@@ -850,7 +866,7 @@ export async function buildApp(
     );
     demand(
       r &&
-        u.roles.includes("learner") &&
+        canContinueType(s, u, r.qualificationType) &&
         r.learnerId === u.id &&
         r.lv1OrganizationId === u.lv1OrganizationId,
       403,

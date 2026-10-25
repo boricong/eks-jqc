@@ -138,6 +138,7 @@ export function dashboardReader(
   query: DashboardQuery,
   at: string,
 ) {
+  const type = query.qualificationType || "auditee";
   const scope = dashboardScope(doc, user, query),
     date = kstDate(at);
   const entries = organizationEntries(doc),
@@ -147,7 +148,9 @@ export function dashboardReader(
     (scope.includeDescendants &&
       !!orgs.get(id)?.path.some((p) => p.id === scope.organizationId));
   const allowedUsers = s.users.filter(
-    (u) => u.roles.includes("learner") && includesOrg(u.organizationId),
+    (u) =>
+      u.roles.includes(type === "auditor" ? "evaluator" : "learner") &&
+      includesOrg(u.organizationId),
   );
   const people = allowedUsers.map((u): DashboardPerson => {
     const org = orgs.get(u.organizationId)!;
@@ -168,7 +171,11 @@ export function dashboardReader(
   const courses = new Map(s.courses.map((c) => [c.id, c]));
   const pool = new Map(
     doc.qualificationPools
-      .filter((p) => p.lv1OrganizationId === scope.lv1OrganizationId)
+      .filter(
+        (p) =>
+          p.lv1OrganizationId === scope.lv1OrganizationId &&
+          qualifications.get(p.qualificationId)?.qualificationType === type,
+      )
       .map((p) => [p.entityId, p]),
   );
   const title = (q: Qualification) =>
@@ -176,6 +183,7 @@ export function dashboardReader(
   const entityOf = (qid: string) => qualifications.get(qid)?.entityId || "";
   const assignments = s.assignments.filter(
     (a) =>
+      qualifications.get(a.qualificationId)?.qualificationType === type &&
       a.lv1OrganizationId === scope.lv1OrganizationId &&
       personById.has(a.learnerId),
   );
@@ -206,6 +214,7 @@ export function dashboardReader(
   const plans = s.plans.filter(
     (p) =>
       !p.deletedAt &&
+      qualifications.get(p.qualificationId)?.qualificationType === type &&
       p.lv1OrganizationId === scope.lv1OrganizationId &&
       personById.has(p.learnerId),
   );
@@ -216,6 +225,7 @@ export function dashboardReader(
   const requestById = new Map(s.planningRequests.map((r) => [r.id, r]));
   const requests = s.planningRequests.filter(
     (r) =>
+      r.qualificationType === type &&
       personById.has(r.learnerId) &&
       r.lv1OrganizationId === scope.lv1OrganizationId &&
       r.organizationId === personById.get(r.learnerId)!.organizationId,
@@ -264,6 +274,7 @@ export function dashboardReader(
   const entityQualifications = new Map<string, Qualification>();
   for (const q of s.qualifications)
     if (
+      q.qualificationType === type &&
       q.lv1OrganizationId === scope.lv1OrganizationId &&
       (pool.has(q.entityId) || recordEntities.has(q.entityId))
     ) {
@@ -273,7 +284,7 @@ export function dashboardReader(
     }
   for (const p of pool.values()) {
     const q = qualifications.get(p.qualificationId);
-    if (q) entityQualifications.set(p.entityId, q);
+    if (q?.qualificationType === type) entityQualifications.set(p.entityId, q);
   }
   const allOptions: DashboardQualificationOption[] = [...entityQualifications]
     .map(([entityId, q]) => ({
@@ -377,7 +388,7 @@ export function dashboardReader(
     c?: Certification,
   ) {
     const codes: string[] = [];
-    if (!c)
+    if (!c || type === "auditor")
       return {
         renewalState: "not_applicable" as DashboardRenewalState,
         renewalBlockCodes: codes,
@@ -465,15 +476,24 @@ export function dashboardReader(
     const completedCourses = ens.filter((e) =>
       completionsByEnrollment.has(e.id),
     ).length;
+    const hasChecks = ens.some((e) =>
+      s.learningChecklists.some(
+        (c) => c.enrollmentId === e.id && c.items.length,
+      ),
+    );
     const hasAttempt = ens.some(
       (e) => (attemptsByEnrollment.get(e.id)?.length || 0) > 0,
     );
     const progress = assignment
       ? completedCourses > 0
         ? "partial_completion"
-        : hasAttempt
-          ? "assessment_progress"
-          : "assessment_wait"
+        : type === "auditor"
+          ? hasChecks
+            ? "learning_progress"
+            : "learning_wait"
+          : hasAttempt
+            ? "assessment_progress"
+            : "assessment_wait"
       : plan?.status === "draft"
         ? "draft"
         : (required || selectedPairs.has(key)) &&
@@ -767,6 +787,8 @@ export function dashboardReader(
     const progress = {
       unplanned: 0,
       draft: 0,
+      learning_wait: 0,
+      learning_progress: 0,
       assessment_wait: 0,
       assessment_progress: 0,
       partial_completion: 0,
@@ -1323,6 +1345,7 @@ export function dashboardReader(
             done = completionsByEnrollment.get(e.id),
             ts = attemptsByEnrollment.get(e.id) || [];
           const state = (kind: "objective" | "practical") =>
+            course.qualificationType === "auditor" ||
             !course.assessmentKinds.includes(kind)
               ? "not_required"
               : ts.some((t) => t.kind === kind && t.result === "passed")
@@ -1334,6 +1357,18 @@ export function dashboardReader(
                     : "ready";
           return {
             courseId: course.id,
+            qualificationType: course.qualificationType,
+            requiredItems: course.learningItems.filter((i) => i.required)
+              .length,
+            confirmedItems: course.learningItems.filter(
+              (i) =>
+                i.required &&
+                s.learningChecklists.some(
+                  (c) =>
+                    c.enrollmentId === e.id &&
+                    c.items.some((v) => v.itemId === i.id),
+                ),
+            ).length,
             title: done?.snapshot?.title || course.title,
             version: course.version,
             completed: !!done,

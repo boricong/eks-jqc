@@ -5,4 +5,5 @@ export const systemSections = [
   { id: 'overview', name: '전체 업무 조회' },
   { id: 'testing', name: '테스트 관리' },
   { id: 'notices', name: '시스템 공지 관리' },
+  { id: 'documents', name: '문서 조회' },
 ].map((section) => ({ ...section, path: `/system/${section.id}` }));

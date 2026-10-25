@@ -101,6 +101,11 @@ export const router = createRouter({
     },
     { path: '/system', redirect: '/system/organizations' },
     {
+      path: '/system/:section(documents)/:id?',
+      component: SystemView,
+      meta: { role: 'system_operator', title: '문서 조회' },
+    },
+    {
       path: '/system/:section(organizations|users|overview|testing|notices|qualification-templates)',
       component: SystemView,
       meta: { role: 'system_operator' },
@@ -114,7 +119,10 @@ router.beforeEach(async (to) => {
   if (
     (!store.signedIn ||
       (to.meta.management && !store.canEnterManagement) ||
-      (to.meta.role && !store.hasRole(to.meta.role as Role))) &&
+      (to.meta.role &&
+        !(to.meta.role === 'learner'
+          ? store.canEnterPersonal
+          : store.hasRole(to.meta.role as Role)))) &&
     to.path !== '/'
   )
     return '/';
@@ -128,6 +136,18 @@ router.beforeEach(async (to) => {
       path: '/admin/dashboard',
       query: to.query,
     };
+  if (
+    to.name === 'assessment' ||
+    (to.name === 'qualification' && to.query.stage === 'assessment')
+  ) {
+    const a = store.assignment(String(to.params.id));
+    if (a && store.qualification(a.qualificationId).qualificationType === 'auditor')
+      return {
+        path: `/qualifications/${a.id}`,
+        query: { type: 'auditor', course: to.params.courseId || to.query.course },
+        replace: true,
+      };
+  }
   const managed =
     !!to.meta.management ||
     (['certificate', 'completion'].includes(String(to.name)) &&
@@ -176,7 +196,10 @@ router.beforeResolve(async (to) => {
       if (
         (to.meta.management &&
           !store.canManageSection(String(to.meta.managementSection || to.params.section))) ||
-        (to.meta.role && !store.hasRole(to.meta.role as Role))
+        (to.meta.role &&
+          !(to.meta.role === 'learner'
+            ? store.canEnterPersonal
+            : store.hasRole(to.meta.role as Role)))
       )
         return '/';
       if (managed && store.hasRole('system_operator')) store.rememberManagement(lv1);

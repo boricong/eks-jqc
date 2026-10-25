@@ -23,6 +23,8 @@ export const efficacyLabels: Record<DashboardEfficacy, string> = {
 export const progressLabels: Record<DashboardProgress, string> = {
   unplanned: '계획 미작성',
   draft: '계획 작성',
+  learning_wait: '학습 확인 대기',
+  learning_progress: '학습 확인 중',
   assessment_wait: '평가 대기',
   assessment_progress: '평가 진행',
   partial_completion: '일부 수료',

@@ -33,3 +33,14 @@ export function visibleManagementGroups(canManage: (section: string) => boolean)
     }))
     .filter((group) => group.sections.length);
 }
+
+export function withCriteriaType<T extends { path: string; query: Record<string, unknown> }>(
+  location: T,
+  type: unknown,
+) {
+  if (!/^\/admin\/(qualifications|courses)(\/|$)/.test(location.path)) return location;
+  return {
+    ...location,
+    query: { ...location.query, ...(type === 'auditor' ? { type: 'auditor' } : {}) },
+  };
+}

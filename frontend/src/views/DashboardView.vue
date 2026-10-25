@@ -218,6 +218,23 @@ function detailPage(page: number) {
     </PageHeading>
     <p v-if="!ready" class="dashboard-empty">조회할 Lv1 조직을 선택해 주세요.</p>
     <template v-else>
+      <label class="field compact-field"
+        >인증 유형<select
+          :value="query.qualificationType"
+          @change="
+            update({
+              qualificationType: valueOf($event),
+              entityId: undefined,
+              progress: undefined,
+              member: undefined,
+              metric: undefined,
+            })
+          "
+        >
+          <option value="auditee">Auditee · 학습자</option>
+          <option value="auditor">Auditor · 평가자</option>
+        </select></label
+      >
       <div v-if="options" class="dashboard-scope">
         <template v-if="!options.snapshot.scope.directOnly">
           <label class="field"

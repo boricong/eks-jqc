@@ -323,3 +323,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Criterion type is a work context, not an operational status. */
+.criteria-type-tabs {
+  margin: 0 0 16px;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+}
+.criteria-type-tabs > button {
+  min-height: 44px;
+  max-width: none;
+  padding: 8px 16px;
+}
+.criteria-type-tabs > button > span:first-child {
+  white-space: normal;
+}
+.criteria-type-value {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.criteria-type-tabs > button:focus-visible {
+  outline: 2px solid var(--primary-press);
+  outline-offset: -2px;
+}

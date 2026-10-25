@@ -47,6 +47,7 @@ async function mock(page: Page, display: Display) {
         display.kind === 'planning'
           ? [
               {
+                qualificationType: 'auditee',
                 id: 'height-request',
                 learnerId: view.actor.id,
                 lv1OrganizationId: view.actor.lv1OrganizationId,
@@ -109,11 +110,11 @@ function equalAreas(value: Awaited<ReturnType<typeof geometry>>) {
   expect(Math.abs(value.leftHeading.height - value.rightHeading.height)).toBeLessThanOrEqual(2);
 }
 
-test('김민서 1자격·5알림의 5폭 전후 높이/행 밀도·이미지 대비와 모바일 자연 높이', async ({
+test('김민서 1자격·4알림의 5폭 전후 높이/행 밀도·이미지 대비와 모바일 자연 높이', async ({
   page,
   backend,
 }, info) => {
-  await mock(page, { kind: 'qualification', count: 5 });
+  await mock(page, { kind: 'qualification', count: 4 });
   await page.goto('/');
   await actor(page, 'learner-1');
   const beforeState = backend.store.snapshot();
@@ -162,7 +163,7 @@ test('0/1/4/5알림·긴 이름·다중/계획/빈 카드의 자동 높이와 �
       display.count = count;
       await refresh(page);
       await page.setViewportSize({ width: 1920, height: 900 });
-      await expect(page.locator('.home-notification-row')).toHaveCount(count);
+      await expect(page.locator('.home-notification-row')).toHaveCount(Math.min(count, 4));
       const desktop = await geometry(page);
       equalAreas(desktop);
       expect(desktop.rows.every((height) => height < 100)).toBe(true);

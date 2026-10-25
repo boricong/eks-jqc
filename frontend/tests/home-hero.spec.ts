@@ -41,6 +41,8 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
       .evaluateAll((els) => els.map((e) => e.getAttribute('href')));
     expect(links).toHaveLength(3);
     await expect(hero.locator('.home-date')).toHaveText('2026년 10월 23일 금요일');
+    await expect(hero.locator('.home-date')).toHaveCSS('font-weight', '600');
+    await expect(hero.locator('.home-date')).toHaveCSS('color', 'rgb(13, 37, 61)');
     for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
       await noOverflow(page);
@@ -153,7 +155,7 @@ test('프로세스 검토의 정보 위계·단계 배치·키보드·화면 및
     for (const h of await guide.locator('h4').all()) await expect(h).toHaveCSS('font-size', '16px');
     await expect(guide.locator('.process-current p')).toHaveCSS('font-size', '14px');
     await expect(guide.locator('.process-guide-meta')).toHaveCSS('font-size', '12px');
-    await expect(guide.locator('.process-guide-meta')).toContainText('v13 · 2026-10-23');
+    await expect(guide.locator('.process-guide-meta')).toContainText('v14 · 2026-10-26');
     const cols = await guide
       .locator('.process-steps')
       .evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(' ').length);

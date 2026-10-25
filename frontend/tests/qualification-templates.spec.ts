@@ -19,7 +19,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications');
   await expect(page.getByRole('button', { name: '새 자격 만들기', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '기본자격에서 등록', exact: true }).click();
+  await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();
   await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
   await page.getByRole('button', { name: '팀 자격 등록', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();

@@ -11,8 +11,13 @@ export function courseIssues(c: Course): CourseIssue[] {
   const add = (kind: CourseIssue['kind'], field: string, message: string, itemId?: string) =>
     issues.push({ kind, field, message, itemId });
   if (!c.title.trim()) add('basic', 'title', '인증Set명을 입력해 주세요.');
-  if (!c.assessmentKinds.length) add('basic', 'assessmentKinds', '필수 평가 유형을 선택해 주세요.');
-  if (c.assessmentKinds.includes('practical') && !c.assessmentKinds.includes('objective'))
+  if (c.qualificationType !== 'auditor' && !c.assessmentKinds.length)
+    add('basic', 'assessmentKinds', '필수 평가 유형을 선택해 주세요.');
+  if (
+    c.qualificationType !== 'auditor' &&
+    c.assessmentKinds.includes('practical') &&
+    !c.assessmentKinds.includes('objective')
+  )
     add(
       'basic',
       'assessmentKinds',
@@ -38,7 +43,7 @@ export function courseIssues(c: Course): CourseIssue[] {
       c.learningItems[0]?.id,
     );
   for (const kind of ['objective', 'practical'] as Kind[]) {
-    if (!c.assessmentKinds.includes(kind)) continue;
+    if (c.qualificationType === 'auditor' || !c.assessmentKinds.includes(kind)) continue;
     const label = { objective: '지식 평가', practical: '상황 대응 평가' }[kind];
     {
       const score = kind === 'objective' ? c.passScore : c.practicalPassScore;

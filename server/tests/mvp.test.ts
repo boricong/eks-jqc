@@ -1393,6 +1393,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
       s.courses.push(c);
       s.qualifications.push({
         templateId: "rounding-fixture",
+        qualificationType: "auditee",
         templateRevision: 1,
         englishName: "",
         description: "검증용 직무 수행 기준",
@@ -1458,6 +1459,7 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
     objectiveAttempts: 2,
     practicalAttempts: 3,
     learningRecords: 0,
+    learningChecklists: 0,
     notifications: 3,
     completions: 2,
     certifications: 1,

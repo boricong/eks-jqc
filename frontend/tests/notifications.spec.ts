@@ -64,6 +64,11 @@ async function enter(page: Page) {
   await page.goto('/');
   await actor(page, 'learner-1');
   await page.goto('/notifications');
+  await expect(
+    page.getByText('화면에 표시된 알림은 읽음으로 처리됩니다. 업무 완료는 별도로 관리됩니다.', {
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '내 알림', exact: true })).toBeVisible();
   await expect(page.locator('#main')).toBeFocused();
 }

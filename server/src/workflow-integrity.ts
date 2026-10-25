@@ -118,7 +118,11 @@ export function validateWorkflow(s: State) {
           a.createdBy === p.learnerId &&
           p.completedAt &&
           p.approval === "skipped_by_policy" &&
-          !planErrors(p).length,
+          !planErrors(
+            p,
+            s.qualifications.find((q) => q.id === p.qualificationId)!
+              .qualificationType,
+          ).length,
         "완료 계획과 배정",
       );
     } else

@@ -1,3 +1,6 @@
+import { migrateAuditorWorkflow } from "./auditor-migration.ts";
+import { migrateCourseTypes } from "./course-type-migration.ts";
+import { migrateQualificationTypes } from "./qualification-type-migration.ts";
 import { migratePlanning } from "./planning-migration.ts";
 import { migrateTemplates } from "./template-migration.ts";
 import { migrateCatalogEditing } from "./catalog-editing-migration.ts";
@@ -36,6 +39,9 @@ if (
     "migrate-catalog-editing",
     "migrate-templates",
     "migrate-planning",
+    "migrate-qualification-types",
+    "migrate-course-types",
+    "migrate-auditor-workflow",
   ].includes(command)
 ) {
   const mappingFile = optionsMapping();
@@ -51,19 +57,26 @@ if (
     ? JSON.parse(await readFile(path.resolve(mappingFile), "utf8"))
     : {};
   const transform =
-    command === "migrate-planning"
-      ? migratePlanning
-      : command === "migrate-templates"
-        ? (a: unknown, b: unknown) => migrateTemplates(a, b, undefined, mapping)
-        : command === "migrate-catalog-editing"
-          ? migrateCatalogEditing
-          : command === "migrate-assessment-flow"
-            ? migrateAssessmentFlow
-            : command === "migrate-lifecycle"
-              ? migrateLifecycle
-              : command === "migrate-administration"
-                ? migrateAdministration
-                : migratePolicies;
+    command === "migrate-auditor-workflow"
+      ? migrateAuditorWorkflow
+      : command === "migrate-course-types"
+        ? migrateCourseTypes
+        : command === "migrate-qualification-types"
+          ? migrateQualificationTypes
+          : command === "migrate-planning"
+            ? migratePlanning
+            : command === "migrate-templates"
+              ? (a: unknown, b: unknown) =>
+                  migrateTemplates(a, b, undefined, mapping)
+              : command === "migrate-catalog-editing"
+                ? migrateCatalogEditing
+                : command === "migrate-assessment-flow"
+                  ? migrateAssessmentFlow
+                  : command === "migrate-lifecycle"
+                    ? migrateLifecycle
+                    : command === "migrate-administration"
+                      ? migrateAdministration
+                      : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -89,19 +102,25 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-planning"
-            ? "planning"
-            : command === "migrate-templates"
-              ? "qualification-templates"
-              : command === "migrate-catalog-editing"
-                ? "catalog-editing"
-                : command === "migrate-assessment-flow"
-                  ? "assessment-flow"
-                  : command === "migrate-lifecycle"
-                    ? "lifecycle"
-                    : command === "migrate-administration"
-                      ? "administration"
-                      : "policies",
+          command === "migrate-auditor-workflow"
+            ? "auditor-workflow"
+            : command === "migrate-course-types"
+              ? "course-types"
+              : command === "migrate-qualification-types"
+                ? "qualification-types"
+                : command === "migrate-planning"
+                  ? "planning"
+                  : command === "migrate-templates"
+                    ? "qualification-templates"
+                    : command === "migrate-catalog-editing"
+                      ? "catalog-editing"
+                      : command === "migrate-assessment-flow"
+                        ? "assessment-flow"
+                        : command === "migrate-lifecycle"
+                          ? "lifecycle"
+                          : command === "migrate-administration"
+                            ? "administration"
+                            : "policies",
         ),
         null,
         2,
@@ -267,7 +286,7 @@ if (
   console.log(JSON.stringify(await store.recoverMasterReplacement(), null, 2));
 } else if (command === "migrate") {
   await store.migrate(migrateState);
-  console.log("현행 업무 스키마 8 확인 완료");
+  console.log("현행 업무 스키마 14 확인 완료");
 } else if (command === "organizations:restore") {
   const source = process.argv[3];
   if (!source) throw new Error("조직 백업 경로가 필요합니다.");

@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import type { OrganizationPoliciesView } from '@eks/contracts';
+import CompactTabs from './CompactTabs.vue';
 import AppDialog from './AppDialog.vue';
 import PolicyOrganizationTree from './PolicyOrganizationTree.vue';
 import OrganizationAdministrators from './OrganizationAdministrators.vue';
@@ -25,12 +26,16 @@ const metadata = ref({
   duties: '',
   requiredQualifications: [] as string[],
 });
+const selectedType = ref('auditee');
 const review = ref(false),
   qualificationSearch = ref('');
 const filteredQualifications = computed(
   () =>
-    doc.value?.pool.filter((p) =>
-      p.title.toLocaleLowerCase().includes(qualificationSearch.value.trim().toLocaleLowerCase()),
+    doc.value?.pool.filter(
+      (p) =>
+        store.data.qualifications.find((q) => q.id === p.qualificationId)?.qualificationType ===
+          selectedType.value &&
+        p.title.toLocaleLowerCase().includes(qualificationSearch.value.trim().toLocaleLowerCase()),
     ) || [],
 );
 let generation = 0;
@@ -45,11 +50,6 @@ const informationDirty = computed(
   () =>
     metadata.value.description !== (selected.value?.description || '') ||
     metadata.value.duties !== (selected.value?.duties || ''),
-);
-const requiredDirty = computed(
-  () =>
-    JSON.stringify(metadata.value.requiredQualifications) !==
-    JSON.stringify(selected.value?.requiredQualifications || []),
 );
 const affected = computed(() => doc.value?.entries.filter((e) => e.id === orgId.value) || []);
 function readMeta() {
@@ -76,13 +76,6 @@ async function select(id: string) {
   informationOpen.value = false;
   administratorsOpen.value = false;
   readMeta();
-}
-async function reload() {
-  if (
-    !(metaDirty.value || administratorsDirty.value) ||
-    (await confirmAction('입력을 버리고 다시 불러올까요?', '다시 불러오기'))
-  )
-    await load();
 }
 async function load() {
   const seq = ++generation,
@@ -165,13 +158,6 @@ watch(
     <p v-if="!doc && !store.managementReady" class="empty-state">
       관리할 Lv1 조직을 선택하거나 현재 조직 설정 권한을 확인해 주세요.
     </p>
-    <button
-      class="button secondary small policy-reload"
-      :disabled="busy || administratorsBusy"
-      @click="reload"
-    >
-      다시 불러오기
-    </button>
     <div v-if="doc" class="policy-selection-layout">
       <PolicyOrganizationTree
         :entries="
@@ -194,34 +180,42 @@ watch(
           </p>
           <fieldset :disabled="busy || !canSave">
             <legend>필수 자격 · 선택 사항</legend>
-            <p class="muted">
-              선택하지 않으면 필수 자격 없음 · {{ metadata.requiredQualifications.length }}개 선택
-              <span v-if="requiredDirty"> · 미저장 변경</span>
-            </p>
-            <label v-if="doc.pool.length" class="field compact-field"
-              >자격 검색<input
-                v-model="qualificationSearch"
-                type="search"
-                placeholder="자격명 검색"
-            /></label>
-            <label v-for="p in filteredQualifications" :key="p.entityId" class="choice"
-              ><input
-                type="checkbox"
-                v-model="metadata.requiredQualifications"
-                :value="p.entityId"
-              /><span
-                >{{ p.title }} · v{{ p.version
-                }}<small v-if="p.errors.length" class="field-error"
-                  >신규 계획 불가 · {{ p.errors.join(' · ') }}</small
-                ></span
-              ></label
-            >
-            <p v-if="doc.pool.length && !filteredQualifications.length" class="muted">
-              검색 결과가 없습니다.
-            </p>
-            <p v-if="!doc.pool.length">
-              팀 관리자가 자격 설정을 완료하고 팀 적용을 확정해야 합니다.
-            </p>
+            <CompactTabs
+              class="certification-type-tabs"
+              v-model="selectedType"
+              :items="[
+                { id: 'auditee', label: 'Auditee · 학습자' },
+                { id: 'auditor', label: 'Auditor · 평가자' },
+              ]"
+              panel-id="policy-type-panel"
+              label="필수 인증 유형"
+            />
+            <div id="policy-type-panel">
+              <label v-if="doc.pool.length" class="field policy-qualification-search"
+                ><span>자격 검색</span
+                ><input v-model="qualificationSearch" type="search" placeholder="자격명 검색"
+              /></label>
+              <div class="policy-qualification-list">
+                <label v-for="p in filteredQualifications" :key="p.entityId" class="choice"
+                  ><input
+                    type="checkbox"
+                    v-model="metadata.requiredQualifications"
+                    :value="p.entityId"
+                  /><span
+                    >{{ p.title }} · v{{ p.version
+                    }}<small v-if="p.errors.length" class="field-error"
+                      >신규 계획 불가 · {{ p.errors.join(' · ') }}</small
+                    ></span
+                  ></label
+                >
+                <p v-if="doc.pool.length && !filteredQualifications.length" class="muted">
+                  검색 결과가 없습니다.
+                </p>
+                <p v-if="!doc.pool.length">
+                  팀 관리자가 자격 설정을 완료하고 팀 적용을 확정해야 합니다.
+                </p>
+              </div>
+            </div>
           </fieldset>
           <CollapsibleSection
             v-model:open="informationOpen"

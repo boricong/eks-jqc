@@ -77,6 +77,7 @@ async function people(store: JsonStore) {
         ['request-new-z', '2026-10-24T00:00:00.000Z', '2032-01-01', false],
       ] as const)
         s.planningRequests.push({
+          qualificationType: 'auditee',
           id,
           createdAt,
           dueOn,
@@ -113,7 +114,7 @@ async function enter(page: Page) {
 }
 async function requestDialog(page: Page) {
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
-  return page.getByRole('dialog', { name: '계획 수립 요청', exact: true });
+  return page.getByRole('dialog', { name: 'Auditee 계획 수립 요청', exact: true });
 }
 
 test('대상자 한 줄과 모달 밀도·최신 요청·긴 이름·네 화면 폭·상세 초점 복귀', async ({
@@ -166,7 +167,8 @@ test('대상자 한 줄과 모달 밀도·최신 요청·긴 이름·네 화면 
               return b.top >= 0 && b.bottom <= innerHeight;
             }).length,
         ),
-      ).toBeGreaterThanOrEqual(14);
+        // 유형 선택 44px와 구분 여백이 추가되어도 기존 40px 행 밀도는 유지한다.
+      ).toBeGreaterThanOrEqual(13);
     }
     await page.screenshot({ path: test.info().outputPath(`request-table-${width}.png`) });
     const dialog = await requestDialog(page);

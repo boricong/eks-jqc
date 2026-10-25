@@ -146,6 +146,11 @@ onMounted(async () => {
             }}</label
           >
         </fieldset>
+        <p class="muted">
+          학습자는 Auditee, 평가자는 Auditor 계획 요청 대상입니다. 평가자 역할은 다른 사람의
+          평가·승인 권한을 부여하지 않습니다. 역할을 해제해도 기존 Auditor 요청은 계속 진행할 수
+          있습니다.
+        </p>
         <p v-if="selected?.organizationAdministration" class="notice-body">
           세부 조직 관리자 지정은 조직 필수 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재
           지정이 해제되며 새 소속에서 다시 지정해야 합니다.

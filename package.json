@@ -13,7 +13,8 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "npm run typecheck && npm run build -w frontend",
+    "build": "npm run documents:check && npm run typecheck && npm run build -w frontend",
+    "documents:check": "node --import tsx scripts/check-documents.ts",
     "typecheck": "tsc -p server/tsconfig.json && npm run typecheck -w frontend",
     "test": "node --import tsx --test server/tests/*.test.ts",
     "test:e2e": "npm run test:e2e -w frontend",
@@ -33,7 +34,10 @@
     "start": "node --import tsx server/src/index.ts",
     "data:migrate-catalog-editing": "node --import tsx server/src/cli.ts migrate-catalog-editing",
     "data:migrate-planning": "node --import tsx server/src/cli.ts migrate-planning",
-    "data:migrate-templates": "node --import tsx server/src/cli.ts migrate-templates"
+    "data:migrate-templates": "node --import tsx server/src/cli.ts migrate-templates",
+    "data:migrate-qualification-types": "node --import tsx server/src/cli.ts migrate-qualification-types",
+    "data:migrate-course-types": "node --import tsx server/src/cli.ts migrate-course-types",
+    "data:migrate-auditor-workflow": "node --import tsx server/src/cli.ts migrate-auditor-workflow"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

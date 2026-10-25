@@ -1,5 +1,5 @@
 import { answerConfirmation } from './fixtures';
-import { courseSection, saveCriterion, openSavedCourse } from './catalog-helpers';
+import { createCourse, courseSection, saveCriterion, openSavedCourse } from './catalog-helpers';
 import { requestPlan, completePlan, practicalOnly, qualificationPolicy } from './workflow-helpers';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -39,7 +39,7 @@ test('다른 창에서 전역 역할을 제거하면 선택한 타 Lv1 편집 �
     roles: ['system_operator'],
   });
   await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
-  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await createCourse(page);
   await page.getByLabel('인증Set명', { exact: true }).fill('권한 제거 전 편집');
   const other = await page.context().newPage();
   await other.goto('/');
@@ -73,7 +73,7 @@ test('탭별 Lv1 선택·새로고침·미저장 경고·저장 중 전환 차�
   await actor(other, 'operator-1');
   await manage(other, 'org-photo');
   await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
-  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await createCourse(page);
   await page.getByLabel('인증Set명', { exact: true }).fill('Etch 탭 초안');
   await page.getByLabel('관리할 Lv1 조직').selectOption('org-photo');
   await answerConfirmation(page, false);
@@ -143,7 +143,7 @@ test('인증Set 삭제 영향·변경 충돌·응답 유실 재시도와 연결 
   await manage(page, 'org-photo');
   const call = await apiFor(page);
   await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
-  await page.getByRole('button', { name: '인증Set 추가', exact: true }).click();
+  await createCourse(page);
   await expect(page.getByRole('button', { name: '인증Set 삭제', exact: true })).toBeVisible();
   const id = backend.store.snapshot().courses.at(-1)!.id;
   await page.getByRole('button', { name: '인증Set 삭제', exact: true }).click();

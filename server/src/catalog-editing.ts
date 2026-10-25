@@ -1,4 +1,8 @@
 import {
+  auditorAssessmentChanged,
+  requireCourseTypeChange,
+} from "./course-types.ts";
+import {
   currentQualification,
   checkCommonFields,
 } from "./qualification-templates.ts";
@@ -116,6 +120,7 @@ function editingChanges(
         .join("\n\n");
     return {
       인증Set명: item.title,
+      "인증 유형": item.qualificationType === "auditor" ? "Auditor" : "Auditee",
       "평가 유형": item.assessmentKinds
         .map((k) => (k === "objective" ? "지식 평가" : "상황 대응 평가"))
         .join(", "),
@@ -167,6 +172,16 @@ export function validateCatalogStructure(
       ),
       422,
       "같은 팀의 인증Set만 연결할 수 있습니다.",
+    );
+    demand(
+      q.courseIds.every(
+        (id) =>
+          s.courses.find((c) => c.id === id)?.qualificationType ===
+          q.qualificationType,
+      ),
+      422,
+      "같은 인증 유형의 인증Set만 연결할 수 있습니다.",
+      "COURSE_TYPE_MISMATCH",
     );
   } else {
     const c = item as Course;
@@ -267,6 +282,14 @@ export function prepareCatalogSave(
           lifecycleStatus: (source as Qualification).lifecycleStatus,
           templateId: (source as Qualification).templateId,
         });
+  if (section === "courses")
+    requireCourseTypeChange(s, source as Course, candidate.qualificationType);
+  if (section === "courses")
+    demand(
+      !auditorAssessmentChanged(candidate as Course, source as Course),
+      422,
+      "Auditor 인증Set은 평가 설정을 변경할 수 없습니다. 학습항목을 작성해 주세요.",
+    );
   const versionMode =
     section === "qualifications"
       ? QualificationVersionModeSchema.optional().parse(body.versionMode)

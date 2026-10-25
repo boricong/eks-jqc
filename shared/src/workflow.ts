@@ -1,3 +1,7 @@
+import {
+  QualificationTypeSchema,
+  type QualificationType,
+} from "./qualification-types.ts";
 import { QualificationMetadataSchema } from "./qualification-templates.ts";
 import { renewalOpensOn } from "./lifecycle.ts";
 import { z } from "zod";
@@ -96,6 +100,7 @@ export const PlanningTargetSchema = z.object({
   previousCertificationId: id.optional(),
 });
 export const PlanningRequestSchema = z.object({
+  qualificationType: QualificationTypeSchema.default("auditee"),
   id,
   lv1OrganizationId: id,
   learnerId: id,
@@ -167,19 +172,25 @@ export const PersonalPlanSchema = z.object({
 export type PersonalPlan = z.infer<typeof PersonalPlanSchema>;
 export function planErrors(
   p: Pick<PersonalPlan, "targetOn" | "schedules">,
+  type: QualificationType = "auditee",
 ): string[] {
   const errors: string[] = [];
   if (!p.targetOn) errors.push("목표 인증일을 입력해 주세요.");
   p.schedules.forEach((s, i) => {
-    if (!s.learningStart || !s.learningEnd || !s.assessmentOn)
+    if (
+      !s.learningStart ||
+      !s.learningEnd ||
+      (type === "auditee" && !s.assessmentOn)
+    )
       errors.push(`${i + 1}번째 인증Set의 일정을 입력해 주세요.`);
     else if (
       s.learningStart > s.learningEnd ||
-      s.learningEnd > s.assessmentOn ||
-      (p.targetOn && s.assessmentOn > p.targetOn)
+      (type === "auditee" && s.learningEnd > s.assessmentOn) ||
+      (p.targetOn &&
+        (type === "auditee" ? s.assessmentOn : s.learningEnd) > p.targetOn)
     )
       errors.push(
-        `${i + 1}번째 인증Set은 학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일 순서여야 합니다.`,
+        `${i + 1}번째 인증Set은 ${type === "auditor" ? "학습 시작 ≤ 학습 완료 ≤ 목표 인증일" : "학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일"} 순서여야 합니다.`,
       );
   });
   return errors;
@@ -201,6 +212,7 @@ export const LearningRecordSchema = z.object({
 });
 export type LearningRecord = z.infer<typeof LearningRecordSchema>;
 export const NotificationSchema = z.object({
+  qualificationType: QualificationTypeSchema.optional(),
   id,
   key: z.string().max(500),
   lv1OrganizationId: id,

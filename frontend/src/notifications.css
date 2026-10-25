@@ -9,7 +9,6 @@
   font-size: var(--text-display);
   font-weight: var(--weight-heading);
 }
-.notifications-help,
 .notifications-filter-help {
   margin: 8px 0 0;
   color: var(--ink-muted);

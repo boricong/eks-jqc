@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuditorChecklist from '../components/AuditorChecklist.vue';
 import PageHeading from '../components/PageHeading.vue';
 import { computed, ref, useId } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -41,7 +42,8 @@ const selected = computed(
 );
 const course = computed(() => selected.value && store.course(selected.value.courseId));
 const schedule = computed(() => plan.value?.schedules.find((s) => s.courseId === course.value?.id));
-const showAssessments = computed(() => learningStage(route) === 'assessment');
+const auditor = computed(() => qualification.value?.qualificationType === 'auditor');
+const showAssessments = computed(() => !auditor.value && learningStage(route) === 'assessment');
 const memory = useLearnerMemory();
 const contextKey = computed(() => `${store.actorId}:${assignment.value?.id}:${course.value?.id}`);
 const reading = computed(() => memory.reading(contextKey.value));
@@ -56,6 +58,7 @@ const blocked = computed(
 );
 function courseStatus(enrollment: Enrollment) {
   if (store.complete(enrollment)) return '수료';
+  if (auditor.value) return enrollment.checklist?.items.length ? '학습 확인 중' : '학습 미확인';
   const kinds = store.requiredKinds(store.course(enrollment.courseId));
   if (kinds.some((kind) => enrollment[kind] === 'draft')) return '평가 중';
   if (kinds.some((kind) => enrollment[kind] === 'passed'))
@@ -119,6 +122,7 @@ function chooseCourse(id: string) {
       showAssessments.value ? 'assessment' : 'learning',
       assignment.value?.id,
       id,
+      qualification.value?.qualificationType,
     ),
   );
 }
@@ -192,7 +196,7 @@ function chooseCourse(id: string) {
                 <span v-else class="status">{{ courseStatus(selected) }}</span>
               </template>
               <RouterLink
-                v-if="!showAssessments && !blocked"
+                v-if="!auditor && !showAssessments && !blocked"
                 :to="qualificationLocation('assessment', assignment.id, course.id)"
                 class="button primary learning-assessment-start"
                 >평가 시작<AppIcon name="arrow" :size="16"
@@ -218,7 +222,7 @@ function chooseCourse(id: string) {
                   ><span v-else class="date-empty">미설정</span>
                 </dd>
               </div>
-              <div class="learning-assessment-date">
+              <div v-if="!auditor" class="learning-assessment-date">
                 <dt>평가 예정일</dt>
                 <dd>
                   <time v-if="schedule?.assessmentOn" :datetime="schedule.assessmentOn">{{
@@ -257,8 +261,15 @@ function chooseCourse(id: string) {
               aria-label="이 인증Set의 학습 범위"
               class="learning-scope-brief"
             >
+              <AuditorChecklist
+                v-if="auditor"
+                :key="selected.id"
+                :course="course"
+                :enrollment="selected"
+                :blocked="blocked"
+              />
               <ul
-                v-if="course.learningItems.length"
+                v-else-if="course.learningItems.length"
                 class="learning-scope-rows"
                 :class="{ 'is-expanded': reading.scopeExpanded }"
                 :tabindex="reading.scopeExpanded ? 0 : undefined"
@@ -277,7 +288,7 @@ function chooseCourse(id: string) {
               </ul>
               <p v-else class="muted">등록된 학습 항목이 없습니다.</p>
               <button
-                v-if="course.learningItems.length > 3"
+                v-if="!auditor && course.learningItems.length > 3"
                 type="button"
                 class="text-link"
                 :aria-expanded="reading.scopeExpanded"

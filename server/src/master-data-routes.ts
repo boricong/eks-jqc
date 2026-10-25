@@ -132,10 +132,10 @@ export function registerMasterDataRoutes(
       const result = await preview(r, "master-import", readMaster(r.body));
       return {
         ...result,
-        ...([10, 11].includes((r.body as any)?.stateSchemaVersion)
+        ...([10, 11, 12, 13, 14].includes((r.body as any)?.stateSchemaVersion)
           ? {
               compatibility:
-                "이전 형식을 업무13으로 변환합니다. 기본자격 연결을 검사하고 원래 ID·내용·연결·상태를 보존합니다. 공통 설명은 별도 보완이 필요합니다.",
+                "이전 형식을 업무15로 변환합니다. 기존 자격 유형과 연결 근거로 인증Set 계보를 분류하며 혼합 유형은 보류합니다. 기본자격 연결과 원래 ID·내용·연결·상태를 보존합니다.",
             }
           : {}),
       };

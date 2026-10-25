@@ -1,3 +1,4 @@
+import { QualificationTypeSchema } from "./qualification-types.ts";
 import { z } from "zod";
 
 export const catalogTables = [
@@ -24,6 +25,7 @@ const CatalogRowsSchema = z
   )
   .max(10000);
 export const CatalogSheetSchema = z.object({
+  qualificationType: QualificationTypeSchema.optional(),
   templateId: z.string().max(160).optional(),
   templateRevision: z.number().int().positive().optional(),
   legacyUnsupported: z.boolean().optional(),
@@ -59,6 +61,9 @@ export const CatalogWorkbookSchema = z.object({
     "eks-catalog-v5",
     "eks-catalog-v6",
     "eks-catalog-v7",
+    "eks-catalog-v8",
+    "eks-catalog-v9",
+    "eks-catalog-v10",
   ]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),
@@ -147,6 +152,7 @@ export const catalogColumns: Record<CatalogTable, [string, string][]> = {
     ["practicalPassScore", "상황 대응 합격 기준"],
     ["sourceId", "원본 ID"],
     ["sourceRevision", "원본 revision"],
+    ["qualificationType", "인증 유형 · 읽기 전용"],
   ],
   learning: [
     ["courseCode", "인증Set코드"],

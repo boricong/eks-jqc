@@ -198,9 +198,15 @@ export function planningView(
     doc.qualificationPools
       .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
       .forEach((p) => ids.add(p.entityId));
-  const candidates = [...ids].map((id) =>
-    candidate(s, doc, u, id, at, request),
-  );
+  const candidates = [...ids]
+    .filter((id) =>
+      s.qualifications.some(
+        (q) =>
+          q.entityId === id &&
+          q.qualificationType === request.qualificationType,
+      ),
+    )
+    .map((id) => candidate(s, doc, u, id, at, request));
   const selected = candidates.filter((c) => c.selected);
   const covered = (c: PlanningCandidate) =>
     ["valid", "planned"].includes(c.status);
@@ -274,6 +280,8 @@ export function planRequestErrors(
     return ["현재 소속의 본인 계획 요청을 확인해 주세요."];
   if (u.certificationEligibility === "hold" || !u.organizationActive)
     return ["취득 대상자 Hold 또는 사용 중지된 소속입니다."];
+  if (r.qualificationType !== q.qualificationType)
+    return ["요청과 자격의 인증 유형이 다릅니다."];
   if (r.completion) return ["완료된 계획 요청입니다. 새 요청을 확인해 주세요."];
   const c = candidate(s, doc, u, q.entityId, at, r);
   if (!c.selected && !(starting && r.mode === "learner_choice"))

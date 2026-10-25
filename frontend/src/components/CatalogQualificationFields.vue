@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import RenewalNoticeExample from './RenewalNoticeExample.vue';
 import CatalogFieldErrors from './CatalogFieldErrors.vue';
+import { qualificationTypeLabels, AUDITOR_PREPARATION_MESSAGE } from '@eks/contracts';
 import type { CatalogIssue } from '@eks/contracts';
 import type { CatalogSheet } from '@eks/contracts';
 const props = defineProps<{ sheet: CatalogSheet; disabled?: boolean; issues?: CatalogIssue[] }>();
@@ -37,7 +38,12 @@ const validity = computed({
     @input="emit('change')"
     @change="emit('change')"
   >
+    <p v-if="sheet.qualificationType === 'auditor'" class="qualification-save-notice">
+      {{ AUDITOR_PREPARATION_MESSAGE }}
+    </p>
     <dl class="property-list">
+      <dt>인증 유형</dt>
+      <dd>{{ qualificationTypeLabels[sheet.qualificationType || 'auditee'] }}</dd>
       <dt>자격명</dt>
       <dd>{{ sheet.title }}</dd>
       <dt>영문명</dt>

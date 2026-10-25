@@ -245,7 +245,7 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
   await expect(page.locator('.award-document')).toContainText('정하린');
   await page.goto(`/qualifications/${a.id}`);
   await page.getByRole('link', { name: '인증서 보기', exact: true }).click();
-  await expect(page.locator('.cert-header')).toContainText('정하린');
+  await expect(page.locator('.certificate-recipient')).toHaveText('정하린');
   await page.clock.install({ time: Date.now() + 100 * 86400000 });
   await page.goto(`/qualifications/${a.id}`);
   await expect(summary.locator('.validity-badge')).toHaveText('Revoke · 폐기');

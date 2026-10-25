@@ -15,6 +15,7 @@ export function linkFixtureTemplates(s: State) {
     if (!s.qualificationTemplates.some((t) => t.id === q.templateId))
       s.qualificationTemplates.push({
         id: q.templateId,
+        qualificationType: q.qualificationType,
         revision: 1,
         title: q.title || "가상 자격",
         englishName: q.englishName,

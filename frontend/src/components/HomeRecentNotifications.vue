@@ -9,7 +9,7 @@ const notifications = computed(() =>
   [...store.data.notifications]
     .filter((n) => n.recipientId === store.actorId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
-    .slice(0, 5),
+    .slice(0, 4),
 );
 const formatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul',

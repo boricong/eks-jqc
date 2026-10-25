@@ -295,7 +295,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 13);
+  assert.equal(next.state.schemaVersion, 16);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -558,7 +558,7 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
   assert.equal(await readFile(result.stateBackup, "utf8"), original);
   const migrated = await readFile(file, "utf8");
   await store.migratePolicies(
-    { ...expected, revision: raw.revision + 2, stateHash: hash(migrated) },
+    { ...expected, revision: raw.revision + 5, stateHash: hash(migrated) },
     migrateTemplates,
   );
   assert.equal(await readFile(file, "utf8"), migrated);

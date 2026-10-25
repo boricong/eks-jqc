@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PageHeading from '../components/PageHeading.vue';
-import { managementTitle } from '../management-navigation';
+import CompactTabs from '../components/CompactTabs.vue';
+import { withCriteriaType, managementTitle } from '../management-navigation';
 import ActionBar from '../components/ActionBar.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import CourseEditor from '../components/CourseEditor.vue';
@@ -31,6 +32,10 @@ import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
 import {
   kindLabels,
+  qualificationTypeLabels,
+  qualificationReadinessErrors,
+  type QualificationType,
+  AUDITOR_PREPARATION_MESSAGE,
   certificationStatus,
   kstDate,
   credentialCurrent,
@@ -56,7 +61,60 @@ const organizationData = computed(() => {
   };
 });
 const section = computed(() => String(route.params.section));
-const filterKey = () => `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}`;
+const selectedType = computed<QualificationType>(() => {
+  const item = route.params.id
+    ? (section.value === 'courses'
+        ? organizationData.value.courses
+        : organizationData.value.qualifications
+      ).find((x) => x.id === route.params.id)
+    : undefined;
+  return item?.qualificationType ?? (route.query.type === 'auditor' ? 'auditor' : 'auditee');
+});
+const typeItems = [
+  { id: 'auditee', label: 'Auditee(피심사자)' },
+  { id: 'auditor', label: 'Auditor(심사자)' },
+];
+const typeTabs = ref<InstanceType<typeof CompactTabs>>();
+const criteriaLink = (path: string, type = selectedType.value) =>
+  withCriteriaType(store.managementLink(path), type);
+function selectType(type: string) {
+  void router.push({
+    path: route.path,
+    query: { ...route.query, type: type === 'auditor' ? 'auditor' : undefined },
+  });
+}
+watch(
+  () => [route.path, route.query.type, selectedType.value],
+  () => {
+    if (!['courses', 'qualifications'].includes(section.value)) return;
+    const expected = selectedType.value === 'auditor' ? 'auditor' : undefined;
+    if (route.query.type !== expected)
+      void router.replace({ path: route.path, query: { ...route.query, type: expected } });
+  },
+  { immediate: true },
+);
+watch(
+  () => [store.actorId, store.managementLv1],
+  () => {
+    createOpen.value = false;
+    if (
+      !route.params.id &&
+      ['courses', 'qualifications'].includes(section.value) &&
+      route.query.type
+    )
+      void router.replace({ path: route.path, query: { ...route.query, type: undefined } });
+  },
+);
+const filterKey = () =>
+  `eks-admin-filter-${store.actorId}-${store.managementLv1}-${section.value}-${selectedType.value}`;
+const qualificationErrors = (q: Qualification) =>
+  q.qualificationType === 'auditor'
+    ? qualificationReadinessErrors(q, organizationData.value.courses)
+    : store.qualificationErrors(q);
+const createOpen = ref(false),
+  createName = ref(''),
+  createError = ref('');
+
 const title = computed(() => managementTitle(section.value));
 const busy = ref(false);
 const editingContext = ref('');
@@ -84,6 +142,7 @@ const courseSaveResult = ref<{
   readiness: string[];
   links: { id: string; title: string; version: number }[];
   newVersion: boolean;
+  qualificationType: QualificationType;
 } | null>(null);
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
@@ -128,9 +187,17 @@ const selectedAssignment = ref<Assignment | null>(null),
   reason = ref('');
 const noticeDraft = ref<Notice | null>(null);
 function plain<T>(item: T): T {
-  return JSON.parse(JSON.stringify(item));
+  return JSON.parse(
+    JSON.stringify(item, (key, value) => (key === 'typeEditing' ? undefined : value)),
+  );
 }
 function enrollmentPhase(enrollment: Assignment['enrollments'][number]) {
+  if (store.course(enrollment.courseId).qualificationType === 'auditor')
+    return enrollment.completion
+      ? '수료'
+      : enrollment.checklist?.items.length
+        ? '학습 확인 중'
+        : '학습 미확인';
   return enrollment.completion
     ? '수료'
     : [enrollment.objective, enrollment.practical].includes('passed')
@@ -152,7 +219,8 @@ watch(
       (section.value !== 'courses' ||
         route.params.id ||
         courseSaveResult.value.actor !== store.actorId ||
-        courseSaveResult.value.organization !== store.managementLv1)
+        courseSaveResult.value.organization !== store.managementLv1 ||
+        courseSaveResult.value.qualificationType !== selectedType.value)
     )
       courseSaveResult.value = null;
     if (
@@ -162,16 +230,9 @@ watch(
       section.value === (courseDraft.value ? 'courses' : 'qualifications')
     )
       return;
+    createOpen.value = false;
     editingContext.value = `${store.actorId}:${store.managementLv1}`;
-    let remembered: { query?: string; filter?: string } = {};
-    try {
-      remembered = JSON.parse(localStorage.getItem(filterKey()) || '{}');
-    } catch {}
-    query.value = remembered.query || '';
     courseSearch.value = '';
-    filter.value = ['draft', 'published'].includes(remembered.filter || '')
-      ? 'all'
-      : remembered.filter || (section.value === 'courses' ? 'active' : 'all');
     savePreview.value = null;
     previewGeneration++;
     previewPending.value = false;
@@ -202,6 +263,7 @@ const qualifications = computed(() =>
   organizationData.value.qualifications.filter(
     (q) =>
       matches(q.title) &&
+      q.qualificationType === selectedType.value &&
       (filter.value === 'deleted'
         ? !!q.deletedAt
         : !q.deletedAt &&
@@ -211,6 +273,7 @@ const qualifications = computed(() =>
 const courses = computed(() =>
   organizationData.value.courses.filter(
     (c) =>
+      c.qualificationType === selectedType.value &&
       matches(c.title) &&
       (filter.value === 'all' ||
         (filter.value === 'active' && c.operationalStatus !== 'retired') ||
@@ -221,6 +284,7 @@ const selectableCourses = computed(() => {
   const selected = new Set(qualificationDraft.value?.courseIds || []);
   const term = courseSearch.value.trim().toLocaleLowerCase();
   return organizationData.value.courses
+    .filter((c) => c.qualificationType === qualificationDraft.value?.qualificationType)
     .filter(
       (c) =>
         selected.has(c.id) ||
@@ -270,22 +334,66 @@ const listItems = computed<Array<Qualification | Course | Assignment | Notice>>(
 const list = useListView(listItems, 'admin', (item) =>
   'title' in item ? item.title : store.username(item.learnerId),
 );
-watch([query, filter], () => {
-  list.page = 1;
-  localStorage.setItem(filterKey(), JSON.stringify({ query: query.value, filter: filter.value }));
-});
+let restoringFilters = false;
+let activeFilterKey = '';
+watch(
+  () => filterKey(),
+  (key) => {
+    restoringFilters = true;
+    let saved: { query?: string; filter?: string; size?: number; sort?: string } = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(key) || '{}');
+    } catch {}
+    activeFilterKey = key;
+    query.value = saved.query || '';
+    filter.value = ['draft', 'published'].includes(saved.filter || '')
+      ? 'all'
+      : saved.filter || (section.value === 'courses' ? 'active' : 'all');
+    list.size = [25, 50, 100].includes(saved.size || 0) ? saved.size! : 25;
+    list.sort = ['original', 'asc', 'desc'].includes(saved.sort || '') ? saved.sort! : 'original';
+    list.page = 1;
+    restoringFilters = false;
+  },
+  { immediate: true, flush: 'sync' },
+);
+watch(
+  [query, filter, () => list.size, () => list.sort],
+  () => {
+    if (restoringFilters || activeFilterKey !== filterKey()) return;
+    list.page = 1;
+    localStorage.setItem(
+      activeFilterKey,
+      JSON.stringify({
+        query: query.value,
+        filter: filter.value,
+        size: list.size,
+        sort: list.sort,
+      }),
+    );
+  },
+  { flush: 'sync' },
+);
 const pageQualifications = computed(() => list.rows as Qualification[]),
   pageCourses = computed(() => list.rows as Course[]),
   pageAssignments = computed(() => list.rows as Assignment[]),
   pageNotices = computed(() => list.rows as Notice[]);
 async function createCatalog() {
-  if (busy.value) return;
+  if (busy.value || !createName.value.trim()) return;
+  createError.value = '';
   busy.value = true;
   try {
-    const result = await store.createCatalog(section.value);
-    await router.push(store.managementLink(`/admin/${section.value}/${result.id}`));
+    const actor = store.actorId,
+      scope = store.managementLv1,
+      type = selectedType.value;
+    const result = await store.createCatalog(section.value, {
+      qualificationType: type,
+      title: createName.value.trim(),
+    });
+    if (actor !== store.actorId || scope !== store.managementLv1) return;
+    createOpen.value = false;
+    await router.push(criteriaLink(`/admin/${section.value}/${result.id}`, type));
   } catch (error) {
-    errors.value = [(error as Error).message];
+    createError.value = (error as Error).message;
   } finally {
     busy.value = false;
   }
@@ -367,12 +475,13 @@ async function saveCatalog(confirm = false) {
         organization: store.managementLv1,
         id: saved.id,
         title: saved.title || '이름 없는 인증Set',
+        qualificationType: saved.qualificationType,
         version: saved.version,
         readiness: result.readiness || [],
         links: result.linkedQualifications || [],
         newVersion: !!result.newVersion,
       };
-      await router.replace(store.managementLink('/admin/courses'));
+      await router.replace(criteriaLink('/admin/courses', saved.qualificationType));
       await nextTick();
       // Apply the contextual destination after the router's general main focus.
       requestAnimationFrame(() => {
@@ -386,7 +495,7 @@ async function saveCatalog(confirm = false) {
       return;
     }
     qualificationDraft.value = plain(store.qualification(result.id));
-    await router.replace(store.managementLink(`/admin/${section.value}/${result.id}`));
+    await router.replace(criteriaLink(`/admin/${section.value}/${result.id}`));
     validationShown.value = true;
     errors.value = result.readiness || [];
   } catch (error) {
@@ -493,6 +602,7 @@ async function refreshCommon() {
     const q = store.qualification(id);
     Object.assign(qualificationDraft.value, {
       title: q.title,
+      qualificationType: q.qualificationType,
       englishName: q.englishName,
       description: q.description,
       templateId: q.templateId,
@@ -516,7 +626,9 @@ async function canLeave() {
     return false;
   }
   if (
-    (noticeDraft.value || selectedAssignment.value) &&
+    (noticeDraft.value ||
+      selectedAssignment.value ||
+      (createOpen.value && createName.value.trim())) &&
     !(await confirmAction(
       '작성 중인 입력이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
       '변경 버리고 이동',
@@ -527,7 +639,8 @@ async function canLeave() {
     !store.canEnterManagement ||
     !editor.value ||
     readOnly.value ||
-    (!courseEditor.value?.pending && JSON.stringify(source) === JSON.stringify(editor.value)) ||
+    (!courseEditor.value?.pending &&
+      JSON.stringify(plain(source)) === JSON.stringify(editor.value)) ||
     (await confirmAction(
       '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
       '변경 버리고 이동',
@@ -538,6 +651,27 @@ onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 </script>
 <template>
+  <AppDialog
+    :open="createOpen"
+    @update:open="
+      (value) => {
+        if (!busy) createOpen = value;
+      }
+    "
+    :title="`${qualificationTypeLabels[selectedType]} 인증Set 만들기`"
+  >
+    <p class="muted">{{ qualificationTypeLabels[selectedType] }} 전용 인증Set을 만듭니다.</p>
+    <label v-if="createOpen" class="field"
+      >인증Set명<input v-model="createName" maxlength="300" :disabled="busy"
+    /></label>
+    <p v-if="createError" class="error-message" role="alert">{{ createError }}</p>
+    <template #footer
+      ><button class="button secondary" :disabled="busy" @click="createOpen = false">취소</button
+      ><button class="button primary" :disabled="busy || !createName.trim()" @click="createCatalog">
+        생성 후 편집
+      </button></template
+    >
+  </AppDialog>
   <div class="admin-section" :class="{ 'individual-editor': !!editor }">
     <div v-if="!store.managementReady && section !== 'policies'" class="empty-state">
       관리할 Lv1 조직을 선택하면 인증 업무를 관리할 수 있습니다.
@@ -551,12 +685,13 @@ onBeforeRouteUpdate(canLeave);
         {{ errors.join(' · ') }}
       </div>
       <template v-if="editor">
-        <RouterLink :to="store.managementLink(`/admin/${section}`)" class="back-link"
+        <RouterLink :to="criteriaLink(`/admin/${section}`)" class="back-link"
           ><AppIcon name="back" :size="16" />{{ title }}</RouterLink
         >
         <PageHeading class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
+            <span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
             <span class="small-label">v{{ editor.version }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
@@ -571,7 +706,7 @@ onBeforeRouteUpdate(canLeave);
               "
               @deleted="
                 qualificationDraft = null;
-                router.push(store.managementLink('/admin/qualifications'));
+                router.push(criteriaLink('/admin/qualifications'));
               "
             />
           </div>
@@ -593,12 +728,15 @@ onBeforeRouteUpdate(canLeave);
         <button v-if="errors.length" class="button secondary" @click="reloadCatalog">
           다시 불러오기
         </button>
+        <p v-if="courseDraft?.qualificationType === 'auditor'" class="qualification-save-notice">
+          {{ AUDITOR_PREPARATION_MESSAGE }}
+        </p>
         <div :class="{ 'course-editor-meta': !!courseDraft }">
           <details class="criterion-versions">
             <summary>버전 이력 · {{ relatedVersions.length }}개</summary>
             <ul>
               <li v-for="version in relatedVersions" :key="version.id">
-                <RouterLink :to="store.managementLink(`/admin/${section}/${version.id}`)"
+                <RouterLink :to="criteriaLink(`/admin/${section}/${version.id}`)"
                   >v{{ version.version }} · {{ version.title || '이름 없는 기준'
                   }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
                 >
@@ -610,12 +748,14 @@ onBeforeRouteUpdate(canLeave);
             :key="courseDraft.id"
             :course="store.course(courseDraft.id) || courseDraft"
             :disabled="
-              busy || JSON.stringify(courseDraft) !== JSON.stringify(store.course(courseDraft.id))
+              busy ||
+              JSON.stringify(courseDraft) !==
+                JSON.stringify(plain(store.course(courseDraft.id) || courseDraft))
             "
             @changed="courseDraft = plain(store.course(courseDraft.id))"
             @deleted="
               courseDraft = null;
-              router.push(store.managementLink('/admin/courses'));
+              router.push(criteriaLink('/admin/courses'));
             "
           />
         </div>
@@ -624,6 +764,12 @@ onBeforeRouteUpdate(canLeave);
           :key="qualificationContext"
           class="team-qualification-detail"
         >
+          <p
+            v-if="qualificationDraft.qualificationType === 'auditor'"
+            class="qualification-save-notice"
+          >
+            {{ AUDITOR_PREPARATION_MESSAGE }}
+          </p>
           <QualificationLifecycle
             v-if="qualificationDraft && !readOnly"
             :qualification="store.qualification(qualificationDraft.id)"
@@ -634,9 +780,7 @@ onBeforeRouteUpdate(canLeave);
                   JSON.stringify(store.qualification(qualificationDraft.id)))
             "
             @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
-            @version-created="
-              (id) => router.push(store.managementLink(`/admin/qualifications/${id}`))
-            "
+            @version-created="(id) => router.push(criteriaLink(`/admin/qualifications/${id}`))"
           />
           <p
             v-if="qualificationDraft && store.retiredCourses(qualificationDraft).length"
@@ -659,6 +803,10 @@ onBeforeRouteUpdate(canLeave);
           <CollapsibleSection title="공통 정보" class="editor-panel">
             <template #summary>수정 번호 {{ qualificationDraft.templateRevision }}</template>
             <dl class="property-list team-qualification-facts">
+              <div>
+                <dt>인증 유형</dt>
+                <dd>{{ qualificationTypeLabels[qualificationDraft.qualificationType] }}</dd>
+              </div>
               <div>
                 <dt>자격명</dt>
                 <dd>{{ qualificationDraft.title }}</dd>
@@ -753,6 +901,7 @@ onBeforeRouteUpdate(canLeave);
           v-if="courseDraft"
           ref="courseEditor"
           :course="courseDraft"
+          :type-editing="store.course(courseDraft.id)?.typeEditing"
           :disabled="readOnly || busy"
           :issues="locatedIssues"
           :show-errors="validationShown"
@@ -762,7 +911,7 @@ onBeforeRouteUpdate(canLeave);
           <RouterLink
             v-for="q in savedLinks"
             :key="q.id"
-            :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+            :to="criteriaLink(`/admin/qualifications/${q.id}`)"
             >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
           >
         </div>
@@ -928,16 +1077,25 @@ onBeforeRouteUpdate(canLeave);
       <template v-else>
         <PageHeading class="page-heading">
           <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
-          <TemplateImport v-if="section === 'qualifications'" /><TeamQualificationPool
+          <TemplateImport
             v-if="section === 'qualifications'"
+            :qualification-type="selectedType"
+          /><TeamQualificationPool
+            v-if="section === 'qualifications'"
+            :qualification-type="selectedType"
           />
           <button
             v-if="section === 'courses'"
             class="button primary"
             :disabled="busy"
-            @click="createCatalog"
+            @click="
+              createName = '';
+              createError = '';
+              createOpen = true;
+            "
           >
-            <AppIcon name="plus" :size="18" />인증Set 추가</button
+            <AppIcon name="plus" :size="18" />{{ qualificationTypeLabels[selectedType] }} 인증Set
+            추가</button
           ><button
             v-else-if="section === 'notices'"
             class="button primary"
@@ -947,6 +1105,22 @@ onBeforeRouteUpdate(canLeave);
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </PageHeading>
+        <CompactTabs
+          v-if="['qualifications', 'courses'].includes(section)"
+          ref="typeTabs"
+          class="criteria-type-tabs"
+          :items="typeItems"
+          :model-value="selectedType"
+          label="기준 인증 유형"
+          panel-id="criteria-type-panel"
+          @update:model-value="selectType"
+        />
+        <p
+          v-if="['qualifications', 'courses'].includes(section) && selectedType === 'auditor'"
+          class="qualification-save-notice"
+        >
+          {{ AUDITOR_PREPARATION_MESSAGE }}
+        </p>
         <section
           v-if="section === 'courses' && courseSaveResult"
           class="course-save-result"
@@ -960,7 +1134,7 @@ onBeforeRouteUpdate(canLeave);
           <RouterLink
             class="text-link"
             data-testid="saved-course-link"
-            :to="store.managementLink(`/admin/courses/${courseSaveResult.id}`)"
+            :to="criteriaLink(`/admin/courses/${courseSaveResult.id}`)"
             >저장한 인증Set 확인<AppIcon name="chevron" :size="16"
           /></RouterLink>
           <details v-if="courseSaveResult.readiness.length">
@@ -978,7 +1152,7 @@ onBeforeRouteUpdate(canLeave);
               v-for="q in courseSaveResult.links"
               :key="q.id"
               class="text-link"
-              :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+              :to="criteriaLink(`/admin/qualifications/${q.id}`)"
               >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
             >
           </div>
@@ -1032,7 +1206,16 @@ onBeforeRouteUpdate(canLeave);
                     </td>
                     <td>
                       {{ store.completedCount(a) }} / {{ a.enrollments.length }}
-                      <template v-for="stage in ['평가 전', '평가 중', '일부 통과']" :key="stage">
+                      <template
+                        v-for="stage in [
+                          '평가 전',
+                          '평가 중',
+                          '일부 통과',
+                          '학습 미확인',
+                          '학습 확인 중',
+                        ]"
+                        :key="stage"
+                      >
                         <span
                           v-if="
                             a.enrollments.some(
@@ -1133,7 +1316,13 @@ onBeforeRouteUpdate(canLeave);
           :key="`${store.actorId}:${store.managementLv1}`"
         />
         <OrganizationPolicies v-if="section === 'policies'" :key="store.actorId" />
-        <div v-if="section === 'qualifications'" class="table-panel">
+        <div
+          v-if="section === 'qualifications'"
+          id="criteria-type-panel"
+          role="tabpanel"
+          :aria-labelledby="typeTabs?.tabId(selectedType)"
+          class="table-panel"
+        >
           <table>
             <thead>
               <tr>
@@ -1148,18 +1337,18 @@ onBeforeRouteUpdate(canLeave);
               <tr v-for="q in pageQualifications" :key="q.id">
                 <td>
                   <RouterLink
-                    :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+                    :to="criteriaLink(`/admin/qualifications/${q.id}`)"
                     class="table-title"
                     >{{ q.title || '이름 없음' }}</RouterLink
                   >
-                  <details v-if="store.qualificationErrors(q).length" class="readiness">
-                    <summary>설정 필요 {{ store.qualificationErrors(q).length }}건</summary>
+                  <details v-if="qualificationErrors(q).length" class="readiness">
+                    <summary>설정 필요 {{ qualificationErrors(q).length }}건</summary>
                     <ul>
-                      <li v-for="error in store.qualificationErrors(q)" :key="error">
+                      <li v-for="error in qualificationErrors(q)" :key="error">
                         {{ error }}
                       </li>
                     </ul>
-                    <RouterLink :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+                    <RouterLink :to="criteriaLink(`/admin/qualifications/${q.id}`)"
                       >기준 확인</RouterLink
                     >
                   </details>
@@ -1177,6 +1366,7 @@ onBeforeRouteUpdate(canLeave);
                     >시험 데이터</span
                   >
                 </td>
+
                 <td>v{{ q.version }}</td>
                 <td>
                   {{
@@ -1193,7 +1383,7 @@ onBeforeRouteUpdate(canLeave);
                 <td>
                   <QualificationDelete :qualification="q" :disabled="busy" compact />
                   <RouterLink
-                    :to="store.managementLink(`/admin/qualifications/${q.id}`)"
+                    :to="criteriaLink(`/admin/qualifications/${q.id}`)"
                     class="icon-button"
                     :aria-label="`${q.title} 상세`"
                     ><AppIcon name="chevron" :size="18"
@@ -1202,9 +1392,21 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </tbody>
           </table>
-          <p v-if="!qualifications.length" class="empty-state">검색 결과가 없습니다.</p>
+          <p v-if="!qualifications.length" class="empty-state">
+            {{
+              query
+                ? '검색 결과가 없습니다.'
+                : `${qualificationTypeLabels[selectedType]} 팀 자격이 없습니다. 기본자격에서 등록해 주세요.`
+            }}
+          </p>
         </div>
-        <div v-else-if="section === 'courses'" class="table-panel">
+        <div
+          v-else-if="section === 'courses'"
+          id="criteria-type-panel"
+          role="tabpanel"
+          :aria-labelledby="typeTabs?.tabId(selectedType)"
+          class="table-panel"
+        >
           <table>
             <thead>
               <tr>
@@ -1218,20 +1420,24 @@ onBeforeRouteUpdate(canLeave);
             <tbody>
               <tr v-for="c in pageCourses" :key="c.id">
                 <td>
-                  <RouterLink
-                    :to="store.managementLink(`/admin/courses/${c.id}`)"
-                    class="table-title"
-                    >{{ c.title || '이름 없음' }}</RouterLink
-                  >
+                  <RouterLink :to="criteriaLink(`/admin/courses/${c.id}`)" class="table-title">{{
+                    c.title || '이름 없음'
+                  }}</RouterLink>
                 </td>
                 <td>v{{ c.version }}</td>
-                <td class="muted">{{ c.assessmentKinds.map((k) => labels[k]).join(' · ') }}</td>
+                <td class="muted">
+                  {{
+                    c.qualificationType === 'auditor'
+                      ? '본인 학습 확인'
+                      : c.assessmentKinds.map((k) => labels[k]).join(' · ')
+                  }}
+                </td>
                 <td>
                   <StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'" />
                 </td>
                 <td>
                   <RouterLink
-                    :to="store.managementLink(`/admin/courses/${c.id}`)"
+                    :to="criteriaLink(`/admin/courses/${c.id}`)"
                     class="icon-button"
                     :aria-label="`${c.title} 상세`"
                     ><AppIcon name="chevron" :size="18"
@@ -1240,13 +1446,19 @@ onBeforeRouteUpdate(canLeave);
               </tr>
             </tbody>
           </table>
-          <p v-if="!courses.length" class="empty-state">검색 결과가 없습니다.</p>
+          <p v-if="!courses.length" class="empty-state">
+            {{
+              query
+                ? '검색 결과가 없습니다.'
+                : `${qualificationTypeLabels[selectedType]} 인증Set이 없습니다. 새 인증Set을 만들어 주세요.`
+            }}
+          </p>
         </div>
         <div v-else-if="section === 'results'" class="results-list">
           <RouterLink
             v-if="resultAssignmentId"
             class="text-link"
-            :to="store.managementLink('/admin/results')"
+            :to="criteriaLink('/admin/results')"
             >전체 결과 목록</RouterLink
           >
           <details
@@ -1342,10 +1554,25 @@ onBeforeRouteUpdate(canLeave);
                 <RouterLink
                   v-if="e.completion"
                   class="text-link"
-                  :to="store.managementLink(`/completions/${e.completion.id}`)"
+                  :to="criteriaLink(`/completions/${e.completion.id}`)"
                   >인증Set 수료증 보기</RouterLink
                 >
-                <p v-if="!e.history.length" class="muted">평가 이력이 없습니다.</p>
+                <template v-if="store.course(e.courseId).qualificationType === 'auditor'"
+                  ><p class="muted">
+                    본인 학습 확인 · {{ e.completion ? '수료 확정' : '확인 진행' }}
+                  </p>
+                  <ul>
+                    <li v-for="item in e.checklist?.items || []" :key="item.itemId">
+                      {{ item.title }} · {{ item.required ? '필수' : '선택' }} ·
+                      {{
+                        new Date(item.confirmedAt).toLocaleString('ko-KR', {
+                          timeZone: 'Asia/Seoul',
+                        })
+                      }}
+                    </li>
+                  </ul></template
+                >
+                <p v-else-if="!e.history.length" class="muted">평가 이력이 없습니다.</p>
               </section>
               <details class="attempt-detail">
                 <summary>변경 이력</summary>
@@ -1363,7 +1590,7 @@ onBeforeRouteUpdate(canLeave);
               </details>
               <RouterLink
                 v-if="a.certifiedAt"
-                :to="store.managementLink(`/certifications/${a.id}`)"
+                :to="criteriaLink(`/certifications/${a.id}`)"
                 class="button secondary"
                 >인증 근거 보기<AppIcon name="arrow" :size="16"
               /></RouterLink>

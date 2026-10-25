@@ -18,6 +18,7 @@ const positive = (value: string) => (/^\d+$/.test(value) && Number(value) > 0 ? 
 const choice = <const T extends string>(value: string, choices: readonly T[], fallback: T): T =>
   choices.includes(value as T) ? (value as T) : fallback;
 const filterKeys = [
+  'qualificationType',
   'search',
   'entityId',
   'required',
@@ -84,6 +85,7 @@ export function useDashboard() {
   const query = computed<DashboardQuery>(() => {
     const q = route.query;
     const result: DashboardQuery = {
+      qualificationType: q.qualificationType === 'auditor' ? 'auditor' : 'auditee',
       lv1OrganizationId: store.managementLv1,
       organizationId:
         one(q.organizationId) ||
@@ -125,6 +127,8 @@ export function useDashboard() {
         [
           'unplanned',
           'draft',
+          'learning_wait',
+          'learning_progress',
           'assessment_wait',
           'assessment_progress',
           'partial_completion',

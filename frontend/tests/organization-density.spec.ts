@@ -50,6 +50,22 @@ test('182개 조직의 조밀한 행·독립 스크롤·검색 오른쪽/테두�
   await expect(page.locator('.tree-node')).toHaveCount(
     backend.store.organizations.snapshot().roots.length,
   );
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const panel = (await page.locator('.organization-tree').boundingBox())!,
+      list = (await page.locator('.organization-nodes').boundingBox())!,
+      layout = (await page.locator('.organization-layout').boundingBox())!;
+    if (width > 1000) {
+      expect(Math.abs(panel.height - layout.height)).toBeLessThan(2);
+      expect(Math.abs(panel.y + panel.height - list.y - list.height - 1)).toBeLessThan(2);
+    } else {
+      expect(list.height).toBeLessThan(180);
+    }
+    await page.screenshot({
+      path: info.outputPath(`organization-collapsed-${width}.png`),
+      fullPage: true,
+    });
+  }
   await page.getByRole('button', { name: '모두 펼치기', exact: true }).click();
   await expect(page.locator('.tree-node')).toHaveCount(count);
   const metrics = [];

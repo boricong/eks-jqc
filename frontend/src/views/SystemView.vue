@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { systemSections as sections } from '../system-navigation';
 import QualificationTemplates from '../components/QualificationTemplates.vue';
@@ -9,6 +9,7 @@ import SystemOverview from '../components/SystemOverview.vue';
 import SystemNotices from '../components/SystemNotices.vue';
 import MasterDataPanel from '../components/MasterDataPanel.vue';
 import TestProgressPanel from '../components/TestProgressPanel.vue';
+const SystemDocuments = defineAsyncComponent(() => import('../components/SystemDocuments.vue'));
 const route = useRoute();
 const section = computed(() => String(route.params.section));
 const menuOpen = ref(false);
@@ -47,7 +48,9 @@ watch(
         v-else-if="section === 'organizations'"
       /><UserManagementPanel v-else-if="section === 'users'" /><SystemOverview
         v-else-if="section === 'overview'"
-      /><SystemNotices v-else-if="section === 'notices'" /><template v-else
+      /><SystemNotices v-else-if="section === 'notices'" /><SystemDocuments
+        v-else-if="section === 'documents'"
+      /><template v-else
         ><h1>테스트 관리</h1>
         <TestProgressPanel />
         <MasterDataPanel

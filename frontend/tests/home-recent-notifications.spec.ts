@@ -48,7 +48,7 @@ async function refresh(page: Page) {
   await response;
 }
 
-test('홈은 본인 최신 다섯 건·안정된 동률 순서·서버 조회 범위와 0/1개를 유지하며 읽음 요청을 보내지 않는다', async ({
+test('홈은 본인 최신 네 건·안정된 동률 순서·서버 조회 범위와 0/1개를 유지하며 읽음 요청을 보내지 않는다', async ({
   page,
   backend,
 }) => {
@@ -73,11 +73,11 @@ test('홈은 본인 최신 다섯 건·안정된 동률 순서·서버 조회 �
   await actor(page, 'learner-1');
   const before = backend.store.snapshot();
   const links = recent(page).locator('.home-notification-row');
-  await expect(links).toHaveCount(5);
+  await expect(links).toHaveCount(4);
   await expect(links.first()).toHaveAttribute('href', /notification=/);
   expect(
     await links.evaluateAll((els) => els.map((e) => e.getAttribute('data-notification-id'))),
-  ).toEqual(['a', 'b', 'c', 'old', 'd']);
+  ).toEqual(['a', 'b', 'c', 'old']);
   await expect(links.first().locator('time')).toHaveText('2026.10.23 09:00');
   await expect(links.first()).toHaveAttribute('aria-label', /^읽음/);
   await expect(links.nth(1)).toHaveAttribute('aria-label', /^미읽음/);
@@ -118,7 +118,7 @@ test('모든 홈 역할은 같은 본인 최근 알림을 유지하고 계정 �
   await page.goto('/');
   await actor(page, 'admin-1');
   const before = backend.store.snapshot();
-  for (const label of ['나의 학습', '팀 관리', '시스템 운영']) {
+  for (const label of ['학습자 인증 · Auditee', '팀 관리', '시스템 운영']) {
     await page.getByRole('tab', { name: label, exact: true }).click();
     await expect(recent(page).locator('.home-notification-row')).toHaveCount(1);
     await expect(recent(page)).toContainText('알림 제목 admin');

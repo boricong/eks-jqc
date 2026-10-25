@@ -23,6 +23,26 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
+  if (!legacy && (input as any)?.schemaVersion === 16) {
+    const raw = input as any;
+    for (const item of [
+      ...(raw.courses || []),
+      ...(raw.qualificationTemplates || []),
+      ...(raw.qualifications || []),
+      ...[
+        ...(raw.plans || []),
+        ...(raw.assignments || []),
+        ...(raw.certifications || []),
+      ].flatMap((r: any) =>
+        r.qualificationMetadata ? [r.qualificationMetadata] : [],
+      ),
+    ])
+      check(
+        item.qualificationType === "auditee" ||
+          item.qualificationType === "auditor",
+        "업무16 인증 유형 누락 또는 알 수 없는 유형",
+      );
+  }
   const s = (
     legacy ? LegacyStateSchema.parse(input) : StateSchema.parse(input)
   ) as State;
@@ -36,6 +56,12 @@ export function validateState(
     const lineages = new Map<string, string>();
     for (const q of s.qualifications) {
       check(templates.has(q.templateId), "기본자격 연결 누락");
+      check(
+        q.qualificationType ===
+          s.qualificationTemplates.find((t) => t.id === q.templateId)!
+            .qualificationType,
+        "기본자격과 팀 자격 유형 불일치",
+      );
       const key = `${q.lv1OrganizationId}:${q.templateId}`;
       check(
         !teams.has(key) || teams.get(key) === q.entityId,
@@ -51,6 +77,50 @@ export function validateState(
         q.templateRevision <=
           s.qualificationTemplates.find((t) => t.id === q.templateId)!.revision,
         "기본자격 수정 번호 참조",
+      );
+    }
+  }
+  for (const record of [...s.plans, ...s.assignments, ...s.certifications]) {
+    if (record.qualificationMetadata)
+      check(
+        record.qualificationMetadata.qualificationType ===
+          s.qualifications.find((q) => q.id === record.qualificationId)
+            ?.qualificationType,
+        "보존 자격 유형 불일치",
+      );
+  }
+  if (!legacy) {
+    const courseTypes = new Map<string, string>();
+    for (const c of s.courses) {
+      check(
+        !courseTypes.has(c.entityId) ||
+          courseTypes.get(c.entityId) === c.qualificationType,
+        "인증Set 계보 유형 불일치",
+      );
+      courseTypes.set(c.entityId, c.qualificationType);
+    }
+    for (const q of s.qualifications)
+      for (const id of q.courseIds)
+        check(
+          s.courses.find((c) => c.id === id)?.qualificationType ===
+            q.qualificationType,
+          "자격과 인증Set 유형 불일치",
+        );
+    for (const p of s.plans)
+      for (const item of p.schedules)
+        check(
+          s.courses.find((c) => c.id === item.courseId)?.qualificationType ===
+            s.qualifications.find((q) => q.id === p.qualificationId)
+              ?.qualificationType,
+          "계획 인증Set 유형 불일치",
+        );
+    for (const e of s.enrollments) {
+      const a = s.assignments.find((a) => a.id === e.assignmentId);
+      check(
+        s.courses.find((c) => c.id === e.courseId)?.qualificationType ===
+          s.qualifications.find((q) => q.id === a?.qualificationId)
+            ?.qualificationType,
+        "배정 인증Set 유형 불일치",
       );
     }
   }
@@ -322,6 +392,8 @@ export function validateState(
         "평가별 합격 중복",
       );
     if (
+      c.qualificationType === "auditee" &&
+      kinds.length > 0 &&
       !a.excludedReason &&
       kinds.every((kind) =>
         s.attempts.some(
@@ -332,6 +404,42 @@ export function validateState(
     )
       check(completions.length === 1, "수료 누락");
   }
+  check(
+    new Set(s.learningChecklists.map((v) => v.enrollmentId)).size ===
+      s.learningChecklists.length,
+    "학습 확인 중복",
+  );
+  for (const checklist of s.learningChecklists) {
+    const e = s.enrollments.find((e) => e.id === checklist.enrollmentId),
+      a = s.assignments.find((a) => a.id === e?.assignmentId),
+      c = s.courses.find((c) => c.id === e?.courseId);
+    check(e && a && c?.qualificationType === "auditor", "학습 확인 배정 참조");
+    check(
+      new Set(checklist.items.map((i) => i.itemId)).size ===
+        checklist.items.length,
+      "학습 확인 항목 중복",
+    );
+    for (const item of checklist.items) {
+      const original = c.learningItems.find((i) => i.id === item.itemId);
+      check(
+        original &&
+          item.title === original.title &&
+          item.type === original.type &&
+          item.required === original.required &&
+          item.confirmedBy === a.learnerId,
+        "학습 확인 원본과 본인 근거",
+      );
+    }
+    const required = c.learningItems.filter((i) => i.required);
+    if (
+      required.length &&
+      required.every((i) => checklist.items.some((v) => v.itemId === i.id))
+    )
+      check(
+        s.completions.some((v) => v.enrollmentId === e.id),
+        "학습 확인 수료 누락",
+      );
+  }
   for (const co of s.completions) {
     const e = s.enrollments.find((e) => e.id === co.enrollmentId),
       a = s.assignments.find((a) => a.id === e?.assignmentId),
@@ -339,6 +447,32 @@ export function validateState(
     check(
       e && a && c && co.learnerId === a.learnerId && co.courseId === e.courseId,
       "수료 참조",
+    );
+    if (co.method === "self_confirmation") {
+      const checklist = s.learningChecklists.find(
+        (v) => v.enrollmentId === e.id,
+      );
+      const required = c.learningItems.filter((i) => i.required);
+      check(
+        c.qualificationType === "auditor" &&
+          co.evidence.length === 0 &&
+          required.length > 0 &&
+          required.every((i) =>
+            co.learningEvidence.some((v) => v.itemId === i.id),
+          ),
+        "학습 확인 수료 근거",
+      );
+      check(
+        checklist &&
+          JSON.stringify(checklist.items) ===
+            JSON.stringify(co.learningEvidence),
+        "수료 확인 기록 잠금",
+      );
+      continue;
+    }
+    check(
+      c.qualificationType === "auditee" && co.learningEvidence.length === 0,
+      "평가 수료 유형 근거",
     );
     const kinds = requiredKinds(c);
     check(

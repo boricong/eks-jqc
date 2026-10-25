@@ -315,6 +315,16 @@ const eventLabels: Record<string, string> = {
         </div>
       </section>
       <p v-if="error && !dialog" class="error-message" role="alert">{{ error }}</p>
+      <p
+        v-if="
+          !data.canRenew &&
+          data.certification.learnerId === store.actorId &&
+          data.certification.qualificationMetadata?.qualificationType === 'auditor'
+        "
+        class="certificate-renewal muted"
+      >
+        Auditor 재인증은 준비 중입니다. 최초 취득과 만료 상태 조회만 제공합니다.
+      </p>
       <section
         v-if="data.canRenew"
         class="certificate-renewal"
@@ -326,7 +336,13 @@ const eventLabels: Record<string, string> = {
             <dt>재인증 시작일</dt>
             <dd>{{ data.renewal.opensOn || '정기 재인증 대상 아님' }}</dd>
           </div>
-          <div v-if="data.periods.at(-1) && renewalNoticeOn(data.periods.at(-1)!)">
+          <div
+            v-if="
+              data.certification.qualificationMetadata?.qualificationType !== 'auditor' &&
+              data.periods.at(-1) &&
+              renewalNoticeOn(data.periods.at(-1)!)
+            "
+          >
             <dt>재인증 사전 알림 · 1회</dt>
             <dd>{{ renewalNoticeOn(data.periods.at(-1)!) }}</dd>
           </div>

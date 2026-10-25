@@ -6,6 +6,7 @@ import HomeQualificationCarousel from '../components/HomeQualificationCarousel.v
 import { computed, ref } from 'vue';
 import CompactTabs from '../components/CompactTabs.vue';
 import { useHomeRole } from '../composables/useHomeRole';
+import { useProcessContext } from '../composables/useProcessContext';
 import { useHomeSummary } from '../composables/useHomeSummary';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
@@ -13,7 +14,17 @@ import HomeRecentNotifications from '../components/HomeRecentNotifications.vue';
 import { certificationStatus } from '@eks/contracts';
 const store = useDemo();
 const { items: homeRoles, selected: homeRole, select: selectHome } = useHomeRole();
+useProcessContext(() => `home-${homeRole.value}`);
 const summary = useHomeSummary(homeRole);
+const personalHome = computed(() => ['learner', 'evaluator'].includes(homeRole.value));
+const personalType = computed(() => (homeRole.value === 'evaluator' ? 'auditor' : 'auditee'));
+const personalAssignments = computed(() =>
+  store.myAssignments.filter(
+    (a) => store.qualification(a.qualificationId).qualificationType === personalType.value,
+  ),
+);
+const personalLink = (path: string) =>
+  personalType.value === 'auditor' ? `${path}${path.includes('?') ? '&' : '?'}type=auditor` : path;
 const roleTabs = ref<InstanceType<typeof CompactTabs>>();
 const multipleRoles = computed(() => homeRoles.value.length > 1);
 const homeLabel = computed(
@@ -33,20 +44,17 @@ const managementName = computed(
     '담당 조직',
 );
 const active = computed(() =>
-  store.myAssignments.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt),
+  personalAssignments.value.filter((a) => !a.certifiedAt && !a.acquisitionClosedAt),
 );
 const planningRequests = computed(() => {
   const actor = store.actor;
-  if (
-    homeRole.value !== 'learner' ||
-    actor.certificationEligibility === 'hold' ||
-    !actor.organizationActive
-  )
+  if (!personalHome.value || actor.certificationEligibility === 'hold' || !actor.organizationActive)
     return [];
   return store.data.planningRequests
     .filter(
       (request) =>
         request.learnerId === actor.id &&
+        request.qualificationType === personalType.value &&
         request.organizationId === actor.organizationId &&
         request.lv1OrganizationId === actor.lv1OrganizationId &&
         !request.completion &&
@@ -81,29 +89,29 @@ const attention = computed(() => [
   },
 ]);
 const stats = computed(() =>
-  homeRole.value === 'learner'
+  personalHome.value
     ? [
         {
           label: '진행 중인 자격',
           value: active.value.length,
           icon: 'book',
-          to: '/qualifications',
+          to: personalLink('/qualifications'),
         },
         {
           label: '수료 인증Set',
-          value: store.myAssignments.reduce((n, a) => n + store.completedCount(a), 0),
+          value: personalAssignments.value.reduce((n, a) => n + store.completedCount(a), 0),
           icon: 'check',
-          to: '/qualifications',
+          to: personalLink('/qualifications'),
         },
         {
           label: '현재 유효한 자격',
-          value: store.myAssignments.filter(
+          value: personalAssignments.value.filter(
             (a) =>
               a.certification &&
               ['valid', 'expiring'].includes(certificationStatus(a.certification)),
           ).length,
           icon: 'award',
-          to: '/qualifications?filter=certified',
+          to: personalLink('/qualifications?filter=certified'),
         },
       ]
     : homeRole.value === 'system_operator'
@@ -163,6 +171,9 @@ const stats = computed(() =>
       <PageHeading class="page-heading home-heading">
         <div>
           <h1 id="home-person-title">{{ store.actor.name }} 님</h1>
+          <span v-if="personalHome && !multipleRoles" class="home-personal-type">{{
+            homeLabel
+          }}</span>
           <p class="muted organization-path">
             {{ store.actor.organizationPath.map((p) => p.name).join(' › ') }}
           </p>
@@ -209,7 +220,7 @@ const stats = computed(() =>
         <section
           v-if="stats.length"
           class="stats-panel"
-          :aria-label="homeRole === 'learner' ? '내 현황' : `${homeLabel} 현황`"
+          :aria-label="personalHome ? '내 현황' : `${homeLabel} 현황`"
         >
           <RouterLink v-for="stat in stats" :key="stat.label" :to="stat.to" class="stat-item"
             ><div class="stat-top">
@@ -229,7 +240,7 @@ const stats = computed(() =>
       :aria-labelledby="panelLabel"
     >
       <p
-        v-if="homeRole === 'learner' && store.actor.certificationEligibility === 'hold'"
+        v-if="personalHome && store.actor.certificationEligibility === 'hold'"
         class="error-message"
       >
         취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은
@@ -251,15 +262,16 @@ const stats = computed(() =>
           /></RouterLink>
         </template>
       </nav>
-      <div class="home-columns" :class="{ 'home-columns--learning': homeRole === 'learner' }">
+      <div class="home-columns" :class="{ 'home-columns--learning': personalHome }">
         <div class="home-primary">
           <HomeQualificationCarousel
-            v-if="homeRole === 'learner'"
-            :key="store.actorId"
+            v-if="personalHome"
+            :key="`${store.actorId}:${personalType}`"
+            :qualification-type="personalType"
             :assignments="active"
             :planning-requests="planningRequests"
           />
-          <section v-if="homeRole !== 'learner'" class="home-card">
+          <section v-if="!personalHome" class="home-card">
             <div class="section-heading">
               <h2>
                 {{

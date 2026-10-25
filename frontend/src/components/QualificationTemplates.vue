@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
+import { qualificationTypeLabels, type QualificationType } from '@eks/contracts';
 import type { QualificationTemplate, AuditEvent } from '@eks/contracts';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import { confirmAction } from '../composables/useConfirmation';
 import AppDialog from './AppDialog.vue';
+type TemplateItem = QualificationTemplate & { canChangeType: boolean; typeChangeReason: string };
+const typeFilter = ref('all');
+const typeEditing = computed(() => items.value.find((t) => t.id === draft.value?.id));
 const store = useDemo(),
-  items = ref<QualificationTemplate[]>([]),
+  items = ref<TemplateItem[]>([]),
   audits = ref<AuditEvent[]>([]),
   query = ref(''),
   error = ref(''),
@@ -15,6 +19,7 @@ const store = useDemo(),
 const draft = ref<{
   id?: string;
   revision?: number;
+  qualificationType: QualificationType;
   title: string;
   englishName: string;
   description: string;
@@ -22,8 +27,10 @@ const draft = ref<{
 const baseline = ref('');
 const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== baseline.value);
 const listed = computed(() =>
-  items.value.filter((t) =>
-    `${t.title} ${t.englishName}`.toLowerCase().includes(query.value.toLowerCase()),
+  items.value.filter(
+    (t) =>
+      (typeFilter.value === 'all' || t.qualificationType === typeFilter.value) &&
+      `${t.title} ${t.englishName}`.toLowerCase().includes(query.value.toLowerCase()),
   ),
 );
 let generation = 0;
@@ -31,7 +38,7 @@ async function load() {
   const seq = ++generation,
     actor = store.actorId;
   try {
-    const result = await api<{ items: QualificationTemplate[]; audits: AuditEvent[] }>(
+    const result = await api<{ items: TemplateItem[]; audits: AuditEvent[] }>(
       '/system/qualification-templates',
     );
     if (seq === generation && actor === store.actorId) {
@@ -46,12 +53,13 @@ function edit(item?: QualificationTemplate) {
   draft.value = item
     ? {
         id: item.id,
+        qualificationType: item.qualificationType,
         revision: item.revision,
         title: item.title,
         englishName: item.englishName,
         description: item.description,
       }
-    : { title: '', englishName: '', description: '' };
+    : { qualificationType: 'auditee', title: '', englishName: '', description: '' };
   baseline.value = JSON.stringify(draft.value);
   error.value = '';
 }
@@ -92,10 +100,15 @@ function historyChanges(a: AuditEvent) {
     before?: Partial<QualificationTemplate>;
     after?: Partial<QualificationTemplate>;
   };
-  return (['title', 'englishName', 'description'] as const)
+  return (['title', 'englishName', 'description', 'qualificationType'] as const)
     .filter((k) => d?.before?.[k] !== d?.after?.[k])
     .map((k) => ({
-      label: { title: '자격명', englishName: '영문명', description: '설명' }[k],
+      label: {
+        title: '자격명',
+        englishName: '영문명',
+        description: '설명',
+        qualificationType: '인증 유형',
+      }[k],
       before: d?.before?.[k] || '없음',
       after: d?.after?.[k] || '없음',
     }));
@@ -134,7 +147,16 @@ watch(
       <h1>기본자격 관리</h1>
       <button class="button primary" @click="edit()">새 기본자격 만들기</button>
     </div>
-    <label class="field">기본자격 검색<input v-model="query" type="search" /></label>
+    <div class="list-toolbar">
+      <label class="field">기본자격 검색<input v-model="query" type="search" /></label>
+      <label class="field"
+        >인증 유형<select v-model="typeFilter" aria-label="인증 유형 필터">
+          <option value="all">전체</option>
+          <option value="auditee">Auditee</option>
+          <option value="auditor">Auditor</option>
+        </select></label
+      >
+    </div>
     <p v-if="error && !draft" class="error-message" role="alert">{{ error }}</p>
     <div class="table-panel template-table">
       <table>
@@ -142,6 +164,7 @@ watch(
           <tr>
             <th>기본자격명</th>
             <th>영문명</th>
+            <th>유형</th>
             <th>설정</th>
             <th>수정 번호</th>
             <th>작업</th>
@@ -153,6 +176,7 @@ watch(
               <button class="text-button" @click="edit(t)">{{ t.title }}</button>
             </td>
             <td>{{ t.englishName || '—' }}</td>
+            <td>{{ qualificationTypeLabels[t.qualificationType] }}</td>
             <td>{{ t.description ? '설명 등록됨' : '설명 보완 필요' }}</td>
             <td>{{ t.revision }}</td>
             <td><button class="button ghost" @click="edit(t)">수정</button></td>
@@ -172,6 +196,23 @@ watch(
             최신 정보 다시 불러오기
           </button>
         </div>
+        <label class="field"
+          >인증 유형<select
+            aria-label="인증 유형"
+            aria-describedby="template-type-reason"
+            v-model="draft.qualificationType"
+            :disabled="busy || (!!draft.id && !typeEditing?.canChangeType)"
+          >
+            <option value="auditee">Auditee(피심사자)</option>
+            <option value="auditor">Auditor(심사자)</option>
+          </select></label
+        >
+        <p id="template-type-reason" class="muted">
+          {{ typeEditing?.typeChangeReason || '팀 등록 전까지 유형을 변경할 수 있습니다.' }}
+        </p>
+        <p v-if="draft.qualificationType === 'auditor'" class="muted">
+          Auditor는 필수 학습항목의 본인 완료 확인으로 수료·인증됩니다.
+        </p>
         <label class="field"
           >기본자격명<input v-model="draft.title" :disabled="busy" maxlength="300" required
         /></label>
@@ -246,10 +287,10 @@ watch(
   table-layout: fixed;
 }
 .template-table th:first-child {
-  width: 38%;
+  width: 30%;
 }
 .template-table th:nth-child(2) {
-  width: 28%;
+  width: 24%;
 }
 .template-table td:nth-child(-n + 2) {
   white-space: normal;

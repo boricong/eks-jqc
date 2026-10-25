@@ -220,7 +220,12 @@ export function changeUser(
     demand(
       !user.roles.includes("learner") ||
         input.roles.includes("learner") ||
-        !open.some((a) => a.learnerId === user.id),
+        !open.some(
+          (a) =>
+            a.learnerId === user.id &&
+            s.qualifications.find((q) => q.id === a.qualificationId)
+              ?.qualificationType === "auditee",
+        ),
       409,
       "진행 중인 학습자 배정을 먼저 정리해 주세요.",
     );

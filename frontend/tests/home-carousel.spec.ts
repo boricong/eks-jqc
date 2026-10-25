@@ -257,6 +257,8 @@ test('4해상도·긴 제목/두 줄 설명·목표일/수료율·0 분모·모�
     });
     const enrollment = base.enrollments[0]!;
     enrollment.completion = {
+      method: 'assessment',
+      learningEvidence: [],
       id: 'display-completion',
       enrollmentId: enrollment.id,
       learnerId: base.learnerId,

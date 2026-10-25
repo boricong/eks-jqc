@@ -60,7 +60,7 @@ const validity = computed(() => {
             <strong>{{ completed }}</strong> / {{ assignment.enrollments.length }}
           </dd>
         </div>
-        <div>
+        <div v-if="qualification.qualificationType !== 'auditor'">
           <dt>평가 통과</dt>
           <dd>
             <strong>{{ passed }}</strong> / {{ assessments }}
@@ -97,7 +97,14 @@ const validity = computed(() => {
       <p v-if="qualification.description" class="prose-text">{{ qualification.description }}</p>
       <p v-if="qualification.englishName">{{ qualification.englishName }}</p>
       <p>인증기간 · {{ validity }}</p>
-      <p>취득 조건 · 필수 인증Set 전체 수료 및 설정된 평가 유형별 통과</p>
+      <p>
+        취득 조건 ·
+        {{
+          qualification.qualificationType === 'auditor'
+            ? '필수 학습항목 본인 확인 및 필수 인증Set 전체 수료'
+            : '필수 인증Set 전체 수료 및 설정된 평가 유형별 통과'
+        }}
+      </p>
     </section>
   </section>
 </template>
