@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile, readdir } from "node:fs/promises";
@@ -318,14 +319,15 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const raw: any = structuredClone(f.store.snapshot()),
     org = f.store.organizations.snapshot();
   raw.schemaVersion = 9;
+  legacyPlanFixture(raw);
   for (const q of raw.qualifications) delete q.renewalNoticeDaysBefore;
   for (const c of raw.certifications)
     for (const p of c.periods) delete p.renewalNoticeDaysBefore;
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 24);
-  assert.equal(next.state.revision, raw.revision + 15);
+  assert.equal(next.state.schemaVersion, 25);
+  assert.equal(next.state.revision, raw.revision + 16);
   for (const key of [
     "attempts",
     "completions",

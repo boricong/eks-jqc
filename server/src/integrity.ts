@@ -27,7 +27,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 24) {
+  if (!legacy && (input as any)?.schemaVersion === 25) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -53,9 +53,15 @@ export function validateState(
         !Object.hasOwn(r, "targets"),
         "폐지된 요청 필수 대상은 명시적으로 이관해 주세요.",
       );
-  const s = (
-    legacy ? LegacyStateSchema.parse(input) : StateSchema.parse(input)
-  ) as State;
+  if (!legacy)
+    for (const p of (input as any)?.plans || [])
+      check(
+        !Object.hasOwn(p, "schedules") && !Object.hasOwn(p, "targetOn"),
+        "인증Set별 계획은 명시적으로 이관해 주세요.",
+      );
+  const s = (legacy
+    ? LegacyStateSchema.parse(input)
+    : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
     validateSubjective(s);
     if (organizations) validateRequirements(s, organizations);
@@ -326,7 +332,7 @@ export function validateState(
           "자격과 인증Set 유형 불일치",
         );
     for (const p of s.plans)
-      for (const item of p.schedules)
+      for (const item of p.previousSchedule?.schedules || [])
         check(
           s.courses.find((c) => c.id === item.courseId)?.qualificationType ===
             s.qualifications.find((q) => q.id === p.qualificationId)
@@ -876,7 +882,7 @@ export function validateState(
       s.requests.length,
     "요청 식별자 중복",
   );
-  validateWorkflow(s);
+  validateWorkflow(s, legacy);
   return s;
 }
 

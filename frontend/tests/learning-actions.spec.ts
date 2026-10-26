@@ -186,17 +186,14 @@ test('완료 계획은 편집·저장 없이 조회하고 서버 API 수정 후 
   await expect(
     page.getByText('완료된 계획은 이 화면에서 변경할 수 없습니다.', { exact: true }),
   ).toBeVisible();
-  const first = page.locator('.plan-review-course .collapsible-section-toggle').first();
-  await first.focus();
-  await page.keyboard.press('Space');
-  await expect(first).toHaveAttribute('aria-expanded', 'false');
-  const schedules = structuredClone(plan.schedules);
-  schedules[0]!.goal = '서버에서 수정한 조회 목표';
-  await savePlanViaApi(page, plan.id, { targetOn: '2030-12-01', schedules }, '서버 조정');
+  await savePlanViaApi(
+    page,
+    plan.id,
+    { endOn: '2030-12-01', goal: '서버에서 수정한 조회 목표' },
+    '서버 조정',
+  );
   await refresh(page);
-  await expect(page.locator('.plan-review-target')).toContainText('2030.12.01');
-  await expect(first).toHaveAttribute('aria-expanded', 'false');
-  await first.click();
+  await expect(page.locator('.plan-review-summary')).toContainText('2030.12.01');
   await expect(page.locator('.plan-review-goal').first()).toContainText(
     '서버에서 수정한 조회 목표',
   );
@@ -219,15 +216,15 @@ test('다른 화면에서 완료한 계획을 재조회하면 대기 자동 저�
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2030-12-01');
-  await expect.poll(() => backend.store.snapshot().plans[0]!.targetOn).toBe('2030-12-01');
+  await page.getByLabel('종료일', { exact: true }).fill('2030-12-01');
+  await expect.poll(() => backend.store.snapshot().plans[0]!.endOn).toBe('2030-12-01');
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   const writes: string[] = [];
   page.on('request', (r) => {
     if (r.method() === 'PUT' && /\/api\/plans\//.test(r.url())) writes.push(r.url());
   });
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2031-12-01');
+  await page.getByLabel('종료일', { exact: true }).fill('2031-12-01');
   const plan = backend.store.snapshot().plans[0]!;
   const response = await page.request.post(`/api/plans/${plan.id}/complete`, {
     headers: await headers(page),
@@ -237,9 +234,9 @@ test('다른 화면에서 완료한 계획을 재조회하면 대기 자동 저�
   await refresh(page);
   await expect(page.getByRole('heading', { name: '계획 내용', exact: true })).toBeVisible();
   await page.clock.runFor(1000);
-  await expect(page.locator('.plan-review-target')).toContainText('2030.12.01');
+  await expect(page.locator('.plan-review-summary')).toContainText('2030.12.01');
   await expect(page.locator('[data-plan-field]')).toHaveCount(0);
   expect(writes).toEqual([]);
-  expect(backend.store.snapshot().plans[0]!.targetOn).toBe('2030-12-01');
+  expect(backend.store.snapshot().plans[0]!.endOn).toBe('2030-12-01');
   await page.clock.resume();
 });

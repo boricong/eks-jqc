@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -429,6 +430,7 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
   t.after(() => rm(dir, { recursive: true, force: true }));
   const raw: any = seedState(true);
   raw.schemaVersion = 7;
+  legacyPlanFixture(raw);
   for (const n of raw.notices) delete n.scope;
   await mkdir(path.dirname(file), { recursive: true });
   await mkdir(path.dirname(store.organizations.file), { recursive: true });
@@ -467,8 +469,8 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "administration",
   );
   const after = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(after.schemaVersion, 24);
-  assert.equal(after.revision, raw.revision + 17);
+  assert.equal(after.schemaVersion, 25);
+  assert.equal(after.revision, raw.revision + 18);
   for (const key of [
     "users",
     "plans",

@@ -532,6 +532,19 @@ export async function buildApp(
               }
             }
             authorize(s, current, action, targetId, payload, scope);
+            if (action.startsWith("plan."))
+              demand(
+                ![
+                  "schedules",
+                  "targetOn",
+                  "assessmentOn",
+                  "learningStart",
+                  "learningEnd",
+                ].some((k) => Object.hasOwn(body as object, k)),
+                410,
+                "계획 입력 방식이 변경되었습니다. 새로고침 후 자격 시작일·종료일을 입력해 주세요.",
+                "FEATURE_REMOVED",
+              );
           },
           (s: State, org?: OrganizationDocument) =>
             execute(

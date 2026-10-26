@@ -314,16 +314,13 @@ test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 
   await expect(current(page)).toHaveAttribute('data-request-id', id);
   await expect(current(page)).toContainText('작성 중');
   await page.goto(draftUrl);
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2027-02-01');
-  for (const el of await page.getByLabel('학습 시작 예정일', { exact: true }).all())
+  await page.getByLabel('종료일', { exact: true }).fill('2027-02-01');
+  for (const el of await page.getByLabel('시작일', { exact: true }).all())
     await el.fill('2026-10-01');
-  for (const el of await page.getByLabel('학습 완료 예정일', { exact: true }).all())
+  for (const el of await page.getByLabel('종료일', { exact: true }).all())
     await el.fill('2026-10-15');
-  for (const el of await page.getByLabel('평가 예정일', { exact: true }).all())
-    await el.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
-  for (const el of await page.getByRole('textbox').all())
+  await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
+  for (const el of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
     await el.fill('판단 근거를 설명하고 독립적으로 수행한다.');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();

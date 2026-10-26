@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -308,7 +309,7 @@ test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적
     new Date().toISOString(),
   );
   assert.equal(master.formatVersion, 14);
-  assert.equal(master.stateSchemaVersion, 24);
+  assert.equal(master.stateSchemaVersion, 25);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -384,14 +385,9 @@ function auditorProgress(s: ReturnType<typeof seedState>) {
     revision: 1,
     createdAt: "2026-10-25T00:00:00.000Z",
     updatedAt: "2026-10-25T00:00:00.000Z",
-    targetOn: "2027-12-31",
-    schedules: q.courseIds.map((courseId) => ({
-      courseId,
-      goal: "",
-      learningStart: "2027-01-01",
-      learningEnd: "2027-02-01",
-      assessmentOn: "2027-03-01",
-    })),
+    endOn: "2027-12-31",
+    startOn: "2027-01-01",
+    goal: "",
   });
 }
 test("Auditor를 기존 평가 응시 근거로 위조하면 무결성 검사에서 거부한다", () => {
@@ -415,6 +411,7 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
   const raw: any = f.store.snapshot();
   await f.app.close();
   raw.schemaVersion = 13;
+  legacyPlanFixture(raw);
   const values = [
     ...raw.qualificationTemplates,
     ...raw.qualifications,
@@ -433,12 +430,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 24);
-  assert.equal(preview.state.revision, raw.revision + 11);
+  assert.equal(preview.state.schemaVersion, 25);
+  assert.equal(preview.state.revision, raw.revision + 12);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 11;
-  normalized.audits.splice(-11 - raw.planningRequests.length);
+  normalized.revision -= 12;
+  normalized.audits.splice(-12 - raw.planningRequests.length);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,

@@ -292,14 +292,9 @@ test("Photo 5과정 계획·학습·지식·상황 대응 완료 후 36개월 �
     `/plans/${plan.id}`,
     {
       revision: draft.revision,
-      targetOn: "2026-12-31",
-      schedules: draft.schedules.map((schedule) => ({
-        ...schedule,
-        learningStart: "2026-10-01",
-        learningEnd: "2026-10-19",
-        assessmentOn: "2026-11-01",
-        goal: "가상 기준과 결과를 독립적으로 검증한다.",
-      })),
+      endOn: "2026-12-31",
+      startOn: "2026-10-01",
+      goal: "가상 기준과 결과를 독립적으로 검증한다.",
     },
     "PUT",
   );

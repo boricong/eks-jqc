@@ -9,7 +9,7 @@ export function migrateAdministration(
     organizations = validateOrganizations(organizationInput);
   if (
     ![
-      7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+      7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     ].includes(raw?.schemaVersion)
   )
     throw new Error(
@@ -38,7 +38,7 @@ export function migrateAdministration(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 24,
+      alreadyApplied: raw.schemaVersion === 25,
       revision: state.revision,
       organizationRevision: organizations.revision,
       notices: state.notices.length,

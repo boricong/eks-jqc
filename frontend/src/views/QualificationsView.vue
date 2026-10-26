@@ -285,7 +285,7 @@ const list = computed(() =>
             class="qualification-target"
             ><span class="small-label">목표일</span
             ><time>{{
-              store.data.plans.find((p) => p.id === a.planId)?.targetOn || '미설정'
+              store.data.plans.find((p) => p.id === a.planId)?.endOn || '미설정'
             }}</time></span
           ><span class="qualification-progress"
             ><span class="progress-label"

@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { setup } from "./auditor-test-fixture.ts";
 import { createPoolQualification, startInput } from "./auditor-fixture.ts";
 import { saveTemplate } from "../src/qualification-templates.ts";
@@ -465,7 +466,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   delete legacy.auditorPrograms;
   legacy.users.find((u: any) => u.id === "learner-2").roles = ["evaluator"];
   const migrated = migrateAuditorProgram(legacy, org);
-  assert.equal(migrated.state.schemaVersion, 24);
+  assert.equal(migrated.state.schemaVersion, 25);
   assert.equal(
     migrated.state.users.find((u) => u.id === "learner-2")!.auditorDesignation
       ?.source,
@@ -478,7 +479,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   );
   assert.throws(() => validateState(legacy, org));
   const bytes = await readFile(f.file);
-  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 24);
+  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 25);
 });
 
 test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 다시 시작해도 중복 발급하지 않는다", async (t) => {
@@ -550,6 +551,7 @@ test("명시적 16→17 이관의 실패는 세 파일을 복구하고 재실행
   await f.app.close();
   const raw: any = JSON.parse(await readFile(f.file, "utf8"));
   raw.schemaVersion = 16;
+  legacyPlanFixture(raw);
   delete raw.auditorPrograms;
   await writeFile(f.file, JSON.stringify(raw, null, 2));
   const disk = new JsonStore(f.file),

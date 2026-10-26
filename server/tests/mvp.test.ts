@@ -637,14 +637,9 @@ async function planAssignment(
     `/plans/${p.id}`,
     {
       revision: plan.revision,
-      targetOn: "2026-11-30",
-      schedules: q.courseIds.map((courseId) => ({
-        courseId,
-        learningStart: "2026-10-01",
-        learningEnd: "2026-10-31",
-        assessmentOn: "2026-11-15",
-        goal: "독립 수행 연습",
-      })),
+      endOn: "2026-11-30",
+      startOn: "2026-10-01",
+      goal: "독립 수행 연습",
     },
     200,
     randomUUID(),

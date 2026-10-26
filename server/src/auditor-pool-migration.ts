@@ -1,5 +1,5 @@
+import { migrateQualificationPlans } from "./qualification-plan-migration.ts";
 import { randomUUID } from "node:crypto";
-import { validateState } from "./integrity.ts";
 import { validateOrganizations } from "./organizations.ts";
 export function migrateAuditorPool(
   input: unknown,
@@ -8,9 +8,11 @@ export function migrateAuditorPool(
 ) {
   const raw = structuredClone(input) as any,
     organizations = validateOrganizations(orgInput);
-  if (![23, 24].includes(raw?.schemaVersion))
+  if (![23, 24, 25].includes(raw?.schemaVersion))
     throw Error("Auditor 풀 이관은 업무23·조직4 또는 현행 파일이 필요합니다.");
-  const alreadyApplied = raw.schemaVersion === 24;
+  if (raw.schemaVersion >= 24)
+    return migrateQualificationPlans(raw, organizations, at);
+  const alreadyApplied = false;
   if (!alreadyApplied) {
     if (
       raw.qualifications?.some((q: any) => q.auditorCriteria) ||
@@ -37,13 +39,13 @@ export function migrateAuditorPool(
       details: { fromSchema: 23, progressReset: false },
     });
   }
-  const state = validateState(raw, organizations);
+  const state = migrateQualificationPlans(raw, organizations, at).state;
   return {
     state,
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 24,
+      schemaVersion: 25,
       organizationSchemaVersion: 4,
       revision: state.revision,
       organizationRevision: organizations.revision,

@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -276,6 +277,7 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
     org = seedOrganizations(),
     raw: any = structuredClone(state);
   raw.schemaVersion = 21;
+  legacyPlanFixture(raw);
   delete raw.subjectiveResponses;
   for (const c of raw.courses) {
     delete c.subjectiveEnabled;
@@ -284,8 +286,8 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
   const before = structuredClone(raw),
     hashes = raw.courses.map(courseContentHash);
   const result = migrateSubjective(raw, org);
-  assert.equal(result.state.schemaVersion, 24);
-  assert.equal(result.state.revision, raw.revision + 3);
+  assert.equal(result.state.schemaVersion, 25);
+  assert.equal(result.state.revision, raw.revision + 4);
   assert.deepEqual(result.state.courses.map(courseContentHash), hashes);
   for (const key of Object.keys(before))
     if (
@@ -443,6 +445,7 @@ test("주관식 명시 이관의 해시 충돌·파일 교체 실패는 세 원�
   await loaded.close();
   const old: any = seedState(true);
   old.schemaVersion = 21;
+  legacyPlanFixture(old);
   delete old.subjectiveResponses;
   for (const c of old.courses) {
     delete c.subjectiveEnabled;
@@ -477,7 +480,7 @@ test("주관식 명시 이관의 해시 충돌·파일 교체 실패는 세 원�
   );
   const after = await Promise.all(files.map((f) => readFile(f)));
   await new JsonStore(file).migratePolicies(
-    { ...expected, revision: old.revision + 3, stateHash: hash(after[0]!) },
+    { ...expected, revision: old.revision + 4, stateHash: hash(after[0]!) },
     migrateSubjective,
     "subjective",
   );

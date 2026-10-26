@@ -151,7 +151,6 @@ const alerts = computed(() =>
         { metric: 'blockedProgress' as const, count: data.value.summary.blockedProgress },
         { metric: 'overdueRequests' as const, count: data.value.summary.overdueRequests },
         { metric: 'overdueTargets' as const, count: data.value.summary.overdueTargets },
-        { metric: 'overdueAssessments' as const, count: data.value.summary.overdueAssessments },
       ],
 );
 const scopeText = computed(
@@ -554,10 +553,7 @@ function detailPage(page: number) {
                       <td class="dashboard-number">{{ org.inProgress }}건</td>
                       <td>
                         <span>요청 {{ org.overdueRequests }}건</span>
-                        <small class="dashboard-meta"
-                          >목표 인증 {{ org.overdueTargets }}건 · 평가
-                          {{ org.overdueAssessments }}건</small
-                        >
+                        <small class="dashboard-meta">자격 종료 {{ org.overdueTargets }}건</small>
                       </td>
                       <td class="dashboard-number">{{ org.expires0to30 }}건</td>
                     </tr>

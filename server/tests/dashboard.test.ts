@@ -583,9 +583,7 @@ test("조직별 세 종류 경과 건수·다음 일정·인증Set 평가일은 
   const r = addRequest(seed, "schedule-alice", "alice");
   r.dueOn = "2026-10-24";
   const plan = addDraft(seed, "schedule-confirmed", r.id);
-  plan.targetOn = "2026-10-22";
-  plan.schedules[0]!.assessmentOn = "2026-10-19";
-  plan.schedules[1]!.assessmentOn = "2026-10-21";
+  plan.endOn = "2026-10-22";
   const assignment = seed.state.assignments[0]!;
   plan.status = "completed";
   plan.assignmentId = assignment.id;
@@ -595,23 +593,23 @@ test("조직별 세 종류 경과 건수·다음 일정·인증Set 평가일은 
   assignment.createdBy = "alice";
   const bobRequest = addRequest(seed, "schedule-bob", "bob");
   bobRequest.dueOn = "2026-10-18";
-  addDraft(seed, "bob-target", bobRequest.id).targetOn = "2026-10-19";
+  addDraft(seed, "bob-target", bobRequest.id).endOn = "2026-10-19";
   const charlieRequest = addRequest(seed, "schedule-charlie", "charlie");
   charlieRequest.dueOn = "2026-10-25";
-  addDraft(seed, "charlie-target", charlieRequest.id).targetOn = "2026-10-17";
+  addDraft(seed, "charlie-target", charlieRequest.id).endOn = "2026-10-17";
   const f = await dashboardFixture(t, seed);
   const members: DashboardResponse = await f.call(
     "admin-1",
     "/dashboard?view=members",
   );
   const byId = new Map(members.members.items.map((m) => [m.userId, m]));
-  assert.equal(byId.get("alice")!.nextSchedule!.kind, "assessment");
+  assert.equal(byId.get("alice")!.nextSchedule!.kind, "target");
   assert.equal(
     byId.get("alice")!.nextSchedule!.date,
-    "2026-10-21",
-    "완료된 인증Set의 과거 평가일은 제외",
+    "2026-10-22",
+    "자격 종료일 사용",
   );
-  assert.equal(byId.get("alice")!.nextSchedule!.courseTitle, c2.title);
+  assert.equal(byId.get("alice")!.nextSchedule!.courseTitle, undefined);
   assert.equal(byId.get("bob")!.nextSchedule!.kind, "request");
   assert.equal(byId.get("bob")!.nextSchedule!.date, "2026-10-18");
   assert.equal(byId.get("charlie")!.nextSchedule!.kind, "target");
@@ -626,19 +624,9 @@ test("조직별 세 종류 경과 건수·다음 일정·인증Set 평가일은 
   const orgB = orgs.organizations.items.find(
     (o) => o.organizationId === ORG_B,
   )!;
-  assert.deepEqual(
-    [orgA.overdueRequests, orgA.overdueTargets, orgA.overdueAssessments],
-    [0, 2, 1],
-  );
-  assert.deepEqual(
-    [orgB.overdueRequests, orgB.overdueTargets, orgB.overdueAssessments],
-    [1, 1, 0],
-  );
-  for (const metric of [
-    "overdueRequests",
-    "overdueTargets",
-    "overdueAssessments",
-  ] as const)
+  assert.deepEqual([orgA.overdueRequests, orgA.overdueTargets], [0, 2]);
+  assert.deepEqual([orgB.overdueRequests, orgB.overdueTargets], [1, 1]);
+  for (const metric of ["overdueRequests", "overdueTargets"] as const)
     assert.equal(
       orgs.organizations.items.reduce((sum, row) => sum + row[metric], 0),
       orgs.summary[metric],
@@ -648,8 +636,10 @@ test("조직별 세 종류 경과 건수·다음 일정·인증Set 평가일은 
     "/dashboard/members/alice",
   );
   assert.deepEqual(
-    detail.qualifications[0]!.courses.map((c) => c.assessmentOn),
-    ["2026-10-19", "2026-10-21"],
+    detail.qualifications[0]!.courses.map((c) =>
+      Object.hasOwn(c, "assessmentOn"),
+    ),
+    [false, false],
   );
   const targets = await f.call(
     "admin-1",
@@ -923,19 +913,13 @@ test("평가 대기·응시·일부 수료를 구분하고 이미 수료한 인�
   assert.equal(byUser.get("waiting")!.progress, "assessment_wait");
   assert.equal(v.summary.inProgress, 3);
   assert.equal(v.summary.overdueTargets, 3);
-  assert.equal(v.summary.overdueAssessments, 5, "총6개 중 수료1개 제외");
+  assert.equal(Object.hasOwn(v.summary, "overdueAssessments"), false);
   const details = await f.call(
     "admin-1",
     "/dashboard/details?metric=overdueAssessments",
+    410,
   );
-  assert.equal(details.unit, "enrollments");
-  assert.equal(details.rows.total, 5);
-  assert.ok(
-    details.rows.items.every(
-      (r: any) =>
-        !seed.state.completions.some((c) => c.enrollmentId === r.enrollmentId),
-    ),
-  );
+  assert.equal(details.code, "FEATURE_REMOVED");
 });
 
 test("같은 팀에서 소속을 옮겨도 확정 배정 진행과 당시 근거는 유지한다", async (t) => {

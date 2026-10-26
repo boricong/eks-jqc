@@ -39,14 +39,9 @@ for (const goals of [
     const latest = () =>
       f.store.snapshot().plans.find((p) => p.id === created.id)!;
     const fields = {
-      targetOn: "2026-12-01",
-      schedules: latest().schedules.map((s, i) => ({
-        ...s,
-        learningStart: "2026-10-01",
-        learningEnd: "2026-10-15",
-        assessmentOn: "2026-11-01",
-        goal: goals[i]!,
-      })),
+      endOn: "2026-12-01",
+      startOn: "2026-10-01",
+      goal: goals.join("\n"),
     };
     await f.call(
       "learner-2",
@@ -76,16 +71,14 @@ for (const goals of [
       ),
       result,
     );
-    assert.deepEqual(
-      latest().schedules.map((s) => s.goal),
-      goals,
-    );
+    assert.deepEqual(latest().goal, goals.join("\n"));
     const assignment = f.store
       .snapshot()
       .assignments.find((a) => a.id === result.assignmentId)!;
     const empty = {
       ...fields,
-      schedules: fields.schedules.map((s) => ({ ...s, goal: "" })),
+      startOn: fields.startOn,
+      goal: "",
     };
     await f.call(
       "learner-2",
@@ -101,11 +94,11 @@ for (const goals of [
       200,
       "PUT",
     );
-    assert.ok(latest().schedules.every((s) => s.goal === ""));
+    assert.equal(latest().goal, "");
     const before = f.store.snapshot();
     const invalid = {
       ...empty,
-      schedules: empty.schedules.map((s) => ({ ...s, learningEnd: "" })),
+      endOn: "",
     };
     await f.call(
       "learner-2",
@@ -119,10 +112,8 @@ for (const goals of [
       `/plans/${created.id}`,
       {
         ...empty,
-        schedules: empty.schedules.map((s) => ({
-          ...s,
-          goal: "가".repeat(2001),
-        })),
+        startOn: empty.startOn,
+        goal: "가".repeat(2001),
         revision: latest().revision,
         reason: "길이 초과",
       },
@@ -235,27 +226,22 @@ async function fixture(t: TestContext) {
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 test("계획 기본 일정은 KST 날짜·월말·윤년을 기준으로 1회 계산한다", () => {
   assert.deepEqual(defaultPlanSchedule("2026-10-18T15:00:00Z"), {
-    learningStart: "2026-10-26",
-    learningEnd: "2026-11-16",
-    assessmentOn: "2026-11-23",
+    startOn: "2026-10-26",
+    endOn: "2026-11-16",
   });
   assert.equal(
-    defaultPlanSchedule("2026-10-18T14:59:59Z").learningStart,
+    defaultPlanSchedule("2026-10-18T14:59:59Z").startOn,
     "2026-10-25",
   );
   assert.deepEqual(defaultPlanSchedule("2028-01-31T14:59:00Z"), {
-    learningStart: "2028-02-07",
-    learningEnd: "2028-02-28",
-    assessmentOn: "2028-03-06",
+    startOn: "2028-02-07",
+    endOn: "2028-02-28",
   });
   assert.equal(
-    defaultPlanSchedule("2028-02-22T00:00:00Z").learningStart,
+    defaultPlanSchedule("2028-02-22T00:00:00Z").startOn,
     "2028-02-29",
   );
-  assert.equal(
-    defaultPlanSchedule("2026-12-28T00:00:00Z").assessmentOn,
-    "2027-02-01",
-  );
+  assert.equal(defaultPlanSchedule("2026-12-28T00:00:00Z").endOn, "2027-01-25");
 });
 test("신규 일정 저장·기존 빈 날짜만 최초 보완·수정과 삭제한 날짜 보존", async (t) => {
   const f = await fixture(t),
@@ -269,13 +255,10 @@ test("신규 일정 저장·기존 빈 날짜만 최초 보완·수정과 삭제
     qualificationId: q,
   });
   let p = f.store.snapshot().plans.find((p) => p.id === id)!;
-  assert.deepEqual(p.schedules[0], {
-    courseId: p.schedules[0]!.courseId,
-    ...defaultPlanSchedule(p.createdAt),
-    goal: "",
-  });
+  assert.equal(p.startOn, defaultPlanSchedule(p.createdAt).startOn);
+  assert.equal(p.endOn, defaultPlanSchedule(p.createdAt).endOn);
+  assert.equal(p.goal, "");
   assert.equal(p.scheduleDefaultsAppliedAt, p.createdAt);
-  assert.equal(p.targetOn, "");
   await f.store.transact(
     "learner-2",
     randomUUID(),
@@ -284,38 +267,30 @@ test("신규 일정 저장·기존 빈 날짜만 최초 보완·수정과 삭제
     (s) => {
       const legacy = s.plans.find((p) => p.id === id)!;
       delete legacy.scheduleDefaultsAppliedAt;
-      legacy.schedules[0]!.learningStart = "2028-02-08";
-      legacy.schedules[0]!.learningEnd = "";
-      legacy.schedules[0]!.assessmentOn = "2028-03-12";
-      legacy.schedules[0]!.goal = "입력한 목표 보존";
+      legacy.startOn = "2028-02-08";
+      legacy.endOn = "";
+      legacy.goal = "입력한 목표 보존";
       return {};
     },
   );
   await f.call("learner-2", `/plans/${id}/schedule-defaults`, { revision: 1 });
   p = f.store.snapshot().plans.find((p) => p.id === id)!;
-  assert.deepEqual(p.schedules[0], {
-    courseId: p.schedules[0]!.courseId,
-    learningStart: "2028-02-08",
-    learningEnd: "2028-02-29",
-    assessmentOn: "2028-03-12",
-    goal: "입력한 목표 보존",
-  });
-  const schedules = p.schedules.map((s) => ({
-    ...s,
-    learningStart: "2028-02-10",
-    learningEnd: "",
-  }));
+  assert.equal(p.startOn, "2028-02-08");
+  assert.equal(p.endOn, "2028-02-29");
+  assert.equal(p.goal, "입력한 목표 보존");
+  const fields = { startOn: "2028-02-10", endOn: "", goal: p.goal };
   await f.call(
     "learner-2",
     `/plans/${id}`,
-    { revision: 2, targetOn: "", schedules },
+    { revision: 2, ...fields },
     200,
     "PUT",
   );
   await f.restart();
   await f.call("learner-2", `/plans/${id}/schedule-defaults`, { revision: 3 });
   p = f.store.snapshot().plans.find((p) => p.id === id)!;
-  assert.deepEqual(p.schedules, schedules);
+  assert.equal(p.startOn, fields.startOn);
+  assert.equal(p.endOn, "");
   assert.equal(p.revision, 3);
   await f.call("learner-2", `/plans/${id}/complete`, { revision: 3 }, 422);
   await f.call(
@@ -389,7 +364,7 @@ test("미확정 계획 삭제는 본인·revision·최신 역할을 검사하고
   const stale = await f.call(
     "learner-2",
     `/plans/${id}`,
-    { revision: 1, targetOn: "", schedules: deleted.schedules },
+    { revision: 1, endOn: "", startOn: deleted.startOn, goal: deleted.goal },
     410,
     "PUT",
   );
@@ -450,8 +425,9 @@ test("삭제와 확정의 경합은 배정을 중복 생성하지 않으며 확�
     `/plans/${id}`,
     {
       revision: 1,
-      targetOn: "2029-12-01",
-      schedules: p.schedules.map((s) => ({ ...s, goal: "독립 수행" })),
+      endOn: "2029-12-01",
+      startOn: p.startOn,
+      goal: "독립 수행",
     },
     200,
     "PUT",
@@ -577,14 +553,9 @@ async function plan(
   const value = f.store.snapshot().plans.find((v) => v.id === p.id)!;
   const fields = {
     revision: 1,
-    targetOn: "2026-12-01",
-    schedules: value.schedules.map((s) => ({
-      ...s,
-      learningStart: "2026-10-01",
-      learningEnd: "2026-10-15",
-      assessmentOn: "2026-11-01",
-      goal: "원인을 설명하고 독립 수행",
-    })),
+    endOn: "2026-12-01",
+    startOn: "2026-10-01",
+    goal: "원인을 설명하고 독립 수행",
   };
   await f.call(learner, `/plans/${p.id}`, fields, 200, "PUT");
   const key = randomUUID();
@@ -870,24 +841,19 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
     requestId: r,
     qualificationId: q,
   });
-  await f.call("learner-2", `/plans/${p.id}/complete`, { revision: 1 }, 422);
+  assert.ok(f.store.snapshot().plans.find((v) => v.id === p.id)!.endOn);
   const value = f.store.snapshot().plans.find((p2) => p2.id === p.id)!;
   const body = {
     revision: 1,
-    targetOn: "2026-12-01",
-    schedules: value.schedules.map((s) => ({
-      ...s,
-      goal: "독립 수행",
-      learningStart: "2026-10-15",
-      learningEnd: "2026-10-01",
-      assessmentOn: "2026-11-01",
-    })),
+    endOn: "2026-10-01",
+    startOn: "2026-10-15",
+    goal: "독립 수행",
   };
   await f.call("learner-2", `/plans/${p.id}`, body, 200, "PUT");
   await f.call("learner-2", `/plans/${p.id}/complete`, { revision: 2 }, 422);
   await f.call("learner-2", `/plans/${p.id}`, body, 409, "PUT");
   body.revision = 2;
-  body.schedules[0]!.learningStart = "2026-10-01";
+  body.startOn = "2026-10-01";
   await f.call("learner-2", `/plans/${p.id}`, body, 200, "PUT");
   const before = f.store.snapshot();
   f.store.beforeReplace = () => {
@@ -905,7 +871,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   assert.deepEqual(results[0], results[1]);
   const done = f.store.snapshot().plans.find((x) => x.id === p.id)!;
   assert.equal(done.approval, "skipped_by_policy");
-  assert.equal(done.workflowVersion, "personal-certification-v5");
+  assert.equal(done.workflowVersion, "personal-certification-v6");
   assert.equal(
     f.store.snapshot().assignments.filter((a) => a.planId === p.id).length,
     1,
@@ -926,7 +892,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   await f.call(
     "learner-2",
     `/plans/${p.id}`,
-    { ...body, targetOn: "2026-12-31", revision: 4, reason: "일정 조정" },
+    { ...body, endOn: "2026-12-31", revision: 4, reason: "일정 조정" },
     200,
     "PUT",
   );
@@ -935,7 +901,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
     fixed,
   );
   const record = f.store.snapshot().plans.find((x) => x.id === p.id)!;
-  assert.equal(record.targetOn, "2026-12-31");
+  assert.equal(record.endOn, "2026-12-31");
   await f.restart();
   assert.deepEqual(
     f.store.snapshot().plans.find((x) => x.id === p.id),
@@ -961,14 +927,9 @@ test("계획 완료 직전 운영 종료 차단, 기존 미시작 계획 배정�
     `/plans/${draft.id}`,
     {
       revision: 1,
-      targetOn: "2026-12-01",
-      schedules: value.schedules.map((s) => ({
-        ...s,
-        learningStart: "2026-10-01",
-        learningEnd: "2026-10-15",
-        assessmentOn: "2026-11-01",
-        goal: "학습",
-      })),
+      endOn: "2026-12-01",
+      startOn: "2026-10-01",
+      goal: "학습",
     },
     200,
     "PUT",
@@ -1201,7 +1162,7 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
   await f.call(
     "admin-1",
     "/planning-requests",
-    { ...body, dueOn: "2027-02-01" },
+    { ...body, dueOn: "2027-01-25" },
     409,
     "POST",
     key,
@@ -1325,14 +1286,9 @@ test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적
     `/plans/${p.id}`,
     {
       revision: p.revision,
-      targetOn: "2027-12-01",
-      schedules: p.schedules.map((s) => ({
-        ...s,
-        learningStart: "2026-10-01",
-        learningEnd: "2026-10-15",
-        assessmentOn: "2026-11-01",
-        goal: "",
-      })),
+      endOn: "2027-12-01",
+      startOn: "2026-10-01",
+      goal: "",
     },
     200,
     "PUT",

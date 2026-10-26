@@ -96,7 +96,7 @@ test("과거 비교 자료는 schema13·파일 재시작·무결성 검사에서
   const reopened = await new JsonStore(file).load();
   try {
     const restored = reopened.snapshot();
-    assert.equal(restored.schemaVersion, 24);
+    assert.equal(restored.schemaVersion, 25);
     assert.deepEqual(restored.comparisons, before.comparisons);
     for (const field of [
       "attempts",

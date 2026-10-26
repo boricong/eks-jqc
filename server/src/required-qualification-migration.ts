@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   LegacyOrganizationNodeSchema,
   StateSchema,
+  LegacyPersonalPlanSchema,
   PlanningRequestSchema,
   PlanningTargetSchema,
 } from "@eks/contracts";
@@ -56,7 +57,7 @@ export function migrateRequiredQualifications(
   allowUpgradedOrganization = false,
 ) {
   const raw = structuredClone(input) as any;
-  if (![20, 21, 22, 23, 24].includes(raw?.schemaVersion))
+  if (![20, 21, 22, 23, 24, 25].includes(raw?.schemaVersion))
     throw new Error(
       "필수자격 종료 이관에는 업무20·조직3 또는 현행 파일 쌍이 필요합니다.",
     );
@@ -72,6 +73,7 @@ export function migrateRequiredQualifications(
   // Parse all former fields before conversion; do not silently discard a target snapshot.
   const LegacyState20 = StateSchema.extend({
     schemaVersion: z.literal(20),
+    plans: z.array(LegacyPersonalPlanSchema),
     planningRequests: z.array(
       PlanningRequestSchema.extend({
         targets: z.array(PlanningTargetSchema).optional(),
@@ -150,7 +152,7 @@ export function migrateRequiredQualifications(
     organizations,
     report: {
       alreadyApplied: false,
-      schemaVersion: 24,
+      schemaVersion: 25,
       revision: checked.revision,
       organizationSchemaVersion: 4,
       organizationRevision: organizations.revision,

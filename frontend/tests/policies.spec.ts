@@ -218,7 +218,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
       await expect(guide).toContainText('이후 흐름');
       await expect(guide).toContainText('AI 검수 항목');
       await expect(guide).toContainText('정적 설명');
-      await expect(guide).toContainText('검토 기준 v22 · 2026-10-27');
+      await expect(guide).toContainText('검토 기준 v23 · 2026-10-27');
       if (expected[path]) await expect(guide).toContainText(expected[path]!);
       expect(
         await guide.evaluate(

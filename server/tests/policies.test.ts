@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import {
   linkFixtureTemplates,
@@ -139,14 +140,9 @@ async function fixture(t: TestContext) {
       `/plans/${id}`,
       {
         revision: p.revision,
-        targetOn: "2027-01-01",
-        schedules: p.schedules.map((s) => ({
-          ...s,
-          goal: "독립적으로 판단",
-          learningStart: "2026-10-28",
-          learningEnd: "2026-11-18",
-          assessmentOn: "2026-11-25",
-        })),
+        endOn: "2027-01-01",
+        startOn: "2026-10-28",
+        goal: "독립적으로 판단",
       },
       200,
       "PUT",
@@ -349,14 +345,20 @@ test("적용 버전·소속 변경은 초안 확정을 막고 입력과 요청 �
   await f.setup();
   const request = await f.invite(),
     p = await f.plan(request),
-    before = structuredClone(p.schedules);
+    before = structuredClone({
+      startOn: p.startOn,
+      endOn: p.endOn,
+      goal: p.goal,
+    });
   const v = await f.call("admin-1", `/qualifications/${q1}/versions`, {});
   const draft = f.store.snapshot().qualifications.find((q) => q.id === v.id)!;
   await f.call("admin-1", `/qualifications/${v.id}`, draft, undefined, "PUT");
   await f.pool([v.id]);
   await f.complete(p.id, "learner-2", 409);
   assert.deepEqual(
-    f.store.snapshot().plans.find((x) => x.id === p.id)!.schedules,
+    ((p) => ({ startOn: p.startOn, endOn: p.endOn, goal: p.goal }))(
+      f.store.snapshot().plans.find((x) => x.id === p.id)!,
+    ),
     before,
   );
   await f.call(
@@ -513,6 +515,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const raw: any = f.store.snapshot(),
     org: any = f.store.organizations.snapshot();
   raw.schemaVersion = 6;
+  legacyPlanFixture(raw);
   org.schemaVersion = 1;
   delete org.qualificationPools;
   for (const e of organizationEntries(org)) {
@@ -582,7 +585,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 24);
+  assert.equal(migrated.schemaVersion, 25);
   assert.equal(master.schemaVersion, 4);
   for (const key of [
     "users",
@@ -615,7 +618,15 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
         return copy;
       }),
     );
-  assert.equal(migrated.plans[0]!.workflowVersion, "personal-certification-v2");
+  assert.equal(migrated.plans[0]!.workflowVersion, "personal-certification-v6");
+  assert.equal(
+    migrated.plans[0]!.previousSchedule!.workflowVersion,
+    "personal-certification-v2",
+  );
+  assert.deepEqual(
+    migrated.plans[0]!.previousSchedule!.schedules,
+    raw.plans[0].schedules,
+  );
   assert.equal(migrated.planningRequests[0]!.source, "migration");
   assert.equal("qualificationPools" in master, false);
   const after = await readFile(file),
@@ -642,6 +653,7 @@ test("정책 이관 백업 실패·변경된 해시·부분 이관은 원본을 
   const raw: any = seedState(true),
     org: any = seedOrganizations();
   raw.schemaVersion = 6;
+  legacyPlanFixture(raw);
   org.schemaVersion = 1;
   delete org.qualificationPools;
   const file = path.join(dir, "runtime", "state.json"),

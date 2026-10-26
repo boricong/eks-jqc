@@ -85,7 +85,7 @@ const querySchema = z
         "qualification",
 
         "expiresOn",
-        "targetOn",
+        "endOn",
         "dueOn",
       ])
       .optional(),
@@ -108,7 +108,6 @@ const querySchema = z
         "expires0to30",
         "overdueRequests",
         "overdueTargets",
-        "overdueAssessments",
         "excludedPeople",
       ])
       .optional(),
@@ -170,8 +169,10 @@ export function registerDashboardRoutes(
     kind: "options" | "dashboard" | "details" | "member" | "chart-details",
   ) => {
     actor(request);
-    const raw = request.query as Record<string, unknown>;
+    const raw = { ...(request.query as Record<string, unknown>) };
+    if (raw.sort === "targetOn") raw.sort = "endOn";
     if (
+      raw.metric === "overdueAssessments" ||
       raw.required !== undefined ||
       ["requiredCoverage", "requiredMissing", "fullyRequiredPeople"].includes(
         String(raw.metric),
@@ -188,11 +189,13 @@ export function registerDashboardRoutes(
       awaitScope(request, raw);
       throw new DomainError(
         410,
-        "조직별 필수자격 지표와 조건은 종료되었습니다.",
+        raw.metric === "overdueAssessments"
+          ? "평가 예정일과 평가 지연 지표는 종료되었습니다."
+          : "조직별 필수자격 지표와 조건은 종료되었습니다.",
         "FEATURE_REMOVED",
       );
     }
-    const query: DashboardQuery = querySchema.parse(request.query);
+    const query: DashboardQuery = querySchema.parse(raw);
     if (kind === "details")
       query.metric = z
         .string()

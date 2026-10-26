@@ -1,6 +1,6 @@
 # 설정·기준 보존 초기화와 서버 이전
 
-현재 형식은 업무24·조직4·JSON14다. Auditor 등급·선행 일반 기본자격과 팀 등록 근거를 포함한다. JSON1~13은 원본 검증 후 변환하며, 새 관계를 구형 파일로 위장할 수 없다. `data:migrate-auditor-pool`은 등급 추정 없이 schema·전체 revision·감사만 변경한다. [Auditor 풀 계약](AUDITOR_POOL.md)을 우선한다.
+현재 형식은 업무25·조직4·JSON14다. 계획은 자격별 시작일·종료일·목표로 저장하며 JSON에는 포함하지 않는다. JSON14의 stateSchemaVersion24/25를 모두 읽는다. 업무24→25는 [자격 계획 계약](QUALIFICATION_PLANS.md)의 명시 이관을 따른다. Auditor 등급·선행 일반 기본자격과 팀 등록 근거를 포함한다. JSON1~13은 원본 검증 후 변환하며, 새 관계를 구형 파일로 위장할 수 없다. Auditor 풀 이관 단계는 등급을 추정하지 않으며 후속 자격 계획 이관까지 연결한다. [Auditor 풀 계약](AUDITOR_POOL.md)을 우선한다.
 
 ## 현행 조직 필요자격 형식
 

@@ -99,7 +99,7 @@ test('팀 자격에서 필요 조직을 지정하고 소속별 전체 계획 요
   await actor(page, 'learner-2');
   await page.goto(`/plans/${plan.id}`);
   await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('목표 인증일', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('종료일', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '계획 내용', exact: true })).toBeVisible();
 });
 test('필요자격 미지정·저장 충돌·발송 응답 유실을 안내하고 입력·단일 요청을 유지한다', async ({

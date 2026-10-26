@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { prerequisiteCertification } from "../src/auditor-pool.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -261,14 +262,15 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
     raw: any = seedState(true),
     org = f.store.organizations.snapshot();
   raw.schemaVersion = 23;
+  legacyPlanFixture(raw);
   const old = structuredClone(raw),
     converted = migrateAuditorPool(raw, org);
-  assert.equal(converted.state.schemaVersion, 24);
-  assert.equal(converted.state.revision, old.revision + 1);
+  assert.equal(converted.state.schemaVersion, 25);
+  assert.equal(converted.state.revision, old.revision + 2);
   const stripped: any = structuredClone(converted.state);
   stripped.schemaVersion = 23;
-  stripped.revision--;
-  stripped.audits.pop();
+  stripped.revision -= 2;
+  stripped.audits.splice(-2);
   assert.deepEqual(stripped, old);
   assert.deepEqual(
     migrateAuditorPool(converted.state, org).state,
@@ -309,7 +311,7 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
   );
   const after = await Promise.all(files.map((x) => readFile(x)));
   await new JsonStore(f.file).migratePolicies(
-    { ...expected, revision: raw.revision + 1, stateHash: hash(after[0]!) },
+    { ...expected, revision: raw.revision + 2, stateHash: hash(after[0]!) },
     migrateAuditorPool,
     "auditor-pool",
   );

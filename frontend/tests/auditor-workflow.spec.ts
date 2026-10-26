@@ -187,7 +187,7 @@ test('Auditor 홈에서 일정 없이 일반·메인 취득과 반응형·키보
   await carouselContrast(page, '.auditor-learning');
   await page.keyboard.press('Enter');
   await expect(page.locator('.auditor-checklist')).toBeVisible();
-  await expect(page.getByText('목표 인증일', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('종료일', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('region', { name: '내 학습 일정' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '내 계획', exact: true })).toHaveCount(0);
   for (const width of [1920, 1440, 768, 390]) {

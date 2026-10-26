@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -372,6 +373,7 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   const f = await fixture(t);
   const raw: any = structuredClone(seedState(true));
   raw.schemaVersion = 18;
+  legacyPlanFixture(raw);
   raw.requests.push({
     actorId: "operator-1",
     key: randomUUID(),
@@ -383,8 +385,8 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   });
   const org = f.store.organizations.snapshot(),
     migrated = migrateReadyQualifications(raw, org);
-  assert.equal(migrated.state.schemaVersion, 24);
-  assert.equal(migrated.state.revision, raw.revision + 6);
+  assert.equal(migrated.state.schemaVersion, 25);
+  assert.equal(migrated.state.revision, raw.revision + 7);
   for (const field of [
     "qualifications",
     "courses",
@@ -443,7 +445,7 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   assert.deepEqual(await readFile(report.maintenanceBackup), maintenance);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 6, stateHash: hash(after) },
+    { ...expected, revision: raw.revision + 7, stateHash: hash(after) },
     migrateReadyQualifications,
     "ready-qualifications",
   );

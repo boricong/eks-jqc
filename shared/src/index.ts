@@ -45,6 +45,7 @@ import {
   AwardSnapshotSchema,
   PlanningRequestSchema,
   PersonalPlanSchema,
+  LegacyPersonalPlanSchema,
   QualificationPolicySnapshotSchema,
   type QualificationPolicySnapshot,
   type QualificationVersionMode,
@@ -464,7 +465,7 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(24),
+  schemaVersion: z.literal(25),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
     .default([]),
@@ -495,6 +496,7 @@ export const StateSchema = z.object({
   lifecycleEvents: z.array(LifecycleEventSchema).default([]),
 });
 export const LegacyStateSchema = StateSchema.extend({
+  plans: z.array(LegacyPersonalPlanSchema),
   schemaVersion: z.literal(11),
   qualificationTemplates: z.array(QualificationTemplateSchema).optional(),
   qualifications: z.array(

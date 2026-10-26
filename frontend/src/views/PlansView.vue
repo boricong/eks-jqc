@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CourseCategory from '../components/CourseCategory.vue';
+import PreviousPlanSchedule from '../components/PreviousPlanSchedule.vue';
 import PersonalTypeTabs from '../components/PersonalTypeTabs.vue';
 import RequestPlanning from '../components/RequestPlanning.vue';
 import PageHeading from '../components/PageHeading.vue';
@@ -66,12 +68,10 @@ const planRequest = computed(() => requests.value.find((r) => r.id === current.v
 const planReadOnly = computed(
   () => current.value?.status === 'completed' || !!planRequest.value?.closed,
 );
-const reviewOpen = ref<Record<string, boolean>>({});
 const reviewRequestOpen = ref(false);
 watch(
   () => `${store.actorId}:${route.params.id || ''}`,
   () => {
-    reviewOpen.value = {};
     reviewRequestOpen.value = false;
   },
 );
@@ -110,7 +110,7 @@ watch(
   },
   { immediate: true },
 );
-type Fields = Pick<PersonalPlan, 'targetOn' | 'schedules'>;
+type Fields = Pick<PersonalPlan, 'startOn' | 'endOn' | 'goal'>;
 const draft = useSavedDraft<Fields>(async (value, revision) => {
   if (
     planReadOnly.value ||
@@ -122,20 +122,13 @@ const draft = useSavedDraft<Fields>(async (value, revision) => {
 });
 const form = computed(() =>
   planReadOnly.value && current.value
-    ? { targetOn: current.value.targetOn, schedules: current.value.schedules }
+    ? { startOn: current.value.startOn, endOn: current.value.endOn, goal: current.value.goal }
     : draft.value.value,
-);
-watch(
-  () => form.value?.schedules.map((s) => s.courseId),
-  (ids) => {
-    for (const id of ids || []) reviewOpen.value[id] ??= true;
-  },
-  { immediate: true },
 );
 function reviewDate(value?: string) {
   return value ? value.replaceAll('-', '.') : '미정';
 }
-async function editReviewField(target: 2 | 3, key: string) {
+async function editReviewField(target: 2, key: string) {
   if (
     planReadOnly.value ||
     current.value?.status !== 'draft' ||
@@ -181,10 +174,10 @@ async function load() {
   if (generation !== loadGeneration) return;
   if (!planReadOnly.value && current.value?.status === 'draft' && !draft.terminal.value)
     draft.load(
-      { targetOn: current.value.targetOn, schedules: current.value.schedules },
+      { startOn: current.value.startOn, endOn: current.value.endOn, goal: current.value.goal },
       current.value.revision,
     );
-  step.value = planReadOnly.value ? 4 : 2;
+  step.value = planReadOnly.value ? 3 : 2;
 }
 watch(() => `${store.actorId}:${route.params.id || ''}`, load, { immediate: true });
 watch(current, (value, previous) => {
@@ -196,13 +189,13 @@ watch(current, (value, previous) => {
     initializing.value = false;
     fieldErrors.value = {};
     error.value = '';
-    step.value = 4;
+    step.value = 3;
   }
 });
 function handleError(err: unknown) {
   if (err instanceof ApiError && err.code === 'PLAN_DELETED') draft.stop(err.message);
   else error.value = (err as Error).message;
-  if (step.value === 4)
+  if (step.value === 3)
     void nextTick(() => {
       const message = document.querySelector<HTMLElement>('.plan-review-submit-error');
       message?.focus({ preventScroll: true });
@@ -244,27 +237,12 @@ function clearField(key: string) {
   changed();
 }
 function scheduleErrors(): Record<string, string> {
-  const fields = form.value;
-  const result: Record<string, string> = {};
-  if (!fields?.targetOn) result.targetOn = '목표 인증일을 입력해 주세요.';
-  fields?.schedules.forEach((s) => {
-    const title = store.course(s.courseId).title;
-    if (!s.learningStart)
-      result[`${s.courseId}.learningStart`] = `${title}: 학습 시작 예정일을 입력해 주세요.`;
-    if (!s.learningEnd)
-      result[`${s.courseId}.learningEnd`] = `${title}: 학습 완료 예정일을 입력해 주세요.`;
-    if (!auditor.value && !s.assessmentOn)
-      result[`${s.courseId}.assessmentOn`] = `${title}: 평가 예정일을 입력해 주세요.`;
-    if (s.learningStart && s.learningEnd && s.learningStart > s.learningEnd)
-      result[`${s.courseId}.learningEnd`] = `${title}: 학습 완료 예정일은 시작일 이후여야 합니다.`;
-    if (!auditor.value && s.learningEnd && s.assessmentOn && s.learningEnd > s.assessmentOn)
-      result[`${s.courseId}.assessmentOn`] =
-        `${title}: 평가 예정일은 학습 완료 예정일 이후여야 합니다.`;
-    if (auditor.value && fields.targetOn && s.learningEnd > fields.targetOn)
-      result.targetOn = '목표 인증일은 학습 완료 예정일 이후여야 합니다.';
-    if (!auditor.value && fields.targetOn && s.assessmentOn && s.assessmentOn > fields.targetOn)
-      result.targetOn = '목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.';
-  });
+  const f = form.value,
+    result: Record<string, string> = {};
+  if (!f?.startOn) result.startOn = '시작일을 입력해 주세요.';
+  if (!f?.endOn) result.endOn = '종료일을 입력해 주세요.';
+  if (f?.startOn && f.endOn && f.startOn > f.endOn)
+    result.endOn = '종료일은 시작일 이후여야 합니다.';
   return result;
 }
 async function focusFirstError() {
@@ -420,7 +398,7 @@ onBeforeRouteUpdate(leave);
   <div
     id="personal-content"
     class="container page plans-page"
-    :class="{ 'is-plan-review': current && step === 4 }"
+    :class="{ 'is-plan-review': current && step === 3 }"
   >
     <LearnerNav />
     <PersonalTypeTabs panel-id="personal-content" v-if="!route.params.id" />
@@ -435,7 +413,7 @@ onBeforeRouteUpdate(leave);
       <span>{{ store.actor.name }}</span>
     </PageHeading>
     <p
-      v-if="error && !(current && form && step === 4 && !draft.terminal.value)"
+      v-if="error && !(current && form && step === 3 && !draft.terminal.value)"
       class="error-message preserve-lines"
       role="alert"
     >
@@ -464,7 +442,7 @@ onBeforeRouteUpdate(leave);
         class="back-link"
         >내 계획으로</RouterLink
       >
-      <div v-if="step !== 4" class="panel plan-context">
+      <div v-if="step !== 3" class="panel plan-context">
         <h2>
           {{ store.qualification(current.qualificationId, current.qualificationMetadata).title }}
         </h2>
@@ -485,7 +463,7 @@ onBeforeRouteUpdate(leave);
         aria-label="계획 작성 단계"
       >
         <button
-          v-for="(label, i) in ['자격 선택', '일정 수립', '학습 목표(선택)', '최종 확인']"
+          v-for="(label, i) in ['자격 확인', '일정 수립', '최종 확인']"
           :key="label"
           :class="{ active: step === i + 1 }"
           :aria-current="step === i + 1 ? 'step' : undefined"
@@ -500,141 +478,52 @@ onBeforeRouteUpdate(leave);
           {{ store.qualification(current.qualificationId, current.qualificationMetadata).title }}
         </p>
         <p class="muted">
-          필수 {{ form.schedules.length }}인증Set · 이 계획의 자격과 기준 버전은 고정됩니다.
+          필수 {{ reviewQualification?.courseIds.length || 0 }}인증Set · 이 계획의 자격과 기준
+          버전은 고정됩니다.
         </p>
         <button class="button primary" @click="moveTo(2)">일정 수립</button>
       </section>
       <section v-else-if="step === 2" class="panel editor-panel plan-schedule-panel">
         <h2>일정 수립</h2>
-        <label class="field"
-          ><span>목표 인증일</span
-          ><input
-            v-model="form.targetOn"
-            data-plan-field="targetOn"
-            type="date"
-            :disabled="busy"
-            :aria-invalid="!!fieldErrors.targetOn"
-            :aria-describedby="fieldErrors.targetOn ? 'plan-target-error' : undefined"
-            @input="clearField('targetOn')"
-          /><small
-            v-if="fieldErrors.targetOn"
-            id="plan-target-error"
-            class="field-error"
-            role="alert"
-            >{{ fieldErrors.targetOn }}</small
-          ></label
-        >
-        <div class="schedule-table" :class="{ 'auditor-schedules': auditor }">
-          <div class="schedule-header" aria-hidden="true">
-            <span>인증Set</span><span>학습 시작 예정일</span><span>학습 완료 예정일</span
-            ><span v-if="!auditor">평가 예정일</span>
-          </div>
-          <div v-for="(s, index) in form.schedules" :key="s.courseId" class="schedule-row">
-            <h3 :title="store.course(s.courseId).title">
-              <span class="schedule-number">{{ index + 1 }}</span
-              ><span>{{ store.course(s.courseId).title }}</span>
-            </h3>
-            <label class="field"
-              ><span>학습 시작 예정일</span
-              ><input
-                v-model="s.learningStart"
-                :data-plan-field="`${s.courseId}.learningStart`"
-                type="date"
-                :disabled="busy"
-                :aria-invalid="!!fieldErrors[`${s.courseId}.learningStart`]"
-                :aria-describedby="
-                  fieldErrors[`${s.courseId}.learningStart`]
-                    ? `plan-${s.courseId}-learningStart-error`
-                    : undefined
-                "
-                @input="clearField(`${s.courseId}.learningStart`)"
-              /><small
-                v-if="fieldErrors[`${s.courseId}.learningStart`]"
-                :id="`plan-${s.courseId}-learningStart-error`"
-                class="field-error"
-                role="alert"
-                >{{ fieldErrors[`${s.courseId}.learningStart`] }}</small
-              ></label
-            ><label class="field"
-              ><span>학습 완료 예정일</span
-              ><input
-                v-model="s.learningEnd"
-                :data-plan-field="`${s.courseId}.learningEnd`"
-                type="date"
-                :disabled="busy"
-                :aria-invalid="!!fieldErrors[`${s.courseId}.learningEnd`]"
-                :aria-describedby="
-                  fieldErrors[`${s.courseId}.learningEnd`]
-                    ? `plan-${s.courseId}-learningEnd-error`
-                    : undefined
-                "
-                @input="clearField(`${s.courseId}.learningEnd`)"
-              /><small
-                v-if="fieldErrors[`${s.courseId}.learningEnd`]"
-                :id="`plan-${s.courseId}-learningEnd-error`"
-                class="field-error"
-                role="alert"
-                >{{ fieldErrors[`${s.courseId}.learningEnd`] }}</small
-              ></label
-            ><label v-if="!auditor" class="field"
-              ><span>평가 예정일</span
-              ><input
-                v-model="s.assessmentOn"
-                :data-plan-field="`${s.courseId}.assessmentOn`"
-                type="date"
-                :disabled="busy"
-                :aria-invalid="!!fieldErrors[`${s.courseId}.assessmentOn`]"
-                :aria-describedby="
-                  fieldErrors[`${s.courseId}.assessmentOn`]
-                    ? `plan-${s.courseId}-assessmentOn-error`
-                    : undefined
-                "
-                @input="clearField(`${s.courseId}.assessmentOn`)"
-              /><small
-                v-if="fieldErrors[`${s.courseId}.assessmentOn`]"
-                :id="`plan-${s.courseId}-assessmentOn-error`"
-                class="field-error"
-                role="alert"
-                >{{ fieldErrors[`${s.courseId}.assessmentOn`] }}</small
-              ></label
+        <div class="qualification-plan-dates">
+          <label v-for="field in ['startOn', 'endOn'] as const" :key="field" class="field">
+            <span :id="`plan-${field}-label`">{{ field === 'startOn' ? '시작일' : '종료일' }}</span>
+            <input
+              v-model="form[field]"
+              :data-plan-field="field"
+              :aria-labelledby="`plan-${field}-label`"
+              type="date"
+              :disabled="busy"
+              :aria-invalid="!!fieldErrors[field]"
+              :aria-describedby="fieldErrors[field] ? `plan-${field}-error` : undefined"
+              @input="clearField(field)"
+            />
+            <small
+              v-if="fieldErrors[field]"
+              :id="`plan-${field}-error`"
+              class="field-error"
+              role="alert"
+              >{{ fieldErrors[field] }}</small
             >
-          </div>
+          </label>
         </div>
-        <p class="muted schedule-help">
-          최초 일정은 오늘부터 1주 후 시작, 시작일부터 3주 후 완료{{
-            auditor ? '' : '·4주 후 평가'
-          }}로 채웁니다. 수정한 날짜는 자동으로 바뀌지 않습니다. 예정일은 진행을 막지 않습니다.
-        </p>
-        <div class="actions">
-          <button class="button primary" @click="moveTo(4)">최종 확인</button>
-          <button class="button secondary" @click="moveTo(3)">학습 목표 입력(선택)</button>
-        </div>
-      </section>
-      <section v-else-if="step === 3" class="panel editor-panel">
-        <h2>학습 목표(선택)</h2>
-        <p class="muted">필요한 경우에만 작성하세요. 입력하지 않아도 계획을 완료할 수 있습니다.</p>
-        <label v-for="s in form.schedules" :key="s.courseId" class="field"
-          ><span>{{ store.course(s.courseId).title }} · 학습 목표</span
-          ><textarea
-            v-model="s.goal"
-            :data-plan-field="`${s.courseId}.goal`"
+        <label class="field"
+          ><span>학습 목표(선택)</span>
+          <textarea
+            v-model="form.goal"
+            data-plan-field="goal"
             rows="3"
             maxlength="2000"
             :disabled="busy"
-            placeholder="교육을 통해 혼자 수행할 수 있어야 하는 내용을 작성해 주세요."
-            :aria-invalid="!!fieldErrors[`${s.courseId}.goal`]"
-            :aria-describedby="
-              fieldErrors[`${s.courseId}.goal`] ? `plan-${s.courseId}-goal-error` : undefined
-            "
-            @input="clearField(`${s.courseId}.goal`)"
-          /><small
-            v-if="fieldErrors[`${s.courseId}.goal`]"
-            :id="`plan-${s.courseId}-goal-error`"
-            class="field-error"
-            role="alert"
-            >{{ fieldErrors[`${s.courseId}.goal`] }}</small
-          ></label
-        ><button class="button primary" @click="moveTo(4)">최종 확인</button>
+            @input="clearField('goal')"
+            placeholder="이 자격을 취득하며 달성할 목표를 작성해 주세요."
+          />
+        </label>
+        <p class="muted schedule-help">
+          최초 일정은 오늘부터 1주 후 시작, 시작일부터 3주 후 종료로 채웁니다. 예정일은 학습·평가
+          진행을 막지 않습니다.
+        </p>
+        <button class="button primary" @click="moveTo(3)">최종 확인</button>
       </section>
       <div v-else class="plan-review">
         <header class="plan-review-heading">
@@ -643,7 +532,7 @@ onBeforeRouteUpdate(leave);
             {{
               planReadOnly
                 ? '확정한 일정과 선택 입력한 학습 목표를 확인하세요.'
-                : '목표 인증일과 인증Set별 일정을 확인한 뒤 계획을 완료해 주세요.'
+                : '자격의 시작일·종료일과 학습 목표를 확인한 뒤 계획을 완료해 주세요.'
             }}
           </p>
         </header>
@@ -657,24 +546,17 @@ onBeforeRouteUpdate(leave);
                 ><span class="plan-review-version">v{{ reviewQualification?.version }}</span>
               </dd>
             </div>
-            <div class="plan-review-target">
-              <dt>목표 인증일</dt>
-              <dd>
-                <strong>{{ reviewDate(form.targetOn) }}</strong
-                ><button
-                  v-if="!planReadOnly && current.status === 'draft'"
-                  type="button"
-                  class="button secondary small"
-                  :disabled="busy"
-                  @click="editReviewField(2, 'targetOn')"
-                >
-                  목표 인증일 수정
-                </button>
-              </dd>
+            <div v-for="field in ['startOn', 'endOn'] as const" :key="field">
+              <dt>{{ field === 'startOn' ? '시작일' : '종료일' }}</dt>
+              <dd>{{ reviewDate(form[field]) }}</dd>
+            </div>
+            <div class="plan-review-goal">
+              <dt>학습 목표</dt>
+              <dd class="preserve-lines">{{ form.goal || '미입력' }}</dd>
             </div>
             <div>
               <dt>필수 인증Set</dt>
-              <dd>{{ form.schedules.length }}개</dd>
+              <dd>{{ reviewQualification?.courseIds.length || 0 }}개</dd>
             </div>
             <div>
               <dt>계획 작성 기한</dt>
@@ -686,67 +568,13 @@ onBeforeRouteUpdate(leave);
             </div>
           </PropertyList>
         </section>
-        <div class="plan-review-courses">
-          <CollapsibleSection
-            v-for="(s, index) in form.schedules"
-            :key="s.courseId"
-            v-model:open="reviewOpen[s.courseId]"
-            :title="`${index + 1}. ${store.course(s.courseId)?.title || '인증Set 정보 확인 필요'}`"
-            class="plan-review-course"
-            :data-review-course="s.courseId"
-          >
-            <template #summary
-              ><span class="plan-review-course-meta"
-                ><span>v{{ store.course(s.courseId)?.version ?? '확인 필요' }}</span
-                ><span
-                  >{{ auditor ? '학습 완료일' : '평가 예정일' }}
-                  {{ reviewDate(auditor ? s.learningEnd : s.assessmentOn) }}</span
-                ></span
-              ></template
-            >
-            <PropertyList class="plan-review-schedule">
-              <div>
-                <dt>학습 시작 예정일</dt>
-                <dd>{{ reviewDate(s.learningStart) }}</dd>
-              </div>
-              <div>
-                <dt>학습 완료 예정일</dt>
-                <dd>{{ reviewDate(s.learningEnd) }}</dd>
-              </div>
-              <div v-if="!auditor">
-                <dt>평가 예정일</dt>
-                <dd>{{ reviewDate(s.assessmentOn) }}</dd>
-              </div>
-            </PropertyList>
-            <div v-if="s.goal.trim()" class="plan-review-goal">
-              <h3>학습 목표</h3>
-              <p>{{ s.goal }}</p>
-            </div>
-            <div
-              v-if="!planReadOnly && current.status === 'draft'"
-              class="plan-review-edit-actions"
-            >
-              <button
-                type="button"
-                class="button secondary"
-                :disabled="busy"
-                @click="editReviewField(2, `${s.courseId}.learningStart`)"
-              >
-                일정 수정
-              </button>
-              <button
-                type="button"
-                class="button secondary"
-                :disabled="busy"
-                @click="editReviewField(3, `${s.courseId}.goal`)"
-              >
-                {{ s.goal.trim() ? '학습 목표 수정' : '학습 목표 추가(선택)' }}
-              </button>
-            </div>
-          </CollapsibleSection>
-          <p v-if="!form.schedules.length" class="plan-review-empty">
-            등록된 인증Set 일정이 없습니다.
-          </p>
+        <div v-if="!planReadOnly && current.status === 'draft'" class="plan-review-edit-actions">
+          <button class="button secondary" :disabled="busy" @click="editReviewField(2, 'startOn')">
+            일정 수정
+          </button>
+          <button class="button secondary" :disabled="busy" @click="editReviewField(2, 'goal')">
+            학습 목표 수정
+          </button>
         </div>
         <aside class="plan-review-completion" aria-labelledby="plan-review-completion-title">
           <h2 id="plan-review-completion-title">
@@ -771,8 +599,19 @@ onBeforeRouteUpdate(leave);
           </ul>
         </aside>
       </div>
+      <section class="panel plan-course-reference" aria-label="포함된 인증Set">
+        <h2>포함된 인증Set</h2>
+        <ul>
+          <li v-for="id in reviewQualification?.courseIds || []" :key="id">
+            <CourseCategory :course="store.course(id)" /> {{ store.course(id).title }} · v{{
+              store.course(id).version
+            }}
+          </li>
+        </ul>
+      </section>
+      <PreviousPlanSchedule :plan="current" />
       <CollapsibleSection
-        v-if="step === 4"
+        v-if="step === 3"
         v-model:open="reviewRequestOpen"
         title="요청 기준"
         class="plan-review-request"
@@ -787,7 +626,7 @@ onBeforeRouteUpdate(leave);
         </PropertyList>
         <p class="plan-review-help">이번 계획은 선택한 자격 버전을 따릅니다.</p>
       </CollapsibleSection>
-      <ActionBar class="actionbar" :class="{ 'plan-review-actionbar': step === 4 }">
+      <ActionBar class="actionbar" :class="{ 'plan-review-actionbar': step === 3 }">
         <div class="plan-action-feedback">
           <SaveFeedback
             v-if="!planReadOnly && current.status === 'draft'"
@@ -800,7 +639,7 @@ onBeforeRouteUpdate(leave);
           />
           <span v-else class="save-status" role="status" aria-atomic="true">계획 완료</span>
           <p
-            v-if="step === 4 && error"
+            v-if="step === 3 && error"
             class="error-message preserve-lines plan-review-submit-error"
             role="alert"
             tabindex="-1"
@@ -808,7 +647,7 @@ onBeforeRouteUpdate(leave);
             {{ error }}
           </p>
         </div>
-        <template v-if="step === 4">
+        <template v-if="step === 3">
           <button
             v-if="!planReadOnly && current.status === 'draft'"
             class="button primary"
@@ -912,14 +751,16 @@ onBeforeRouteUpdate(leave);
                 store.qualification(p.qualificationId, p.qualificationMetadata).title
               }}</strong
               ><small class="muted"
-                >목표 인증일 {{ p.targetOn || '미정'
+                >시작일 {{ p.startOn || '미정' }} · 종료일 {{ p.endOn || '미정'
                 }}{{
-                  p.targetOn &&
-                  p.targetOn < kstDate() &&
+                  p.endOn &&
+                  p.endOn < kstDate() &&
                   !store.assignment(p.assignmentId || '')?.certifiedAt
                     ? ' · 목표일 경과'
                     : ''
                 }}</small
+              ><small v-if="p.goal" class="muted plan-list-goal"
+                >학습 목표 · {{ p.goal }}</small
               ></span
             ><StatusBadge
               :status="p.status === 'draft' ? 'draft' : 'complete'"
@@ -970,8 +811,8 @@ onBeforeRouteUpdate(leave);
           해당 자격을 제외합니다. 필요하면 다시 선택해 계획할 수 있습니다.
         </p>
         <p class="muted">
-          {{ deleting.schedules.length }}개 인증Set의 일정·목표 · 목표 인증일
-          {{ deleting.targetOn || '미입력' }}
+          자격의 시작일·종료일·학습 목표 · {{ deleting.startOn || '미입력' }} ~
+          {{ deleting.endOn || '미입력' }}
         </p>
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>
       </div>
@@ -985,10 +826,30 @@ onBeforeRouteUpdate(leave);
 </template>
 
 <style scoped>
-@media (min-width: 769px) {
-  .auditor-schedules .schedule-row,
-  .auditor-schedules .schedule-header {
-    grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(150px, 1fr));
+.plan-list-goal {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.qualification-plan-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.plan-course-reference li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line, #e3e8ee);
+  overflow-wrap: anywhere;
+}
+.plan-course-reference ul {
+  list-style: none;
+  padding: 0;
+}
+@media (max-width: 600px) {
+  .qualification-plan-dates {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

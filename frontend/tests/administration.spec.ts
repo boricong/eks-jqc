@@ -154,9 +154,9 @@ test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', a
   const goals = page.getByRole('region', { name: '내 학습 일정', exact: true });
   await expect(overview.getByRole('heading', { name: '평가 흐름 체험', level: 1 })).toBeVisible();
   await expect(goals.getByRole('heading', { name: '학습 목표', exact: true })).toHaveCount(0);
-  await expect(goals.locator('time')).toHaveCount(3);
+  await expect(goals.locator('time')).toHaveCount(2);
   await expect(overview.locator('dl > div')).toHaveCount(3);
-  await expect(goals.locator('dl > div')).toHaveCount(2);
+  await expect(goals.locator('dl > div')).toHaveCount(1);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(

@@ -7,7 +7,7 @@ import {
 function check(value: unknown, label: string): asserts value {
   if (!value) throw new Error(`저장 데이터 무결성 오류: ${label}`);
 }
-export function validateWorkflow(s: State) {
+export function validateWorkflow(s: State, legacy = false) {
   function snapshotValid(
     qualificationId: string,
     frozen?: QualificationPolicySnapshot,
@@ -100,13 +100,29 @@ export function validateWorkflow(s: State) {
         !!q,
       "계획 요청·자격 연결",
     );
-    check(
-      p.schedules.length === q.courseIds.length &&
-        new Set(p.schedules.map((x) => x.courseId)).size ===
-          q.courseIds.length &&
-        p.schedules.every((x) => q.courseIds.includes(x.courseId)),
-      "계획 필수 인증Set",
-    );
+    const old = p as any;
+    if (legacy)
+      check(
+        old.schedules.length === q.courseIds.length &&
+          new Set(old.schedules.map((v: any) => v.courseId)).size ===
+            q.courseIds.length &&
+          old.schedules.every((v: any) => q.courseIds.includes(v.courseId)),
+        "이전 계획 인증Set 참조",
+      );
+    const validDates = legacy
+      ? !!old.targetOn &&
+        old.schedules.every(
+          (v: any) =>
+            v.learningStart &&
+            v.learningEnd &&
+            v.learningStart <= v.learningEnd &&
+            (q.qualificationType === "auditor"
+              ? v.learningEnd <= old.targetOn
+              : v.assessmentOn &&
+                v.learningEnd <= v.assessmentOn &&
+                v.assessmentOn <= old.targetOn),
+        )
+      : !planErrors(p).length;
     if (p.status === "completed") {
       const a = s.assignments.find((a) => a.id === p.assignmentId);
       check(
@@ -118,11 +134,7 @@ export function validateWorkflow(s: State) {
           a.createdBy === p.learnerId &&
           p.completedAt &&
           p.approval === "skipped_by_policy" &&
-          !planErrors(
-            p,
-            s.qualifications.find((q) => q.id === p.qualificationId)!
-              .qualificationType,
-          ).length,
+          validDates,
         "완료 계획과 배정",
       );
     } else

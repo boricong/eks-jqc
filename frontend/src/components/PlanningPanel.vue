@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PreviousPlanSchedule from './PreviousPlanSchedule.vue';
 import { api } from '../api';
 import type { PlanningRequestPreview, PlanningRequest } from '@eks/contracts';
 import { confirmAction } from '../composables/useConfirmation';
@@ -104,8 +105,8 @@ const allRows = computed(() =>
       plans.some(
         (p) =>
           !(p.status === 'draft' && requests.find((r) => r.id === p.requestId)?.closed) &&
-          p.targetOn &&
-          p.targetOn < kstDate() &&
+          p.endOn &&
+          p.endOn < kstDate() &&
           (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId && !a.certifiedAt)),
       );
     return {
@@ -431,16 +432,9 @@ onBeforeRouteUpdate(leave);
         <h3>개인 계획 {{ detail.plans.length }}건</h3>
         <section v-for="p in detail.plans" :key="p.id" class="planning-history-item">
           <h4>{{ store.qualification(p.qualificationId, p.qualificationMetadata).title }}</h4>
-          <p>목표 인증일 {{ p.targetOn || '미정' }}</p>
-          <ul>
-            <li v-for="s in p.schedules" :key="s.courseId">
-              <strong>{{ store.course(s.courseId).title }}</strong>
-              <p v-if="s.goal.trim()" class="preserve-lines">{{ s.goal }}</p>
-              <p v-if="selectedType === 'auditee'" class="planning-meta">
-                평가 예정 {{ s.assessmentOn || '미정' }}
-              </p>
-            </li>
-          </ul>
+          <p>시작일 {{ p.startOn || '미정' }} · 종료일 {{ p.endOn || '미정' }}</p>
+          <p v-if="p.goal" class="preserve-lines">학습 목표 · {{ p.goal }}</p>
+          <PreviousPlanSchedule :plan="p" />
         </section>
         <p v-if="!detail.plans.length" class="planning-meta">작성한 계획이 없습니다.</p>
       </section>

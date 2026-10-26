@@ -17,7 +17,7 @@ const props = defineProps<{
   completed: number;
   passed: number;
   assessments: number;
-  targetOn?: string;
+  endOn?: string;
 }>();
 const infoOpen = ref(false),
   infoId = useId();
@@ -73,9 +73,9 @@ const validity = computed(() => {
           </dd>
         </div>
         <div v-if="qualification.qualificationType !== 'auditor'">
-          <dt>목표 인증일</dt>
+          <dt>종료일</dt>
           <dd>
-            <time v-if="targetOn" :datetime="targetOn">{{ targetOn }}</time
+            <time v-if="endOn" :datetime="endOn">{{ endOn }}</time
             ><span v-else>미설정</span>
           </dd>
         </div>

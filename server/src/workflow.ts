@@ -678,13 +678,8 @@ export function executeWorkflow(
       createdAt: at,
       updatedAt: at,
       scheduleDefaultsAppliedAt: at,
-      targetOn: "",
-      schedules: q.courseIds.map((courseId) => ({
-        courseId,
-        ...defaultPlanSchedule(at),
-        ...(q.qualificationType === "auditor" ? { assessmentOn: "" } : {}),
-        goal: "",
-      })),
+      ...defaultPlanSchedule(at),
+      goal: "",
     });
     p.acquisitionCycleId = p.id;
     s.plans.push(p);
@@ -757,29 +752,23 @@ export function executeWorkflow(
       } else {
         if (p.scheduleDefaultsAppliedAt)
           return { id: p.id, revision: p.revision };
-        for (const schedule of p.schedules) {
-          const defaults = defaultPlanSchedule(at, schedule.learningStart);
-          if (q.qualificationType === "auditor") defaults.assessmentOn = "";
-          // Existing values are never changed; initialization happens only once.
-          schedule.learningStart ||= defaults.learningStart;
-          schedule.learningEnd ||= defaults.learningEnd;
-          schedule.assessmentOn ||= defaults.assessmentOn;
-        }
+        const defaults = defaultPlanSchedule(at, p.startOn);
+        p.startOn ||= defaults.startOn;
+        p.endOn ||= defaults.endOn;
         p.scheduleDefaultsAppliedAt = at;
       }
     } else if (action === "plan.save") {
       const value = PersonalPlanSchema.pick({
-        targetOn: true,
-        schedules: true,
-      }).parse(body);
-      demand(
-        value.schedules.length === q.courseIds.length &&
-          new Set(value.schedules.map((x) => x.courseId)).size ===
-            q.courseIds.length &&
-          value.schedules.every((x) => q.courseIds.includes(x.courseId)),
-        422,
-        "계획의 필수 인증Set은 변경할 수 없습니다.",
-      );
+        startOn: true,
+        endOn: true,
+        goal: true,
+      })
+        .extend({
+          revision: z.number().int().positive(),
+          reason: z.string().max(2000).optional(),
+        })
+        .strict()
+        .parse(body);
       if (p.status === "completed") {
         demand(
           z.string().trim().min(1).max(2000).safeParse(body.reason).success,
@@ -794,9 +783,11 @@ export function executeWorkflow(
           "제외된 계획입니다.",
         );
       }
-      if (q.qualificationType === "auditor")
-        value.schedules.forEach((s) => (s.assessmentOn = ""));
-      Object.assign(p, value);
+      Object.assign(p, {
+        startOn: value.startOn,
+        endOn: value.endOn,
+        goal: value.goal,
+      });
     } else if (action === "plan.complete") {
       demand(p.status === "draft", 409, "이미 완료한 계획입니다.");
       demand(

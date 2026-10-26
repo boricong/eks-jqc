@@ -45,8 +45,7 @@ export const metricLabels: Record<DashboardMetric, string> = {
   incompleteRequests: '미완료 계획 요청',
   expires0to30: '30일 내 만료',
   overdueRequests: '계획 요청 기한 경과',
-  overdueTargets: '목표 인증일 경과',
-  overdueAssessments: '평가 예정일 경과',
+  overdueTargets: '자격 종료일 경과',
   excludedPeople: '집계 제외 인원',
   blockedProgress: '진행 제한',
 };
@@ -59,8 +58,7 @@ export const assessmentLabels: Record<string, string> = {
 };
 export const scheduleLabels = {
   request: '계획 요청 기한',
-  target: '목표 인증일',
-  assessment: '평가 예정일',
+  target: '자격 종료일',
 };
 export const renewalBlockLabels: Record<string, string> = {
   TARGET_HOLD: '취득 대상자 Hold 해제가 필요합니다.',

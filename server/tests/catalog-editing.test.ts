@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import { registerFixtureQualification } from "./template-helpers.ts";
 import test, { type TestContext } from "node:test";
@@ -237,7 +238,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 24);
+  assert.equal(next.state.schemaVersion, 25);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -274,6 +275,7 @@ test("스키마11 이관의 중간 실패는 파일 쌍·세대를 복구하고 
   await f.app.close();
   const raw: any = JSON.parse(await readFile(f.file, "utf8"));
   raw.schemaVersion = 10;
+  legacyPlanFixture(raw);
   raw.qualifications.forEach((q: any) => (q.status = "published"));
   raw.courses.forEach((c: any) => (c.status = "draft"));
   await writeFile(f.file, JSON.stringify(raw));

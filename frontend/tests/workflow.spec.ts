@@ -38,7 +38,7 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await expect(page.getByLabel('목표 인증일')).toBeVisible();
+  await expect(page.getByLabel('종료일')).toBeVisible();
   const plan = backend.store.snapshot().plans[0]!;
   let once = true;
   await page.route(`**/api/plans/${plan.id}`, async (r) => {
@@ -48,12 +48,12 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
       await r.abort('failed');
     } else await r.continue();
   });
-  await page.getByLabel('목표 인증일').fill('2027-01-31');
+  await page.getByLabel('종료일').fill('2027-01-31');
   await expect(page.getByRole('alert')).toContainText('다시 시도');
   await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel('목표 인증일')).toHaveValue('2027-01-31');
+  await expect(page.getByLabel('종료일')).toHaveValue('2027-01-31');
   const other = await context.newPage();
   await other.goto('/');
   await actor(other, 'learner-2');
@@ -62,14 +62,14 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
     latest = backend.store.snapshot().plans[0]!;
   await save(
     `/plans/${plan.id}`,
-    { targetOn: '2027-02-28', schedules: latest.schedules, revision: latest.revision },
+    { endOn: '2027-02-28', startOn: latest.startOn, goal: latest.goal, revision: latest.revision },
     'PUT',
   );
-  await page.getByLabel('목표 인증일').fill('2027-03-31');
+  await page.getByLabel('종료일').fill('2027-03-31');
   await expect(page.getByRole('alert')).toContainText('다른 창');
   await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
   await answerConfirmation(page, true);
-  await expect(page.getByLabel('목표 인증일')).toHaveValue('2027-02-28');
+  await expect(page.getByLabel('종료일')).toHaveValue('2027-02-28');
   await page.setViewportSize({ width: 390, height: 900 });
   await noOverflow(page);
   await page.screenshot({
@@ -77,15 +77,13 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
     fullPage: true,
   });
   expect(backend.store.snapshot().plans).toHaveLength(1);
-  for (const field of await page.getByLabel('학습 시작 예정일', { exact: true }).all())
+  for (const field of await page.getByLabel('시작일', { exact: true }).all())
     await field.fill('2026-10-01');
-  for (const field of await page.getByLabel('학습 완료 예정일', { exact: true }).all())
+  for (const field of await page.getByLabel('종료일', { exact: true }).all())
     await field.fill('2026-10-15');
-  for (const field of await page.getByLabel('평가 예정일', { exact: true }).all())
-    await field.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
-  for (const field of await page.getByRole('textbox').all()) await field.fill('독립 수행 학습');
+  await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
+  for (const field of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
+    await field.fill('독립 수행 학습');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await page.getByRole('button', { name: '계획 완료', exact: true }).click();
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
@@ -93,10 +91,10 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   await page.goto(`/plans/${plan.id}`);
   await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);
   await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);
-  await savePlanViaApi(page, plan.id, { targetOn: '2027-03-31' }, '현장 교육 일정 조정');
+  await savePlanViaApi(page, plan.id, { endOn: '2027-03-31' }, '현장 교육 일정 조정');
   await page.reload();
-  await expect(page.locator('.plan-review-target')).toContainText('2027.03.31');
-  await expect.poll(() => backend.store.snapshot().plans[0]!.targetOn).toBe('2027-03-31');
+  await expect(page.locator('.plan-review-summary')).toContainText('2027.03.31');
+  await expect.poll(() => backend.store.snapshot().plans[0]!.endOn).toBe('2027-03-31');
   expect(backend.store.snapshot().assignments.find((a) => a.id === assignment.id)).toEqual(
     assignment,
   );

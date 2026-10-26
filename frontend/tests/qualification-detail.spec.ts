@@ -181,8 +181,7 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
     () => {},
     (s) => {
       const p = s.plans.find((p) => p.id === a.planId)!;
-      p.schedules[0]!.goal = '기준의 이름과 버전을 독립적으로 확인한다.';
-      p.schedules[1]!.goal = '수행 기록의 누락 여부를 판단한다.';
+      p.goal = '기준의 이름과 버전을 독립적으로 확인한다.';
       return {};
     },
   );
@@ -195,11 +194,11 @@ test('개인 목표·일정과 전체 진행 분리 → 자료 → 응시 복귀
     '기준의 이름과 버전을 독립적으로 확인한다.',
   );
   await page.getByRole('navigation', { name: '인증Set' }).getByRole('button').nth(1).click();
-  await expect(goals).toContainText('2026-12-01');
+  await expect(goals).toContainText('2027-02-01');
   await expect(page.locator('.learning-course-hero')).not.toContainText(
     '수행 기록의 누락 여부를 판단한다.',
   );
-  await expect(goals).not.toContainText('목표 인증일');
+  await expect(goals).not.toContainText('평가 예정일');
   await page.getByRole('link', { name: '평가 시작', exact: true }).click();
   await page.getByRole('link', { name: '응시하기', exact: true }).first().click();
   await page.getByRole('radio').first().check();

@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -301,11 +302,12 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   state.courses.push(unused);
   const raw: any = structuredClone(state);
   raw.schemaVersion = 14;
+  legacyPlanFixture(raw);
   raw.courses.forEach((c: any) => delete c.qualificationType);
   const before = structuredClone(raw),
     result = migrateCourseTypes(raw, org);
   assert.deepEqual(raw, before);
-  assert.equal(result.state.schemaVersion, 24);
+  assert.equal(result.state.schemaVersion, 25);
   for (const id of [c.id, "future-version"])
     assert.equal(
       result.state.courses.find((c) => c.id === id)!.qualificationType,
@@ -317,8 +319,8 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   );
   const stripped: any = structuredClone(result.state);
   stripped.schemaVersion = 14;
-  stripped.revision -= 10;
-  stripped.audits.splice(-10 - raw.planningRequests.length);
+  stripped.revision -= 11;
+  stripped.audits.splice(-11 - raw.planningRequests.length);
   stripped.qualificationTemplates.forEach((t: any) => delete t.scope);
   stripped.courses.forEach((c: any) => delete c.qualificationType);
   assert.deepEqual(stripped, raw);
@@ -340,6 +342,7 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
     raw: any = f.store.snapshot();
   await f.app.close();
   raw.schemaVersion = 14;
+  legacyPlanFixture(raw);
   raw.courses.forEach((c: any) => delete c.qualificationType);
   await writeFile(f.file, JSON.stringify(raw));
   const before = await readFile(f.file),
@@ -385,7 +388,7 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
     new Date().toISOString(),
   );
   assert.equal(file.formatVersion, 14);
-  assert.equal(file.stateSchemaVersion, 24);
+  assert.equal(file.stateSchemaVersion, 25);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   delete old.payload.commonCourses;

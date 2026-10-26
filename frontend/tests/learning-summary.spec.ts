@@ -65,7 +65,7 @@ async function top(page: Page) {
   );
 }
 
-test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 네 화면 폭', async ({
+test('균형형 히어로·자격 목표·시작일과 종료일 표시 및 네 화면 폭', async ({
   page,
   backend,
 }, info) => {
@@ -117,7 +117,7 @@ test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 
       'hidden-goal',
       () => {},
       (s) => {
-        s.plans.find((p) => p.id === assignment.planId)!.schedules[0]!.goal = text;
+        s.plans.find((p) => p.id === assignment.planId)!.goal = text;
         return {};
       },
     );
@@ -126,11 +126,10 @@ test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 
     await expect(hero.locator('.learning-course-goal')).toHaveCount(0);
     await expect(hero.getByRole('heading', { name: '학습 목표', exact: true })).toHaveCount(0);
     await expect(hero.getByRole('button', { name: /학습 목표/ })).toHaveCount(0);
-    if (text) await expect(hero).not.toContainText(text);
+    if (text.trim()) await expect(hero).toContainText(text.trim());
     await expect(hero.getByRole('region', { name: '내 학습 일정' }).locator('time')).toHaveText([
       '2026-10-01',
-      '2026-10-15',
-      '2026-12-01',
+      '2027-02-01',
     ]);
     expect(backend.store.snapshot()).toEqual(before);
   }
@@ -147,8 +146,8 @@ test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 
   await expect(summary.locator('.qualification-facts dt').first()).toHaveCSS('font-size', '13px');
   await expect(summary.locator('.qualification-facts time')).toHaveCSS('font-size', '16px');
   await expect(hero.locator('.learning-dates dd').first()).toHaveCSS('font-size', '14px');
-  await expect(hero.locator('.learning-assessment-date dd')).toHaveCSS('color', 'rgb(83, 58, 253)');
-  await expect(hero.locator('.learning-assessment-date dd')).toHaveCSS('font-weight', '600');
+  await expect(hero.getByText('평가 예정일', { exact: true })).toHaveCount(0);
+  await expect(hero.locator('.learning-dates > div')).toHaveCount(1);
   await expect(hero.getByRole('link', { name: '일정 수정', exact: true })).toHaveCount(0);
   const dates = hero.locator('.learning-dates > div');
   expect(
@@ -192,10 +191,7 @@ test('균형형 히어로·저장 목표 미노출·강조한 일정 한 줄과 
         )
         .all())
         expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    if (width === 390)
-      expect((await dates.last().boundingBox())!.y).toBeGreaterThan(
-        (await dates.first().boundingBox())!.y,
-      );
+    await expect(dates).toHaveCount(1);
     await page.screenshot({
       path: info.outputPath(`balanced-materials-${width}.png`),
       fullPage: true,

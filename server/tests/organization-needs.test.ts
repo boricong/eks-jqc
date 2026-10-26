@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -352,11 +353,12 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   assert.throws(() => readMaster(old));
   const raw: any = seedState(true);
   raw.schemaVersion = 22;
+  legacyPlanFixture(raw);
   delete raw.organizationQualificationRequirements;
   const before = structuredClone(raw),
     m = migrateOrganizationNeeds(raw, org);
-  assert.equal(m.state.schemaVersion, 24);
-  assert.equal(m.state.revision, raw.revision + 2);
+  assert.equal(m.state.schemaVersion, 25);
+  assert.equal(m.state.revision, raw.revision + 3);
   assert.deepEqual(m.state.planningRequests, before.planningRequests);
   assert.deepEqual(migrateOrganizationNeeds(m.state, org).state, m.state);
   assert.deepEqual(raw, before);
@@ -385,13 +387,9 @@ test("여러 필요자격은 모두 확정해야 완료되며 기존 확정 계�
       `/plans/${p.id}`,
       {
         revision: p.revision,
-        targetOn: "2028-01-01",
-        schedules: p.schedules.map((x) => ({
-          ...x,
-          learningStart: "2027-01-01",
-          learningEnd: "2027-01-02",
-          assessmentOn: "2027-01-03",
-        })),
+        endOn: "2028-01-01",
+        startOn: "2027-01-01",
+        goal: p.goal,
       },
       200,
       "PUT",

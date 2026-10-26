@@ -559,7 +559,7 @@ export function dashboardReader(
       ...(plan
         ? {
             planId: plan.id,
-            ...(plan.targetOn ? { targetOn: plan.targetOn } : {}),
+            ...(plan.endOn ? { endOn: plan.endOn } : {}),
           }
         : {}),
       ...(q
@@ -629,31 +629,13 @@ export function dashboardReader(
         title: "계획 수립 요청",
       }));
     for (const c of cells.filter(activeProgress)) {
-      if (c.targetOn)
+      if (c.endOn)
         upcoming.push({
           kind: "target",
-          date: c.targetOn,
+          date: c.endOn,
           title: c.title,
           entityId: c.entityId,
         });
-      const assignment = c.assignmentId && assignmentById.get(c.assignmentId);
-      const plan =
-        assignment && assignment.planId && planById.get(assignment.planId);
-      if (!assignment || !plan) continue;
-      const schedules = new Map(
-        plan.schedules.map((schedule) => [schedule.courseId, schedule]),
-      );
-      for (const e of enrollmentsByAssignment.get(assignment.id) || []) {
-        const assessmentOn = schedules.get(e.courseId)?.assessmentOn;
-        if (assessmentOn && !completionsByEnrollment.has(e.id))
-          upcoming.push({
-            kind: "assessment",
-            date: assessmentOn,
-            title: c.title,
-            entityId: c.entityId,
-            courseTitle: courses.get(e.courseId)?.title,
-          });
-      }
     }
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     const row: DashboardMemberRow = {
@@ -730,33 +712,8 @@ export function dashboardReader(
   const metricRenewals = allRenewals.filter((r) => metricIds.has(r.userId));
   const overdueTargets = metricMembers.flatMap((p) =>
     p.cells
-      .filter((c) => activeProgress(c) && c.targetOn && c.targetOn < date)
+      .filter((c) => activeProgress(c) && c.endOn && c.endOn < date)
       .map((c) => ({ p, c })),
-  );
-  const overdueAssessments = metricMembers.flatMap((p) =>
-    p.cells
-      .filter((c) => activeProgress(c) && c.assignmentId)
-      .flatMap((c) => {
-        const a = assignmentById.get(c.assignmentId!)!,
-          plan = a.planId ? planById.get(a.planId) : undefined;
-        if (!plan) return [];
-        const schedules = new Map(
-          plan.schedules.map((schedule) => [schedule.courseId, schedule]),
-        );
-        return (enrollmentsByAssignment.get(a.id) || [])
-          .filter(
-            (e) =>
-              !completionsByEnrollment.has(e.id) &&
-              !!schedules.get(e.courseId)?.assessmentOn &&
-              schedules.get(e.courseId)!.assessmentOn < date,
-          )
-          .map((e) => ({
-            p,
-            c,
-            e,
-            dueOn: schedules.get(e.courseId)!.assessmentOn,
-          }));
-      }),
   );
   const summary = summarize(metricMembers);
   function summarize(rows: DashboardMemberRow[]): DashboardSummary {
@@ -793,8 +750,6 @@ export function dashboardReader(
         (r) => ids.has(r.learnerId) && r.dueOn < date,
       ).length,
       overdueTargets: overdueTargets.filter((r) => ids.has(r.p.userId)).length,
-      overdueAssessments: overdueAssessments.filter((r) => ids.has(r.p.userId))
-        .length,
       efficacy,
       progress,
     };
@@ -840,8 +795,8 @@ export function dashboardReader(
   const personSort = (p: DashboardMemberRow) =>
     !query.sort || query.sort === "organization"
       ? p.organizationPath.map((o) => o.name).join("/")
-      : query.sort === "targetOn"
-        ? p.cells.flatMap((c) => c.targetOn || []).sort()[0] || "9999"
+      : query.sort === "endOn"
+        ? p.cells.flatMap((c) => c.endOn || []).sort()[0] || "9999"
         : query.sort === "expiresOn"
           ? p.cells.flatMap((c) => c.expiresOn || []).sort()[0] || "9999"
           : p.name;
@@ -916,7 +871,6 @@ export function dashboardReader(
           expires0to30: sum.expires0to30,
           overdueRequests: sum.overdueRequests,
           overdueTargets: sum.overdueTargets,
-          overdueAssessments: sum.overdueAssessments,
         };
       });
       fullOrganizations = sortRows(
@@ -967,7 +921,7 @@ export function dashboardReader(
           )
           .sort(
             (a, b) =>
-              (a.targetOn || "9999").localeCompare(b.targetOn || "9999") ||
+              (a.endOn || "9999").localeCompare(b.endOn || "9999") ||
               textCompare(a.title, b.title),
           )
           .slice(0, 2),
@@ -1109,16 +1063,7 @@ export function dashboardReader(
       unit = "person_qualification";
       rows = overdueTargets.map(({ p, c }) => ({
         ...cellRow(p, c),
-        dueOn: c.targetOn,
-      }));
-    } else if (metric === "overdueAssessments") {
-      unit = "enrollments";
-      rows = overdueAssessments.map(({ p, c, e, dueOn }) => ({
-        ...cellRow(p, c),
-        key: e.id,
-        enrollmentId: e.id,
-        courseTitle: courses.get(e.courseId)?.title,
-        dueOn,
+        dueOn: c.endOn,
       }));
     }
     const detailSort =
@@ -1244,7 +1189,7 @@ export function dashboardReader(
               qualifications.get(plan.qualificationId)?.title ||
               "자격 계획",
             createdOn: kstDate(plan.createdAt),
-            ...(plan.targetOn ? { dueOn: plan.targetOn } : {}),
+            ...(plan.endOn ? { dueOn: plan.endOn } : {}),
             organizationPath:
               requestById.get(plan.requestId)?.organizationPath ||
               orgs.get(plan.organizationId || "")?.path ||
@@ -1259,12 +1204,6 @@ export function dashboardReader(
         const assignment = c.assignmentId && assignmentById.get(c.assignmentId);
         const plan =
           assignment && assignment.planId && planById.get(assignment.planId);
-        const schedules = new Map(
-          (plan ? plan.schedules : []).map((schedule) => [
-            schedule.courseId,
-            schedule,
-          ]),
-        );
         const ens = c.assignmentId
           ? enrollmentsByAssignment.get(c.assignmentId) || []
           : [];
@@ -1301,9 +1240,6 @@ export function dashboardReader(
             version: course.version,
             completed: !!done,
             ...(done ? { completedOn: kstDate(done.date) } : {}),
-            ...(schedules.get(course.id)?.assessmentOn
-              ? { assessmentOn: schedules.get(course.id)!.assessmentOn }
-              : {}),
             objective: state("objective"),
             practical: state("practical"),
           };

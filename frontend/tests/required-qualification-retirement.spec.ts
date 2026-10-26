@@ -62,6 +62,13 @@ test('이전 필수 현황 조건은 정리하고 조직·유형과 일반 현�
   await expect(page.getByText('필수 자격 충족률', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('필수 여부', { exact: true })).toHaveCount(0);
   await expect(page.locator('.dashboard-metrics')).toContainText('유효 자격 보유 인원');
+  await page.goto(
+    '/admin/dashboard?lv1OrganizationId=org-photo&organizationId=org-photo&qualificationType=auditee&metric=overdueAssessments&sort=targetOn',
+  );
+  await expect(page).not.toHaveURL(/overdueAssessments|targetOn/);
+  await expect(page).toHaveURL(/organizationId=org-photo/);
+  await expect(page).toHaveURL(/sort=endOn/);
+  await expect(page.getByText('평가 예정일 경과', { exact: true })).toHaveCount(0);
   expect(backend.store.snapshot()).toEqual(before);
 });
 

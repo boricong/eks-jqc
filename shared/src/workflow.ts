@@ -19,7 +19,7 @@ export const PlanStartInputSchema = z.object({
 });
 export type PlanStartInput = z.infer<typeof PlanStartInputSchema>;
 const dateOrEmpty = z.union([z.literal(""), z.iso.date()]);
-export const WORKFLOW_VERSION = "personal-certification-v5";
+export const WORKFLOW_VERSION = "personal-certification-v6";
 export const workflowSteps = [
   ["person", "신규 인력 확인"],
   ["organization", "운영 조직 지정"],
@@ -170,6 +170,7 @@ export const PersonalPlanSchema = z.object({
     "personal-certification-v2",
     "personal-certification-v3",
     "personal-certification-v4",
+    "personal-certification-v5",
     WORKFLOW_VERSION,
   ]),
   organizationId: id.optional(),
@@ -181,36 +182,48 @@ export const PersonalPlanSchema = z.object({
   scheduleDefaultsAppliedAt: z.iso.datetime().optional(),
   deletedAt: z.iso.datetime().optional(),
   deletedBy: id.optional(),
-  targetOn: dateOrEmpty,
-  schedules: z.array(PlanScheduleSchema).max(100),
+  startOn: dateOrEmpty,
+  endOn: dateOrEmpty,
+  goal: z.string().max(2000),
+  previousSchedule: z
+    .object({
+      workflowVersion: z.string(),
+      targetOn: dateOrEmpty,
+      schedules: z.array(PlanScheduleSchema).max(100),
+      migratedAt: z.iso.datetime(),
+      goalNeedsReview: z.boolean(),
+    })
+    .strict()
+    .optional(),
   completedAt: z.iso.datetime().optional(),
   assignmentId: id.optional(),
   approval: z.literal("skipped_by_policy").optional(),
 });
+export const LegacyPersonalPlanSchema = PersonalPlanSchema.omit({
+  startOn: true,
+  endOn: true,
+  goal: true,
+  previousSchedule: true,
+}).extend({
+  workflowVersion: z.enum([
+    "personal-certification-v2",
+    "personal-certification-v3",
+    "personal-certification-v4",
+    "personal-certification-v5",
+  ]),
+  targetOn: dateOrEmpty,
+  schedules: z.array(PlanScheduleSchema).max(100),
+});
 export type PersonalPlan = z.infer<typeof PersonalPlanSchema>;
 export function planErrors(
-  p: Pick<PersonalPlan, "targetOn" | "schedules">,
-  type: QualificationType = "auditee",
+  p: Pick<PersonalPlan, "startOn" | "endOn">,
+  _type: QualificationType = "auditee",
 ): string[] {
   const errors: string[] = [];
-  if (!p.targetOn) errors.push("목표 인증일을 입력해 주세요.");
-  p.schedules.forEach((s, i) => {
-    if (
-      !s.learningStart ||
-      !s.learningEnd ||
-      (type === "auditee" && !s.assessmentOn)
-    )
-      errors.push(`${i + 1}번째 인증Set의 일정을 입력해 주세요.`);
-    else if (
-      s.learningStart > s.learningEnd ||
-      (type === "auditee" && s.learningEnd > s.assessmentOn) ||
-      (p.targetOn &&
-        (type === "auditee" ? s.assessmentOn : s.learningEnd) > p.targetOn)
-    )
-      errors.push(
-        `${i + 1}번째 인증Set은 ${type === "auditor" ? "학습 시작 ≤ 학습 완료 ≤ 목표 인증일" : "학습 시작 ≤ 학습 완료 ≤ 평가 예정 ≤ 목표 인증일"} 순서여야 합니다.`,
-      );
-  });
+  if (!p.startOn) errors.push("시작일을 입력해 주세요.");
+  if (!p.endOn) errors.push("종료일을 입력해 주세요.");
+  if (p.startOn && p.endOn && p.startOn > p.endOn)
+    errors.push("종료일은 시작일 이후여야 합니다.");
   return errors;
 }
 export const LearningRecordSchema = z.object({
@@ -291,9 +304,8 @@ export function defaultPlanSchedule(
   };
   const learningStart = existingStart || addDays(kstDate(value), 7);
   return {
-    learningStart,
-    learningEnd: addDays(learningStart, 21),
-    assessmentOn: addDays(learningStart, 28),
+    startOn: learningStart,
+    endOn: addDays(learningStart, 21),
   };
 }
 export function expirationDate(

@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -363,6 +364,7 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
   const f = await fixture(t),
     old: any = structuredClone(f.store.snapshot());
   old.schemaVersion = 19;
+  legacyPlanFixture(old);
   delete old.commonCourses;
   for (const c of old.courses) delete c.category;
   for (const q of old.qualifications) delete q.commonCourseEntityIds;
@@ -370,8 +372,8 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
   const before = structuredClone(old),
     org = f.store.organizations.snapshot(),
     r = migrateCommonCourses(old, org);
-  assert.equal(r.state.schemaVersion, 24);
-  assert.equal(r.state.revision, old.revision + 5);
+  assert.equal(r.state.schemaVersion, 25);
+  assert.equal(r.state.revision, old.revision + 6);
   assert.deepEqual(r.organizations, org);
   for (const key of [
     "users",

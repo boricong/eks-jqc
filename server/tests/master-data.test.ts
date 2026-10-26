@@ -527,11 +527,9 @@ test("파일 불러오기 후 새 요청·계획·두 자동 평가·수료·인
     `/plans/${plan.id}`,
     {
       revision: draft.revision,
-      targetOn: "2027-03-01",
-      schedules: draft.schedules.map((s) => ({
-        ...s,
-        goal: "기준에 맞게 판단",
-      })),
+      endOn: "2027-03-01",
+      startOn: draft.startOn,
+      goal: "기준에 맞게 판단",
     },
     "learner-1",
     200,

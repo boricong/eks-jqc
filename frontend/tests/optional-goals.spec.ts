@@ -14,14 +14,11 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     await page.goto('/plans');
     await page.getByLabel('취득할 자격').selectOption('demo-qualification');
     await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-    await page.getByLabel('목표 인증일', { exact: true }).fill('2029-12-01');
+    await page.getByLabel('종료일', { exact: true }).fill('2029-12-01');
     const plan = backend.store.snapshot().plans[0]!;
     const goals = page.locator('textarea[data-plan-field]');
     if (mode !== 'skip') {
-      await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
-      await expect(
-        page.getByRole('heading', { name: '학습 목표(선택)', exact: true }),
-      ).toBeVisible();
+      await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
       if (mode === 'partial')
         await goals.first().fill('줄바꿈을 보존하는 목표\n독립적으로 기준을 설명한다.');
       else await goals.first().fill('   ');
@@ -29,9 +26,9 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     }
     await page.getByRole('button', { name: '최종 확인', exact: true }).click();
     await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-    await expect(page.locator('.plan-review-goal')).toHaveCount(mode === 'partial' ? 1 : 0);
+    await expect(page.locator('.plan-review-goal')).toHaveCount(1);
     await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: '3. 학습 목표(선택)', exact: true }).click();
+    await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
     await expect(goals.first()).toHaveValue(
       mode === 'partial'
         ? '줄바꿈을 보존하는 목표\n독립적으로 기준을 설명한다.'
@@ -47,26 +44,22 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     await expect(summary).not.toContainText('작성된 학습 목표가 없습니다.');
     expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
     await page.goto(`/plans/${plan.id}`);
-    const course = page.locator(`[data-review-course="${plan.schedules[0]!.courseId}"]`);
     await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);
-    await expect(course.getByRole('button', { name: /학습 목표.*(수정|선택)/ })).toHaveCount(0);
     await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);
-    const schedules = structuredClone(
-      backend.store.snapshot().plans.find((p) => p.id === plan.id)!.schedules,
+    await savePlanViaApi(
+      page,
+      plan.id,
+      { goal: '확정 후 서버에서 선택 목표 추가' },
+      '선택 목표 추가',
     );
-    schedules[0]!.goal = '확정 후 서버에서 선택 목표 추가';
-    await savePlanViaApi(page, plan.id, { schedules }, '선택 목표 추가');
     await page.reload();
-    await expect(course.locator('.plan-review-goal')).toContainText(
+    await expect(page.locator('.plan-review-goal')).toContainText(
       '확정 후 서버에서 선택 목표 추가',
     );
-    schedules[0]!.goal = '';
-    await savePlanViaApi(page, plan.id, { schedules }, '선택 목표 삭제');
+    await savePlanViaApi(page, plan.id, { goal: '' }, '선택 목표 삭제');
     await page.reload();
-    await expect(course.locator('.plan-review-goal')).toHaveCount(0);
-    await expect(
-      course.getByRole('button', { name: '학습 목표 추가(선택)', exact: true }),
-    ).toHaveCount(0);
+    await expect(page.locator('.plan-review-goal')).toContainText('미입력');
+    await expect(page.getByRole('button', { name: '학습 목표 수정', exact: true })).toHaveCount(0);
     expect(backend.store.snapshot().assignments.filter((a) => a.planId === plan.id)).toHaveLength(
       1,
     );

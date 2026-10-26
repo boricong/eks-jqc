@@ -237,14 +237,9 @@ export function addDraft(
     revision: 1,
     createdAt: request.createdAt,
     updatedAt: request.createdAt,
-    targetOn: "2026-10-21",
-    schedules: q.courseIds.map((courseId) => ({
-      courseId,
-      learningStart: "2026-10-10",
-      learningEnd: "2026-10-15",
-      assessmentOn: "2026-10-20",
-      goal: DASHBOARD_SECRET,
-    })),
+    endOn: "2026-10-21",
+    startOn: "2026-10-10",
+    goal: DASHBOARD_SECRET,
   };
   seed.state.plans.push(plan);
   return plan;

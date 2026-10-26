@@ -252,8 +252,9 @@ test('4해상도·긴 제목/두 줄 설명·목표일/수료율·0 분모·모�
       revision: 1,
       createdAt: base.assignedAt,
       updatedAt: base.assignedAt,
-      targetOn: '2027-02-01',
-      schedules: [],
+      endOn: '2027-02-01',
+      startOn: '2027-01-01',
+      goal: '',
     });
     const enrollment = base.enrollments[0]!;
     enrollment.completion = {

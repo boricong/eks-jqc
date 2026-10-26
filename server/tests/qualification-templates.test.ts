@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -205,9 +206,10 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     "learner-2",
     `/plans/${p.id}`,
     {
-      ...plan,
-      targetOn: "2027-12-31",
-      schedules: plan.schedules.map((x) => ({ ...x, goal: "독립 수행" })),
+      revision: plan.revision,
+      endOn: "2027-12-31",
+      startOn: plan.startOn,
+      goal: "독립 수행",
     },
     200,
     "PUT",
@@ -275,6 +277,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
   const raw: any = structuredClone(seedState(true)),
     org = seedOrganizations();
   raw.schemaVersion = 11;
+  legacyPlanFixture(raw);
   const legacyTemplates = raw.qualificationTemplates;
   delete raw.qualificationTemplates;
   // Explicit fixture mapping, not title-based inference.
@@ -282,7 +285,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 24);
+  assert.equal(next.state.schemaVersion, 25);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -492,6 +495,7 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
     org = JSON.parse(await readFile(store.organizations.file, "utf8"));
   const raw: any = structuredClone(initial);
   raw.schemaVersion = 11;
+  legacyPlanFixture(raw);
   delete raw.qualificationTemplates;
   const original = JSON.stringify(raw),
     orgBytes = await readFile(store.organizations.file, "utf8");

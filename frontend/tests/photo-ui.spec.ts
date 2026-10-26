@@ -63,37 +63,30 @@ test('계획 단계는 날짜·저장을 검사하고 목표 없이 최종 확�
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await page.getByRole('button', { name: '4. 최종 확인' }).click();
+  await page.getByLabel('종료일', { exact: true }).fill('');
+  await page.getByRole('button', { name: '3. 최종 확인' }).click();
   await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();
-  await expect(page.getByText('목표 인증일을 입력해 주세요.')).toBeVisible();
-  await expect(page.getByLabel('목표 인증일')).toBeFocused();
-  await page.getByLabel('목표 인증일').fill('2027-02-01');
-  for (const field of await page.getByLabel('학습 시작 예정일').all())
-    await field.fill('2026-10-01');
-  for (const field of await page.getByLabel('학습 완료 예정일').all())
-    await field.fill('2026-10-15');
-  for (const field of await page.getByLabel('평가 예정일').all()) await field.fill('2026-12-01');
-  await page.getByRole('button', { name: '4. 최종 확인' }).click();
+  await expect(page.getByText('종료일을 입력해 주세요.')).toBeVisible();
+  await expect(page.getByLabel('종료일', { exact: true })).toBeFocused();
+  await page.getByLabel('시작일', { exact: true }).fill('2026-10-01');
+  await page.getByLabel('종료일', { exact: true }).fill('2026-10-15');
+  await page.getByRole('button', { name: '3. 최종 확인' }).click();
   await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  await expect(page.locator('.plan-review-goal')).toHaveCount(0);
-  await page.getByRole('button', { name: '3. 학습 목표(선택)', exact: true }).click();
-  for (const field of await page.locator('[data-plan-field$=".goal"]').all())
-    await field.fill('독립적으로 기준을 확인하고 결과를 기록한다.');
+  await expect(page.locator('.plan-review-goal')).toContainText('미입력');
+  await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
+  await page
+    .getByLabel('학습 목표(선택)', { exact: true })
+    .fill('독립적으로 기준을 확인하고 결과를 기록한다.');
+  await page.getByLabel('종료일', { exact: true }).fill('2026-09-30');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '2. 일정 수립' }).click();
-  await page.getByLabel('목표 인증일').fill('2026-11-01');
-  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
-  await expect(
-    page.getByText('목표 인증일은 모든 인증Set의 평가 예정일 이후여야 합니다.'),
-  ).toBeVisible();
-  await expect(page.getByLabel('목표 인증일')).toBeFocused();
+  await expect(page.getByText('종료일은 시작일 이후여야 합니다.')).toBeVisible();
+  await expect(page.getByLabel('종료일', { exact: true })).toBeFocused();
   await page.route('**/api/plans/**', async (route) => {
     if (route.request().method() === 'PUT') await route.abort('failed');
     else await route.continue();
   });
-  await page.getByLabel('목표 인증일').fill('2027-03-01');
-  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
+  await page.getByLabel('종료일', { exact: true }).fill('2027-03-01');
+  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();
   await expect(page.getByRole('alert').first()).toContainText(
     '저장되지 않아 다음 단계로 이동할 수 없습니다.',

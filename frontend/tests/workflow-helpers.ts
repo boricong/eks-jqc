@@ -6,7 +6,7 @@ import { expect } from './fixtures';
 export async function savePlanViaApi(
   page: Page,
   id: string,
-  fields: Partial<Pick<PersonalPlan, 'targetOn' | 'schedules'>>,
+  fields: Partial<Pick<PersonalPlan, 'startOn' | 'endOn' | 'goal'>>,
   reason: string,
 ) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
@@ -16,8 +16,9 @@ export async function savePlanViaApi(
   const response = await page.request.put(`/api/plans/${id}`, {
     headers,
     data: {
-      targetOn: plan.targetOn,
-      schedules: plan.schedules,
+      endOn: plan.endOn,
+      startOn: plan.startOn,
+      goal: plan.goal,
       ...fields,
       revision: plan.revision,
       reason,
@@ -79,16 +80,13 @@ export async function completePlan(page: Page, title: string, recordLearning = t
   await select.selectOption((await option.getAttribute('value')) as string);
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2027-02-01');
-  for (const el of await page.getByLabel('학습 시작 예정일', { exact: true }).all())
+  await page.getByLabel('종료일', { exact: true }).fill('2027-02-01');
+  for (const el of await page.getByLabel('시작일', { exact: true }).all())
     await el.fill('2026-10-01');
-  for (const el of await page.getByLabel('학습 완료 예정일', { exact: true }).all())
-    await el.fill('2026-10-15');
-  for (const el of await page.getByLabel('평가 예정일', { exact: true }).all())
-    await el.fill('2026-12-01');
-  await page.getByRole('button', { name: '학습 목표 입력(선택)', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '학습 목표(선택)', exact: true })).toBeVisible();
-  for (const el of await page.getByRole('textbox').all())
+  for (const el of await page.getByLabel('종료일', { exact: true }).all())
+    await el.fill('2027-02-01');
+  await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
+  for (const el of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
     await el.fill('판단 근거를 설명하고 도움 없이 독립적으로 수행한다.');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();

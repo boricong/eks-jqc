@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { createPoolQualification } from "./auditor-fixture.ts";
 import { userView } from "../src/organizations.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
@@ -305,6 +306,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     qualificationId: auditor!.id,
   };
   raw.schemaVersion = 17;
+  legacyPlanFixture(raw);
   org.schemaVersion = 2;
   org.qualificationPools = currentTeamQualifications(raw);
   await f.app.close();
@@ -341,7 +343,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 24);
+  assert.equal(migrated.snapshot().schemaVersion, 25);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(migrated.snapshot().assignments, raw.assignments);

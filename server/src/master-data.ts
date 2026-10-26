@@ -119,7 +119,7 @@ export function masterCandidate(
   );
   const state = validateState(
     {
-      schemaVersion: 24,
+      schemaVersion: 25,
       organizationQualificationRequirements: structuredClone(
         p.organizationQualificationRequirements || [],
       ),
@@ -145,7 +145,7 @@ export function exportMaster(
   return {
     format: "eks-master",
     formatVersion: 14,
-    stateSchemaVersion: 24,
+    stateSchemaVersion: 25,
     organizationSchemaVersion: 4,
     createdAt: at,
     counts: masterCounts(payload),
@@ -389,7 +389,7 @@ export function readMaster(input: unknown): MasterFile {
                                 ? z.literal(22)
                                 : version === 13
                                   ? z.literal(23)
-                                  : z.literal(24),
+                                  : z.union([z.literal(24), z.literal(25)]),
         organizationSchemaVersion: z.literal(
           version < 8 ? 2 : version < 11 ? 3 : 4,
         ),
@@ -505,7 +505,7 @@ export function readMaster(input: unknown): MasterFile {
     return {
       ...result,
       formatVersion: 14,
-      stateSchemaVersion: 24,
+      stateSchemaVersion: 25,
       organizationSchemaVersion: 4,
       payload,
       sha256: contentHash(payload),

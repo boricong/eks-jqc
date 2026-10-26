@@ -47,13 +47,22 @@ export function useDashboard() {
         delete q.required;
         removed = true;
       }
+      if (q.sort === 'targetOn') {
+        q.sort = 'endOn';
+        removed = true;
+      }
       if (q.sort === 'coverage') {
         delete q.sort;
         delete q.order;
         removed = true;
       }
       if (
-        ['requiredCoverage', 'requiredMissing', 'fullyRequiredPeople'].includes(String(q.metric))
+        [
+          'requiredCoverage',
+          'requiredMissing',
+          'fullyRequiredPeople',
+          'overdueAssessments',
+        ].includes(String(q.metric))
       ) {
         for (const key of ['metric', 'detailPage', 'detailEntity']) delete q[key];
         removed = true;
@@ -135,7 +144,7 @@ export function useDashboard() {
       result.search = one(q.search);
       result.sort = choice(
         one(q.sort),
-        ['name', 'organization', 'qualification', 'expiresOn', 'targetOn', 'dueOn'],
+        ['name', 'organization', 'qualification', 'expiresOn', 'endOn', 'dueOn'],
         tab.value === 'renewals' ? 'expiresOn' : tab.value === 'members' ? 'organization' : 'name',
       );
       result.order = choice(one(q.order), ['asc', 'desc'], 'asc');

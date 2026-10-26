@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import { executeWorkflow } from "../src/workflow.ts";
 import { userView } from "../src/organizations.ts";
@@ -134,14 +135,9 @@ async function startPlan(f: Awaited<ReturnType<typeof setupAuditor>>) {
   let p = f.store.snapshot().plans.find((p) => p.id === id)!;
   await legacyCommand(f, "learner-2", "plan.save", id, {
     revision: p.revision,
-    targetOn: "2028-12-01",
-    schedules: p.schedules.map((s) => ({
-      ...s,
-      learningStart: "2027-01-01",
-      learningEnd: "2027-01-02",
-      assessmentOn: "",
-      goal: "",
-    })),
+    endOn: "2028-12-01",
+    startOn: "2027-01-01",
+    goal: "",
   });
   p = f.store.snapshot().plans.find((p) => p.id === id)!;
   const a = await legacyCommand(f, "learner-2", "plan.complete", id, {
@@ -477,6 +473,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     raw: any = f.store.snapshot();
   await f.app.close();
   raw.schemaVersion = 15;
+  legacyPlanFixture(raw);
   delete raw.learningChecklists;
   for (const r of raw.planningRequests) delete r.qualificationType;
   for (const c of raw.completions) {
@@ -488,8 +485,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 24);
-  assert.equal(preview.state.revision, raw.revision + 9);
+  assert.equal(preview.state.schemaVersion, 25);
+  assert.equal(preview.state.revision, raw.revision + 10);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {

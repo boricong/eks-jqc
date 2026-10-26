@@ -1,3 +1,4 @@
+import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -107,14 +108,9 @@ async function fixture(t: TestContext) {
       `/plans/${id}`,
       {
         revision: p.revision,
-        targetOn: "2028-01-01",
-        schedules: p.schedules.map((s) => ({
-          ...s,
-          goal: "독립 수행",
-          learningStart: "2027-01-01",
-          learningEnd: "2027-01-02",
-          assessmentOn: "2027-01-03",
-        })),
+        endOn: "2028-01-01",
+        startOn: "2027-01-01",
+        goal: "독립 수행",
       },
       200,
       "PUT",
@@ -332,13 +328,32 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
   await f.plan(id);
   const raw: any = f.store.snapshot();
   raw.schemaVersion = 12;
+  legacyPlanFixture(raw);
   for (const r of raw.planningRequests) {
     delete r.mode;
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 24);
-  assert.deepEqual(next.state.plans, raw.plans);
+  assert.equal(next.state.schemaVersion, 25);
+  assert.deepEqual(
+    next.state.plans.map((p) => p.previousSchedule!.schedules),
+    raw.plans.map((p: any) => p.schedules),
+  );
+  for (const p of next.state.plans) {
+    const original = raw.plans.find((v: any) => v.id === p.id);
+    assert.equal(p.revision, original.revision + 1);
+    const restored: any = {
+      ...p,
+      workflowVersion: p.previousSchedule!.workflowVersion,
+      targetOn: p.previousSchedule!.targetOn,
+      schedules: p.previousSchedule!.schedules,
+      revision: original.revision,
+      updatedAt: original.updatedAt,
+    };
+    for (const k of ["startOn", "endOn", "goal", "previousSchedule"])
+      delete restored[k];
+    assert.deepEqual(restored, original);
+  }
   assert.equal(
     next.state.planningRequests[0]!.selections[0]!.qualificationId,
     raw.plans[0].qualificationId,
@@ -468,6 +483,7 @@ test("13 이관의 교체 실패·해시 충돌은 원본 파일 쌍을 보존�
   const f = await fixture(t),
     raw: any = f.store.snapshot();
   raw.schemaVersion = 12;
+  legacyPlanFixture(raw);
   await f.app.close();
   await writeFile(f.file, JSON.stringify(raw));
   const bytes = await readFile(f.file),

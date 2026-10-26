@@ -9,7 +9,7 @@ export function courseTypeEditing(s: State, course: Course) {
     s.qualifications.some((q) => q.courseIds.some((id) => ids.has(id))) ||
     s.plans.some(
       (p) =>
-        p.schedules.some((x) => ids.has(x.courseId)) ||
+        p.previousSchedule?.schedules.some((x) => ids.has(x.courseId)) ||
         p.qualificationPolicySnapshot?.courseIds.some((id) => ids.has(id)),
     ) ||
     s.assignments.some((a) =>
@@ -84,7 +84,9 @@ export function classifyCourseTypes(data: any) {
       if (q.courseIds.some((id: string) => ids.has(id))) add(q.id);
     for (const p of data.plans || [])
       if (
-        p.schedules.some((x: any) => ids.has(x.courseId)) ||
+        (p.schedules || p.previousSchedule?.schedules || []).some((x: any) =>
+          ids.has(x.courseId),
+        ) ||
         p.qualificationPolicySnapshot?.courseIds.some((id: string) =>
           ids.has(id),
         )

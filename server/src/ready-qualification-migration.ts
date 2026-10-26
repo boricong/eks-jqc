@@ -9,7 +9,7 @@ export function migrateReadyQualifications(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (![18, 19, 20, 21, 22, 23, 24].includes(state?.schemaVersion))
+  if (![18, 19, 20, 21, 22, 23, 24, 25].includes(state?.schemaVersion))
     throw new Error("Ready 이관에는 업무18·조직3이 필요합니다.");
   const organizations = validateOrganizations(orgInput),
     alreadyApplied = state.schemaVersion >= 19;

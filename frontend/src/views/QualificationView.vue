@@ -42,7 +42,7 @@ const selected = computed(
     assignment.value?.enrollments[0],
 );
 const course = computed(() => selected.value && store.course(selected.value.courseId));
-const schedule = computed(() => plan.value?.schedules.find((s) => s.courseId === course.value?.id));
+
 const auditor = computed(() => qualification.value?.qualificationType === 'auditor');
 const showAssessments = computed(() => !auditor.value && learningStage(route) === 'assessment');
 const memory = useLearnerMemory();
@@ -158,7 +158,7 @@ function chooseCourse(id: string) {
       :completed="store.completedCount(assignment)"
       :passed="store.passedCount(assignment)"
       :assessments="store.assessmentCount(assignment)"
-      :target-on="auditor ? undefined : plan?.targetOn"
+      :end-on="auditor ? undefined : plan?.endOn"
     />
     <p v-if="assignment.excludedReason" class="error-message qualification-context-note">
       검증 제외 · {{ assignment.excludedReason }}
@@ -216,29 +216,17 @@ function chooseCourse(id: string) {
           >
             <dl class="learning-dates">
               <div>
-                <dt>학습 기간</dt>
+                <dt>자격 계획 기간</dt>
                 <dd>
-                  <time v-if="schedule?.learningStart" :datetime="schedule.learningStart">{{
-                    schedule.learningStart
-                  }}</time
+                  <time v-if="plan?.startOn" :datetime="plan.startOn">{{ plan.startOn }}</time
                   ><span v-else class="date-empty">미설정</span>
                   <span aria-hidden="true">–</span>
-                  <time v-if="schedule?.learningEnd" :datetime="schedule.learningEnd">{{
-                    schedule.learningEnd
-                  }}</time
-                  ><span v-else class="date-empty">미설정</span>
-                </dd>
-              </div>
-              <div v-if="!auditor" class="learning-assessment-date">
-                <dt>평가 예정일</dt>
-                <dd>
-                  <time v-if="schedule?.assessmentOn" :datetime="schedule.assessmentOn">{{
-                    schedule.assessmentOn
-                  }}</time
+                  <time v-if="plan?.endOn" :datetime="plan.endOn">{{ plan.endOn }}</time
                   ><span v-else class="date-empty">미설정</span>
                 </dd>
               </div>
             </dl>
+            <p v-if="plan?.goal" class="preserve-lines">학습 목표 · {{ plan.goal }}</p>
           </section>
         </section>
         <section

@@ -42,7 +42,6 @@ export type DashboardMetric =
   | "expires0to30"
   | "overdueRequests"
   | "overdueTargets"
-  | "overdueAssessments"
   | "excludedPeople";
 export interface DashboardQuery {
   qualificationType?: "auditee" | "auditor";
@@ -59,12 +58,7 @@ export interface DashboardQuery {
   expiryBucket?: DashboardExpiryBucket;
   renewalState?: DashboardRenewalState;
   sort?:
-    | "name"
-    | "organization"
-    | "qualification"
-    | "expiresOn"
-    | "targetOn"
-    | "dueOn";
+    "name" | "organization" | "qualification" | "expiresOn" | "endOn" | "dueOn";
   order?: "asc" | "desc";
   page?: number;
   pageSize?: 25 | 50 | 100;
@@ -118,7 +112,6 @@ export interface DashboardSummary {
   expires0to30: number;
   overdueRequests: number;
   overdueTargets: number;
-  overdueAssessments: number;
   efficacy: Record<DashboardEfficacy, number>;
   progress: Record<DashboardProgress, number>;
 }
@@ -170,7 +163,7 @@ export interface DashboardQualificationCell {
   issuedOn?: string;
   expiresOn?: string;
   expiryBucket?: DashboardExpiryBucket;
-  targetOn?: string;
+  endOn?: string;
   renewalState: DashboardRenewalState;
   renewalOpensOn?: string;
   renewalBlockCodes: string[];
@@ -184,7 +177,7 @@ export interface DashboardMemberRow extends DashboardPerson {
   incompleteRequests: number;
   overdueRequests: number;
   nextSchedule?: {
-    kind: "request" | "target" | "assessment";
+    kind: "request" | "target";
     date: string;
     title?: string;
     entityId?: string;
@@ -204,7 +197,6 @@ export interface DashboardOrganizationRow {
   expires0to30: number;
   overdueRequests: number;
   overdueTargets: number;
-  overdueAssessments: number;
 }
 export interface DashboardQualificationRow extends DashboardQualificationOption {
   activePeople: number;
@@ -324,7 +316,6 @@ export interface DashboardCourseSummary {
   version: number;
   completed: boolean;
   completedOn?: string;
-  assessmentOn?: string;
   objective: "not_required" | "ready" | "draft" | "passed" | "failed";
   practical: "not_required" | "ready" | "draft" | "passed" | "failed";
 }

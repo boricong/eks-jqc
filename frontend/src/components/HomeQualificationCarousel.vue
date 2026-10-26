@@ -28,7 +28,7 @@ const qualificationCards = computed(() =>
         assignment.qualificationId,
         assignment.qualificationMetadata,
       ),
-      targetOn: store.data.plans.find((plan) => plan.id === assignment.planId)?.targetOn,
+      endOn: store.data.plans.find((plan) => plan.id === assignment.planId)?.endOn,
       completed,
       total,
       passed: store.passedCount(assignment),
@@ -244,9 +244,9 @@ onBeforeUnmount(() => {
             </p>
             <dl class="home-qualification-facts">
               <div>
-                <dt>목표 인증일</dt>
+                <dt>종료일</dt>
                 <dd>
-                  <time v-if="card.targetOn" :datetime="card.targetOn">{{ card.targetOn }}</time
+                  <time v-if="card.endOn" :datetime="card.endOn">{{ card.endOn }}</time
                   ><span v-else>미설정</span>
                 </dd>
               </div>

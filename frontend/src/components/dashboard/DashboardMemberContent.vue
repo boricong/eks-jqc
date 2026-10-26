@@ -87,9 +87,9 @@ const history = computed(
               {{ q.expiresOn || (q.expiryBucket === 'unlimited' ? '무기한' : '확인 필요') }}
             </dd>
           </div>
-          <div v-if="q.targetOn">
-            <dt>목표 인증일</dt>
-            <dd>{{ q.targetOn }}</dd>
+          <div v-if="q.endOn">
+            <dt>종료일</dt>
+            <dd>{{ q.endOn }}</dd>
           </div>
           <div v-if="q.renewalOpensOn">
             <dt>재인증 시작일</dt>
@@ -136,9 +136,6 @@ const history = computed(
                   <th v-if="q.courses[0]?.qualificationType !== 'auditor'" scope="col">
                     상황 대응 평가
                   </th>
-                  <th v-if="q.courses[0]?.qualificationType !== 'auditor'" scope="col">
-                    평가 예정일
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -159,9 +156,6 @@ const history = computed(
                   </td>
                   <td v-if="c.qualificationType !== 'auditor'">
                     {{ assessmentLabels[c.practical] }}
-                  </td>
-                  <td v-if="c.qualificationType !== 'auditor'" class="dashboard-date">
-                    {{ c.assessmentOn || '—' }}
                   </td>
                 </tr>
               </tbody>

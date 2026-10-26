@@ -13,7 +13,7 @@ async function start(page: Page) {
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await expect(page.locator('.schedule-row')).toHaveCount(2);
+  await expect(page.locator('input[type="date"]')).toHaveCount(2);
 }
 async function singleStyle(page: Page) {
   await expect(page.getByLabel('화면 테마')).toHaveCount(0);
@@ -35,23 +35,19 @@ test('계획 기본 일정·날짜 삭제와 시작일 수정 보존·기존 초
   await start(page);
   let p = backend.store.snapshot().plans[0]!;
   const defaults = defaultPlanSchedule(p.createdAt);
-  await expect(page.getByLabel('학습 시작 예정일').first()).toHaveValue(defaults.learningStart);
-  await expect(page.getByLabel('학습 완료 예정일').first()).toHaveValue(defaults.learningEnd);
-  await expect(page.getByLabel('평가 예정일').first()).toHaveValue(defaults.assessmentOn);
-  await page.getByLabel('목표 인증일').fill('2029-12-01');
-  await page.getByLabel('학습 완료 예정일').first().fill('');
-  await page.getByRole('button', { name: '3. 학습 목표' }).click();
-  await expect(page.locator('.field-error').first()).toContainText('학습 완료 예정일');
-  await expect(page.getByLabel('학습 완료 예정일').first()).toBeFocused();
-  await expect.poll(() => backend.store.snapshot().plans[0]!.schedules[0]!.learningEnd).toBe('');
+  await expect(page.getByLabel('시작일').first()).toHaveValue(defaults.startOn);
+  await expect(page.getByLabel('종료일').first()).toHaveValue(defaults.endOn);
+  await page.getByLabel('종료일').fill('2029-12-01');
+  await page.getByLabel('종료일').first().fill('');
+  await page.getByRole('button', { name: '3. 최종 확인' }).click();
+  await expect(page.locator('.field-error').first()).toContainText('종료일');
+  await expect(page.getByLabel('종료일').first()).toBeFocused();
+  await expect.poll(() => backend.store.snapshot().plans[0]!.endOn).toBe('');
   await page.reload();
-  await expect(page.getByLabel('학습 완료 예정일').first()).toHaveValue('');
-  await page.getByLabel('학습 시작 예정일').first().fill('2028-02-08');
-  await expect(page.getByLabel('평가 예정일').first()).toHaveValue(defaults.assessmentOn);
-  await expect(page.getByLabel('학습 완료 예정일').first()).toHaveValue('');
-  await expect
-    .poll(() => backend.store.snapshot().plans[0]!.schedules[0]!.learningStart)
-    .toBe('2028-02-08');
+  await expect(page.getByLabel('종료일').first()).toHaveValue('');
+  await page.getByLabel('시작일').first().fill('2028-02-08');
+  await expect(page.getByLabel('종료일').first()).toHaveValue('');
+  await expect.poll(() => backend.store.snapshot().plans[0]!.startOn).toBe('2028-02-08');
   await page.goto('/plans');
   await backend.store.transact(
     'learner-2',
@@ -61,18 +57,17 @@ test('계획 기본 일정·날짜 삭제와 시작일 수정 보존·기존 초
     (s) => {
       const value = s.plans[0]!;
       delete value.scheduleDefaultsAppliedAt;
-      value.schedules[0]!.goal = '기존 목표';
+      value.goal = '기존 목표';
       return {};
     },
   );
   await page.goto(`/plans/${p.id}`);
-  await expect(page.getByLabel('학습 완료 예정일').first()).toHaveValue('2028-02-29');
+  await expect(page.getByLabel('종료일').first()).toHaveValue('2028-02-29');
   p = backend.store.snapshot().plans[0]!;
-  expect(p.schedules[0]!.goal).toBe('기존 목표');
-  expect(p.schedules[0]!.assessmentOn).toBe(defaults.assessmentOn);
+  expect(p.goal).toBe('기존 목표');
   const revision = p.revision;
   await page.reload();
-  await expect(page.getByLabel('학습 완료 예정일').first()).toHaveValue('2028-02-29');
+  await expect(page.getByLabel('종료일').first()).toHaveValue('2028-02-29');
   expect(backend.store.snapshot().plans[0]!.revision).toBe(revision);
 });
 
@@ -83,7 +78,7 @@ test('내 계획 삭제·재작성과 다른 탭의 자동 저장 중단', async
   await stale.goto('/');
   await actor(stale, 'learner-2');
   await stale.goto(`/plans/${p.id}`);
-  await expect(stale.getByLabel('목표 인증일')).toBeVisible();
+  await expect(stale.getByLabel('종료일')).toBeVisible();
   await page.goto('/plans');
   await page.getByRole('button', { name: '평가 흐름 체험 계획 삭제', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('일정과 학습 목표');
@@ -98,7 +93,7 @@ test('내 계획 삭제·재작성과 다른 탭의 자동 저장 중단', async
   ).toHaveCount(1);
   const deletedRevision = backend.store.snapshot().plans[0]!.revision;
   // No focus refresh: the pending edit must be rejected by the API and stop autosave.
-  await stale.getByLabel('목표 인증일').fill('2029-12-01');
+  await stale.getByLabel('종료일').fill('2029-12-01');
   await expect(
     stale.getByRole('heading', { name: '삭제된 계획입니다', exact: true }),
   ).toBeVisible();
@@ -199,18 +194,10 @@ test('5인증Set 일정의 밀도·인증Set 구분·단일 디자인과 반응�
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('schedule-qualification');
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await expect(page.locator('.schedule-row')).toHaveCount(5);
-  expect(
-    await page.locator('.schedule-table').evaluate((e) => e.getBoundingClientRect().height),
-  ).toBeLessThanOrEqual(520);
-  expect(
-    await page
-      .locator('.schedule-row')
-      .first()
-      .evaluate((e) => e.getBoundingClientRect().height),
-  ).toBeLessThanOrEqual(80);
-  await page.getByLabel('목표 인증일').fill('2029-12-01');
-  const input = page.getByLabel('학습 시작 예정일').first();
+  await expect(page.locator('input[type="date"]')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: '포함된 인증Set' }).locator('li')).toHaveCount(5);
+  await page.getByLabel('종료일').fill('2029-12-01');
+  const input = page.getByLabel('시작일').first();
   await input.fill('2027-01-01');
   await input.focus();
   const scroll = await page.evaluate(() => scrollY);
