@@ -26,7 +26,6 @@ function request(id: string, overrides: Partial<PlanningRequest> = {}): Planning
     createdAt: '2026-10-23T00:00:00.000Z',
     revision: 1,
     mode: 'learner_choice',
-    targets: [],
     selections: [],
     ...overrides,
   };
@@ -304,7 +303,7 @@ test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 
   await expect(page).toHaveURL(new RegExp(`/plans\\?request=${id}$`));
   await expect(page.getByRole('heading', { name: '새 자격 계획' })).toBeVisible();
   expect(backend.store.snapshot()).toEqual(beforeNavigation);
-  await page.getByLabel('취득할 자격').selectOption({ label: '[필수] 평가 흐름 체험 · v1' });
+  await page.getByLabel('취득할 자격').selectOption({ label: '평가 흐름 체험 · v1' });
   await page.getByRole('button', { name: '계획 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   await expect

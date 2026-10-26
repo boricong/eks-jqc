@@ -117,62 +117,12 @@ test("구성원/매트릭스의 현재25행·10열 밖 진행도 차트에 포�
   assert.deepEqual(a.charts, b.charts);
   const progress = a.charts.find((c) => c.id === "progress")!;
   assert.equal(progress.groups[0]!.values[1], 12);
-  const members = a.charts.find((c) => c.id === "member-coverage")!;
-  assert.equal(
-    members.groups[0]!.values.reduce((a, b) => a + b, 0),
-    a.matrix.members.total,
-  );
   const detail: DashboardChartDetails = await f.call(
     "admin-1",
     "/dashboard/chart-details?view=matrix&chartId=progress&groupKey=all&seriesKey=draft",
   );
   assert.equal(detail.rows.total, 12);
   assert.ok(detail.rows.items.every((r) => r.userId === "extra-39"));
-});
-
-test("구성원·만료 차트는 검색/대상/상태 필터를 유지하고 필수 전체 판정은 축소하지 않는다", async (t) => {
-  const seed = dashboardSeed();
-  const q = addQualification(seed, "required-second");
-
-  seed.orgs.roots[0]!.children[0]!.requiredQualifications = [Q, q.entityId];
-  addCertification(seed, "active", "alice", { qualificationId: Q });
-  seed.state.users.find((u) => u.id === "bob")!.certificationEligibility =
-    "hold";
-  const f = await dashboardFixture(t, seed);
-  const value: DashboardResponse = await f.call(
-    "admin-1",
-    "/dashboard?view=members&search=가&entityId=" + Q + "&efficacy=Active",
-  );
-  assert.equal(
-    value.charts.find((c) => c.id === "member-coverage")!.groups[0]!.values[1],
-    1,
-  );
-  const detail: DashboardChartDetails = await f.call(
-    "admin-1",
-    "/dashboard/chart-details?view=members&search=가&entityId=" +
-      Q +
-      "&efficacy=Active&chartId=member-coverage&groupKey=all&seriesKey=partial",
-  );
-  assert.equal(detail.rows.total, 1);
-  assert.equal(detail.rows.items[0]!.requiredCoverage!.total, 2);
-  const excluded: DashboardResponse = await f.call(
-    "admin-1",
-    "/dashboard?view=members&population=excluded",
-  );
-  assert.equal(
-    excluded.charts
-      .find((c) => c.id === "member-coverage")!
-      .groups[0]!.values.reduce((a, b) => a + b, 0),
-    1,
-  );
-  const empty: DashboardResponse = await f.call(
-    "admin-1",
-    "/dashboard?view=renewals&population=excluded",
-  );
-  assert.equal(
-    empty.charts[0]!.groups[0]!.values.reduce((a, b) => a + b, 0),
-    0,
-  );
 });
 
 test("세부 조직 차트는 직접 소속만 포함하고 위조 구간·상위/형제/타팀과 오래된 명세를 차단한다", async (t) => {
@@ -198,36 +148,36 @@ test("세부 조직 차트는 직접 소속만 포함하고 위조 구간·상�
   assert.ok(!value.charts.some((c) => c.id.startsWith("organization")));
   await f.call(
     "alice",
-    "/dashboard/chart-details?chartId=organization-coverage&groupKey=" +
+    "/dashboard/chart-details?chartId=organization-people&groupKey=" +
       TEAM +
-      ":subtree&seriesKey=missing",
+      ":subtree&seriesKey=draft",
     403,
   );
   await f.call(
     "alice",
     "/dashboard/chart-details?view=members&organizationId=" +
       ORG_B +
-      "&chartId=member-coverage&groupKey=all&seriesKey=missing",
+      "&chartId=progress&groupKey=all&seriesKey=draft",
     403,
   );
   await f.call(
     "alice",
-    "/dashboard/chart-details?view=members&chartId=member-coverage&groupKey=forged&seriesKey=missing",
+    "/dashboard/chart-details?view=members&chartId=progress&groupKey=forged&seriesKey=draft",
     403,
   );
   await f.call(
     "alice",
-    "/dashboard/chart-details?view=members&chartId=member-coverage&groupKey=all&seriesKey=forged",
+    "/dashboard/chart-details?view=members&chartId=progress&groupKey=all&seriesKey=forged",
     403,
   );
   await f.call(
     "alice",
-    "/dashboard/chart-details?view=members&chartId=member-coverage&groupKey=all&seriesKey=missing&expectedStateRevision=999",
+    "/dashboard/chart-details?view=members&chartId=progress&groupKey=all&seriesKey=draft&expectedStateRevision=999",
     409,
   );
   await f.call(
     "alice",
-    "/dashboard/chart-details?view=members&chartId=member-coverage",
+    "/dashboard/chart-details?view=members&chartId=progress",
     422,
   );
   await f.mutate((s) => {
@@ -235,21 +185,16 @@ test("세부 조직 차트는 직접 소속만 포함하고 위조 구간·상�
   });
   await f.call(
     "alice",
-    "/dashboard/chart-details?view=members&chartId=member-coverage&groupKey=all&seriesKey=missing",
+    "/dashboard/chart-details?view=members&chartId=progress&groupKey=all&seriesKey=draft",
     403,
   );
 });
 
 test("필수0·기록0은 가상의 비율을 만들지 않고 만료/재인증 효력은 별도 집계한다", async (t) => {
   const seed = dashboardSeed();
-  seed.orgs.roots[0]!.children[0]!.requiredQualifications = [];
   const f = await dashboardFixture(t, seed);
   const value: DashboardResponse = await f.call("admin-1", "/dashboard");
-  assert.deepEqual(
-    value.charts.find((c) => c.id === "required-coverage")!.groups[0]!.values,
-    [0, 0],
-  );
-  assert.equal(value.summary.requiredCoverage.rate, null);
+  assert.ok(value.charts.every((c) => !c.id.endsWith("coverage")));
 });
 
 test("만료 차트는 KST 0/30/31/60/61/90일과 Hold를 유지하며 다음날 같은 시점으로 이동한다", async (t) => {

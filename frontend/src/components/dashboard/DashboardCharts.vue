@@ -89,11 +89,6 @@ const filters = computed(() =>
         : '기본 대상',
     props.query.search ? '검색: ' + props.query.search : '',
     props.query.entityId ? '자격 필터 적용' : '',
-    props.query.required === 'required'
-      ? '필수만'
-      : props.query.required === 'optional'
-        ? '비필수만'
-        : '',
     props.query.efficacy ? efficacyLabels[props.query.efficacy] : '',
     props.query.progress ? progressLabels[props.query.progress] : '',
     props.query.expiryBucket ? '만료 구간 필터 적용' : '',

@@ -1,4 +1,4 @@
-import { courseUseErrors, type Course, type Kind } from '@eks/contracts';
+import { courseUseErrors, type CourseContent, type Kind } from '@eks/contracts';
 export interface CourseIssue {
   kind: Kind | 'basic' | 'learning' | 'materials';
   itemId?: string;
@@ -6,7 +6,7 @@ export interface CourseIssue {
   message: string;
 }
 // Presentation locations supplement the shared publication rules; server validation remains authoritative.
-export function courseIssues(c: Course): CourseIssue[] {
+export function courseIssues(c: CourseContent): CourseIssue[] {
   const issues: CourseIssue[] = [];
   const add = (kind: CourseIssue['kind'], field: string, message: string, itemId?: string) =>
     issues.push({ kind, field, message, itemId });

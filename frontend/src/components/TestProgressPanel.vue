@@ -29,6 +29,7 @@ const labels: Record<keyof ProgressSummary['counts'], string> = {
   renewals: '재인증 진행',
   certificationPeriods: '인증 유효기간 이력',
   credentialEvents: '개인 자격 상태 이력',
+  subjectiveResponses: '주관식 답변',
   objectiveAttempts: '지식 평가 응시',
   practicalAttempts: '상황 대응 평가 응시',
   learningRecords: '과거 학습 완료 기록',

@@ -58,7 +58,6 @@ async function mock(page: Page, display: Display) {
                 createdAt: '2026-10-25T00:00:00Z',
                 revision: 1,
                 mode: 'learner_choice',
-                targets: [],
                 selections: [],
               },
             ]

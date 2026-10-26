@@ -132,7 +132,8 @@ onBeforeRouteUpdate(canLeave);
           {{ usage.counts.certifications }}건
         </p>
         <p>
-          평가 {{ usage.counts.attempts }}건<span v-if="usage.counts.comparisons">
+          평가 {{ usage.counts.attempts }}건 · 주관식 답변
+          {{ usage.counts.subjectiveResponses }}건<span v-if="usage.counts.comparisons">
             · 이전 보존 자료 {{ usage.counts.comparisons }}건</span
           >
           · 후속 버전 {{ usage.successorVersions.length }}개

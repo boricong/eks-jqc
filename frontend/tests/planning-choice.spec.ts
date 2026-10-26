@@ -1,12 +1,12 @@
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { completePlan } from './workflow-helpers';
-async function send(page: any) {
+import { legacyRequestFixture } from '../../server/tests/legacy-request-fixture';
+async function send(page: any, backend: any) {
+  await legacyRequestFixture(backend.store, 'admin-1', {
+    learnerIds: ['learner-2'],
+    message: '보존된 선택형 요청 검증',
+  });
   await page.goto('/admin/assignments');
-  await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByRole('checkbox', { name: '정하린', exact: true }).check();
-  await dialog.getByRole('button', { name: '대상자에게 요청' }).click();
-  await expect(dialog).not.toBeVisible();
 }
 test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네 화면 폭', async ({
   page,
@@ -17,8 +17,8 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
-  expect(backend.store.snapshot().planningRequests[0]!.targets).toEqual([]);
+  await send(page, backend);
+  expect(backend.store.snapshot().planningRequests[0]!.selections).toEqual([]);
   await actor(page, 'learner-2');
   await page.goto('/plans');
   const region = page.getByRole('region', { name: '이번 요청의 계획 현황' });
@@ -122,17 +122,11 @@ test('세부 관리자 선택 사항·검색·빈 저장·다른 조직 노출 �
   );
   await page.goto('/');
   await actor(page, 'learner-2');
-  await page.goto('/admin/policies');
+  await page.goto('/admin/organization-settings');
   await expect(page.getByRole('treeitem')).toHaveCount(1);
-  await expect(page.getByText('필수 자격 · 선택 사항', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('필수 자격 선정을 완료합니다')).toHaveCount(0);
-  await page.getByLabel('자격 검색', { exact: true }).fill('없는 자격');
-  await expect(page.getByText('검색 결과가 없습니다.', { exact: true })).toBeVisible();
-  await page.getByLabel('자격 검색', { exact: true }).fill('평가');
-  const check = page.getByRole('checkbox', { name: /평가 흐름 체험 · v1/ });
-  await check.focus();
-  await page.keyboard.press('Space');
-  await expect(check).toBeChecked();
+  await expect(page.getByText('필수 자격 · 선택 사항', { exact: true })).toHaveCount(0);
+  await page.getByLabel('조직 설명', { exact: true }).fill('직속 조직 설명');
+  await page.getByLabel('담당 업무', { exact: true }).fill('직속 조직 업무');
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
   await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -146,11 +140,10 @@ test('세부 관리자 선택 사항·검색·빈 저장·다른 조직 노출 �
       fullPage: true,
     });
   }
-  await check.uncheck();
+  await page.getByLabel('조직 설명', { exact: true }).fill('');
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
   await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  expect(backend.store.organizations.snapshot().roots[0]!.requiredQualifications).toEqual([]);
 });
 test('계획 시작 저장 실패·revision 충돌은 선택 유지, 재시도·조회로 복구', async ({
   page,
@@ -158,7 +151,7 @@ test('계획 시작 저장 실패·revision 충돌은 선택 유지, 재시도·
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
+  await send(page, backend);
   await actor(page, 'learner-2');
   await page.goto('/plans');
   const select = page.getByLabel('취득할 자격');
@@ -202,8 +195,8 @@ test('저장 응답 유실 후 조회가 바뀌어도 최초 revision·키로 �
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
-  await send(page);
+  await send(page, backend);
+  await send(page, backend);
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
@@ -237,7 +230,7 @@ test('선택만 남은 항목은 계획 미작성으로 제외할 수 있고 비
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
+  await send(page, backend);
   await backend.store.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -277,8 +270,8 @@ test('시작 중 요청·계정 전환을 막고 저장 후 재조회 실패를 
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
-  await send(page);
+  await send(page, backend);
+  await send(page, backend);
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
@@ -331,23 +324,22 @@ test('상단 영역 없이 드롭다운의 요청 당시 필수를 유지하며 
       crypto.randomUUID(),
       () => {},
       (doc) => {
-        doc.roots[0]!.requiredQualifications = ids;
         return {};
       },
     );
   await required(['demo-qualification']);
   await page.goto('/');
   await actor(page, 'admin-1');
-  await send(page);
+  await send(page, backend);
   const first = backend.store.snapshot().planningRequests[0]!.id;
   await required([]);
-  await send(page);
+  await send(page, backend);
   const second = backend.store.snapshot().planningRequests[1]!.id;
   await actor(page, 'learner-2');
   await page.goto(`/plans?request=${first}`);
   const select = page.getByLabel('취득할 자격'),
     option = select.locator('option[value="demo-qualification"]');
-  await expect(option).toHaveText('[필수] 평가 흐름 체험 · v1');
+  await expect(option).toHaveText('평가 흐름 체험 · v1');
   const before = backend.store.snapshot();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -379,6 +371,6 @@ test('상단 영역 없이 드롭다운의 요청 당시 필수를 유지하며 
   await page.reload();
   await expect(option).toHaveText('평가 흐름 체험 · v1');
   await page.getByLabel('계획 수립 요청').selectOption(first);
-  await expect(option).toHaveText('[필수] 평가 흐름 체험 · v1');
+  await expect(option).toHaveText('평가 흐름 체험 · v1');
   expect(backend.store.snapshot()).toEqual(before);
 });

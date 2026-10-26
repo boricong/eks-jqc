@@ -26,6 +26,31 @@ export async function savePlanViaApi(
   expect(response.ok(), await response.text()).toBeTruthy();
 }
 
+// Explicitly configure current organizational needs before testing new requests.
+export async function configureNeeds(page: Page) {
+  const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
+  const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
+  const headers = { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() };
+  const url = `/api/organization-qualification-requirements?lv1OrganizationId=${scope}`;
+  const view = await (await page.request.get(url, { headers })).json();
+  const response = await page.request.put(url, {
+    headers,
+    data: {
+      stateRevision: view.stateRevision,
+      organizationRevision: view.organizationRevision,
+      changes: [
+        {
+          organizationId: scope,
+          entityIds: view.qualifications
+            .filter((q: any) => !q.issues.length)
+            .map((q: any) => q.entityId),
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
 export async function requestPlan(page: Page, learnerName: string) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
@@ -33,37 +58,14 @@ export async function requestPlan(page: Page, learnerName: string) {
   const ws = await (
     await page.request.get(`/api/workspace?lv1OrganizationId=${scope}`, { headers })
   ).json();
-  const user = ws.users.find((u: any) => u.name === learnerName);
-  let doc = await (
-    await page.request.get(`/api/organization-policies?lv1OrganizationId=${scope}`, { headers })
-  ).json();
-  const versions = [
-    ...new Map<string, any>(
-      ws.qualifications
-        .filter((q: any) => qualificationUseErrors(q, ws.courses).length === 0)
-        .sort((a: any, b: any) => a.version - b.version)
-        .map((q: any) => [q.entityId, q] as [string, any]),
-    ).values(),
-  ];
-  const saved = await page.request.put(
-    `/api/organization-policies/${user.organizationId}?lv1OrganizationId=${scope}`,
-    {
-      headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },
-      data: {
-        revision: doc.revision,
-        description: '시험 조직',
-        duties: '프로세스 검증',
-        requiredQualifications: versions.map((q) => q.entityId),
-      },
-    },
-  );
-  expect(saved.ok(), await saved.text()).toBeTruthy();
-  await page.getByRole('link', { name: '계획 요청·진행', exact: true }).click();
+  await configureNeeds(page);
+  await page.goto(`/admin/assignments?lv1OrganizationId=${scope}`);
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('checkbox', { name: learnerName, exact: true }).check();
   await dialog.getByLabel('계획 작성 기한').fill('2026-12-31');
   await dialog.getByLabel('안내문').fill('직무 수행에 필요한 자격별 계획을 작성해 주세요.');
+  await dialog.getByRole('button', { name: '요청 대상 확인', exact: true }).click();
   await dialog.getByRole('button', { name: '대상자에게 요청', exact: true }).click();
   await expect(dialog).toHaveCount(0);
 }
@@ -98,8 +100,10 @@ export async function completePlan(page: Page, title: string, recordLearning = t
   }
 }
 export async function practicalOnly(page: Page) {
-  await page.getByRole('checkbox', { name: '객관식 · 지식 평가', exact: true }).uncheck();
-  await page.getByRole('checkbox', { name: '실기 · 상황 대응 평가', exact: true }).check();
+  await page.getByRole('checkbox', { name: '객관식 · 지식 평가 수료 필수', exact: true }).uncheck();
+  await page
+    .getByRole('checkbox', { name: '실기 · 상황 대응 평가 수료 필수', exact: true })
+    .check();
   if (!(await page.getByLabel('학습 항목명', { exact: true }).count())) {
     await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
     await page.getByLabel('학습 항목명', { exact: true }).fill('가상 수행 연습');

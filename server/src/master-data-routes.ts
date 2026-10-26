@@ -113,7 +113,7 @@ export function registerMasterDataRoutes(
     demand(
       Buffer.byteLength(bytes) <= MASTER_LIMIT,
       422,
-      "설정·기준 파일이 25MB를 초과합니다. 서버 이전 파일의 지원 크기를 확인해 주세요.",
+      "설정·기준 파일이 64MB를 초과합니다. 서버 이전 파일의 지원 크기를 확인해 주세요.",
       "MASTER_FILE_TOO_LARGE",
     );
     return reply
@@ -132,10 +132,20 @@ export function registerMasterDataRoutes(
       const result = await preview(r, "master-import", readMaster(r.body));
       return {
         ...result,
-        ...([10, 11, 12, 13, 14].includes((r.body as any)?.stateSchemaVersion)
+        ...((r.body as any)?.formatVersion < 13
           ? {
-              compatibility:
-                "이전 형식을 업무15로 변환합니다. 기존 자격 유형과 연결 근거로 인증Set 계보를 분류하며 혼합 유형은 보류합니다. 기본자격 연결과 원래 ID·내용·연결·상태를 보존합니다.",
+              compatibility: (() => {
+                const pending = [
+                  ...((r.body as any)?.payload?.organizations?.roots || []),
+                ];
+                let count = 0;
+                while (pending.length) {
+                  const node = pending.pop();
+                  count += (node.requiredQualifications || []).length;
+                  pending.push(...node.children);
+                }
+                return `이전 형식을 업무23·조직4로 변환합니다. 폐지된 조직 필수자격 지정 ${count}개는 제외하며 복원하지 않습니다. 기존 자격·인증Set·조직 정보·관리자 지정은 보존하며 주관식은 비활성 상태로 변환합니다.`;
+              })(),
             }
           : {}),
       };

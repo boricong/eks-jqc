@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue';
-import { qualificationTypeLabels, type Course, type Kind } from '@eks/contracts';
+import { qualificationTypeLabels, type CourseContent, type Kind } from '@eks/contracts';
+import SubjectiveQuestionsEditor from './SubjectiveQuestionsEditor.vue';
 import CompactTabs from './CompactTabs.vue';
 import CourseMaterialsEditor from './CourseMaterialsEditor.vue';
 import CourseLearningEditor from './CourseLearningEditor.vue';
 import CourseAssessmentEditor from './CourseAssessmentEditor.vue';
 import type { CourseIssue } from '../course-editor';
 const props = defineProps<{
-  course: Course;
+  course: CourseContent;
   typeEditing?: { canChangeType: boolean; typeChangeReason: string };
   disabled: boolean;
   issues: CourseIssue[];
@@ -32,6 +33,9 @@ const sections = computed(() =>
     ...(props.course.qualificationType !== 'auditor' &&
     props.course.assessmentKinds.includes('practical')
       ? [{ id: 'practical', label: '상황 대응 평가' }]
+      : []),
+    ...(props.course.qualificationType === 'auditee' && props.course.subjectiveEnabled
+      ? [{ id: 'subjective', label: '주관식 평가' }]
       : []),
   ].map((s) => ({ ...s, invalid: props.issues.some((i) => i.kind === s.id) })),
 );
@@ -109,7 +113,7 @@ defineExpose({
           }}</small>
         </div>
         <fieldset v-if="course.qualificationType !== 'auditor'" class="assessment-kind-group">
-          <legend>필수 평가</legend>
+          <legend>평가 유형</legend>
           <div class="assessment-kind-options">
             <label class="checkbox-label"
               ><input
@@ -118,7 +122,7 @@ defineExpose({
                 value="objective"
                 data-course-field="assessmentKinds"
                 :disabled="disabled"
-              />객관식 · 지식 평가</label
+              />객관식 · 지식 평가 <small>수료 필수</small></label
             >
             <label class="checkbox-label"
               ><input
@@ -126,7 +130,14 @@ defineExpose({
                 type="checkbox"
                 value="practical"
                 :disabled="disabled"
-              />실기 · 상황 대응 평가</label
+              />실기 · 상황 대응 평가 <small>수료 필수</small></label
+            >
+            <label class="checkbox-label"
+              ><input
+                v-model="course.subjectiveEnabled"
+                type="checkbox"
+                :disabled="disabled"
+              />주관식 평가 <small>수료에 영향 없음</small></label
             >
           </div>
         </fieldset>
@@ -140,6 +151,12 @@ defineExpose({
           평가 유형을 선택하면 해당 편집 항목이 나타납니다.
         </p>
       </div>
+      <SubjectiveQuestionsEditor
+        v-if="course.qualificationType === 'auditee' && course.subjectiveEnabled"
+        v-show="section === 'subjective'"
+        :course="course"
+        :disabled="disabled"
+      />
       <CourseMaterialsEditor
         v-show="section === 'materials'"
         ref="materials"

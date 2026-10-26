@@ -36,10 +36,7 @@ const blockReasons = (codes: string[]) =>
     <template v-else-if="detail">
       <p class="dashboard-detail-context">
         {{ detail.snapshot.scope.organizationName }} · 전체
-        {{ detail.rows.total.toLocaleString('ko-KR') }} {{ units[detail.unit]
-        }}<template v-if="detail.denominator !== undefined">
-          · 충족 {{ detail.numerator }} / 대상 {{ detail.denominator }}</template
-        >
+        {{ detail.rows.total.toLocaleString('ko-KR') }} {{ units[detail.unit] }}
       </p>
       <div
         v-if="detail.rows.items.length"
@@ -67,18 +64,11 @@ const blockReasons = (codes: string[]) =>
               </td>
               <td>{{ row.organizationName }}</td>
               <td>
-                <span v-if="row.required" class="dashboard-required">[필수] </span
-                >{{ row.title || (row.requestId ? '계획 수립 요청' : '—')
+                {{ row.title || (row.requestId ? '계획 수립 요청' : '—')
                 }}<small v-if="row.courseTitle" class="dashboard-meta">{{ row.courseTitle }}</small>
               </td>
               <td>
-                <template
-                  v-if="
-                    ['requiredCoverage', 'requiredMissing'].includes(metric) &&
-                    row.fulfilled !== undefined
-                  "
-                  >{{ row.fulfilled ? '충족' : '미충족' }}</template
-                ><template v-else-if="row.efficacy || row.progress"
+                <template v-if="row.efficacy || row.progress"
                   ><span v-if="row.efficacy">{{ efficacyLabels[row.efficacy] }}</span
                   ><small v-if="row.progress && row.progress !== 'none'" class="dashboard-meta">{{
                     progressLabels[row.progress]

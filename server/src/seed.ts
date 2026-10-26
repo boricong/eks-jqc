@@ -30,7 +30,10 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 19,
+    schemaVersion: 23,
+    organizationQualificationRequirements: [],
+    subjectiveResponses: [],
+    commonCourses: [],
     auditorPrograms: [],
     qualificationTemplates: initialTemplates(),
     renewals: [],
@@ -135,6 +138,7 @@ export function seedState(testFixture = false): State {
   for (const q of state.qualifications)
     state.qualificationTemplates.push({
       qualificationType: q.qualificationType,
+      defaultCommonCourseIds: [],
       id: q.templateId,
       revision: 1,
       title: q.title,

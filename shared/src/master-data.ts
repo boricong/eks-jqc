@@ -2,12 +2,15 @@ import type { State } from "./index.ts";
 import type { OrganizationDocument } from "./organizations.ts";
 
 export const masterCountLabels = {
+  organizationQualificationRequirements: "조직 필요자격 지정",
+  commonCourses: "공통인증Set 원본",
   qualificationTemplates: "기본자격",
   users: "사용자",
   organizations: "조직",
   qualifications: "자격 버전",
   courses: "인증Set 버전",
   knowledgeQuestions: "지식 평가 문항",
+  subjectiveQuestions: "주관식 문항",
   scenarioQuestions: "상황 대응 문항",
   learningItems: "학습 항목",
   materials: "학습자료",
@@ -19,6 +22,7 @@ export const clearedDataLabels = {
   plans: "개인 계획",
   assignments: "배정",
   enrollments: "수강",
+  subjectiveResponses: "주관식 답변",
   attempts: "평가 응시",
   completions: "인증Set 수료",
   certifications: "개인 인증",
@@ -37,6 +41,8 @@ export const clearedDataLabels = {
 };
 export type ClearedCounts = Record<keyof typeof clearedDataLabels, number>;
 export interface MasterPayload {
+  organizationQualificationRequirements: State["organizationQualificationRequirements"];
+  commonCourses: State["commonCourses"];
   auditorPrograms?: State["auditorPrograms"];
   qualificationTemplates: State["qualificationTemplates"];
   users: State["users"];
@@ -46,9 +52,9 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 9;
-  stateSchemaVersion: 19;
-  organizationSchemaVersion: 3;
+  formatVersion: 13;
+  stateSchemaVersion: 23;
+  organizationSchemaVersion: 4;
   createdAt: string;
   counts: MasterCounts;
   sha256: string;

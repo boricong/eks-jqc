@@ -33,13 +33,15 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
   const contrast: unknown[] = [];
   for (const id of ['learner-1', 'admin-1', 'operator-1', 'learner-2']) {
     await actor(page, id);
+    if (id === 'learner-2') await page.getByRole('tab', { name: '조직 관리', exact: true }).click();
     const hero = page.locator('.home-hero');
-    await expect(hero.locator('a')).toHaveCount(3);
+    const count = ['admin-1', 'learner-2'].includes(id) ? 2 : 3;
+    await expect(hero.locator('a')).toHaveCount(count);
     const values = await hero.locator('.stat-value').allTextContents();
     const links = await hero
       .locator('a')
       .evaluateAll((els) => els.map((e) => e.getAttribute('href')));
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(count);
     await expect(hero.locator('.home-date')).toHaveText('2026년 10월 23일 금요일');
     await expect(hero.locator('.home-date')).toHaveCSS('font-weight', '600');
     await expect(hero.locator('.home-date')).toHaveCSS('color', 'rgb(13, 37, 61)');
@@ -59,10 +61,11 @@ test('네 역할 홈 히어로의 현황·KST 날짜·실제 배경 대비와 �
       );
       expect(boxes.every((b) => b.height >= 44)).toBe(true);
       if (width < 768) expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y);
-      else expect(boxes[0]!.y).toBe(boxes[2]!.y);
+      else expect(boxes[0]!.y).toBe(boxes[count - 1]!.y);
       if (width === 1920) {
         expect((await hero.boundingBox())!.height).toBeLessThanOrEqual(
-          id === 'learner-2' ? 304 : 264,
+          // 조직 관리에는 역할 탭과 직속 인원 기준 안내가 함께 표시된다.
+          id === 'learner-2' ? 320 : 264,
         );
         for (const name of ['시스템 공지', '내 팀 공지'])
           await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -155,7 +158,7 @@ test('프로세스 검토의 정보 위계·단계 배치·키보드·화면 및
     for (const h of await guide.locator('h4').all()) await expect(h).toHaveCSS('font-size', '16px');
     await expect(guide.locator('.process-current p')).toHaveCSS('font-size', '14px');
     await expect(guide.locator('.process-guide-meta')).toHaveCSS('font-size', '12px');
-    await expect(guide.locator('.process-guide-meta')).toContainText('v15 · 2026-10-26');
+    await expect(guide.locator('.process-guide-meta')).toContainText('v21 · 2026-10-26');
     const cols = await guide
       .locator('.process-steps')
       .evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(' ').length);

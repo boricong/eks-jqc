@@ -36,7 +36,7 @@ async function load() {
   error.value = '';
   try {
     const result = await api<OrganizationAdministratorsView>(
-      store.managementPath(`/organization-policies/${props.organizationId}/administrators`),
+      store.managementPath(`/organization-settings/${props.organizationId}/administrators`),
     );
     if (key !== context() || seq !== generation) return;
     view.value = result;
@@ -69,7 +69,7 @@ async function save() {
   error.value = '';
   try {
     await store.command(
-      store.managementPath(`/organization-policies/${props.organizationId}/administrators`),
+      store.managementPath(`/organization-settings/${props.organizationId}/administrators`),
       {
         revision: view.value.revision,
         organizationRevision: view.value.organizationRevision,
@@ -107,7 +107,7 @@ watch(
       </button>
     </div>
     <p class="muted">
-      실제 소속 조직의 설명·담당 업무·필수 자격만 설정합니다. 소속이 바뀌면 지정을 해제합니다.
+      실제 소속 조직의 설명·담당 업무를 설정합니다. 소속이 바뀌면 지정을 해제합니다.
     </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <template v-if="view">

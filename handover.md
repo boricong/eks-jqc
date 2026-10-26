@@ -1,6 +1,14 @@
 # EKS 직무자격인증 개발 인수인계
 
+2026-10-26 조직 필요자격 상속·고정 계획 요청 구현 및 실제 이관 완료. 현재 업무23 revision90·조직4 revision10·JSON13. 팀 전체/세부 관리자 자기 조직 지정, 하위 상속, 새 요청 검토·교체/단독 종료를 제공한다. 기존 요청·업무 기록을 보존하며 실제 지정은 빈 상태다. 검증과 백업/복구 근거는 [docs/HANDOVER.md](docs/HANDOVER.md) 및 [공개 계약](docs/ORGANIZATION_REQUIREMENTS.md)을 따른다.
+
 최종 갱신: 2026-10-26 · 날짜 기준: Asia/Seoul
+
+2026-10-26 Auditee 공통/특화인증Set에 수료 영향 없는 주관식 답변 수집을 구현했다. 문항 편집·자동 저장·전 문항 제출·제출/수료 후 잠금과 관리자 제출 답변 조회를 제공한다. 전체 서버237/237, 전체 브라우저272항목 및 기대 문구 정정/추가2항목을 포함한 관련14/14, 타입·빌드·문서·형식 검사를 통과했다. 최신 세 파일·업무21 호환 소스를 백업하고21:59 KST 업무22 revision89·조직4 revision10으로 명시 이관·동일 설정 재시작했다. 기존 모든 업무 필드·조직 바이트·공통 내용 해시를 보존했고 조회 전후 세 파일 해시가 동일하다. [공개 계약](docs/SUBJECTIVE_RESPONSES.md)과 [상세 검증·복구 기록](docs/HANDOVER.md)을 따른다.
+
+2026-10-26 조직별 필수자격 설정·판정·UI·현황 지표를 제거하고 조직 정보·관리자와 선택형 계획 흐름으로 전환했다. 전체 서버230/230, 브라우저269항목 회귀 및 기대값 정정 후 관련8/8, 타입·빌드·문서 검증을 완료했다. 최신 세 파일과 업무20 호환 코드를 백업하고21:02 KST 업무21 revision88·조직4 revision10으로 명시 이관·동일 설정 재시작했다. 기존 업무 필드와 조직 정보·관리자를 보존했고 재시작/화면 조회 전후 세 파일 SHA256이 동일하다. 공개 계약·검증·복구 근거는 [docs/HANDOVER.md](docs/HANDOVER.md)의 조직별 필수자격 종료 기록을 따른다.
+
+2026-10-26 엑셀 가져오기/내보내기와 기준 일괄 편집을 제거했다. 개별 팀 자격·공통/특화인증Set 편집 및 JSON10 백업/복원은 유지하며 업무20·조직3을 이관하지 않는다. 이전 화면 주소는 팀 자격 설정으로 이동하고 전용 API는 권한 확인 후 본문 파싱 전410으로 종료한다. 서버233/233·브라우저267개 항목의 회귀/정정 재검증·빌드/형식 검증을 완료했다. 기존 데이터 세 파일·제거 전 호환 소스를 백업하고19:49 KST 동일 설정으로 재실행했다. 실제 조회 전후 세 파일 SHA256·업무 revision86·조직 revision8은 동일하다. 상세 계약·백업·실행 PID·검증 근거는 docs/HANDOVER.md의 최신 엑셀·기준 일괄 편집 종료 기록을 따른다.
 
 2026-10-26 Windows 로컬 실행: `main`을 `8b97fa2`까지 pull하고 의존성을 잠금 파일 기준으로 설치했다. 이 PC의 업무11 revision222·조직2 revision5를 세 파일 사전 백업과 원본 필드 보존 검증 후 업무16 revision227·조직2 revision5로 명시 이관했다. 기존 자격18개 버전·인증Set78·사용자7·기존 진행과 조직 파일을 보존했다. 연결 없는 빈 자격2개는 각각 임시 미완성 기본자격으로 보존했으며 업무 명칭 확정은 후속 작업이다. 08:11 KST 개발 런처37180/API7664를 숨김 실행하고 앱5186 HTTP200·API5187 health ok/revision227을 확인했다. 아래 다른 PC의 revision79 등 과거 실행 상태와 구분한다. 상세 백업·연결 파일·로그·검증은 docs/HANDOVER.md의 최신 Windows 실행 기록을 따른다.
 
@@ -48,6 +56,12 @@
 
 2026-10-24 최신 학습 화면은 최소160px/여백24px의 균형형 블루그레이 자격 히어로와32px(모바일24px) 작업면 간격이다. 학습 목록과 인증Set 목표 표시를 제거하고 날짜 한 줄·학습범위/자료 가로 탭을 제공한다. 최초 범위, 비활성 패널 제거와 인증Set별 탭/자료/읽기 위치 기억을 적용했다. 이전112/144/650px 상한은 해제했다. 임시 JSON 전체186/186·마지막 안내 변경 후6/6·최종 빌드/형식을 통과했고 실제 화면에 반영했다. 기존 미커밋·서버/shared·업무46/조직4/maintenance 해시를 보존했으며 API 재기동은 없다.
 
+## 공통인증Set 관리·기본자격 연계 완료 (2026-10-26)
+
+시스템 공통 원본/기본 목록과 신규 팀 등록의 독립 사본, 공통·특화 구분/팀 수정·등록 범위 고정·Ready 최초 확정을 구현했다. 업무20·조직3·JSON10·Excel13이며 기존 팀에는 소급하지 않는다. 전체 서버250/250·브라우저278건 회귀 후 기대값3건 정정 및 신규 충돌 복구를 포함한 관련23/23·최종 빌드를 확인했다.
+
+Mac 실행 데이터는 공식 보존 이관으로 업무16 revision82→20 revision86·조직2 revision7→3 revision8이 됐다. 사용자6/자격3/인증Set4·기존 필드/업무 근거를 유지하고 종료된 팀 적용 목록은 조직 감사에 보존했다. 세 원본·업무16 호환 코드·복구 manifest는 `data/backups/common-courses-deploy-20261026/`다. 기존 설정으로 재시작(API4162·5186/5187), 실제 공통 관리 화면/health86·조회 전후 해시 동일을 확인했다. 상세 계약은 [공통인증Set 설계·운영](docs/COMMON_COURSES.md), 검증·운영 기록은 [최신 인수인계](docs/HANDOVER.md)를 따른다. 커밋·푸시는 하지 않았다.
+
 ## 1 현재 상태
 
 2026-10-25 홈 진행 자격 카드에 생성한 웨이퍼·반도체 설비 배경을 추가했다. 이미지 레이어만35%/모바일22%이며 좌우·하단 마스크로 글자와 버튼의 가독성을 유지한다. 로컬 자산2종 약102KB/43KB, 상단 히어로·업무 동작·API·실행 데이터 보존. 임시 JSON 전체 Playwright220/220·TypeScript/Vite와 합성 대비/네 화면 폭을 검증했다.
@@ -64,28 +78,28 @@
 
 2026-10-23 인증 현황 대시보드 후속 개선으로 차트·확대·구간 명세·개인 상세 연결을 구현하고 개발 서버에 반영했다. 전체 조회 조건으로 집계하며 세부조직 직접 소속 권한과 업무13/조직2를 유지한다. 전체 서버186/186·Playwright155/155·빌드 통과, 업무35/조직4의 해시 보존을 확인했다. 이전 대시보드 구현은0150cae에 게시했고 이번 차트 변경은 미커밋 상태다.
 
-| 구분 | 상태 |
-| --- | --- |
-| 구현 단계 | Vue 3 + Fastify 기반 로컬 검증용 MVP |
-| 데이터 | macOS `data/runtime/local-20261022/`: 업무13 revision46·조직2 revision4. 이번 작업은 임시 JSON 시험만 사용. 실행 중 별도 catalog.save에 따른45→46을 관찰·보존했으며 되돌리지 않음 |
-| 서버 | Node 24 / Fastify 5 / TypeScript / Zod 4, API 5187. 이번 macOS 실행·검증 Node 24.19.0. 이전 환경 검증 버전은 각 이력 참조 |
-| 권한과 채점 | 탭별 세션, Lv1·본인·팀 조직 관리자·실제 소속 한 곳의 세부 조직 관리자·운영자. 권한 합산은 역할 순서와 무관. 두 평가 모두 본인 응시·서버 자동 채점 |
-| 조직 운영 | 시스템 공통 기본자격 → Lv1 팀 등록·독립 설정 → 팀 적용 버전 확정 → 실제 소속 한 곳의 필수 선택. 상속/자동 배정 없음. 세부 관리자에게 팀 구성 권한 없음 |
-| 인증Set 운영 | 직접 저장·참조 기반 자동 버전·운영 종료/재개. 팀 자격은 기본자격 필수 연결과 삭제 표시로 계보 보존, 재등록 시 같은 계보의 다음 버전. 팀 적용 중 삭제 차단 |
-| 개인 인증 절차 | 필수 선택 사항·필수/팀 적용0도 관리자 요청 → 취득할 자격에서 계획 시작(자동 요청 포함) → 자격별 확정 → 요청 전체 완료. 비필수 초안 삭제 시 자동 제외, 필수/완료 근거 보존 |
-| 평가 | 지식 선행을 화면·시작/저장/제출 API에서 검사. 제출 → 20문항 단위 답안 검토 → 최종 제출/채점. 미응답·마지막 문항 팝업, 작은 녹색/적색 결과 영역·아이콘·점수/기준/일시·다음 행동 |
-| 수료와 인증 | 최초 발급번호·취득일·평가/기간 근거 유지. 세 상태·갱신/사건·KST 자동 폐기 유지. 사전 알림은 재인증 시작 기본7일 전·기간별1회, 상태 변경 사실 알림은 별도 |
-| 평가 기준 검증 | 2026-10-24 기능 종료. 메뉴·화면·조회/작성/확정/정정 API 제거, 과거 저장 자료·이력·백업 호환만 보존 |
-| 인증 현황 | 팀 전체/조직별·세부조직 직접 소속 전용 읽기 조회, 현재 필수·진행·효력·만료/재인증·근거 요약. 같은 시점 요약/명세와 안전한 개인 패널 |
-| 기준 화면 | 인디고·네이비의 평면 작업면, Pretendard 제목24/UI·표14/읽기15px. 인증Set 상단 가로 탭·내부 세로 번호·자료 목록·모바일44px·오류 초점. 모든 인증Set 저장 후 목록 이동과 결과/보완/연결 자격 안내 |
-| 기준 일괄 관리 | 등록된 팀 자격의 설정 수정만 허용. Excel v7 출력/v3~v6 읽기. 공통 정보 변경·연결 위조·신규 시트 차단, 미저장 입력·부분 저장·응답 유실/복구 유지 |
-| 설정·기준 이전 | 기본자격 포함 JSON 형식3/업무13·조직2. 형식3/업무12 및 형식1·2 보존 호환. 새 요청 선택/완료는 업무 진행이며 설정·기준 이전 본문은 변경 없음 |
-| Photo팀 시험 기준 | 완성된 자격15종·고유 인증Set75개·지식225+상황225=450문항·100%·정답 공개·36개월 유지. 재인증 시작3개월, 사전 알림7일 전1회. 원래 알림 배열은 과거 근거로 보존 |
-| 마지막 코드 검증 | 2026-10-25 반도체 카드 배경: Node24.19.0 TypeScript/Vite·관련14/14·전체 Playwright220/220(5.2분)·3파일 형식/diff 통과. 합성 배경 대비·4폭·이미지 로드 실패/레이아웃과 기존 전체 회귀 확인. 서버 단위 시험은 이번 UI 변경에서 재실행하지 않음 |
-| 저장소 | [boricong/eks-jqc](https://github.com/boricong/eks-jqc), 작업 브랜치 `main` |
-| 최근 기능 커밋 | `0150cae` — 인증 현황 대시보드·전용 조회 API·시험·문서31개 파일. 2026-10-23 `origin/main` 푸시 성공. 후속 기록 커밋은 `git log -1` 참조 |
-| 이번 변경 | 균형형160px 자격 히어로·32px 구역 간격·인증Set 목표 미노출/일정 한 줄·학습범위/자료 가로 탭(범위 기본). 이전 높이 상한 해제·탭/자료/위치 기억·기존 미커밋/서버/shared/실행 데이터 보존 |
-| 마지막 실행 확인 | 2026-10-24 기존 API5187 health200(revision46)·Vite5186 새 학습 화면/자료 위젯/CSS200. 재기동 없음. `/private/tmp/eks-learning-running-check.json`, 업무 해시 `/private/tmp/eks-learning-runtime-final.json` |
+| 구분              | 상태                                                                                                                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 구현 단계         | Vue 3 + Fastify 기반 로컬 검증용 MVP                                                                                                                                                                                                         |
+| 데이터            | macOS `data/runtime/local-20261022/`: 업무13 revision46·조직2 revision4. 이번 작업은 임시 JSON 시험만 사용. 실행 중 별도 catalog.save에 따른45→46을 관찰·보존했으며 되돌리지 않음                                                            |
+| 서버              | Node 24 / Fastify 5 / TypeScript / Zod 4, API 5187. 이번 macOS 실행·검증 Node 24.19.0. 이전 환경 검증 버전은 각 이력 참조                                                                                                                    |
+| 권한과 채점       | 탭별 세션, Lv1·본인·팀 조직 관리자·실제 소속 한 곳의 세부 조직 관리자·운영자. 권한 합산은 역할 순서와 무관. 두 평가 모두 본인 응시·서버 자동 채점                                                                                            |
+| 조직 운영         | 시스템 공통 기본자격 → Lv1 팀 등록·독립 설정 → 팀 적용 버전 확정 → 실제 소속 한 곳의 필수 선택. 상속/자동 배정 없음. 세부 관리자에게 팀 구성 권한 없음                                                                                       |
+| 인증Set 운영      | 직접 저장·참조 기반 자동 버전·운영 종료/재개. 팀 자격은 기본자격 필수 연결과 삭제 표시로 계보 보존, 재등록 시 같은 계보의 다음 버전. 팀 적용 중 삭제 차단                                                                                    |
+| 개인 인증 절차    | 필수 선택 사항·필수/팀 적용0도 관리자 요청 → 취득할 자격에서 계획 시작(자동 요청 포함) → 자격별 확정 → 요청 전체 완료. 비필수 초안 삭제 시 자동 제외, 필수/완료 근거 보존                                                                    |
+| 평가              | 지식 선행을 화면·시작/저장/제출 API에서 검사. 제출 → 20문항 단위 답안 검토 → 최종 제출/채점. 미응답·마지막 문항 팝업, 작은 녹색/적색 결과 영역·아이콘·점수/기준/일시·다음 행동                                                               |
+| 수료와 인증       | 최초 발급번호·취득일·평가/기간 근거 유지. 세 상태·갱신/사건·KST 자동 폐기 유지. 사전 알림은 재인증 시작 기본7일 전·기간별1회, 상태 변경 사실 알림은 별도                                                                                     |
+| 평가 기준 검증    | 2026-10-24 기능 종료. 메뉴·화면·조회/작성/확정/정정 API 제거, 과거 저장 자료·이력·백업 호환만 보존                                                                                                                                           |
+| 인증 현황         | 팀 전체/조직별·세부조직 직접 소속 전용 읽기 조회, 현재 필수·진행·효력·만료/재인증·근거 요약. 같은 시점 요약/명세와 안전한 개인 패널                                                                                                          |
+| 기준 화면         | 인디고·네이비의 평면 작업면, Pretendard 제목24/UI·표14/읽기15px. 인증Set 상단 가로 탭·내부 세로 번호·자료 목록·모바일44px·오류 초점. 모든 인증Set 저장 후 목록 이동과 결과/보완/연결 자격 안내                                               |
+| 기준 일괄 관리    | 등록된 팀 자격의 설정 수정만 허용. Excel v7 출력/v3~v6 읽기. 공통 정보 변경·연결 위조·신규 시트 차단, 미저장 입력·부분 저장·응답 유실/복구 유지                                                                                              |
+| 설정·기준 이전    | 기본자격 포함 JSON 형식3/업무13·조직2. 형식3/업무12 및 형식1·2 보존 호환. 새 요청 선택/완료는 업무 진행이며 설정·기준 이전 본문은 변경 없음                                                                                                  |
+| Photo팀 시험 기준 | 완성된 자격15종·고유 인증Set75개·지식225+상황225=450문항·100%·정답 공개·36개월 유지. 재인증 시작3개월, 사전 알림7일 전1회. 원래 알림 배열은 과거 근거로 보존                                                                                 |
+| 마지막 코드 검증  | 2026-10-25 반도체 카드 배경: Node24.19.0 TypeScript/Vite·관련14/14·전체 Playwright220/220(5.2분)·3파일 형식/diff 통과. 합성 배경 대비·4폭·이미지 로드 실패/레이아웃과 기존 전체 회귀 확인. 서버 단위 시험은 이번 UI 변경에서 재실행하지 않음 |
+| 저장소            | [boricong/eks-jqc](https://github.com/boricong/eks-jqc), 작업 브랜치 `main`                                                                                                                                                                  |
+| 최근 기능 커밋    | `0150cae` — 인증 현황 대시보드·전용 조회 API·시험·문서31개 파일. 2026-10-23 `origin/main` 푸시 성공. 후속 기록 커밋은 `git log -1` 참조                                                                                                      |
+| 이번 변경         | 균형형160px 자격 히어로·32px 구역 간격·인증Set 목표 미노출/일정 한 줄·학습범위/자료 가로 탭(범위 기본). 이전 높이 상한 해제·탭/자료/위치 기억·기존 미커밋/서버/shared/실행 데이터 보존                                                       |
+| 마지막 실행 확인  | 2026-10-24 기존 API5187 health200(revision46)·Vite5186 새 학습 화면/자료 위젯/CSS200. 재기동 없음. `/private/tmp/eks-learning-running-check.json`, 업무 해시 `/private/tmp/eks-learning-runtime-final.json`                                  |
 
 시스템 시험은 가상 데이터에 대한 결과다. 실제 직무 평가 기준의 타당성은 별도의 참여자와 독립 수행 근거를 확보한 뒤 판단한다. 로컬 계정 전환은 검증용이며 실제 사내 로그인 인증은 포함하지 않는다.
 
@@ -98,10 +112,6 @@
 5. [자격 상태·대상자 Hold·재인증 구현 계획](docs/자격_상태_재인증_구현계획.md): 승인 설계·사용자 결정. 실제 적용 결과는 본 문서 최신 이력을 따른다.
 
 v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 수정했고, 실제 수행 비교의 과거 설계에는 2026-10-24 기능 종료 결정을 명시했다. 원본 설계서의 로컬 절대 경로는 다른 개발 환경에서 접근 가능하다고 가정하지 않는다.
-
-
-
-
 
 ## 2 유지해야 할 사용자 결정
 
@@ -354,12 +364,12 @@ v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 �
 
 사용자가 명시적으로 정정한 사항이다. **Recipe Management는 등록할 자격의 예시 데이터이며 Recipe 업무 시스템을 구현하라는 요구가 아니다.**
 
-| 자격 | 과정 | 문항 | 사용자 제공 정답 |
-| --- | --- | --- | --- |
-| Recipe Management | Recipe 생성 | Recipe 생성을 할 수 있는 직급은? | 미정 |
-| Recipe Management | Recipe 생성 | Recipe 생성을 수행하는 시스템 명은? | 미정 |
-| Recipe Management | Recipe 편집 | 하루에 편집 가능한 Recipe 수는 몇 개인가? | 미정 |
-| Recipe Management | Recipe 편집 | Recipe 편집 후 반드시 수행해야 하는 절차는 무엇인가? | 재검토 |
+| 자격              | 과정        | 문항                                                 | 사용자 제공 정답 |
+| ----------------- | ----------- | ---------------------------------------------------- | ---------------- |
+| Recipe Management | Recipe 생성 | Recipe 생성을 할 수 있는 직급은?                     | 미정             |
+| Recipe Management | Recipe 생성 | Recipe 생성을 수행하는 시스템 명은?                  | 미정             |
+| Recipe Management | Recipe 편집 | 하루에 편집 가능한 Recipe 수는 몇 개인가?            | 미정             |
+| Recipe Management | Recipe 편집 | Recipe 편집 후 반드시 수행해야 하는 절차는 무엇인가? | 재검토           |
 
 `재검토`는 정답 문자열이다. 별도 검토자, 결재, 재검토 대기 상태를 만들지 않는다. 선택지, 미정 정답, 실제 배점·합격 기준·실기 항목은 임의로 완성하지 않는다. 현재 Recipe 데이터는 초안으로 유지한다.
 
@@ -429,7 +439,6 @@ v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 �
 
 ## 3 이번 세션의 변경 이력
 
-
 ### 2026-10-15 설계 검토와 범위 조정
 
 - 원본 v1.0을 검토하고 핵심 검증 목적, 객관식·실기 필요 여부, 인증 용도를 사용자에게 확인했다.
@@ -454,17 +463,17 @@ v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 �
 
 ### 2026-10-16 검증 중 수정한 중요 문제
 
-| 문제 | 최종 반영 | 참고 파일 |
-| --- | --- | --- |
-| 객관식 통과 후 실기가 남아 있는데 다른 과정으로 이동 | 같은 과정의 남은 평가로 복귀. 수료 후에만 다음 과정으로 이동 | `frontend/src/views/AssessmentView.vue` |
-| 평가 대기 과정으로만 이어져 다음 작업을 찾기 어려움 | 즉시 실행 가능한 평가가 있는 과정을 우선 선택. 명시한 과정 선택은 유지 | `frontend/src/views/QualificationView.vue` |
-| 작은 화면의 관리 영역 가로 넘침 | 사이드바 최소 폭과 표의 위치 기준을 수정해 내부 스크롤 범위로 제한 | `frontend/src/style.css` |
-| 대화상자 제목 ID 중복 | Vue `useId()`로 대화상자별 접근 가능한 이름을 연결 | `frontend/src/components/AppDialog.vue` |
-| 과정 선택만 바뀌어도 본문으로 초점 이동 | 경로가 바뀔 때만 본문 초점 이동. 항목 이동은 DOM 갱신 후 수행 | `frontend/src/router.ts`, `AssessmentView.vue` |
-| 입력을 모두 채워도 누락 오류가 남음 | 응답·판정·근거가 완성되면 해당 누락 오류를 해제 | `frontend/src/views/AssessmentView.vue` |
-| 계정 전환 시 미저장 편집 취소 처리 | 화면 이탈 확인 후 계정을 바꾸며, 취소 시 기존 계정 유지 | `frontend/src/App.vue`, `AdminView.vue` |
-| 1920×900 FT 화면의 입력 밀도 | 항목명·기준과 통과/미통과 선택을 같은 행에 배치하고 근거를 아래에 배치 | `frontend/src/style.css` |
-| 코드 정리 후 Vue 이벤트 표현식 빌드 실패 | 여러 문장이 있는 이벤트의 구분을 보존하도록 Prettier `semi: true` 적용 | `frontend/.prettierrc.json` |
+| 문제                                                 | 최종 반영                                                              | 참고 파일                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
+| 객관식 통과 후 실기가 남아 있는데 다른 과정으로 이동 | 같은 과정의 남은 평가로 복귀. 수료 후에만 다음 과정으로 이동           | `frontend/src/views/AssessmentView.vue`        |
+| 평가 대기 과정으로만 이어져 다음 작업을 찾기 어려움  | 즉시 실행 가능한 평가가 있는 과정을 우선 선택. 명시한 과정 선택은 유지 | `frontend/src/views/QualificationView.vue`     |
+| 작은 화면의 관리 영역 가로 넘침                      | 사이드바 최소 폭과 표의 위치 기준을 수정해 내부 스크롤 범위로 제한     | `frontend/src/style.css`                       |
+| 대화상자 제목 ID 중복                                | Vue `useId()`로 대화상자별 접근 가능한 이름을 연결                     | `frontend/src/components/AppDialog.vue`        |
+| 과정 선택만 바뀌어도 본문으로 초점 이동              | 경로가 바뀔 때만 본문 초점 이동. 항목 이동은 DOM 갱신 후 수행          | `frontend/src/router.ts`, `AssessmentView.vue` |
+| 입력을 모두 채워도 누락 오류가 남음                  | 응답·판정·근거가 완성되면 해당 누락 오류를 해제                        | `frontend/src/views/AssessmentView.vue`        |
+| 계정 전환 시 미저장 편집 취소 처리                   | 화면 이탈 확인 후 계정을 바꾸며, 취소 시 기존 계정 유지                | `frontend/src/App.vue`, `AdminView.vue`        |
+| 1920×900 FT 화면의 입력 밀도                         | 항목명·기준과 통과/미통과 선택을 같은 행에 배치하고 근거를 아래에 배치 | `frontend/src/style.css`                       |
+| 코드 정리 후 Vue 이벤트 표현식 빌드 실패             | 여러 문장이 있는 이벤트의 구분을 보존하도록 Prettier `semi: true` 적용 | `frontend/.prettierrc.json`                    |
 
 포매팅 문제는 이번 프로젝트에서 관찰한 조합의 문제다. 포매터 설정을 변경하면 TypeScript 검사뿐 아니라 Vite의 Vue 템플릿 빌드까지 확인한다.
 
@@ -548,7 +557,6 @@ v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 �
 - 실행 적용: 기존 서버를 중지하고 `data/backups/state/before-org-deployment-20261016.json` 원본 사본 및 이관 사전 백업을 보관했다. 실제 개발 데이터 revision 29→30, schemaVersion 1→2로 이관했다. 기존 5명과 과정 4개·자격 2개·배정 1개·수강 2개·공지 3개·이력 2개·요청 캐시 1개의 원본 필드/ID 일치를 검증했다. 당시 평가·수료·인증·비교는 모두 0개였다. 35개 조직과 시스템 운영자 1명을 추가했다. 반복 이관과 두 파일 수동 백업 후 개발 서버를 재시작했으며 업무/조직 SHA-256이 이관 직후와 동일했다. 5186 앱·5187 API·프록시 HTTP 200, 운영자 초기화 미리보기 200·조직 관리자 403을 확인했다. 실제 진행 초기화는 실행하지 않았다.
 - 남은 작업: 실제 기준·근거·참여자의 현장 검증과 Lv1 간 이관 등 후속 범위. 이번 변경은 커밋·푸시하지 않았다.
 
-
 ### 2026-10-16 운영자의 Lv1 선택 관리·과정 삭제와 운영 종료 구현
 
 - 배경 및 결정: 사용자가 선택 Lv1의 조직 관리자 기능을 운영자에게 부여하고, 미사용 초안 삭제·게시된 선택 버전 운영 종료·기존 배정 계속 진행·기존 인증 보존 계획을 승인했다. 앞선 조회 전용 정책을 대체했다.
@@ -563,7 +571,6 @@ v1.1의 DB·트랜잭션 표현을 **DB 미사용·JSON 직렬 저장**으로 �
 - 복구: 단순 종료 취소는 운영 재개를 사용한다. 초안 삭제 복구는 서버 중지 후 사전 업무 백업을 임시 저장소에서 검증하고 전체 업무 복구한다. 백업 이후 변경도 되돌아감을 확인해야 한다. 구 스키마 1/2 백업은 별도 디렉터리에서 먼저 명시적으로 이관하며 조직 마스터를 대체하지 않는다. 상세는 README에 기록했다.
 - 남은 작업: 이번 승인 범위는 완료했다. 인증 취소/재평가·Lv1 간 이관·SSO 등 기존 후속 범위는 유지한다.
 - 관련 커밋: 이번 작업에서 커밋·푸시하지 않았다. 확인한 로컬 HEAD는 `a8a1969376af56ccd931663d6a4757a9eefa2eb9`, 브랜치는 `main`이다.
-
 
 ### 2026-10-19 개발 서버 실행과 구현 커밋·푸시
 
@@ -1173,12 +1180,12 @@ EKS_DATA_FILE="$PWD/data/runtime/local-20261022/state.json" EKS_ORGANIZATIONS_FI
 
 동일한 목표 없는 표준 자료(자격 설명2줄·학습 항목10개/기본3개·직접 작성 자료5개/각35개 반복 문단)의 변경 전후:
 
-| 폭 | 본문 시작 전→후 | 페이지 높이 전→후 |
-| --- | --- | --- |
-| 1920 | 775→571px | 1,478→1,274px |
-| 1440 | 775→571px | 1,478→1,274px |
-| 768 | 1,136→898px | 4,016→3,778px |
-| 390 | 1,182→926px | 4,950→4,694px |
+| 폭   | 본문 시작 전→후 | 페이지 높이 전→후 |
+| ---- | --------------- | ----------------- |
+| 1920 | 775→571px       | 1,478→1,274px     |
+| 1440 | 775→571px       | 1,478→1,274px     |
+| 768  | 1,136→898px     | 4,016→3,778px     |
+| 390  | 1,182→926px     | 4,950→4,694px     |
 
 - 반영/보존: 실행 중 화면에서 두 색상/브레드크럼 제거/자료 배치를 확인했고 Vite 모듈·API health200과 빌드 화면에 반영했다. 실제 업무13 revision46/조직2 revision4/maintenance 해시는 착수와 동일하다. 기존 미커밋 변경을 보존했으며 API 재기동·실행 데이터 변경·이관·커밋·푸시 없음. 기존 Zod 주석·500kB 번들 권고만 유지한다.
 - 근거: 시작 소스/업무 해시·diff `/private/tmp/eks-compact-learning-baseline/`, 전후 캡처/측정 `/private/tmp/eks-compact-learning-before/frontend/test-results/`·`/private/tmp/eks-compact-learning-final/frontend/test-results/`, 첫900px 캡처 `/private/tmp/eks-compact-learning-captures/`, 시험/빌드/형식 `/private/tmp/eks-compact-learning-{before,targeted,check,full,type,build,format}.log`, 실제 반영/해시 `/private/tmp/eks-compact-learning-runtime.json`. 현행 UX와 화면 안내를 갱신했으며 아래 이전 색상·3줄 목표 설명은 과거 이력이다.
@@ -1194,12 +1201,12 @@ EKS_DATA_FILE="$PWD/data/runtime/local-20261022/state.json" EKS_ORGANIZATIONS_FI
 
 동일한 목표 없는 표준 자료(자격 설명2줄·학습 항목10개/기본3개·직접 작성5개/각35개 반복 문단)의 자료 탭 전후:
 
-| 폭 | 본문 시작 전→후 | 페이지 높이 전→후 |
-| --- | --- | --- |
-| 1920 | 571→515px | 1,274→1,218px |
-| 1440 | 571→515px | 1,274→1,218px |
-| 768 | 898→819px | 3,778→3,699px |
-| 390 | 926→819px | 4,694→4,587px |
+| 폭   | 본문 시작 전→후 | 페이지 높이 전→후 |
+| ---- | --------------- | ----------------- |
+| 1920 | 571→515px       | 1,274→1,218px     |
+| 1440 | 571→515px       | 1,274→1,218px     |
+| 768  | 898→819px       | 3,778→3,699px     |
+| 390  | 926→819px       | 4,694→4,587px     |
 
 - 반영/보존: 실행 중 화면의160px 요약/기본 범위·목표 미노출과 Vite 모듈/최종 빌드·API health200을 확인했다. 업무13 revision46/조직2 revision4/maintenance의 착수·최종 해시가 동일하다. 기존 미커밋을 보존했으며 API 재기동·실행 데이터 수정·이관·커밋·푸시 없음. 기존 Zod 주석/500kB 번들 권고는 유지한다.
 - 근거: 시작 소스/업무 해시·diff `/private/tmp/eks-learning-tabs-baseline/`, 전후 `/private/tmp/eks-learning-tabs-before/frontend/test-results/`·`/private/tmp/eks-learning-tabs-final/frontend/test-results/`, 첫900px 캡처 `/private/tmp/eks-learning-tabs-captures/`, 시험/빌드/형식 `/private/tmp/eks-learning-tabs-{targeted,fixed,full,guide,final-build,format}.log`, 실행 확인 `/private/tmp/eks-learning-tabs-runtime-final.json`. 전체186개 최종 사본과 마지막 두 안내 문구만 다른 소스를 별도 안내 사본에서6개 재검증했다. UX·프런트 안내·루트 인수인계를 갱신했으며 아래 압축 상한/목표 표시 설명은 과거 이력이다.
@@ -1225,43 +1232,43 @@ EKS_DATA_FILE="$PWD/data/runtime/local-20261022/state.json" EKS_ORGANIZATIONS_FI
 
 ## 4 코드 위치와 실행
 
-| 위치 | 역할 |
-| --- | --- |
-| `frontend/src/management-navigation.ts`; `AdminLayout.vue`, `AdminView.vue` | 인증 업무 관리의 목적별 네 그룹·10개 메뉴·이름·경로 공통 정의와 화면 제목·선택 표시 |
-| `package.json`, `package-lock.json`, `.nvmrc` | Node 24, npm workspaces, 루트 설치·실행·검증 |
-| `shared/src/index.ts`, `organizations.ts`, `workflow.ts` | API·조직·소속 타입과 Zod 스키마, 트리 경로 계산 |
-| `server/src/seed-source.json`, `seed.ts`; `server/tests/fixtures/seed-source.json` | 최초 설치 계정·공지와 별도 회귀 시험용 옛 체험 데이터 |
-| `shared/src/lifecycle.ts`; `server/src/qualification-lifecycle.ts`, `lifecycle-routes.ts`, `lifecycle-integrity.ts`, `lifecycle-migration.ts`, `assessment-flow-migration.ts` | 세 상태·권한·기간·갱신/재취득·자동 폐기·업무8→9→10 이관 |
-| `QualificationLifecycle.vue`, `CertificationTargets.vue`, `CredentialManagement.vue`, `CredentialLifecycle.vue`, `lifecycle.css` | 기준/대상자/개인 상태와 재인증·이력 화면 |
-| `server/src/catalog-editing.ts`, `catalog-editing-migration.ts`; `CourseEditor.vue`, `QualificationDelete.vue` | 참조 기반 저장/삭제·업무10→11 보존 이관·가로 구역/세로 번호 편집·삭제 영향 |
-| `server/src/storage.ts`, `integrity.ts` | 조직/업무 공통 쓰기 대기열·잠금·백업·복구, 참조·채점·근거 검증 |
-| `shared/src/catalog.ts`; `server/src/catalog.ts`, `catalog-workbook.ts`, `catalog-routes.ts` | 공통 교환 형식·XLSX·변경 비교·원자적 배치·관리자 API |
-| `server/src/organizations.ts`, `organization-seed.json`, `migration.ts` | 35개 최초 조직표·트리/사용자 편집·스키마 이관 |
-| `server/src/workflow.ts`, `workflow-integrity.ts`, `notifications.ts`, `qualification-templates.json` | 계획/학습·15종 가져오기·절차 무결성·만료 알림 |
-| `server/src/photo-certification-fixture.ts`, `photo-setup.ts`, `cli.ts` | Photo팀 15종×5과정 시험 기준, 참조 검사·미리보기·백업 후 일회성 적용 |
-| `server/src/assessment-transition.ts` | 이전 스키마5→6 변환 fixture 검증. 실제 무백업 적용 명령은 종료 |
-| `server/src/organization-policies.ts`, `policy-migration.ts` | 팀/필수 정책·요청/충족 집계, 업무6/조직1에서 현행9/2까지 보존 이관 |
-| `server/src/planning.ts`, `planning-migration.ts`; `RequestPlanning.vue`, `PlanningPanel.vue` | 요청별 후보/선택/완료 판정·불변 완료 근거·업무12→13 보존 이관·학습자 선택과 관리자 요청 현황 |
-| `server/src/organization-administrators.ts`, `notices.ts`, `administration-migration.ts` | 정확한 소속 조직 권한·복수 지정·공지 범위·업무7→8 보존 이관 |
-| `AdminLayout.vue`, `OrganizationAdministrators.vue`, `PolicyOrganizationTree.vue`, `HomeNotices.vue`, `SystemNotices.vue` | 공통 관리 메뉴·허용 조직 트리·지정·공지 분리 |
-| `OrganizationPolicies.vue`, `RequiredQualifications.vue`, `ProcessGuide.vue`, `useProcessContext.ts` | 조직 설정·본인 필수 현황·하위 화면별 정적 프로세스 설명 |
-| `server/src/catalog-workbook-v3.ts`, `catalog-workbook-legacy*.ts` | v6 작성/해석과 v3~v5·구형 파일 호환 검사 |
-| `CourseMaterials.vue`, `CourseMaterialsEditor.vue` | 네 유형 자료 열람·추가/수정/순서·편집 보관·보완 위치 이동 |
-| `QualificationView.vue`, `QualificationSummary.vue`, `QualificationCourseNav.vue`, `qualification-detail.css` | 자격 상세 요약·전체 집계·과정 탐색·개인 목표/학습/평가 구획·반응형 자료 열람 |
-| `server/src/domain.ts` | 인가, 기준·배정·평가·수료·인증 처리, 조회 DTO 보호. 과거 비교 자료는 초기화 범위 계산에만 사용 |
-| `server/src/app.ts`, `index.ts`, `cli.ts` | Fastify API·세션, 서버 실행, 초기화·백업·복구 명령 |
-| `frontend/src/api.ts`, `stores/demo.ts` | API 어댑터, 조회 상태, 요청 재시도; 클라이언트 채점 없음 |
-| `frontend/src/composables/useAttemptDraft.ts`, `useSavedDraft.ts` | 500ms 자동 저장·입력 보존·수정 충돌·제출 전 저장 |
-| `server/tests/comparison-retirement.test.ts`, `frontend/tests/comparison-retirement.spec.ts` | 종료 API·화면 접근 차단, 이전 링크·기존 결과 화면과 과거 파일 보존 회귀 |
-| `OrganizationPanel.vue`, `OrganizationSelect.vue`, `UserManagementPanel.vue`, `SystemOverview.vue`, `TestProgressPanel.vue` | `frontend/src/components/`의 조직/사용자 관리·전체 업무 조회·선택 조직 초기화 |
-| `shared/src/dashboard.ts`; `server/src/dashboard.ts`, `dashboard-routes.ts`; `DashboardView.vue`, `useDashboard.ts`, `components/dashboard/`, `styles/dashboard.css` | 대시보드 조회 계약·권한·순수 집계·일관된 명세·안전한 개인 요약·필터/매트릭스/일정 |
-| `frontend/src/views/`, `router.ts`, `App.vue` | 별도 역할별 화면, API 데이터 표시와 입력 |
-| `CatalogView.vue`, `CatalogGrid.vue`, `useListView.ts`, `ListControls.vue` | 자격 시트·가상 셀 편집·범위 붙여넣기·선택 기준 저장·목록 밀도/페이지 |
-| `frontend/src/design-tokens.css`, `style.css`, `course-editor.css`, `catalog.css`, `assessment-flow.css` | 단일 디자인 팔레트·업무 배치/밀도·문항 편집·반응형 규칙 |
-| `CourseAssessmentEditor.vue`, `CompactTabs.vue`, `ObjectiveChoices.vue`, `course-editor.ts` | 평가 유형/문항 탐색·정답 선택지·필드별 오류 위치 |
-| `scripts/design-deployment.ts` | UI 적용 전 두 JSON 영구 백업·스키마 검증·재시작 후 해시 검증. 데이터 쓰기/이관 없음 |
-| `server/tests/mvp.test.ts`, `workflow.test.ts`, `photo-setup.test.ts` | Node/Fastify API·저장소와 Photo 5과정 인증 통합시험 |
-| `frontend/tests/` | Playwright 사용자 여정과 테스트별 서버·임시 저장소 |
+| 위치                                                                                                                                                                          | 역할                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `frontend/src/management-navigation.ts`; `AdminLayout.vue`, `AdminView.vue`                                                                                                   | 인증 업무 관리의 목적별 네 그룹·10개 메뉴·이름·경로 공통 정의와 화면 제목·선택 표시            |
+| `package.json`, `package-lock.json`, `.nvmrc`                                                                                                                                 | Node 24, npm workspaces, 루트 설치·실행·검증                                                   |
+| `shared/src/index.ts`, `organizations.ts`, `workflow.ts`                                                                                                                      | API·조직·소속 타입과 Zod 스키마, 트리 경로 계산                                                |
+| `server/src/seed-source.json`, `seed.ts`; `server/tests/fixtures/seed-source.json`                                                                                            | 최초 설치 계정·공지와 별도 회귀 시험용 옛 체험 데이터                                          |
+| `shared/src/lifecycle.ts`; `server/src/qualification-lifecycle.ts`, `lifecycle-routes.ts`, `lifecycle-integrity.ts`, `lifecycle-migration.ts`, `assessment-flow-migration.ts` | 세 상태·권한·기간·갱신/재취득·자동 폐기·업무8→9→10 이관                                        |
+| `QualificationLifecycle.vue`, `CertificationTargets.vue`, `CredentialManagement.vue`, `CredentialLifecycle.vue`, `lifecycle.css`                                              | 기준/대상자/개인 상태와 재인증·이력 화면                                                       |
+| `server/src/catalog-editing.ts`, `catalog-editing-migration.ts`; `CourseEditor.vue`, `QualificationDelete.vue`                                                                | 참조 기반 저장/삭제·업무10→11 보존 이관·가로 구역/세로 번호 편집·삭제 영향                     |
+| `server/src/storage.ts`, `integrity.ts`                                                                                                                                       | 조직/업무 공통 쓰기 대기열·잠금·백업·복구, 참조·채점·근거 검증                                 |
+| `shared/src/catalog.ts`; `server/src/catalog.ts`, `catalog-workbook.ts`, `catalog-routes.ts`                                                                                  | 공통 교환 형식·XLSX·변경 비교·원자적 배치·관리자 API                                           |
+| `server/src/organizations.ts`, `organization-seed.json`, `migration.ts`                                                                                                       | 35개 최초 조직표·트리/사용자 편집·스키마 이관                                                  |
+| `server/src/workflow.ts`, `workflow-integrity.ts`, `notifications.ts`, `qualification-templates.json`                                                                         | 계획/학습·15종 가져오기·절차 무결성·만료 알림                                                  |
+| `server/src/photo-certification-fixture.ts`, `photo-setup.ts`, `cli.ts`                                                                                                       | Photo팀 15종×5과정 시험 기준, 참조 검사·미리보기·백업 후 일회성 적용                           |
+| `server/src/assessment-transition.ts`                                                                                                                                         | 이전 스키마5→6 변환 fixture 검증. 실제 무백업 적용 명령은 종료                                 |
+| `server/src/organization-policies.ts`, `policy-migration.ts`                                                                                                                  | 팀/필수 정책·요청/충족 집계, 업무6/조직1에서 현행9/2까지 보존 이관                             |
+| `server/src/planning.ts`, `planning-migration.ts`; `RequestPlanning.vue`, `PlanningPanel.vue`                                                                                 | 요청별 후보/선택/완료 판정·불변 완료 근거·업무12→13 보존 이관·학습자 선택과 관리자 요청 현황   |
+| `server/src/organization-administrators.ts`, `notices.ts`, `administration-migration.ts`                                                                                      | 정확한 소속 조직 권한·복수 지정·공지 범위·업무7→8 보존 이관                                    |
+| `AdminLayout.vue`, `OrganizationAdministrators.vue`, `PolicyOrganizationTree.vue`, `HomeNotices.vue`, `SystemNotices.vue`                                                     | 공통 관리 메뉴·허용 조직 트리·지정·공지 분리                                                   |
+| `OrganizationPolicies.vue`, `RequiredQualifications.vue`, `ProcessGuide.vue`, `useProcessContext.ts`                                                                          | 조직 설정·본인 필수 현황·하위 화면별 정적 프로세스 설명                                        |
+| `server/src/catalog-workbook-v3.ts`, `catalog-workbook-legacy*.ts`                                                                                                            | v6 작성/해석과 v3~v5·구형 파일 호환 검사                                                       |
+| `CourseMaterials.vue`, `CourseMaterialsEditor.vue`                                                                                                                            | 네 유형 자료 열람·추가/수정/순서·편집 보관·보완 위치 이동                                      |
+| `QualificationView.vue`, `QualificationSummary.vue`, `QualificationCourseNav.vue`, `qualification-detail.css`                                                                 | 자격 상세 요약·전체 집계·과정 탐색·개인 목표/학습/평가 구획·반응형 자료 열람                   |
+| `server/src/domain.ts`                                                                                                                                                        | 인가, 기준·배정·평가·수료·인증 처리, 조회 DTO 보호. 과거 비교 자료는 초기화 범위 계산에만 사용 |
+| `server/src/app.ts`, `index.ts`, `cli.ts`                                                                                                                                     | Fastify API·세션, 서버 실행, 초기화·백업·복구 명령                                             |
+| `frontend/src/api.ts`, `stores/demo.ts`                                                                                                                                       | API 어댑터, 조회 상태, 요청 재시도; 클라이언트 채점 없음                                       |
+| `frontend/src/composables/useAttemptDraft.ts`, `useSavedDraft.ts`                                                                                                             | 500ms 자동 저장·입력 보존·수정 충돌·제출 전 저장                                               |
+| `server/tests/comparison-retirement.test.ts`, `frontend/tests/comparison-retirement.spec.ts`                                                                                  | 종료 API·화면 접근 차단, 이전 링크·기존 결과 화면과 과거 파일 보존 회귀                        |
+| `OrganizationPanel.vue`, `OrganizationSelect.vue`, `UserManagementPanel.vue`, `SystemOverview.vue`, `TestProgressPanel.vue`                                                   | `frontend/src/components/`의 조직/사용자 관리·전체 업무 조회·선택 조직 초기화                  |
+| `shared/src/dashboard.ts`; `server/src/dashboard.ts`, `dashboard-routes.ts`; `DashboardView.vue`, `useDashboard.ts`, `components/dashboard/`, `styles/dashboard.css`          | 대시보드 조회 계약·권한·순수 집계·일관된 명세·안전한 개인 요약·필터/매트릭스/일정              |
+| `frontend/src/views/`, `router.ts`, `App.vue`                                                                                                                                 | 별도 역할별 화면, API 데이터 표시와 입력                                                       |
+| `CatalogView.vue`, `CatalogGrid.vue`, `useListView.ts`, `ListControls.vue`                                                                                                    | 자격 시트·가상 셀 편집·범위 붙여넣기·선택 기준 저장·목록 밀도/페이지                           |
+| `frontend/src/design-tokens.css`, `style.css`, `course-editor.css`, `catalog.css`, `assessment-flow.css`                                                                      | 단일 디자인 팔레트·업무 배치/밀도·문항 편집·반응형 규칙                                        |
+| `CourseAssessmentEditor.vue`, `CompactTabs.vue`, `ObjectiveChoices.vue`, `course-editor.ts`                                                                                   | 평가 유형/문항 탐색·정답 선택지·필드별 오류 위치                                               |
+| `scripts/design-deployment.ts`                                                                                                                                                | UI 적용 전 두 JSON 영구 백업·스키마 검증·재시작 후 해시 검증. 데이터 쓰기/이관 없음            |
+| `server/tests/mvp.test.ts`, `workflow.test.ts`, `photo-setup.test.ts`                                                                                                         | Node/Fastify API·저장소와 Photo 5과정 인증 통합시험                                            |
+| `frontend/tests/`                                                                                                                                                             | Playwright 사용자 여정과 테스트별 서버·임시 저장소                                             |
 
 저장소 루트에서 실행한다.
 
@@ -1286,15 +1293,15 @@ npm run test:e2e
 
 ### 현재 검증 결과
 
-| 검증 | 결과와 범위 |
-| --- | --- |
-| 빌드 | 2026-10-23 누적 변경 전체 Node24.22.0 서버/프런트 TypeScript·Vite 통과. 기존 Zod 주석·590.59kB 번들 권고 경고 유지 |
-| 서버 | 최종 전체153/153 통과. 계획 선택 통합6건 추가, 기존 선택형 요청/완료/이관과 전체 회귀 포함 |
-| 브라우저 | 2026-10-23 누적 변경 전체 Playwright140/140 통과. 알림·계획 최종 확인·기본자격·홈·조직·공통 UI와 기존 업무 흐름 회귀 포함 |
-| 화면 | 4역할·1920×900·1440×900·768×900·390×900. 실제 글자 크기·그라데이션 픽셀 대비·홈 공지·평면 탐색·더보기/확인창 초점·긴 내용·모바일 조작·가로 넘침·공통 검토 자동 접힘/키보드, 인증Set 가로 탭/번호 탐색·자료 정렬·입력 가림·저장 목록 복귀 확인. 대표 변경 전후 캡처 검토 |
-| Excel | 이번 브라우저 회귀에서 가져오기/저장/왕복·10,000행 가상 렌더링·범위 붙여넣기·실행 취소·작업 복구 확인. 실제 Excel 앱 v6 수동 조작은 미실행 |
-| 데이터 | macOS `data/runtime/local-20261022/`: 업무13 revision46·조직2 revision4. 이번 작업은 임시 JSON 시험만 사용. 실행 중 별도 catalog.save에 따른45→46을 관찰·보존했으며 되돌리지 않음 |
-| 실행 | 2026-10-23 03:23 KST 앱5186/API5187 재기동·직접/프록시 health200 revision14. 업무13·조직2 파일 해시 보존. 이관·초기화 없음 |
+| 검증     | 결과와 범위                                                                                                                                                                                                                                                             |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 빌드     | 2026-10-23 누적 변경 전체 Node24.22.0 서버/프런트 TypeScript·Vite 통과. 기존 Zod 주석·590.59kB 번들 권고 경고 유지                                                                                                                                                      |
+| 서버     | 최종 전체153/153 통과. 계획 선택 통합6건 추가, 기존 선택형 요청/완료/이관과 전체 회귀 포함                                                                                                                                                                              |
+| 브라우저 | 2026-10-23 누적 변경 전체 Playwright140/140 통과. 알림·계획 최종 확인·기본자격·홈·조직·공통 UI와 기존 업무 흐름 회귀 포함                                                                                                                                               |
+| 화면     | 4역할·1920×900·1440×900·768×900·390×900. 실제 글자 크기·그라데이션 픽셀 대비·홈 공지·평면 탐색·더보기/확인창 초점·긴 내용·모바일 조작·가로 넘침·공통 검토 자동 접힘/키보드, 인증Set 가로 탭/번호 탐색·자료 정렬·입력 가림·저장 목록 복귀 확인. 대표 변경 전후 캡처 검토 |
+| Excel    | 이번 브라우저 회귀에서 가져오기/저장/왕복·10,000행 가상 렌더링·범위 붙여넣기·실행 취소·작업 복구 확인. 실제 Excel 앱 v6 수동 조작은 미실행                                                                                                                              |
+| 데이터   | macOS `data/runtime/local-20261022/`: 업무13 revision46·조직2 revision4. 이번 작업은 임시 JSON 시험만 사용. 실행 중 별도 catalog.save에 따른45→46을 관찰·보존했으며 되돌리지 않음                                                                                       |
+| 실행     | 2026-10-23 03:23 KST 앱5186/API5187 재기동·직접/프록시 health200 revision14. 업무13·조직2 파일 해시 보존. 이관·초기화 없음                                                                                                                                              |
 
 전체 접근성 적합성, 대규모 부하, 전원 차단 장비 시험, 실제 평가 기준의 타당성은 검증 범위에 포함하지 않는다. 백업·동시 저장 실패는 기존 서버 회귀로 확인했다.
 

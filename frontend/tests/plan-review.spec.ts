@@ -101,7 +101,7 @@ test('요약·요청 기준·독립 접기와 수정 필드 초점·입력·펼�
   await expect(page.locator('.plan-review-request .plan-review-facts')).toBeHidden();
   await page.keyboard.press('Space');
   await expect(page.locator('.plan-review-request .plan-review-facts')).toBeVisible();
-  await expect(page.locator('.plan-review-request')).toContainText('요청 당시 필수 자격');
+  await expect(page.locator('.plan-review-request')).toContainText('현재 소속');
   await expect(page.locator('.plan-review-request .collapsible-section-title')).toHaveCSS(
     'font-size',
     '14px',
@@ -305,9 +305,8 @@ test('확정 계획 읽기 전용·정확한 버전·서버 변경 재조회와 
   );
 });
 
-test('요청 당시 기준과 현재 조직 구분·필수 없음 및 운영 제한', async ({ page, backend }) => {
+test('요청 당시 기준과 현재 조직 구분·고정 목록 유지 및 운영 제한', async ({ page, backend }) => {
   await startReview(page, backend.store, 1);
-  const title = backend.store.snapshot().planningRequests[0]!.targets![0]!.title;
   await backend.store.organizations.transact(
     'admin-1',
     randomUUID(),
@@ -316,28 +315,25 @@ test('요청 당시 기준과 현재 조직 구분·필수 없음 및 운영 제
     () => ({}),
   );
   await refresh(page);
-  await expect(page.locator('.plan-review-warning')).toContainText(
-    '조직 기준 정보가 변경되었습니다.',
-  );
+  await expect(page.locator('.plan-review-warning')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '요청 기준 펼치기', exact: true })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
   await page.getByRole('button', { name: '요청 기준 펼치기', exact: true }).click();
-  await expect(page.locator('.plan-review-required')).toContainText(title);
+  await expect(page.locator('.plan-review-required')).toHaveCount(0);
   await backend.store.transact(
     'admin-1',
     randomUUID(),
     randomUUID(),
     () => {},
     (s) => {
-      s.planningRequests[0]!.targets = [];
       s.users.find((u) => u.id === 'learner-2')!.certificationEligibility = 'hold';
       return {};
     },
   );
   await refresh(page);
-  await expect(page.locator('.plan-review-request')).toContainText('없음');
+  await expect(page.locator('.plan-review-request')).toContainText('현재 소속');
   await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toBeDisabled();
   await expect(page.locator('.plan-review')).toContainText(
     '기준을 확인하고 독립적으로 수행합니다.',

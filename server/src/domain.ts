@@ -1,3 +1,9 @@
+import {
+  authorizeSubjective,
+  executeSubjective,
+  subjectiveView,
+} from "./subjective.ts";
+import { teamCourseModified } from "./common-courses.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import { canContinueType, canReadPersonal } from "./personal-access.ts";
@@ -12,11 +18,10 @@ import {
 } from "./qualification-templates.ts";
 import { saveCatalogItem, deleteQualification } from "./catalog-editing.ts";
 import {
-  requiredQualifications,
   requestProgress,
   planningReadiness,
   planPolicyErrors,
-} from "./organization-policies.ts";
+} from "./organization-settings.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -157,7 +162,7 @@ export function authorize(
   demand(
     !action.startsWith("attempt.grade") && action !== "assignment.ft",
     410,
-    "FT·주관식 평가 기능은 종료되었습니다.",
+    "FT·주관식 채점 기능은 종료되었습니다.",
     "FEATURE_REMOVED",
   );
   demand(
@@ -187,7 +192,18 @@ export function authorize(
       (Array.isArray(v)
         ? v.some(obsolete)
         : Object.entries(v).some(
-            ([key, value]) => deprecated.has(key) || obsolete(value),
+            ([key, value]) =>
+              (deprecated.has(key) &&
+                !(
+                  (key === "subjectiveQuestions" &&
+                    v === body &&
+                    action.startsWith("catalog.") &&
+                    target === "courses") ||
+                  (key === "category" &&
+                    v === body &&
+                    ["common", "specialized"].includes(String(value)))
+                )) ||
+              obsolete(value),
           ))
     );
   }
@@ -197,6 +213,8 @@ export function authorize(
     "폐지된 평가/자료 필드입니다. 새 화면을 불러와 주세요.",
     "OBSOLETE_FIELDS",
   );
+  if (action.startsWith("subjective."))
+    return authorizeSubjective(s, u, action, target);
   if (action === "checklist.update") {
     const { a, c } = context(s, target);
     const p = s.plans.find(
@@ -490,6 +508,8 @@ export function execute(
   at = now(),
 ): any {
   const now = () => at;
+  if (action.startsWith("subjective."))
+    return executeSubjective(s, u, action, target, body, at);
   reconcileLifecycle(s, at);
   if (action.startsWith("attempt.")) requireEligible(u);
   if (isWorkflowAction(action))
@@ -611,6 +631,9 @@ export function execute(
         .filter((e) => affected.has(e.assignmentId))
         .map((e) => e.id),
     );
+    s.subjectiveResponses = s.subjectiveResponses.filter(
+      (r) => !enrollments.has(r.enrollmentId),
+    );
     s.attempts = s.attempts.filter((r) => !enrollments.has(r.enrollmentId));
     s.learningChecklists = s.learningChecklists.filter(
       (r) => !enrollments.has(r.enrollmentId),
@@ -659,7 +682,7 @@ export function execute(
       )
         delete p.previousCertificationId;
     for (const r of s.planningRequests)
-      for (const t of [...(r.targets || []), ...r.selections])
+      for (const t of r.selections)
         if (
           t.previousCertificationId &&
           removedCertIds.has(t.previousCertificationId)
@@ -676,6 +699,7 @@ export function execute(
             (!r.action ||
               r.action === "legacy" ||
               r.action.startsWith("attempt.") ||
+              r.action.startsWith("subjective.") ||
               r.action.startsWith("learning.") ||
               r.action === "notification.read" ||
               r.action.startsWith("comparison."))) ||
@@ -691,6 +715,7 @@ export function execute(
           ev.assignmentId &&
           affected.has(ev.assignmentId) &&
           (ev.action.startsWith("attempt.") ||
+            ev.action.startsWith("subjective.") ||
             ev.action.startsWith("learning.") ||
             ev.action.startsWith("comparison."))
         ),
@@ -736,6 +761,16 @@ export function execute(
         403,
         "새 자격은 시스템 기본자격 관리에서 생성한 뒤 팀에 등록해 주세요.",
         "TEMPLATE_REQUIRED",
+      );
+      demand(
+        body.category === undefined || body.category === "specialized",
+        422,
+        "공통인증Set은 기본자격 등록을 통해 생성해 주세요.",
+      );
+      demand(
+        body.commonCourseSource === undefined,
+        422,
+        "공통 출처는 지정할 수 없습니다.",
       );
       const id = uid(),
         base = {
@@ -1063,6 +1098,9 @@ export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
           !!e.assignmentId &&
           assignments.has(e.assignmentId),
       ).length,
+      subjectiveResponses: s.subjectiveResponses.filter((r) =>
+        enrollments.has(r.enrollmentId),
+      ).length,
       objectiveAttempts: s.attempts.filter(
         (t) => enrollments.has(t.enrollmentId) && t.kind === "objective",
       ).length,
@@ -1144,13 +1182,9 @@ export function workspace(
         .map((e) => e.courseId),
     );
   for (const p of plans) qids.add(p.qualificationId);
-  const requiredView = canReadPersonal(s, u)
-    ? requiredQualifications(s, organizations, u, at)
-    : null;
   if (canReadPersonal(s, u) && u.organizationActive)
     for (const q of s.qualifications)
       if (
-        requiredView?.items.some((i) => i.qualificationId === q.id) ||
         currentTeamQualifications(s).some(
           (p) =>
             p.lv1OrganizationId === u.lv1OrganizationId &&
@@ -1185,7 +1219,6 @@ export function workspace(
     currentQualifications: currentTeamQualifications(s).filter(
       (p) => p.lv1OrganizationId === lv1,
     ),
-    requiredQualifications: requiredView,
     requestProgress: s.planningRequests
       .filter(
         (r) =>
@@ -1254,7 +1287,7 @@ export function workspace(
       canManageEligibility: operator
         ? !!lv1
         : u.roles.includes("admin") || u.roles.includes("organization_admin"),
-      canManagePolicies: operator
+      canManageOrganizationSettings: operator
         ? !!lv1
         : u.roles.includes("admin") || u.roles.includes("organization_admin"),
       editableOrganizationIds: editableOrganizations(
@@ -1273,7 +1306,7 @@ export function workspace(
       )
       .map((e) =>
         !admin && e.id !== u.organizationId
-          ? { ...e, description: "", duties: "", requiredQualifications: null }
+          ? { ...e, description: "", duties: "" }
           : e,
       ),
     users: s.users
@@ -1318,7 +1351,13 @@ export function workspace(
             copy.practicalQuestions = [];
           }
         }
-        return admin ? { ...copy, typeEditing: courseTypeEditing(s, c) } : copy;
+        return admin
+          ? {
+              ...copy,
+              teamModified: teamCourseModified(c),
+              typeEditing: courseTypeEditing(s, c),
+            }
+          : { ...copy, teamModified: teamCourseModified(c) };
       }),
     assignments: assignments.map((a) => {
       const cert = s.certifications.find((c) => c.assignmentId === a.id);
@@ -1346,6 +1385,12 @@ export function workspace(
             return {
               id: e.id,
               courseId: e.courseId,
+              subjective: (() => {
+                const v = subjectiveView(s, u, e.id);
+                return v?.response?.status === "draft"
+                  ? { ...v, response: null }
+                  : v;
+              })(),
               objective: state("objective"),
               practical: state("practical"),
               answers: activeAttempts.objective?.answers || {},

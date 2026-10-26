@@ -1,6 +1,5 @@
-import { configureTestPolicies } from '../../server/tests/policy-helpers';
 import { test, expect, actor } from './fixtures';
-import { completePlan } from './workflow-helpers';
+import { completePlan, configureNeeds } from './workflow-helpers';
 import { defaultPlanningDueOn, type Course, type Kind } from '../../shared/src/index';
 import type { Page } from '@playwright/test';
 
@@ -27,15 +26,16 @@ test('계획 요청 기본 기한 → 전 FT 학습자의 학습·독립 평가�
   backend,
 }) => {
   test.setTimeout(60000);
-  await configureTestPolicies(backend.store);
   await page.goto('/');
   await actor(page, 'admin-1');
+  await configureNeeds(page);
   await page.goto('/admin/assignments');
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('계획 작성 기한')).toHaveValue(defaultPlanningDueOn());
   await expect(dialog.getByLabel(/담당 FT/)).toHaveCount(0);
   await dialog.getByRole('checkbox', { name: '박준호', exact: true }).check();
+  await dialog.getByRole('button', { name: '요청 대상 확인' }).click();
   await dialog.getByRole('button', { name: '대상자에게 요청' }).click();
   await expect(dialog).toHaveCount(0);
   expect(backend.store.snapshot().planningRequests.at(-1)!.dueOn).toBe(defaultPlanningDueOn());
@@ -95,17 +95,18 @@ test('전 FT 계정·여러 탭 격리와 폐지된 평가 화면 안내', async
 });
 
 test('계획 요청의 수동 기한과 빈 날짜 오류를 유지한다', async ({ page, backend }) => {
-  await configureTestPolicies(backend.store);
   await page.goto('/');
   await actor(page, 'admin-1');
+  await configureNeeds(page);
   await page.goto('/admin/assignments');
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('checkbox', { name: '정하린', exact: true }).check();
   await dialog.getByLabel('계획 작성 기한').fill('');
   await expect(dialog.locator('.field-error')).toContainText('기한을 입력');
-  await expect(dialog.getByRole('button', { name: '대상자에게 요청' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: '요청 대상 확인' })).toBeDisabled();
   await dialog.getByLabel('계획 작성 기한').fill('2027-03-31');
+  await dialog.getByRole('button', { name: '요청 대상 확인' }).click();
   await dialog.getByRole('button', { name: '대상자에게 요청' }).click();
   await expect(dialog).toHaveCount(0);
   expect(backend.store.snapshot().planningRequests.at(-1)!.dueOn).toBe('2027-03-31');

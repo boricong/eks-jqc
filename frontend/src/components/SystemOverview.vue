@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CourseCategory from './CourseCategory.vue';
 import { credentialCurrent, qualificationVersionLabel } from '@eks/contracts';
 import CourseMaterials from './CourseMaterials.vue';
 import ValidityBadge from './ValidityBadge.vue';
@@ -130,6 +131,7 @@ const actionLabels: Record<string, string> = {
       >
       <article v-for="e in a.enrollments" :key="e.id" class="readonly-course">
         <h3>{{ store.course(e.courseId).title }}</h3>
+        <CourseCategory :course="store.course(e.courseId)" />
         <p>
           <span v-for="kind in store.requiredKinds(store.course(e.courseId))" :key="kind"
             >{{ kindLabels[kind] }}: {{ stateLabels[e[kind]] }} · </span
@@ -209,7 +211,7 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ c.title || '이름 없는 기준' }} · v{{ c.version }}
+        {{ c.title || '이름 없는 기준' }} · v{{ c.version }} <CourseCategory :course="c" />
         <StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'" />
       </summary>
       <p class="muted">{{ rootName(c.lv1OrganizationId) }}</p>

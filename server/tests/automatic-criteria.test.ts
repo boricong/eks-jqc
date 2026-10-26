@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
@@ -83,17 +84,16 @@ test("설명 생략 생성·편집은 준비를 막지 않고 수동 적용 없�
   const revision = f.store.organizations.snapshot().revision;
   await f.call(
     "admin-1",
-    "/organization-policies/org-photo",
+    "/organization-settings/org-photo",
     {
       revision,
       description: "",
       duties: "",
-      requiredQualifications: [q.entityId],
     },
     200,
     "PUT",
   );
-  const request = await f.call("admin-1", "/planning-requests", {
+  const request = await legacyRequestFixture(f.store, "admin-1", {
     learnerIds: ["learner-2"],
     message: "",
   });
@@ -154,7 +154,6 @@ test("마지막 삭제의 두 파일 실패·재시도·중간 재시작은 필�
     "required",
     () => {},
     (doc) => {
-      doc.roots[0]!.requiredQualifications = [q.entityId];
       return {};
     },
   );
@@ -182,7 +181,6 @@ test("마지막 삭제의 두 파일 실패·재시도·중간 재시작은 필�
     JSON.stringify({ schemaVersion: 1, state: before, organizations: org }),
   );
   const partial = structuredClone(org);
-  partial.roots[0]!.requiredQualifications = [];
   partial.revision++;
   await writeFile(f.store.organizations.file, JSON.stringify(partial));
   const recovered = await new JsonStore(f.file).load();
@@ -294,12 +292,14 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 19);
-  assert.equal(migrated.organizations.snapshot().schemaVersion, 3);
+  assert.equal(migrated.snapshot().schemaVersion, 23);
+  assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(migrated.snapshot().assignments, raw.assignments);
   assert.deepEqual(
-    migrated.organizations.snapshot().audits.at(-1)!.before,
+    migrated.organizations
+      .snapshot()
+      .audits.find((a) => a.action === "migration.automatic-criteria")!.before,
     org.qualificationPools,
   );
   const master: any = exportMaster(
@@ -307,16 +307,20 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     migrated.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 9);
+  assert.equal(master.formatVersion, 13);
   assert(!("qualificationPools" in master.payload.organizations));
+  delete master.payload.commonCourses;
+  delete master.counts.commonCourses;
   master.formatVersion = 7;
+  delete master.counts.organizationQualificationRequirements;
+  delete master.counts.subjectiveQuestions;
   master.stateSchemaVersion = 17;
   master.organizationSchemaVersion = 2;
   master.payload.organizations.qualificationPools = org.qualificationPools;
   master.counts.poolEntries = org.qualificationPools.length;
   master.payload.auditorPrograms[0].general = raw.auditorPrograms[0].general;
   master.sha256 = contentHash(master.payload);
-  assert.equal(readMaster(master).formatVersion, 9);
+  assert.equal(readMaster(master).formatVersion, 13);
   assert.deepEqual(
     readMaster(master).payload.auditorPrograms![0]!.general,
     lineage,

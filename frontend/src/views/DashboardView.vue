@@ -11,7 +11,6 @@ import type {
 import PageHeading from '../components/PageHeading.vue';
 import CompactTabs from '../components/CompactTabs.vue';
 import DashboardMetricCard from '../components/dashboard/DashboardMetric.vue';
-import DashboardRatio from '../components/dashboard/DashboardRatio.vue';
 import DashboardPager from '../components/dashboard/DashboardPager.vue';
 import DashboardCharts from '../components/dashboard/DashboardCharts.vue';
 import DashboardMemberPanel from '../components/dashboard/DashboardMemberPanel.vue';
@@ -93,12 +92,6 @@ const sortValue = computed(() => `${query.value.sort || 'name'}:${query.value.or
 const sortOptions = computed(() => [
   { value: 'name:asc', label: '이름 오름차순' },
   { value: 'name:desc', label: '이름 내림차순' },
-  ...(tab.value === 'organizations' || tab.value === 'qualifications'
-    ? [
-        { value: 'coverage:asc', label: '필수 충족률 낮은 순' },
-        { value: 'coverage:desc', label: '필수 충족률 높은 순' },
-      ]
-    : []),
   ...(tab.value === 'members' ? [{ value: 'organization:asc', label: '조직·이름 순' }] : []),
   ...(tab.value === 'renewals'
     ? [
@@ -117,14 +110,6 @@ const summaryMetrics = computed(() => {
   if (!s) return [];
   return [
     { metric: 'eligiblePeople', label: '대상 인원', value: s.eligiblePeople, unit: '명' },
-    {
-      metric: 'requiredCoverage',
-      label: '필수 자격 충족률',
-      value: s.requiredCoverage.rate === null ? '—' : `${s.requiredCoverage.rate.toFixed(1)}%`,
-      note: s.requiredCoverage.total
-        ? `${s.requiredCoverage.fulfilled} / ${s.requiredCoverage.total} 사람·자격`
-        : '필수 자격 없음',
-    },
     {
       metric: 'uniqueActiveHolders',
       label: '유효 자격 보유 인원',
@@ -163,7 +148,6 @@ const alerts = computed(() =>
   !data.value
     ? []
     : [
-        { metric: 'requiredMissing' as const, count: data.value.summary.requiredMissing },
         { metric: 'blockedProgress' as const, count: data.value.summary.blockedProgress },
         { metric: 'overdueRequests' as const, count: data.value.summary.overdueRequests },
         { metric: 'overdueTargets' as const, count: data.value.summary.overdueTargets },
@@ -355,18 +339,6 @@ function detailPage(page: number) {
             </template>
             <template v-if="tab === 'members'">
               <label class="field"
-                ><span>필수 여부</span
-                ><select
-                  aria-label="필수 여부"
-                  :value="query.required"
-                  @change="update({ required: valueOf($event) })"
-                >
-                  <option value="all">전체</option>
-                  <option value="required">필수</option>
-                  <option value="optional">선택</option>
-                </select></label
-              >
-              <label class="field"
                 ><span>인증 효력</span
                 ><select
                   aria-label="인증 효력"
@@ -469,68 +441,6 @@ function detailPage(page: number) {
               </div>
               <DashboardCharts :data="data" :query="query" :loading="loading" :refresh="load" />
               <div class="dashboard-summary-layout">
-                <section class="dashboard-section" aria-label="조직별 필수 충족 요약">
-                  <div class="dashboard-section-heading">
-                    <h2>
-                      {{ data.snapshot.scope.directOnly ? '필수 자격 충족' : '조직별 필수 충족' }}
-                    </h2>
-                    <button
-                      v-if="!data.snapshot.scope.directOnly"
-                      class="dashboard-link"
-                      @click="changeTab('organizations')"
-                    >
-                      전체 보기
-                    </button>
-                  </div>
-                  <template v-if="data.snapshot.scope.directOnly"
-                    ><DashboardRatio
-                      :fulfilled="data.summary.requiredCoverage.fulfilled"
-                      :total="data.summary.requiredCoverage.total"
-                    />
-                    <p class="dashboard-meta">
-                      필수 전부 충족 {{ data.summary.fullyRequiredPeople }} /
-                      {{ data.summary.peopleWithRequirements }}명 · 필수 없음
-                      {{ data.summary.peopleWithoutRequirements }}명
-                    </p></template
-                  >
-                  <div
-                    v-else-if="data.organizations.items.length"
-                    class="dashboard-table-wrap dashboard-summary-organizations"
-                    tabindex="0"
-                    role="region"
-                    aria-label="조직 필수 충족 표"
-                  >
-                    <table class="dashboard-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">조직</th>
-                          <th scope="col">필수 충족</th>
-                          <th scope="col" class="dashboard-number">대상</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="org in data.organizations.items.slice(0, 6)"
-                          :key="`${org.organizationId}-${org.direct}`"
-                        >
-                          <td>
-                            <button class="dashboard-link" @click="organizationMembers(org)">
-                              {{ org.name }}{{ org.direct ? ' · 직속' : '' }}
-                            </button>
-                          </td>
-                          <td>
-                            <DashboardRatio
-                              :fulfilled="org.requiredCoverage.fulfilled"
-                              :total="org.requiredCoverage.total"
-                            />
-                          </td>
-                          <td class="dashboard-number">{{ org.people }}명</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <p v-else class="dashboard-empty">조회할 조직 현황이 없습니다.</p>
-                </section>
                 <section class="dashboard-section" aria-label="확인 필요">
                   <div class="dashboard-section-heading"><h2>확인 필요</h2></div>
                   <ul class="dashboard-alerts">
@@ -540,21 +450,7 @@ function detailPage(page: number) {
                         ><strong>{{ alert.count }}건 <span aria-hidden="true">›</span></strong>
                       </button>
                     </li>
-                    <li>
-                      <button :disabled="loading" @click="openMetric('fullyRequiredPeople')">
-                        <span>필수 전부 충족 인원</span
-                        ><span
-                          >{{ data.summary.fullyRequiredPeople }} /
-                          {{ data.summary.peopleWithRequirements }}명
-                          <span aria-hidden="true">›</span></span
-                        >
-                      </button>
-                    </li>
                   </ul>
-                  <p class="dashboard-meta">
-                    필수 자격이 없는 {{ data.summary.peopleWithoutRequirements }}명은 필수
-                    충족률에서 제외합니다.
-                  </p>
                 </section>
               </div>
               <section class="dashboard-section" aria-label="자격별 현황 요약">
@@ -576,7 +472,7 @@ function detailPage(page: number) {
                       <tr>
                         <th scope="col">자격</th>
                         <th scope="col">현재 팀 기준</th>
-                        <th scope="col" class="dashboard-number">필수 대상</th>
+
                         <th scope="col" class="dashboard-number">유효 보유</th>
                         <th scope="col" class="dashboard-number">취득 진행</th>
                         <th scope="col" class="dashboard-number">30일 내 만료</th>
@@ -604,7 +500,7 @@ function detailPage(page: number) {
                                   : '운영 폐기'
                           }}</small>
                         </td>
-                        <td class="dashboard-number">{{ q.requiredPeople }}명</td>
+
                         <td class="dashboard-number">{{ q.activePeople }}명</td>
                         <td class="dashboard-number">{{ q.inProgress }}건</td>
                         <td class="dashboard-number">{{ q.expires0to30 }}건</td>
@@ -631,8 +527,7 @@ function detailPage(page: number) {
                     <tr>
                       <th scope="col">조직</th>
                       <th scope="col" class="dashboard-number">대상 인원</th>
-                      <th scope="col">필수 충족</th>
-                      <th scope="col" class="dashboard-number">필수 전부 충족</th>
+
                       <th scope="col" class="dashboard-number">유효 보유</th>
                       <th scope="col" class="dashboard-number">취득 진행</th>
                       <th scope="col">기한 경과</th>
@@ -654,13 +549,7 @@ function detailPage(page: number) {
                           >제외 {{ org.excludedPeople }}명</small
                         >
                       </td>
-                      <td>
-                        <DashboardRatio
-                          :fulfilled="org.requiredCoverage.fulfilled"
-                          :total="org.requiredCoverage.total"
-                        />
-                      </td>
-                      <td class="dashboard-number">{{ org.fullyRequiredPeople }}명</td>
+
                       <td class="dashboard-number">{{ org.activeHolders }}명</td>
                       <td class="dashboard-number">{{ org.inProgress }}건</td>
                       <td>
@@ -691,7 +580,7 @@ function detailPage(page: number) {
                     <tr>
                       <th scope="col">자격</th>
                       <th scope="col">현재 팀 기준</th>
-                      <th scope="col">필수 충족</th>
+
                       <th scope="col" class="dashboard-number">Active</th>
                       <th scope="col" class="dashboard-number">Hold</th>
                       <th scope="col" class="dashboard-number">Revoke</th>
@@ -722,12 +611,7 @@ function detailPage(page: number) {
                                 : '운영 폐기'
                         }}</small>
                       </td>
-                      <td>
-                        <DashboardRatio
-                          :fulfilled="q.requiredCoverage.fulfilled"
-                          :total="q.requiredCoverage.total"
-                        />
-                      </td>
+
                       <td class="dashboard-number">{{ q.activePeople }}명</td>
                       <td class="dashboard-number">{{ q.heldPeople }}명</td>
                       <td class="dashboard-number">{{ q.revokedPeople }}명</td>
@@ -749,7 +633,7 @@ function detailPage(page: number) {
                     매트릭스
                   </button>
                 </div>
-                <p v-if="matrix" class="dashboard-meta">현재 효력 · 진행 · 필수 여부</p>
+                <p v-if="matrix" class="dashboard-meta">현재 효력 · 진행</p>
               </div>
               <template v-if="matrix">
                 <div v-if="data.matrix.columns.pages > 1" class="dashboard-matrix-pagination">
@@ -812,13 +696,11 @@ function detailPage(page: number) {
                             :key="cell.entityId"
                             ><button
                               class="dashboard-matrix-cell"
-                              :aria-label="`${person.name} · ${q.title} 현황 보기: ${cellSummary(cell)}${cell.required ? ' · 필수' : ''}`"
+                              :aria-label="`${person.name} · ${q.title} 현황 보기: ${cellSummary(cell)}`"
                               @click="openMember(person.userId, cell.entityId)"
                             >
-                              <span v-if="cell.required" class="dashboard-required">[필수]</span
-                              ><span
+                              <span
                                 v-if="
-                                  !cell.required &&
                                   !cell.selected &&
                                   cell.efficacy === 'none' &&
                                   cell.progress === 'none'
@@ -864,7 +746,7 @@ function detailPage(page: number) {
                       <tr>
                         <th scope="col">구성원</th>
                         <th scope="col">소속</th>
-                        <th scope="col">필수 충족</th>
+
                         <th scope="col" class="dashboard-number">유효 보유</th>
                         <th scope="col" class="dashboard-number">취득 진행</th>
                         <th scope="col" class="dashboard-number">미완료 요청</th>
@@ -885,12 +767,7 @@ function detailPage(page: number) {
                           }}</small>
                         </td>
                         <td>{{ person.organizationName }}</td>
-                        <td>
-                          <DashboardRatio
-                            :fulfilled="person.requiredCoverage.fulfilled"
-                            :total="person.requiredCoverage.total"
-                          />
-                        </td>
+
                         <td class="dashboard-number">{{ person.activeQualifications }}개</td>
                         <td class="dashboard-number">{{ person.inProgress }}건</td>
                         <td class="dashboard-number">

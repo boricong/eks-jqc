@@ -23,10 +23,6 @@ const progress: DashboardChartSeries[] = [
   { key: "assessment_progress", label: "평가 진행", tone: "navy" },
   { key: "partial_completion", label: "일부 수료", tone: "success" },
 ];
-const required: DashboardChartSeries[] = [
-  { key: "fulfilled", label: "충족", tone: "success" },
-  { key: "missing", label: "미충족", tone: "neutral" },
-];
 const expiry: DashboardChartSeries[] = [
   { key: "0_30", label: "오늘~30일 내", tone: "danger" },
   { key: "31_60", label: "31~60일 내", tone: "warning" },
@@ -64,7 +60,6 @@ export function dashboardCharts(input: {
       held: p.held,
       inactive: p.inactive,
       key: p.userId,
-      requiredCoverage: p.requiredCoverage,
     }));
   const pairRows = (pairs: Pair[]) =>
     pairs.map(({ person: p, cell: c }): DashboardDetailRow => ({
@@ -72,8 +67,6 @@ export function dashboardCharts(input: {
       key: p.userId + ":" + c.entityId,
       entityId: c.entityId,
       title: c.title,
-      required: c.required,
-      fulfilled: c.efficacy === "Active",
       efficacy: c.efficacy,
       progress: c.progress,
       assignmentId: c.assignmentId,
@@ -84,7 +77,6 @@ export function dashboardCharts(input: {
   const pairs = members.flatMap((person) =>
     person.cells.map((cell) => ({ person, cell })),
   );
-  const requiredPairs = pairs.filter((p) => p.cell.required);
   const activePairs = pairs.filter((p) =>
     progress.some((s) => s.key === p.cell.progress),
   );
@@ -126,22 +118,9 @@ export function dashboardCharts(input: {
             ),
           },
         ],
-        emptyLabel:
-          id === "required-coverage"
-            ? "필수 자격 없음"
-            : "해당하는 취득 진행이 없습니다.",
+        emptyLabel: "해당하는 취득 진행이 없습니다.",
       },
       (_group, key) => pairRows(rows.filter((p) => match(p, key))),
-    );
-  }
-  if (view === "summary") {
-    distribution(
-      "required-coverage",
-      "필수 자격 충족",
-      required,
-      requiredPairs,
-      "donut",
-      (p, key) => (p.cell.efficacy === "Active") === (key === "fulfilled"),
     );
   }
   if (["summary", "members", "matrix"].includes(view)) {
@@ -161,37 +140,6 @@ export function dashboardCharts(input: {
       org.direct
         ? p.organizationId === org.organizationId
         : p.organizationPath.some((o) => o.id === org.organizationId);
-    add(
-      {
-        id: "organization-coverage",
-        title: "조직별 필수 충족률",
-        kind: "stacked",
-        unit: "person_qualification",
-        comparison: true,
-        percentage: true,
-        series: required,
-        emptyLabel: "집계할 대상이 없습니다.",
-        groups: organizations.map((org) => ({
-          key: groupKey(org),
-          label: org.name + (org.direct ? " · 직속" : ""),
-          denominator: org.requiredCoverage.total,
-          values: [
-            org.requiredCoverage.fulfilled,
-            org.requiredCoverage.total - org.requiredCoverage.fulfilled,
-          ],
-        })),
-      },
-      (key, series) => {
-        const org = organizations.find((org) => groupKey(org) === key)!;
-        return pairRows(
-          requiredPairs.filter(
-            (p) =>
-              belongs(p.person, org) &&
-              (p.cell.efficacy === "Active") === (series === "fulfilled"),
-          ),
-        );
-      },
-    );
     if (view === "organizations")
       add(
         {
@@ -228,34 +176,6 @@ export function dashboardCharts(input: {
       comparison: true,
       emptyLabel: "집계할 기록이 없습니다.",
     };
-    add(
-      {
-        ...common,
-        id: "qualification-coverage",
-        title: "자격별 필수 충족률",
-        kind: "stacked",
-        unit: "person_qualification",
-        percentage: true,
-        series: required,
-        groups: qualifications.map((q) => ({
-          key: q.entityId,
-          label: q.title,
-          denominator: q.requiredCoverage.total,
-          values: [
-            q.requiredCoverage.fulfilled,
-            q.requiredCoverage.total - q.requiredCoverage.fulfilled,
-          ],
-        })),
-      },
-      (key, series) =>
-        pairRows(
-          (byEntity.get(key) || []).filter(
-            (p) =>
-              p.cell.required &&
-              (p.cell.efficacy === "Active") === (series === "fulfilled"),
-          ),
-        ),
-    );
     const efficacy: DashboardChartSeries[] = [
       { key: "Active", label: "Active · 유효", tone: "success" },
       { key: "Hold", label: "Hold · 정지", tone: "warning" },
@@ -303,47 +223,6 @@ export function dashboardCharts(input: {
         pairRows(
           (byEntity.get(key) || []).filter((p) => p.cell.progress === series),
         ),
-    );
-  }
-  if (view === "members" || view === "matrix") {
-    const memberSeries: DashboardChartSeries[] = [
-      { key: "full", label: "전체 충족", tone: "success" },
-      { key: "partial", label: "일부 충족", tone: "primary" },
-      { key: "missing", label: "미충족", tone: "warning" },
-      { key: "none", label: "필수 없음", tone: "neutral" },
-    ];
-    const state = (p: DashboardMemberRow) =>
-      !p.requiredCoverage.total
-        ? "none"
-        : p.requiredCoverage.fulfilled === p.requiredCoverage.total
-          ? "full"
-          : p.requiredCoverage.fulfilled
-            ? "partial"
-            : "missing";
-    const chart: DashboardChart = {
-      id: "member-coverage",
-      title: "구성원 필수 충족 분포",
-      kind: "donut",
-      unit: "people",
-      comparison: false,
-      series: memberSeries,
-      groups: [
-        {
-          key: "all",
-          label: "구성원",
-          values: memberSeries.map(
-            (s) => members.filter((p) => state(p) === s.key).length,
-          ),
-        },
-      ],
-      emptyLabel: "조건에 맞는 구성원이 없습니다.",
-    };
-    add(chart, (_group, series) =>
-      people(members.filter((p) => state(p) === series)),
-    );
-    // People first, progress second.
-    charts.sort((a, b) =>
-      a.id === "member-coverage" ? -1 : b.id === "member-coverage" ? 1 : 0,
     );
   }
   if (view === "summary" || view === "renewals") {

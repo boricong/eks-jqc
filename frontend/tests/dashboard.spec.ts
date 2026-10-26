@@ -400,6 +400,7 @@ test('많은 인원·긴 이름·11개 이상 자격에서 명세와 매트릭�
         const id = `many-q-${i}`,
           templateId = `many-template-${i}`;
         s.qualificationTemplates.push({
+          defaultCommonCourseIds: [],
           id: templateId,
           qualificationType: 'auditee',
           revision: 1,

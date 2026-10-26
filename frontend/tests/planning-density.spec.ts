@@ -25,6 +25,15 @@ async function people(store: JsonStore) {
     crypto.randomUUID(),
     () => {},
     (s) => {
+      s.organizationQualificationRequirements = [
+        {
+          organizationId: 'org-photo',
+          entityIds: ['demo-qualification'],
+          revision: 1,
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'admin-1',
+        },
+      ];
       for (let i = 1; i <= 30; i++)
         s.users.push({
           id: `density-${i}`,
@@ -87,7 +96,6 @@ async function people(store: JsonStore) {
           organizationId: 'org-photo',
           revision: 1,
           mode: 'learner_choice',
-          targets: [],
           selections: [],
           source: 'migration',
           message: `${id} 보존된 안내`,
@@ -204,7 +212,7 @@ test('대상자 한 줄과 모달 밀도·최신 요청·긴 이름·네 화면 
           .evaluate((e) => e.getBoundingClientRect().height),
       ).toBeGreaterThanOrEqual(44);
       expect(
-        (await dialog.getByRole('button', { name: '대상자에게 요청' }).boundingBox())!.height,
+        (await dialog.getByRole('button', { name: '요청 대상 확인' }).boundingBox())!.height,
       ).toBeGreaterThanOrEqual(44);
     }
     await page.screenshot({ path: test.info().outputPath(`request-dialog-${width}.png`) });
@@ -251,6 +259,7 @@ test('검색 밖 선택 유지·빈 결과·이동 취소·전송 실패 재시�
   await answerConfirmation(page, false);
   await expect(dialog).toBeVisible();
   await expect(search).toHaveValue('밀도 01');
+  await dialog.getByRole('button', { name: '요청 대상 확인' }).click();
   const keys: string[] = [];
   await page.route('**/api/planning-requests?*', async (route) => {
     keys.push(route.request().headers()['idempotency-key']!);
@@ -275,7 +284,7 @@ test('검색 밖 선택 유지·빈 결과·이동 취소·전송 실패 재시�
     .snapshot()
     .planningRequests.filter((r) => r.learnerId.startsWith('density-'));
   expect(requests.map((r) => r.learnerId).sort()).toEqual(['density-1', 'density-2']);
-  expect(requests.every((r) => r.targets?.length === 0)).toBe(true);
+  expect(requests.every((r) => r.selections?.length === 1)).toBe(true);
 });
 
 test('조회 권한 회수 시 열린 대상자 상세와 이전 인물 정보 제거', async ({ page, backend }) => {

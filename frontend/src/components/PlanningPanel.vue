@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { api } from '../api';
+import type { PlanningRequestPreview, PlanningRequest } from '@eks/contracts';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -16,6 +18,10 @@ const store = useDemo(),
   dueEdited = ref(false),
   detailsOpen = ref(false),
   detailId = ref('');
+const requestPreview = ref<PlanningRequestPreview>(),
+  replaceIds = ref<string[]>([]),
+  closeTarget = ref<PlanningRequest>(),
+  closeReason = ref('');
 const selectedType = ref<'auditee' | 'auditor'>('auditee');
 const typeItems = [{ id: 'auditee', label: 'Auditee · 학습자' }];
 const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
@@ -88,6 +94,7 @@ const allRows = computed(() =>
     const stage = summaries.find((p) => p.id === requests[0]?.id)?.stage || '미발송';
     const unfinished = requests.filter(
       (r) =>
+        !r.closed &&
         !['계획 완료', '추가 계획 대상 없음'].includes(
           summaries.find((p) => p.id === r.id)?.stage || '',
         ),
@@ -96,6 +103,7 @@ const allRows = computed(() =>
       unfinished.some((r) => r.dueOn < kstDate()) ||
       plans.some(
         (p) =>
+          !(p.status === 'draft' && requests.find((r) => r.id === p.requestId)?.closed) &&
           p.targetOn &&
           p.targetOn < kstDate() &&
           (!p.assignmentId || assignments.some((a) => a.id === p.assignmentId && !a.certifiedAt)),
@@ -147,6 +155,10 @@ watch(selectedType, () => {
   detailsOpen.value = false;
 });
 watch(context, () => {
+  closeTarget.value = undefined;
+  closeReason.value = '';
+  requestPreview.value = undefined;
+  replaceIds.value = [];
   detailFocus = null;
   detailId.value = '';
   detailsOpen.value = false;
@@ -161,6 +173,8 @@ onBeforeUnmount(() => {
 });
 function startRequest() {
   if (busy.value || detailsOpen.value) return;
+  requestPreview.value = undefined;
+  replaceIds.value = [];
   form.value = {
     learnerIds: [],
     dueOn: defaultPlanningDueOn(store.data.serverDate + 'T00:00:00+09:00'),
@@ -181,7 +195,22 @@ async function send() {
   busy.value = true;
   error.value = '';
   try {
+    if (!requestPreview.value) {
+      const result = await api<PlanningRequestPreview>(
+        store.managementPath('/planning-requests/preview'),
+        { method: 'POST', body: JSON.stringify({ learnerIds: [...form.value.learnerIds] }) },
+      );
+      if (!disposed && scope === context.value) requestPreview.value = result;
+      return;
+    }
+    if (requestPreview.value.rows.some((r) => r.status !== 'ready')) {
+      error.value = '보류·제외 대상자를 선택 해제하고 다시 확인해 주세요.';
+      return;
+    }
     await store.command('/planning-requests', {
+      stateRevision: requestPreview.value.stateRevision,
+      organizationRevision: requestPreview.value.organizationRevision,
+      replaceRequestIds: replaceIds.value,
       qualificationType: selectedType.value,
       ...form.value,
       learnerIds: [...form.value.learnerIds],
@@ -196,11 +225,37 @@ async function send() {
     busy.value = false;
   }
 }
+watch(
+  () => form.value.learnerIds.slice(),
+  () => {
+    requestPreview.value = undefined;
+    replaceIds.value = [];
+  },
+);
+async function closeRequest() {
+  if (!closeTarget.value || busy.value || !closeReason.value.trim()) return;
+  const scope = context.value;
+  busy.value = true;
+  error.value = '';
+  try {
+    await store.command(store.managementPath(`/planning-requests/${closeTarget.value.id}/close`), {
+      revision: closeTarget.value.revision,
+      reason: closeReason.value,
+    });
+    if (disposed || scope !== context.value) return;
+    closeTarget.value = undefined;
+    closeReason.value = '';
+  } catch (e) {
+    if (!disposed && scope === context.value) error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
 async function leave() {
   return (
     !busy.value &&
-    (!open.value ||
-      !form.value.learnerIds.length ||
+    ((!(open.value && form.value.learnerIds.length) &&
+      !(closeTarget.value && closeReason.value.trim())) ||
       (await confirmAction('작성 중인 요청을 취소하고 이동할까요?', '변경 버리고 이동')))
   );
 }
@@ -227,6 +282,7 @@ onBeforeRouteUpdate(leave);
               '추가 계획 대상 없음',
               '작성 중',
               '계획 완료',
+              '요청 종료',
               '평가 전',
               '평가 중',
               '일부 통과',
@@ -323,10 +379,7 @@ onBeforeRouteUpdate(leave);
           <dt>요청 가능 상태</dt>
           <dd>{{ readiness(detail.user.id)?.reason || '확인 필요' }}</dd>
         </div>
-        <div>
-          <dt>필수 자격</dt>
-          <dd>{{ readiness(detail.user.id)?.requiredCount || 0 }}개</dd>
-        </div>
+
         <div>
           <dt>새로 계획 가능</dt>
           <dd>{{ readiness(detail.user.id)?.count || 0 }}개</dd>
@@ -351,11 +404,23 @@ onBeforeRouteUpdate(leave);
             대상 {{ s.total }}개 · 계획 확정 {{ s.planned }}개 · 유효 인증 {{ s.valid }}개
           </p>
           <p v-if="r.message" class="preserve-lines">{{ r.message }}</p>
+          <p v-if="r.closed" class="muted">요청 종료 · {{ r.closed.reason }}</p>
+          <button
+            v-if="!r.closed && !r.completion && r.qualificationType === 'auditee'"
+            class="button secondary"
+            :disabled="busy"
+            @click="
+              closeTarget = r;
+              closeReason = '';
+            "
+          >
+            요청 종료
+          </button>
           <p v-if="r.source === 'migration'" class="planning-meta">
             이관 시 확보한 소속·계획 대상입니다. 당시 원본에 없는 요청 범위를 추정하지 않았습니다.
           </p>
           <ul>
-            <li v-for="target in [...(r.targets || []), ...r.selections]" :key="target.entityId">
+            <li v-for="target in r.selections" :key="target.entityId">
               {{ target.title }} · 요청 당시 v{{ target.version }}
             </li>
           </ul>
@@ -384,6 +449,26 @@ onBeforeRouteUpdate(leave);
       ><button class="button secondary" @click="detailsOpen = false">닫기</button></template
     >
   </AppDialog>
+  <AppDialog
+    :open="!!closeTarget"
+    title="미완료 요청 종료"
+    @update:open="
+      (v) => {
+        if (!v && !busy) closeTarget = undefined;
+      }
+    "
+    ><p>
+      요청을 미완료 집계에서 제외하고 초안을 읽기 전용으로 보존합니다. 확정 계획과 학습은
+      유지됩니다.
+    </p>
+    <label class="field"
+      >종료 사유<textarea v-model="closeReason" maxlength="2000" :disabled="busy" />
+    </label>
+    <p v-if="error" role="alert">{{ error }}</p>
+    <button class="button primary" :disabled="busy || !closeReason.trim()" @click="closeRequest">
+      요청 종료 확정
+    </button></AppDialog
+  >
   <AppDialog
     :open="open"
     :title="`${selectedType === 'auditor' ? 'Auditor' : 'Auditee'} 계획 수립 요청`"
@@ -465,11 +550,41 @@ onBeforeRouteUpdate(leave);
           >안내문<textarea v-model="form.message" rows="5" maxlength="2000" :disabled="busy" />
         </label>
         <p class="planning-meta">
-          학습자가 현재 팀 기준 자격을 선택합니다. 필수 기준은 발송 시점에 고정되며, 필수 자격이
-          없어도 요청할 수 있습니다.
+          현재 소속에 지정·상속된 필요자격 전체를 요청합니다. 필요자격이 없거나 운영 준비가 부족하면
+          발송하지 않습니다.
         </p>
       </div>
     </div>
+    <section v-if="requestPreview" class="planning-preview">
+      <h3>조직별 필요자격 확인</h3>
+      <section v-for="r in requestPreview.rows" :key="r.learnerId">
+        <h4>
+          {{ r.name }} ·
+          {{
+            r.status === 'ready' ? '발송 가능' : r.status === 'excluded' ? '대상 제외' : '발송 보류'
+          }}
+        </h4>
+        <p>{{ r.organizationPath.map((o) => o.name).join(' › ') }}</p>
+        <p v-if="r.reasons.length" class="error-message">{{ r.reasons.join(' · ') }}</p>
+        <ul>
+          <li v-for="q in r.requirements" :key="q.entityId">
+            {{ q.title }} · {{ q.sourceOrganizations.map((o) => o.name).join(', ') }} 지정 ·
+            {{ r.coveredEntityIds.includes(q.entityId) ? '보유·진행 중' : '계획 필요' }}
+          </li>
+        </ul>
+        <label v-for="id in r.existingRequestIds" :key="id" class="planning-meta"
+          ><input v-model="replaceIds" type="checkbox" :value="id" :disabled="busy" /> 이전 요청
+          교체 종료 · {{ store.data.planningRequests.find((p) => p.id === id)?.dueOn }} ·
+          {{
+            store.data.planningRequests.find((p) => p.id === id)?.message || '계획 수립 요청'
+          }}</label
+        >
+      </section>
+      <p>표시된 필요자격 전체를 요청합니다. 기존 초안·확정 계획·학습 기록은 보존됩니다.</p>
+      <button class="button secondary" :disabled="busy" @click="requestPreview = undefined">
+        대상 다시 검토
+      </button>
+    </section>
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button
       ><button
@@ -477,7 +592,7 @@ onBeforeRouteUpdate(leave);
         :disabled="busy || !form.learnerIds.length || !form.dueOn"
         @click="send"
       >
-        대상자에게 요청
+        {{ requestPreview ? '대상자에게 요청' : '요청 대상 확인' }}
       </button></template
     >
   </AppDialog>

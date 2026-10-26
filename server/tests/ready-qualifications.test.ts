@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -8,15 +9,6 @@ import { qualificationUseErrors } from "@eks/contracts";
 import { JsonStore } from "../src/storage.ts";
 import { seedState } from "../src/seed.ts";
 import { buildApp } from "../src/app.ts";
-import {
-  exportCatalog,
-  prepareCatalog,
-  saveCatalogBatch,
-} from "../src/catalog.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 import {
   exportMaster,
   readMaster,
@@ -139,20 +131,19 @@ test("Ready 등록·중복·무변경·공통 정보 수정은 버전 없이 유
       e.includes("Ready"),
     ),
   );
-  const policies = await f.call("/organization-policies");
-  assert.ok(!policies.qualifications.some((q: any) => q.id === id));
+  const policies = await f.call("/organization-settings");
+  assert.equal(Object.hasOwn(policies, "qualifications"), false);
   await f.call(
-    "/organization-policies/org-photo",
+    "/organization-settings/org-photo",
     {
       revision: f.store.organizations.snapshot().revision,
       description: "",
       duties: "",
-      requiredQualifications: [id],
     },
     "PUT",
-    422,
+    200,
   );
-  const request = await f.call("/planning-requests", {
+  const request = await legacyRequestFixture(f.store, "admin-1", {
     learnerIds: ["learner-2"],
     message: "",
   });
@@ -267,37 +258,11 @@ test("미완성 첫 저장은 같은 ID v1이며 동시 저장·응답 재시도
   validateState(f.store.snapshot(), f.store.organizations.snapshot());
 });
 
-test("웹·Excel12 무변경 왕복은 Ready를 유지하며 첫 기준 저장·삭제 재등록은 번호를 한 번만 부여한다", async (t) => {
+test("개별 무변경 저장은 Ready를 유지하며 삭제 재등록과 최초 기준 저장은 번호를 한 번만 부여한다", async (t) => {
   const f = await fixture(t),
     { id, base } = await f.register();
-  let workbook = exportCatalog(f.store.snapshot(), "org-photo", [id]);
-  assert.equal(workbook.format, "eks-catalog-v12");
-  const parsed = await readCatalogWorkbook(
-    await writeCatalogWorkbook(workbook),
-  );
-  assert.ok(!parsed.issues.some((i) => i.severity === "structure"));
-  assert.equal(
-    prepareCatalog(f.store.snapshot(), parsed.workbook, "org-photo").changes[0]!
-      .kind,
-    "unchanged",
-  );
-  const save = async (input: typeof workbook) =>
-    f.store.transact(
-      "admin-1",
-      randomUUID(),
-      "ready-batch",
-      () => {},
-      (s) =>
-        saveCatalogBatch(
-          s,
-          input,
-          "org-photo",
-          "admin-1",
-          undefined,
-          f.store.organizations.snapshot(),
-        ),
-    );
-  assert.equal((await save(parsed.workbook)).unchanged, true);
+  const unchanged = await f.call(`/qualifications/${id}`, f.q(id), "PUT");
+  assert.equal(unchanged.unchanged, true);
   assert.equal(f.q(id).version, null);
   for (let n = 0; n < 2; n++) {
     const current = f.store
@@ -318,24 +283,27 @@ test("웹·Excel12 무변경 왕복은 Ready를 유지하며 첫 기준 저장·
     .qualifications.find((q) => q.templateId === base.id && !q.deletedAt)!;
   assert.equal(current.entityId, f.q(id).entityId);
   assert.equal(current.version, null);
-  workbook = exportCatalog(f.store.snapshot(), "org-photo", [current.id]);
-  workbook.sheets[0]!.renewalLeadMonths = 4;
-  const preview = prepareCatalog(f.store.snapshot(), workbook, "org-photo");
-  assert.equal(preview.changes[0]!.initialConfiguration, true);
-  assert.equal(preview.qualifications[0]!.id, current.id);
-  await save(workbook);
-  assert.equal(f.q(current.id).version, 1);
-  workbook = exportCatalog(f.store.snapshot(), "org-photo", [current.id]);
-  workbook.format = "eks-catalog-v11";
-  assert.equal(
-    prepareCatalog(f.store.snapshot(), workbook, "org-photo").changes[0]!.kind,
-    "unchanged",
+  const preview = await f.call(`/qualifications/${current.id}/save-preview`, {
+    ...current,
+    renewalLeadMonths: 4,
+  });
+  assert.equal(preview.initialConfiguration, true);
+  assert.equal(preview.candidate.id, current.id);
+  await f.call(
+    `/qualifications/${current.id}`,
+    { ...current, renewalLeadMonths: 4 },
+    "PUT",
   );
-  const third = await f.register(),
-    first = exportCatalog(f.store.snapshot(), "org-photo", [third.id]);
-  first.sheets[0]!.validityType = "unlimited";
-  const excel = await readCatalogWorkbook(await writeCatalogWorkbook(first));
-  await save(excel.workbook);
+  assert.equal(f.q(current.id).version, 1);
+  const third = await f.register();
+  await f.call(
+    `/qualifications/${third.id}`,
+    {
+      ...f.q(third.id),
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+    },
+    "PUT",
+  );
   assert.equal(f.q(third.id).version, 1);
   assert.equal(f.q(third.id).lifecycleStatus, "Active");
   const file = exportMaster(
@@ -343,10 +311,15 @@ test("웹·Excel12 무변경 왕복은 Ready를 유지하며 첫 기준 저장·
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 9);
+  assert.equal(file.formatVersion, 13);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
+  delete old.payload.commonCourses;
+  delete old.counts.commonCourses;
   old.formatVersion = 8;
+  delete old.counts.organizationQualificationRequirements;
+  delete old.counts.organizationQualificationRequirements;
+  delete old.counts.subjectiveQuestions;
   old.stateSchemaVersion = 18;
   old.sha256 = contentHash(old.payload);
   assert.throws(() => readMaster(old), /Ready/);
@@ -410,8 +383,8 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   });
   const org = f.store.organizations.snapshot(),
     migrated = migrateReadyQualifications(raw, org);
-  assert.equal(migrated.state.schemaVersion, 19);
-  assert.equal(migrated.state.revision, raw.revision + 1);
+  assert.equal(migrated.state.schemaVersion, 23);
+  assert.equal(migrated.state.revision, raw.revision + 5);
   for (const field of [
     "qualifications",
     "courses",
@@ -470,7 +443,7 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   assert.deepEqual(await readFile(report.maintenanceBackup), maintenance);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 1, stateHash: hash(after) },
+    { ...expected, revision: raw.revision + 5, stateHash: hash(after) },
     migrateReadyQualifications,
     "ready-qualifications",
   );

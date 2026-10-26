@@ -401,3 +401,7 @@
     font-size: 14px;
   }
 }
+
+.dashboard-charts:has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}

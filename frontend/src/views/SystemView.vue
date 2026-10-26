@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CommonCourses from '../components/CommonCourses.vue';
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { systemSections as sections } from '../system-navigation';
@@ -46,9 +47,9 @@ watch(
       </nav>
     </aside>
     <div class="admin-content management-content">
-      <QualificationTemplates v-if="section === 'qualification-templates'" /><OrganizationPanel
-        v-else-if="section === 'organizations'"
-      /><UserManagementPanel
+      <QualificationTemplates v-if="section === 'qualification-templates'" /><CommonCourses
+        v-else-if="section === 'common-courses'"
+      /><OrganizationPanel v-else-if="section === 'organizations'" /><UserManagementPanel
         v-else-if="section === 'users'"
         :key="store.actorId"
         mode="system"

@@ -1,6 +1,5 @@
 import { test, expect, actor } from './fixtures';
 import { completePlan, requestPlan } from './workflow-helpers';
-import { configureTestPolicies } from '../../server/tests/policy-helpers';
 import { nodeFor } from '../../server/src/organizations';
 import type { Page } from '@playwright/test';
 async function responsive(page: Page, name: string) {
@@ -53,33 +52,27 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications');
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await page.goto('/admin/policies');
+  await page.goto('/admin/organization-settings');
   await page.getByLabel('조직 검색').fill('Photo 공정 검증 상세 조직');
   await page.getByRole('treeitem').filter({ hasText: 'Photo 공정 검증 상세 조직' }).click();
-  await page.getByRole('button', { name: '조직 정보 펼치기', exact: true }).click();
   await page.getByLabel('조직 설명', { exact: true }).fill('상황 대응 능력 검증 조직');
   await page.getByLabel('담당 업무', { exact: true }).fill('설비 정보와 결과 기록 검토');
-  await page.getByRole('checkbox', { name: /평가 흐름 체험 · v1/ }).check();
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
   await expect(page.getByRole('dialog')).toContainText('구성원 1명');
   await page.getByRole('dialog').getByRole('button', { name: '설정 저장' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await responsive(page, 'organization-policy');
-  await page.goto('/admin/assignments');
-  await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
-  await page.getByRole('dialog').getByRole('checkbox', { name: '정하린', exact: true }).check();
-  await page.getByRole('dialog').getByRole('button', { name: '대상자에게 요청' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await requestPlan(page, '정하린');
   const request = backend.store.snapshot().planningRequests[0]!;
   expect(request.organizationId).toBe(deep.id);
-  expect(request.targets).toHaveLength(1);
+  expect(request.selections).toHaveLength(1);
   await actor(page, 'learner-2');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await expect(
     page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
-  ).toHaveText('[필수] 평가 흐름 체험 · v1');
+  ).toHaveText('평가 흐름 체험 · v1');
   await completePlan(page, '평가 흐름 체험', false);
   const a = backend.store.snapshot().assignments.find((a) => a.learnerId === 'learner-2')!;
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
@@ -124,44 +117,6 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   expect(errors).toEqual([]);
 });
 
-test('요청 대기·초안의 기준 변경 경고·입력 보존·삭제 경로', async ({ page, backend }) => {
-  await page.goto('/');
-  await actor(page, 'learner-2');
-  await page.goto('/plans');
-  await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
-  await expect(page.getByLabel('취득할 자격')).toHaveCount(0);
-  await expect(
-    page.getByRole('heading', { name: '계획 수립 요청을 기다리고 있습니다.', exact: true }),
-  ).toBeVisible();
-  await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications');
-  await requestPlan(page, '정하린');
-  await actor(page, 'learner-2');
-  await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
-  await page.getByLabel('목표 인증일', { exact: true }).fill('2027-01-31');
-  await expect.poll(() => backend.store.snapshot().plans[0]!.targetOn).toBe('2027-01-31');
-  await backend.store.organizations.transact(
-    'admin-1',
-    crypto.randomUUID(),
-    'policy-change',
-    () => {},
-    (doc) => {
-      nodeFor(doc.roots, 'org-photo')!.requiredQualifications = [];
-      return {};
-    },
-  );
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByLabel('목표 인증일', { exact: true })).toHaveValue('2027-01-31');
-  await page.goto('/plans');
-  await page.getByRole('button', { name: '평가 흐름 체험 계획 삭제', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '계획 삭제', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(backend.store.snapshot().plans[0]!.deletedAt).toBeTruthy();
-});
-
 test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정적 AI 검수 안내', async ({
   page,
   backend,
@@ -196,7 +151,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
         '/admin/dashboard',
         '/admin/targets',
         '/admin/credentials',
-        '/admin/policies',
+        '/admin/organization-settings',
         '/admin/qualifications',
         '/admin/qualifications?type=auditor',
         '/admin/qualifications/demo-qualification',
@@ -206,13 +161,13 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
         '/admin/assignments',
         '/admin/results',
         '/admin/notices',
-        '/admin/catalog',
       ],
     ],
     [
       'operator-1',
       [
         '/system/qualification-templates',
+        '/system/common-courses',
         '/system/organizations',
         '/system/users',
         '/system/overview',
@@ -234,19 +189,19 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/admin/dashboard': '평가 또는 Auditor 학습 확인',
     '/admin/targets': '학습 확인',
     '/admin/credentials': 'Auditor는 교육·인증기준 확인',
-    '/admin/policies': 'Auditee·Auditor 탭',
+    '/admin/organization-settings': '상위 조직의 지정은 하위 조직으로 계속 상속',
     '/admin/qualifications/demo-qualification': '현재 버전 저장 또는 새 버전',
     '/admin/qualifications?type=auditor': '팀 자격 설정 · Auditor',
     '/admin/courses?type=auditor': '필수 항목을 하나 이상',
     '/admin/assignments': 'Auditee 개인 계획',
     '/admin/results': 'Auditor는 본인 확인 항목·일시',
     '/admin/notices': '각각 최신 3개',
-    '/admin/catalog': 'eks-catalog-v12',
+    '/system/common-courses': '시스템 공통인증Set 관리',
     '/system/qualification-templates': '등록 이력이 있으면 유형 변경을 거부',
     '/system/organizations': '신규 변경 이력 생성은 중단',
     '/system/users': '타인 채점·승인 권한이 아닙니다',
     '/system/overview': '조회 전용',
-    '/system/testing': '기본정보 형식9',
+    '/system/testing': '기본정보 형식13',
     '/system/notices': '시스템 공지 관리',
     '/system/documents': '운영 문서 목록',
     '/system/documents/iatf16949-competence-review': '운영 문서 읽기',
@@ -263,7 +218,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
       await expect(guide).toContainText('이후 흐름');
       await expect(guide).toContainText('AI 검수 항목');
       await expect(guide).toContainText('정적 설명');
-      await expect(guide).toContainText('검토 기준 v16 · 2026-10-26');
+      await expect(guide).toContainText('검토 기준 v21 · 2026-10-26');
       if (expected[path]) await expect(guide).toContainText(expected[path]!);
       expect(
         await guide.evaluate(

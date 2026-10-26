@@ -34,7 +34,7 @@ export function policyScope(
     u.roles.includes("organization_admin") &&
       u.organizationAdministration?.organizationId === u.organizationId,
     403,
-    "조직별 자격 설정 권한이 없습니다.",
+    "조직 정보 관리 권한이 없습니다.",
     "POLICY_ACCESS_REVOKED",
   );
   demand(

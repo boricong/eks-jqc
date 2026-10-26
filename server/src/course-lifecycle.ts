@@ -25,6 +25,9 @@ export function courseUsage(
   const counts = {
     assignments: assignmentIds.size,
     enrollments: enrollments.length,
+    subjectiveResponses: s.subjectiveResponses.filter(
+      (r) => r.courseId === courseId,
+    ).length,
     attempts: s.attempts.filter((a) => a.courseId === courseId).length,
     completions: s.completions.filter((c) => c.courseId === courseId).length,
     certifications: s.certifications.filter((c) =>
@@ -33,6 +36,13 @@ export function courseUsage(
     comparisons: s.comparisons.filter((c) => c.courseId === courseId).length,
   };
   const blockers = [
+    ...(s.qualifications.some((q) =>
+      q.commonCourseEntityIds.includes(course.entityId),
+    )
+      ? [
+          "등록 당시 공통 선택 목록에 포함되어 있습니다. 자격 연결에서 제외할 수 있으며 사본은 보존합니다.",
+        ]
+      : []),
     ...qualifications.map(
       (q) => `연결된 자격: ${q.title || "이름 없는 자격"} v${q.version}`,
     ),

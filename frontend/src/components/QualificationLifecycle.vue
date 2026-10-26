@@ -28,7 +28,8 @@ const impact = ref<{
   events: LifecycleEvent[];
 }>();
 const countLabels: Record<string, string> = {
-  organizations: '필수 지정 조직',
+  organizations: '필요자격 직접 지정 조직',
+  planningRequests: '미완료 계획 요청',
   draftPlans: '계획 초안',
   assignments: '확정 배정',
   certifications: '보유 자격',
@@ -112,7 +113,7 @@ async function createVersion() {
       <div class="qualification-lifecycle-description">
         <p>
           Hold·Revoke는 신규 계획과 재인증을 중단합니다. 기존 확정 배정과 개인 보유 자격은
-          유지됩니다.
+          유지됩니다. 조직 필요자격 지정은 남으며 운영 불가 자격이 포함된 새 요청은 보류됩니다.
         </p>
         <p v-if="qualification.lifecycleStatus === 'Revoke'" class="muted">
           폐기한 버전은 재개할 수 없습니다. 새 기준 버전을 작성해 주세요.

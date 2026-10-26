@@ -1,6 +1,7 @@
+import { migrateCommonCourses } from "./common-course-migration.ts";
 import { randomUUID } from "node:crypto";
 import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 
 export function migrateReadyQualifications(
   input: unknown,
@@ -8,10 +9,10 @@ export function migrateReadyQualifications(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (![18, 19].includes(state?.schemaVersion))
+  if (![18, 19, 20, 21, 22, 23].includes(state?.schemaVersion))
     throw new Error("Ready 이관에는 업무18·조직3이 필요합니다.");
   const organizations = validateOrganizations(orgInput),
-    alreadyApplied = state.schemaVersion === 19;
+    alreadyApplied = state.schemaVersion >= 19;
   if (!alreadyApplied) {
     if (
       !state.qualifications.every(
@@ -38,17 +39,12 @@ export function migrateReadyQualifications(
       details: { fromSchema: 18, progressReset: false },
     });
   }
-  const checked = validateState(state, organizations);
+  const result = migrateCommonCourses(state, organizations, at);
   return {
-    state: checked,
-    organizations,
+    ...result,
     report: {
-      alreadyApplied,
-      schemaVersion: 19,
-      revision: checked.revision,
-      organizationSchemaVersion: 3,
-      organizationRevision: organizations.revision,
-      progressReset: false,
+      ...result.report,
+      alreadyApplied: alreadyApplied && result.report.alreadyApplied,
     },
   };
 }

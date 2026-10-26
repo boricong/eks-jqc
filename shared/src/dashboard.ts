@@ -35,10 +35,7 @@ export type DashboardExpiryBucket =
   | "revoked";
 export type DashboardMetric =
   | "eligiblePeople"
-  | "requiredCoverage"
-  | "requiredMissing"
   | "blockedProgress"
-  | "fullyRequiredPeople"
   | "uniqueActiveHolders"
   | "inProgress"
   | "incompleteRequests"
@@ -56,7 +53,6 @@ export interface DashboardQuery {
   view?: DashboardView;
   search?: string;
   entityId?: string;
-  required?: "all" | "required" | "optional";
   efficacy?: DashboardEfficacy;
   progress?: DashboardProgress;
   qualificationScope?: "all" | "registered" | "records";
@@ -66,7 +62,6 @@ export interface DashboardQuery {
     | "name"
     | "organization"
     | "qualification"
-    | "coverage"
     | "expiresOn"
     | "targetOn"
     | "dueOn";
@@ -114,22 +109,9 @@ export interface DashboardPage<T> {
   total: number;
   pages: number;
 }
-/** rate is an unrounded percentage (0–100); null means an empty denominator. */
-export interface DashboardCoverage {
-  fulfilled: number;
-  total: number;
-  rate: number | null;
-}
 export interface DashboardSummary {
   eligiblePeople: number;
-  /** Filtered person–qualification pairs; the requiredCoverage detail returns this exact denominator. */
-  requiredCoverage: DashboardCoverage;
-  requiredMissing: number;
   blockedProgress: number;
-  /** Full current organizational requirements for each matching person, unaffected by qualification/status filters. */
-  fullyRequiredPeople: number;
-  peopleWithRequirements: number;
-  peopleWithoutRequirements: number;
   uniqueActiveHolders: number;
   inProgress: number;
   incompleteRequests: number;
@@ -174,7 +156,6 @@ export interface DashboardPerson {
 export interface DashboardQualificationCell {
   entityId: string;
   title: string;
-  required: boolean;
   registered: boolean;
   currentVersion?: number | null;
   efficacy: DashboardEfficacy;
@@ -198,8 +179,6 @@ export interface DashboardQualificationCell {
   totalCourses: number;
 }
 export interface DashboardMemberRow extends DashboardPerson {
-  /** All of this person's current organizational requirements, irrespective of the visible qualification columns. */
-  requiredCoverage: DashboardCoverage;
   activeQualifications: number;
   inProgress: number;
   incompleteRequests: number;
@@ -220,8 +199,6 @@ export interface DashboardOrganizationRow {
   direct: boolean;
   people: number;
   excludedPeople: number;
-  requiredCoverage: DashboardCoverage;
-  fullyRequiredPeople: number;
   activeHolders: number;
   inProgress: number;
   expires0to30: number;
@@ -230,8 +207,6 @@ export interface DashboardOrganizationRow {
   overdueAssessments: number;
 }
 export interface DashboardQualificationRow extends DashboardQualificationOption {
-  requiredPeople: number;
-  requiredCoverage: DashboardCoverage;
   activePeople: number;
   heldPeople: number;
   revokedPeople: number;
@@ -273,8 +248,6 @@ export interface DashboardDetailRow extends DashboardPerson {
   key: string;
   entityId?: string;
   title?: string;
-  required?: boolean;
-  fulfilled?: boolean;
   efficacy?: DashboardEfficacy;
   progress?: DashboardProgress;
   requestId?: string;
@@ -286,17 +259,12 @@ export interface DashboardDetailRow extends DashboardPerson {
   dueOn?: string;
   expiresOn?: string;
   acquisitionBlockCodes?: string[];
-  requiredCoverage?: DashboardCoverage;
 }
 export type DashboardChartId =
-  | "required-coverage"
   | "progress"
-  | "organization-coverage"
   | "organization-people"
-  | "qualification-coverage"
   | "qualification-efficacy"
   | "qualification-progress"
-  | "member-coverage"
   | "expiry"
   | "renewal";
 export type DashboardChartTone =
@@ -344,7 +312,6 @@ export interface DashboardDetails {
     | "requests"
     | "credentials"
     | "enrollments";
-  numerator?: number;
   denominator?: number;
   rows: DashboardPage<DashboardDetailRow>;
 }
@@ -389,7 +356,8 @@ export interface DashboardMemberDetail {
     createdOn: string;
     dueOn: string;
     completedOn?: string;
-    requiredTitles: string[];
+    closedOn?: string;
+    closeReason?: string;
     selectedTitles: string[];
   }[];
   history: DashboardHistoricalRecord[];
@@ -400,6 +368,8 @@ export interface DashboardMemberDetail {
     createdOn: string;
     dueOn?: string;
     completedOn?: string;
+    closedOn?: string;
+    closeReason?: string;
     organizationPath: { id: string; name: string }[];
   }[];
 }

@@ -162,8 +162,12 @@ test('학습·평가 1·10·30·최대 항목의 세로 순번 탐색과 입력 
     .click();
   await expect(page.getByLabel('상황 설명')).toBeVisible();
   await courseSection(page, '기본정보');
-  await page.getByRole('checkbox', { name: '실기 · 상황 대응 평가', exact: true }).uncheck();
-  await page.getByRole('checkbox', { name: '실기 · 상황 대응 평가', exact: true }).check();
+  await page
+    .getByRole('checkbox', { name: '실기 · 상황 대응 평가 수료 필수', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: '실기 · 상황 대응 평가 수료 필수', exact: true })
+    .check();
   await page
     .getByRole('tablist', { name: '인증Set 편집 항목', exact: true })
     .getByRole('tab', { name: /상황 대응 평가/ })

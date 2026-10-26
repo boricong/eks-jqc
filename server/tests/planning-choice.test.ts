@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -52,7 +53,7 @@ async function fixture(t: TestContext) {
   }
   const req = async () =>
     (
-      await call("admin-1", "/planning-requests", {
+      await legacyRequestFixture(store, "admin-1", {
         learnerIds: ["learner-2"],
         message: "자격 선택",
       })
@@ -75,12 +76,11 @@ async function fixture(t: TestContext) {
   const required = (ids: string[] | null) =>
     call(
       "admin-1",
-      `/organization-policies/${root}`,
+      `/organization-settings/${root}`,
       {
         revision: store.organizations.snapshot().revision,
         description: "",
         duties: "",
-        requiredQualifications: ids,
       },
       200,
       "PUT",
@@ -170,7 +170,7 @@ test("필수 null/빈 배열에도 등록 자격으로 시작하며 미착수 �
     const id = await f.req();
     assert.equal((await f.view(id)).stage, "미착수");
     await f.finish(id, 409);
-    assert.deepEqual(f.row(id).targets, []);
+    assert.deepEqual(f.row(id).selections, []);
   }
   await f.pool();
   const id = f.store.snapshot().planningRequests[0]!.id;
@@ -187,52 +187,6 @@ test("필수 null/빈 배열에도 등록 자격으로 시작하며 미착수 �
     f.store.snapshot().assignments.filter((a) => a.planId === p.id).length,
     1,
   );
-});
-test("요청 당시 필수 고정·추가 자격 선택·필수 해제 후 확정·전체 완료 근거 보존", async (t) => {
-  const f = await fixture(t);
-  const created = await registerFixtureQualification(
-    f.store,
-    "추가 자격",
-    "추가 검증",
-  );
-  await f.mutate((s) => {
-    const source = s.qualifications.find((q) => q.id === qid)!,
-      extra = s.qualifications.find((q) => q.id === created.id)!;
-    extra.courseIds = [...source.courseIds];
-    extra.validity = source.validity;
-    extra.version = 1;
-    extra.lifecycleStatus = "Active";
-  });
-  const q2 = f.store
-    .snapshot()
-    .qualifications.find((q) => q.id === created.id)!;
-  await f.pool([qid, q2.id]);
-  await f.required([qid]);
-  const id = await f.req();
-  await f.required([q2.entityId]);
-  const v = await f.view(id);
-  assert.equal(
-    v.candidates.find((c: any) => c.entityId === qid).required,
-    true,
-  );
-  assert.equal(
-    v.candidates.find((c: any) => c.entityId === q2.entityId).required,
-    false,
-  );
-  await f.select(id, [q2.entityId]);
-  const p1 = await f.plan(id),
-    p2 = await f.plan(id, q2.id);
-  await f.select(id, [], 409);
-  await f.confirmPlan(p1);
-  await f.finish(id, 409);
-  await f.confirmPlan(p2);
-  await f.finish(id);
-  const snapshot = f.row(id).completion;
-  await f.required([]);
-  await f.pool([]);
-  assert.deepEqual(f.row(id).completion, snapshot);
-  assert.equal((await f.view(id)).stage, "계획 완료");
-  await f.select(id, [], 409);
 });
 test("모두 확정 계획으로 진행 중이면 0개 완료 확인과 기존 근거 재사용", async (t) => {
   const f = await fixture(t);
@@ -360,7 +314,12 @@ test("비활성·Hold·운영 중지는 발송 또는 계획 완료를 적절히
   await f.call(
     "admin-1",
     "/planning-requests",
-    { learnerIds: ["learner-2"], message: "" },
+    {
+      stateRevision: f.store.snapshot().revision,
+      organizationRevision: f.store.organizations.snapshot().revision,
+      learnerIds: ["learner-2"],
+      message: "",
+    },
     409,
   );
   await f.select(id, [qid], 409);
@@ -378,13 +337,13 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 19);
+  assert.equal(next.state.schemaVersion, 23);
   assert.deepEqual(next.state.plans, raw.plans);
-  assert.deepEqual(
-    next.state.planningRequests[0]!.targets,
-    raw.planningRequests[0].targets,
+  assert.equal(
+    next.state.planningRequests[0]!.selections[0]!.qualificationId,
+    raw.plans[0].qualificationId,
   );
-  assert.equal(next.state.planningRequests[0]!.mode, "fixed");
+  assert.equal(next.state.planningRequests[0]!.mode, "learner_choice");
   assert.equal(next.state.planningRequests[0]!.completion, undefined);
   assert.deepEqual(
     migratePlanning(next.state, next.organizations).state,
@@ -408,7 +367,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
   );
   assert.deepEqual(await readFile(f.store.organizations.file), orgBytes);
   const restored = await new JsonStore(f.file).load();
-  assert.equal(restored.snapshot().planningRequests[0]!.mode, "fixed");
+  assert.equal(restored.snapshot().planningRequests[0]!.mode, "learner_choice");
   await restored.close();
 });
 test("저장 실패는 선택·감사·요청 기록을 원복하고 동시 완료·재시작에도 근거는 하나다", async (t) => {
@@ -484,7 +443,7 @@ test("과거 직접 배정은 중복 계획 없이 근거로 연결하고 외부
   });
   await f.pool();
   const id = (
-    await f.call("admin-1", "/planning-requests", {
+    await legacyRequestFixture(f.store, "admin-1", {
       learnerIds: ["learner-1"],
       message: "",
     })
@@ -694,7 +653,7 @@ test("다른 요청의 초안을 동시 재사용하며 삭제는 관련 비필�
   assert.equal(f.store.snapshot().plans.length, 1);
   assert.equal(f.row(first).selections.length, 1);
   assert.equal(f.row(second).selections.length, 1);
-  assert.deepEqual(f.row(required).selections, []);
+  assert.equal(f.row(required).selections.length, 1);
   await f.finish(first, 409);
   await f.finish(required, 409);
   const p = f.store.snapshot().plans[0]!;
@@ -705,12 +664,12 @@ test("다른 요청의 초안을 동시 재사용하며 삭제는 관련 비필�
     200,
     "DELETE",
   );
-  for (const id of [first, second]) {
+  for (const id of [first, second, required]) {
     assert.deepEqual(f.row(id).selections, []);
     assert.equal(f.row(id).revision, 3);
   }
-  assert.equal(f.row(required).targets!.length, 1);
-  assert.equal(f.row(required).revision, 1);
+  assert.equal(f.row(required).selections.length, 0);
+  assert.equal(f.row(required).revision, 3);
   assert.equal((await f.view(required)).candidates[0].canStart, true);
   await f.finish(required, 409);
   const next = await f.plan(required);
@@ -766,38 +725,6 @@ test("초안 삭제 저장 실패는 요청 포함과 원본을 모두 보존한
     key,
   );
   assert.deepEqual(f.row(id).selections, []);
-});
-test("과거 fixed 요청은 범위를 넓히지 않으며 선택만 저장한 기록은 명시적으로 제외한다", async (t) => {
-  const f = await fixture(t);
-  await f.pool();
-  const optional = await f.req();
-  await f.select(optional, [qid]);
-  assert.equal((await f.view(optional)).candidates[0].status, "available");
-  assert.equal(f.store.snapshot().plans.length, 0);
-  await f.select(optional, []);
-  const fixed = await f.req();
-  await f.mutate((s) => {
-    s.planningRequests.find((r) => r.id === fixed)!.mode = "fixed";
-  });
-  await f.call(
-    "learner-2",
-    "/plans",
-    {
-      requestId: fixed,
-      requestRevision: f.row(fixed).revision,
-      qualificationId: qid,
-    },
-    409,
-  );
-  await f.required([qid]);
-  const fixedRequired = await f.req();
-  await f.mutate((s) => {
-    s.planningRequests.find((r) => r.id === fixedRequired)!.mode = "fixed";
-  });
-  const p = await f.plan(fixedRequired);
-  await f.confirmPlan(p);
-  await f.finish(fixedRequired);
-  assert.deepEqual(f.row(fixedRequired).selections, []);
 });
 test("시작의 본인·팀 버전·운영 상태 검사는 실패한 요청 포함을 남기지 않는다", async (t) => {
   const f = await fixture(t);

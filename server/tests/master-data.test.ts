@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
@@ -16,7 +17,6 @@ import {
   contentHash,
   clearedCounts,
 } from "../src/master-data.ts";
-import { configureTestPolicies } from "./policy-helpers.ts";
 
 const clock = "2026-10-22T06:00:00.000Z";
 async function fixture(t: TestContext) {
@@ -99,7 +99,6 @@ async function fixture(t: TestContext) {
 
 test("기준 파일은 설정·모든 버전·자료·정답만 왕복하며 내보내기는 원본을 변경하지 않는다", async (t) => {
   const f = await fixture(t);
-  await configureTestPolicies(f.store);
   await f.change((s) => {
     s.users[0]!.certificationEligibility = "hold";
     s.users[0]!.organizationAdministration = {
@@ -118,7 +117,9 @@ test("기준 파일은 설정·모든 버전·자료·정답만 왕복하며 내
   );
   assert.deepEqual(Object.keys(file.payload).sort(), [
     "auditorPrograms",
+    "commonCourses",
     "courses",
+    "organizationQualificationRequirements",
     "organizations",
     "qualificationTemplates",
     "qualifications",
@@ -131,7 +132,6 @@ test("기준 파일은 설정·모든 버전·자료·정답만 왕복하며 내
 
 test("전체 초기화는 설정 해시를 유지하고 진행·공지·모든 이력을 비우며 백업 쌍과 세대를 보존한다", async (t) => {
   const f = await fixture(t);
-  await configureTestPolicies(f.store);
   const original = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
     generation = f.store.generation;
@@ -166,7 +166,6 @@ test("전체 초기화는 설정 해시를 유지하고 진행·공지·모든 �
 test("다른 서버의 기준 파일로 전체 교체하고 불러온 운영자 계정으로 다시 접속한다", async (t) => {
   const source = await fixture(t),
     target = await fixture(t);
-  await configureTestPolicies(source.store);
   await source.change((s) => {
     s.users.find((u) => u.id === "operator-1")!.id = "imported-operator";
     s.users[0]!.name = "이전된 사용자";
@@ -304,7 +303,17 @@ test("미리보기 이후 업무 또는 조직 변경·확인 만료·잘못된 
     "REVISION_CONFLICT",
   );
   const second = await f.resetBody();
-  await configureTestPolicies(f.store);
+  await f.call(
+    "/organization-settings/org-photo?lv1OrganizationId=org-photo",
+    {
+      revision: f.store.organizations.snapshot().revision,
+      description: "초기화 검토 이후 조직 설명 변경",
+      duties: "",
+    },
+    "operator-1",
+    200,
+    "PUT",
+  );
   assert.equal(
     (await f.call("/testing/master-reset", second, "operator-1", 409)).code,
     "REVISION_CONFLICT",
@@ -491,9 +500,6 @@ test("대기 중인 이전 세대 쓰기와 재접속 후 이전 세대 헤더�
 
 test("파일 불러오기 후 새 요청·계획·두 자동 평가·수료·인증이 신규 기록으로 연결된다", async (t) => {
   const f = await fixture(t);
-  await configureTestPolicies(f.store, "org-photo", undefined, [
-    "demo-qualification",
-  ]);
   const file = await f.call("/system/master-data/export");
   const p = await f.call("/system/master-data/import-preview", file);
   await f.call("/system/master-data/import", {
@@ -501,11 +507,10 @@ test("파일 불러오기 후 새 요청·계획·두 자동 평가·수료·인
     confirmation: "전체 교체",
   });
   f.cookies.clear();
-  const req = await f.call(
-    "/planning-requests?lv1OrganizationId=org-photo",
-    { learnerIds: ["learner-1"], message: "이전 후 새 계획" },
-    "admin-1",
-  );
+  const req = await legacyRequestFixture(f.store, "admin-1", {
+    learnerIds: ["learner-1"],
+    message: "이전 후 새 계획",
+  });
   const plan = await f.call(
     "/plans",
     {
@@ -586,7 +591,7 @@ test("손상된 관리 정보는 자동 생성하지 않고 잠금을 해제한 
   await f.restart();
 });
 
-test("25MB 초과 파일은 검사 전에 거부하고 데이터는 변경하지 않는다", async (t) => {
+test("64MB 초과 파일은 검사 전에 거부하고 데이터는 변경하지 않는다", async (t) => {
   const f = await fixture(t),
     before = f.store.snapshot();
   await f.login();
@@ -597,7 +602,7 @@ test("25MB 초과 파일은 검사 전에 거부하고 데이터는 변경하지
       cookie: f.cookies.get("operator-1")!,
       "content-type": "application/json",
     },
-    payload: " ".repeat(25 * 1024 * 1024) + "{}",
+    payload: " ".repeat(64 * 1024 * 1024) + "{}",
   });
   assert.equal(r.statusCode, 413);
   assert.deepEqual(f.store.snapshot(), before);

@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import CourseCategory from './CourseCategory.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{
   courses: {
+    category?: 'common' | 'specialized';
     id: string;
     title: string;
     status: string;
@@ -90,7 +92,7 @@ watch([() => props.selected, visible], async () => {
           ><span class="course-label"
             ><strong>{{ course.title }}</strong
             ><span v-if="course.required" class="course-required-badge">필수</span></span
-          ><small>{{ course.status }}</small></span
+          ><CourseCategory :course="course" /><small>{{ course.status }}</small></span
         >
       </button>
     </nav>

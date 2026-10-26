@@ -7,7 +7,20 @@ import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import { confirmAction } from '../composables/useConfirmation';
 import AppDialog from './AppDialog.vue';
+import CoursePreviewDialog from './CoursePreviewDialog.vue';
+import type { CommonCourse } from '@eks/contracts';
 type TemplateItem = QualificationTemplate & { canChangeType: boolean; typeChangeReason: string };
+const commonCourses = ref<(CommonCourse & { readiness: string[] })[]>([]),
+  commonSearch = ref(''),
+  previewCommon = ref<CommonCourse | null>(null);
+const commonOptions = computed(() =>
+  commonCourses.value.filter(
+    (c) =>
+      c.operationalStatus === 'active' &&
+      c.qualificationType === draft.value?.qualificationType &&
+      (c.title.includes(commonSearch.value) || draft.value?.defaultCommonCourseIds.includes(c.id)),
+  ),
+);
 const typeFilter = ref('all');
 const typeEditing = computed(() => items.value.find((t) => t.id === draft.value?.id));
 const store = useDemo(),
@@ -17,6 +30,7 @@ const store = useDemo(),
   error = ref(''),
   busy = ref(false);
 const draft = ref<{
+  defaultCommonCourseIds: string[];
   id?: string;
   revision?: number;
   qualificationType: QualificationType;
@@ -38,10 +52,13 @@ async function load() {
   const seq = ++generation,
     actor = store.actorId;
   try {
-    const result = await api<{ items: TemplateItem[]; audits: AuditEvent[] }>(
-      '/system/qualification-templates',
-    );
+    const result = await api<{
+      items: TemplateItem[];
+      audits: AuditEvent[];
+      commonCourses: (CommonCourse & { readiness: string[] })[];
+    }>('/system/qualification-templates');
     if (seq === generation && actor === store.actorId) {
+      commonCourses.value = result.commonCourses;
       items.value = result.items;
       audits.value = result.audits;
     }
@@ -52,6 +69,7 @@ async function load() {
 function edit(item?: QualificationTemplate) {
   draft.value = item
     ? {
+        defaultCommonCourseIds: [...item.defaultCommonCourseIds],
         id: item.id,
         qualificationType: item.qualificationType,
         revision: item.revision,
@@ -59,7 +77,13 @@ function edit(item?: QualificationTemplate) {
         englishName: item.englishName,
         description: item.description,
       }
-    : { qualificationType: 'auditee', title: '', englishName: '', description: '' };
+    : {
+        defaultCommonCourseIds: [],
+        qualificationType: 'auditee',
+        title: '',
+        englishName: '',
+        description: '',
+      };
   baseline.value = JSON.stringify(draft.value);
   error.value = '';
 }
@@ -82,7 +106,12 @@ async function save() {
   try {
     await store.command(
       `/system/qualification-templates${id ? `/${id}` : ''}`,
-      body,
+      {
+        ...body,
+        commonCourseRevisions: Object.fromEntries(
+          commonCourses.value.map((c) => [c.id, c.revision]),
+        ),
+      },
       id ? 'PUT' : 'POST',
     );
     if (actor !== store.actorId) return;
@@ -100,17 +129,26 @@ function historyChanges(a: AuditEvent) {
     before?: Partial<QualificationTemplate>;
     after?: Partial<QualificationTemplate>;
   };
-  return (['title', 'englishName', 'description', 'qualificationType'] as const)
-    .filter((k) => d?.before?.[k] !== d?.after?.[k])
+  return (
+    ['title', 'englishName', 'description', 'qualificationType', 'defaultCommonCourseIds'] as const
+  )
+    .filter((k) => JSON.stringify(d?.before?.[k]) !== JSON.stringify(d?.after?.[k]))
     .map((k) => ({
       label: {
+        defaultCommonCourseIds: '공통인증Set 목록',
         title: '자격명',
         englishName: '영문명',
         description: '설명',
         qualificationType: '인증 유형',
       }[k],
-      before: d?.before?.[k] || '없음',
-      after: d?.after?.[k] || '없음',
+      before:
+        k === 'defaultCommonCourseIds'
+          ? `${d?.before?.defaultCommonCourseIds?.length || 0}개`
+          : d?.before?.[k] || '없음',
+      after:
+        k === 'defaultCommonCourseIds'
+          ? `${d?.after?.defaultCommonCourseIds?.length || 0}개`
+          : d?.after?.[k] || '없음',
     }));
 }
 async function reloadDraft() {
@@ -166,6 +204,7 @@ watch(
             <th>영문명</th>
             <th>유형</th>
             <th>설정</th>
+            <th>공통인증Set</th>
             <th>수정 번호</th>
             <th>작업</th>
           </tr>
@@ -178,6 +217,7 @@ watch(
             <td>{{ t.englishName || '—' }}</td>
             <td>{{ qualificationTypeLabels[t.qualificationType] }}</td>
             <td>{{ t.description ? '설명 등록됨' : '—' }}</td>
+            <td>{{ t.defaultCommonCourseIds.length }}개</td>
             <td>{{ t.revision }}</td>
             <td><button class="button ghost" @click="edit(t)">수정</button></td>
           </tr>
@@ -227,6 +267,46 @@ watch(
             maxlength="20000"
           />
         </label>
+        <fieldset :disabled="busy" class="common-defaults">
+          <legend>공통인증Set 목록</legend>
+          <button type="button" class="text-link" :disabled="busy" @click="load">
+            선택 유지·공통 목록 다시 확인
+          </button>
+          <p class="muted">
+            이후 새로 등록하는 팀 자격의 기본값입니다. 이미 등록한 팀 자격에는 반영되지 않습니다.
+            팀은 내용을 수정하거나 제외할 수 있습니다.
+          </p>
+          <label class="field"
+            >공통인증Set 검색<input v-model="commonSearch" type="search"
+          /></label>
+          <button
+            type="button"
+            class="button ghost"
+            :disabled="!draft.defaultCommonCourseIds.length"
+            @click="draft.defaultCommonCourseIds = []"
+          >
+            전체 해제
+          </button>
+          <p
+            v-if="
+              draft.defaultCommonCourseIds.some((id) => !commonOptions.some((c) => c.id === id))
+            "
+            class="error-message"
+          >
+            인증 유형과 맞지 않는 선택이 있습니다. 전체 해제 후 다시 선택해 주세요.
+          </p>
+          <div v-for="c in commonOptions" :key="c.id" class="common-default-row">
+            <label class="checkbox-label"
+              ><input v-model="draft.defaultCommonCourseIds" type="checkbox" :value="c.id" />{{
+                c.title || '이름 없음'
+              }}
+              · {{ c.readiness.length ? '보완 필요' : '준비 완료' }}</label
+            ><button type="button" class="text-link" @click="previewCommon = c">내용 보기</button>
+          </div>
+          <p v-if="!commonOptions.length" class="muted">
+            선택할 공통인증Set이 없습니다. 공통인증Set 관리에서 같은 유형의 항목을 생성해 주세요.
+          </p>
+        </fieldset>
         <p v-if="!draft.description.trim()" class="muted">
           설명은 선택 항목이며 비워 두어도 자격을 사용할 수 있습니다.
         </p>
@@ -265,8 +345,30 @@ watch(
       >
     </AppDialog>
   </div>
+  <CoursePreviewDialog
+    :open="!!previewCommon"
+    :course="previewCommon"
+    @update:open="
+      (v) => {
+        if (!v) previewCommon = null;
+      }
+    "
+  />
 </template>
 <style scoped>
+.common-defaults {
+  border: 0;
+  border-top: 1px solid var(--border, #e3e8ee);
+  padding: 16px 0;
+}
+.common-default-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border, #e3e8ee);
+}
 .template-history {
   padding-left: 20px;
   font-size: 13px;

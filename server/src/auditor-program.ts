@@ -315,6 +315,7 @@ export function createAuditorQualification(
   if (!previous)
     s.qualificationTemplates.push({
       id: templateId,
+      defaultCommonCourseIds: [],
       scope: "team",
       ownerLv1OrganizationId: team,
       auditorLevel: input.level,

@@ -1,3 +1,7 @@
+import { migrateOrganizationNeeds } from "./organization-requirement-migration.ts";
+import { migrateSubjective } from "./subjective-migration.ts";
+import { migrateRequiredQualifications } from "./required-qualification-migration.ts";
+import { migrateCommonCourses } from "./common-course-migration.ts";
 import { migrateAutomaticCriteria } from "./automatic-criteria-migration.ts";
 import { migrateReadyQualifications } from "./ready-qualification-migration.ts";
 import { migrateAuditorProgram } from "./auditor-program-migration.ts";
@@ -48,6 +52,10 @@ if (
     "migrate-auditor-program",
     "migrate-automatic-criteria",
     "migrate-ready-qualifications",
+    "migrate-common-courses",
+    "migrate-remove-required-qualifications",
+    "migrate-subjective",
+    "migrate-organization-needs",
   ].includes(command)
 ) {
   const mappingFile = optionsMapping();
@@ -63,32 +71,40 @@ if (
     ? JSON.parse(await readFile(path.resolve(mappingFile), "utf8"))
     : {};
   const transform =
-    command === "migrate-ready-qualifications"
-      ? migrateReadyQualifications
-      : command === "migrate-automatic-criteria"
-        ? migrateAutomaticCriteria
-        : command === "migrate-auditor-program"
-          ? migrateAuditorProgram
-          : command === "migrate-auditor-workflow"
-            ? migrateAuditorWorkflow
-            : command === "migrate-course-types"
-              ? migrateCourseTypes
-              : command === "migrate-qualification-types"
-                ? migrateQualificationTypes
-                : command === "migrate-planning"
-                  ? migratePlanning
-                  : command === "migrate-templates"
-                    ? (a: unknown, b: unknown) =>
-                        migrateTemplates(a, b, undefined, mapping)
-                    : command === "migrate-catalog-editing"
-                      ? migrateCatalogEditing
-                      : command === "migrate-assessment-flow"
-                        ? migrateAssessmentFlow
-                        : command === "migrate-lifecycle"
-                          ? migrateLifecycle
-                          : command === "migrate-administration"
-                            ? migrateAdministration
-                            : migratePolicies;
+    command === "migrate-organization-needs"
+      ? migrateOrganizationNeeds
+      : command === "migrate-subjective"
+        ? migrateSubjective
+        : command === "migrate-remove-required-qualifications"
+          ? migrateRequiredQualifications
+          : command === "migrate-common-courses"
+            ? migrateCommonCourses
+            : command === "migrate-ready-qualifications"
+              ? migrateReadyQualifications
+              : command === "migrate-automatic-criteria"
+                ? migrateAutomaticCriteria
+                : command === "migrate-auditor-program"
+                  ? migrateAuditorProgram
+                  : command === "migrate-auditor-workflow"
+                    ? migrateAuditorWorkflow
+                    : command === "migrate-course-types"
+                      ? migrateCourseTypes
+                      : command === "migrate-qualification-types"
+                        ? migrateQualificationTypes
+                        : command === "migrate-planning"
+                          ? migratePlanning
+                          : command === "migrate-templates"
+                            ? (a: unknown, b: unknown) =>
+                                migrateTemplates(a, b, undefined, mapping)
+                            : command === "migrate-catalog-editing"
+                              ? migrateCatalogEditing
+                              : command === "migrate-assessment-flow"
+                                ? migrateAssessmentFlow
+                                : command === "migrate-lifecycle"
+                                  ? migrateLifecycle
+                                  : command === "migrate-administration"
+                                    ? migrateAdministration
+                                    : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -114,30 +130,38 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-ready-qualifications"
-            ? "ready-qualifications"
-            : command === "migrate-automatic-criteria"
-              ? "automatic-criteria"
-              : command === "migrate-auditor-program" ||
-                  command === "migrate-auditor-workflow"
-                ? "auditor-workflow"
-                : command === "migrate-course-types"
-                  ? "course-types"
-                  : command === "migrate-qualification-types"
-                    ? "qualification-types"
-                    : command === "migrate-planning"
-                      ? "planning"
-                      : command === "migrate-templates"
-                        ? "qualification-templates"
-                        : command === "migrate-catalog-editing"
-                          ? "catalog-editing"
-                          : command === "migrate-assessment-flow"
-                            ? "assessment-flow"
-                            : command === "migrate-lifecycle"
-                              ? "lifecycle"
-                              : command === "migrate-administration"
-                                ? "administration"
-                                : "policies",
+          command === "migrate-organization-needs"
+            ? "organization-needs"
+            : command === "migrate-subjective"
+              ? "subjective"
+              : command === "migrate-remove-required-qualifications"
+                ? "remove-required-qualifications"
+                : command === "migrate-common-courses"
+                  ? "common-courses"
+                  : command === "migrate-ready-qualifications"
+                    ? "ready-qualifications"
+                    : command === "migrate-automatic-criteria"
+                      ? "automatic-criteria"
+                      : command === "migrate-auditor-program" ||
+                          command === "migrate-auditor-workflow"
+                        ? "auditor-workflow"
+                        : command === "migrate-course-types"
+                          ? "course-types"
+                          : command === "migrate-qualification-types"
+                            ? "qualification-types"
+                            : command === "migrate-planning"
+                              ? "planning"
+                              : command === "migrate-templates"
+                                ? "qualification-templates"
+                                : command === "migrate-catalog-editing"
+                                  ? "catalog-editing"
+                                  : command === "migrate-assessment-flow"
+                                    ? "assessment-flow"
+                                    : command === "migrate-lifecycle"
+                                      ? "lifecycle"
+                                      : command === "migrate-administration"
+                                        ? "administration"
+                                        : "policies",
         ),
         null,
         2,
@@ -303,7 +327,7 @@ if (
   console.log(JSON.stringify(await store.recoverMasterReplacement(), null, 2));
 } else if (command === "migrate") {
   await store.migrate(migrateState);
-  console.log("현행 업무 스키마 14 확인 완료");
+  console.log("현행 업무 스키마 21 확인 완료");
 } else if (command === "organizations:restore") {
   const source = process.argv[3];
   if (!source) throw new Error("조직 백업 경로가 필요합니다.");

@@ -10,6 +10,10 @@ export const QualificationMetadataSchema = z.object({
 });
 export type QualificationMetadata = z.infer<typeof QualificationMetadataSchema>;
 export const QualificationTemplateSchema = z.object({
+  defaultCommonCourseIds: z
+    .array(z.string().min(1).max(160))
+    .max(100)
+    .default([]),
   scope: z.enum(["system", "team"]).optional(),
   ownerLv1OrganizationId: z.string().optional(),
   auditorLevel: z.enum(["general", "main"]).optional(),

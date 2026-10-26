@@ -1,3 +1,4 @@
+import { migrateOrganizationRequirements } from "./required-qualification-migration.ts";
 import { randomUUID } from "node:crypto";
 import { migrateReadyQualifications } from "./ready-qualification-migration.ts";
 import { validateOrganizations } from "./organizations.ts";
@@ -24,7 +25,7 @@ export function migrationOrganizations(
       after: { selection: "latest-non-deleted" },
     });
   }
-  return validateOrganizations(org);
+  return migrateOrganizationRequirements(org, actorId, at);
 }
 
 export function migrateAutomaticCriteria(
@@ -33,7 +34,7 @@ export function migrateAutomaticCriteria(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (![17, 18, 19].includes(state?.schemaVersion))
+  if (![17, 18, 19, 20, 21, 22, 23].includes(state?.schemaVersion))
     throw new Error("최신 기준 이관에는 업무17·조직2가 필요합니다.");
   const actorId = state.users.find((u: any) =>
     u.roles.includes("system_operator"),

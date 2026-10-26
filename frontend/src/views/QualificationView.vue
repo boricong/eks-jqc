@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CourseCategory from '../components/CourseCategory.vue';
 import AuditorChecklist from '../components/AuditorChecklist.vue';
 import PageHeading from '../components/PageHeading.vue';
 import { computed, ref, useId } from 'vue';
@@ -71,6 +72,7 @@ const courses = computed(
   () =>
     assignment.value?.enrollments.map((e) => ({
       id: e.courseId,
+      category: store.course(e.courseId).category,
       title: store.course(e.courseId).title,
       required: qualification.value?.courseIds.includes(e.courseId) === true,
       status: courseStatus(e),
@@ -184,6 +186,7 @@ function chooseCourse(id: string) {
                 >선택 인증Set · v{{ course.version }}</span
               >
               <h2>{{ course.title }}</h2>
+              <CourseCategory :course="course" />
               <template v-if="!showAssessments">
                 <span class="small-label">v{{ course.version }}</span>
                 <StatusBadge v-if="store.complete(selected)" status="complete" />
@@ -383,6 +386,33 @@ function chooseCourse(id: string) {
               </p>
             </section>
           </div>
+          <section
+            v-if="course.subjectiveEnabled && !auditor"
+            class="panel"
+            aria-label="주관식 평가"
+          >
+            <h3>주관식 평가 · 수료에 영향 없음</h3>
+            <p>
+              {{ course.subjectiveQuestions.length }}문항 ·
+              {{
+                selected.subjective?.status === 'submitted'
+                  ? '답변 제출 완료'
+                  : selected.completion
+                    ? '수료로 작성 종료'
+                    : selected.subjective?.status === 'draft'
+                      ? '작성 중'
+                      : '미작성'
+              }}
+            </p>
+            <p class="muted">
+              인증Set 수료 전까지만 작성·제출할 수 있습니다. {{ selected.subjective?.reason }}
+            </p>
+            <RouterLink
+              class="button secondary"
+              :to="`/qualifications/${assignment.id}/courses/${course.id}/subjective-response`"
+              >주관식 답변 보기</RouterLink
+            >
+          </section>
           <p v-if="!kinds.length" class="muted">
             등록된 평가 유형이 없습니다. 관리자에게 확인해 주세요.
           </p>

@@ -15,7 +15,9 @@ export function migrateLifecycle(
   const raw = input as any,
     organizations = validateOrganizations(organizationInput);
   if (
-    ![8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].includes(raw?.schemaVersion)
+    ![8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].includes(
+      raw?.schemaVersion,
+    )
   )
     throw new Error(
       "자격 상태 이관에는 업무 스키마 8과 조직 스키마 2가 필요합니다.",
@@ -63,7 +65,7 @@ export function migrateLifecycle(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 19,
+      alreadyApplied: raw.schemaVersion === 23,
       revision: state.revision,
       schemaVersion: state.schemaVersion,
       users: state.users.length,

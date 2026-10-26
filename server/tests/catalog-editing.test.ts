@@ -18,11 +18,6 @@ import {
   masterCandidate,
   contentHash,
 } from "../src/master-data.ts";
-import {
-  exportCatalog,
-  prepareCatalog,
-  saveCatalogBatch,
-} from "../src/catalog.ts";
 
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-editing-")),
@@ -147,9 +142,6 @@ test("최신 버전 삭제는 이전 기준으로 돌아가고 마지막 삭제�
     "required",
     () => {},
     (doc) => {
-      doc.roots.find((o) => o.id === "org-photo")!.requiredQualifications = [
-        q.entityId,
-      ];
       return {};
     },
   );
@@ -169,7 +161,6 @@ test("최신 버전 삭제는 이전 기준으로 돌아가고 마지막 삭제�
   );
   impact = await f.call("/qualifications/" + q.id + "/deletion-impact");
   assert.equal(impact.replacement, null);
-  assert.equal(impact.affectedOrganizations.length, 1);
   const key = randomUUID(),
     body = { ...impact, reason: "마지막 기준 삭제" };
   const result = await f.call(
@@ -190,11 +181,6 @@ test("최신 버전 삭제는 이전 기준으로 돌아가고 마지막 삭제�
       key,
     ),
     result,
-  );
-  assert.deepEqual(
-    f.store.organizations.snapshot().roots.find((o) => o.id === "org-photo")!
-      .requiredQualifications,
-    [],
   );
   assert.deepEqual(f.store.snapshot().assignments, before.assignments);
   assert.deepEqual(f.store.snapshot().courses, before.courses);
@@ -242,39 +228,6 @@ test("미참조 팀 등록도 계보 보존 삭제·권한·최신 참조·백�
     f.store.snapshot().qualifications.find((x) => x.id === q.id)!.deletedAt,
   );
 });
-test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저장과 Excel 무변경은 보존된다", () => {
-  const s = seedState(true),
-    org = seedOrganizations();
-  const q = s.qualifications.find((q) => q.id === "demo-qualification")!;
-  const before = structuredClone(s),
-    book = exportCatalog(s, "org-photo", [q.id]);
-  book.sheets[0]!.validityType = "unknown";
-  const p = prepareCatalog(s, book, "org-photo", org);
-  assert.ok(p.issues.some((i) => i.severity === "readiness"));
-  assert.equal(p.qualifications[0]!.version, 2);
-  const saved = saveCatalogBatch(
-    s,
-    book,
-    "org-photo",
-    "admin-1",
-    undefined,
-    org,
-  );
-  assert.deepEqual(
-    s.qualifications.find((x) => x.id === q.id),
-    before.qualifications.find((x) => x.id === q.id),
-  );
-  assert.equal(
-    saveCatalogBatch(s, saved.workbook, "org-photo", "admin-1", undefined, org)
-      .unchanged,
-    true,
-  );
-  assert.equal(
-    currentTeamQualifications(s).find((r) => r.entityId === q.entityId)!
-      .qualificationId,
-    saved.qualificationIds[0],
-  );
-});
 test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 표시를 보존하고 반복 이관은 무변경이다", () => {
   const source: any = seedState(true),
     org = seedOrganizations();
@@ -284,7 +237,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 19);
+  assert.equal(next.state.schemaVersion, 23);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -297,7 +250,11 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
   const copied = masterCandidate(readMaster(file).payload, 0, 0);
   assert.equal(copied.state.qualifications[0]!.deletedAt, q.deletedAt);
   const legacy: any = exportMaster(next.state, org, "2026-10-22T00:00:00.000Z");
+  delete legacy.payload.commonCourses;
+  delete legacy.counts.commonCourses;
   legacy.formatVersion = 1;
+  delete legacy.counts.organizationQualificationRequirements;
+  delete legacy.counts.subjectiveQuestions;
   legacy.organizationSchemaVersion = 2;
   legacy.payload.organizations.qualificationPools = [];
   legacy.counts.poolEntries = 0;

@@ -57,7 +57,6 @@ const routes = {
   'admin-1': [
     '/',
     ...[
-      'catalog',
       'credentials',
       'targets',
       'policies',
@@ -74,7 +73,7 @@ const routes = {
     '/',
     ...['organizations', 'users', 'overview', 'testing', 'notices'].map((s) => `/system/${s}`),
   ],
-  'learner-2': ['/', '/admin/policies', '/admin/targets'],
+  'learner-2': ['/', '/admin/organization-settings', '/admin/targets'],
 };
 for (const [id, paths] of Object.entries(routes)) {
   test(`${id} 전체 메뉴의 네 화면 폭·글꼴·입력·조작 기준`, async ({ page, backend }, info) => {
@@ -129,7 +128,7 @@ test('홈 공지의 첫 화면 배치와 관리 표의 실제 글자 크기', as
     await expect(page.locator('.home-journey,.focus-card,.home-heading .eyebrow')).toHaveCount(0);
   }
   await actor(page, 'admin-1');
-  for (const path of ['/admin/catalog', '/admin/qualifications', '/admin/courses']) {
+  for (const path of ['/admin/qualifications', '/admin/courses']) {
     await page.goto(path);
     for (const th of await page.locator('th').all())
       await expect(th).toHaveCSS('font-size', '14px');

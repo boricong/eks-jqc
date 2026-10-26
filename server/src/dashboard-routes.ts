@@ -1,3 +1,4 @@
+import { DomainError } from "./errors.ts";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type {
@@ -38,7 +39,6 @@ const querySchema = z
       .optional(),
     search: z.string().max(300).optional(),
     entityId: z.string().min(1).max(160).optional(),
-    required: z.enum(["all", "required", "optional"]).optional(),
     efficacy: z.enum(["Active", "Hold", "Revoke", "none"]).optional(),
     progress: z
       .enum([
@@ -83,7 +83,7 @@ const querySchema = z
         "name",
         "organization",
         "qualification",
-        "coverage",
+
         "expiresOn",
         "targetOn",
         "dueOn",
@@ -99,10 +99,9 @@ const querySchema = z
     metric: z
       .enum([
         "eligiblePeople",
-        "requiredCoverage",
-        "requiredMissing",
+
         "blockedProgress",
-        "fullyRequiredPeople",
+
         "uniqueActiveHolders",
         "inProgress",
         "incompleteRequests",
@@ -115,14 +114,13 @@ const querySchema = z
       .optional(),
     chartId: z
       .enum([
-        "required-coverage",
         "progress",
-        "organization-coverage",
+
         "organization-people",
-        "qualification-coverage",
+
         "qualification-efficacy",
         "qualification-progress",
-        "member-coverage",
+
         "expiry",
         "renewal",
       ])
@@ -145,10 +143,55 @@ export function registerDashboardRoutes(
   actor: (r: FastifyRequest, s?: State) => UserView,
   clock: () => string,
 ) {
+  const awaitScope = (
+    request: FastifyRequest,
+    raw: Record<string, unknown>,
+  ) => {
+    const clean = { ...raw };
+    for (const key of [
+      "required",
+      "metric",
+      "chartId",
+      "sort",
+      "groupKey",
+      "seriesKey",
+    ])
+      delete clean[key];
+    dashboardReader(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      actor(request),
+      querySchema.parse(clean),
+      clock(),
+    );
+  };
   const read = (
     request: FastifyRequest,
     kind: "options" | "dashboard" | "details" | "member" | "chart-details",
   ) => {
+    actor(request);
+    const raw = request.query as Record<string, unknown>;
+    if (
+      raw.required !== undefined ||
+      ["requiredCoverage", "requiredMissing", "fullyRequiredPeople"].includes(
+        String(raw.metric),
+      ) ||
+      [
+        "required-coverage",
+        "organization-coverage",
+        "qualification-coverage",
+        "member-coverage",
+      ].includes(String(raw.chartId)) ||
+      raw.sort === "coverage"
+    ) {
+      // Validate the ordinary scope as well before reporting a retired projection.
+      awaitScope(request, raw);
+      throw new DomainError(
+        410,
+        "조직별 필수자격 지표와 조건은 종료되었습니다.",
+        "FEATURE_REMOVED",
+      );
+    }
     const query: DashboardQuery = querySchema.parse(request.query);
     if (kind === "details")
       query.metric = z

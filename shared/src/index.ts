@@ -1,3 +1,5 @@
+import { OrganizationQualificationRequirementSchema } from "./organization-requirements.ts";
+export * from "./organization-requirements.ts";
 export {
   currentTeamQualifications,
   latestQualification,
@@ -177,13 +179,35 @@ const revision = {
   deletedBy: id.optional(),
   deletionReason: z.string().trim().min(1).max(2000).optional(),
 };
-export const CourseSchema = z.object({
+export const SubjectiveQuestionSchema = z.object({ id, prompt: text }).strict();
+export type SubjectiveQuestion = z.infer<typeof SubjectiveQuestionSchema>;
+export const SubjectiveResponseSchema = z
+  .object({
+    id,
+    enrollmentId: id,
+    courseId: id,
+    learnerId: id,
+    revision: z.number().int().positive(),
+    status: z.enum(["draft", "submitted"]),
+    questions: z.array(SubjectiveQuestionSchema).min(1).max(500),
+    answers: z.record(id, text),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    submittedAt: z.iso.datetime().optional(),
+  })
+  .strict();
+export type SubjectiveResponse = z.infer<typeof SubjectiveResponseSchema>;
+export interface SubjectiveResponseView {
+  response: SubjectiveResponse | null;
+  canWrite: boolean;
+  reason: string;
+  status: "unstarted" | "draft" | "submitted" | "closed";
+}
+export const CourseContentSchema = z.object({
+  subjectiveEnabled: z.boolean().default(false),
+  subjectiveQuestions: z.array(SubjectiveQuestionSchema).max(500).default([]),
   qualificationType: QualificationTypeSchema.default("auditee"),
-  ...revision,
-  operationalStatus: z.enum(["active", "retired"]),
-  retiredAt: z.iso.datetime().optional(),
-  retiredBy: id.optional(),
-  retirementReason: z.string().trim().min(1).max(2000).optional(),
+  title: z.string().max(300),
   assessmentKinds: z.array(KindSchema).max(2),
   learningItems: z.array(LearningItemSchema).max(100).default([]),
   practicalPassScore: z.number().int().min(1).max(100).nullable(),
@@ -191,6 +215,32 @@ export const CourseSchema = z.object({
   materials: z.array(MaterialSchema).max(100),
   questions: z.array(QuestionSchema).max(500),
   practicalQuestions: z.array(PracticalQuestionSchema).max(500),
+});
+export type CourseContent = z.infer<typeof CourseContentSchema>;
+export const CommonCourseSchema = CourseContentSchema.extend({
+  id,
+  revision: z.number().int().positive(),
+  operationalStatus: z.enum(["active", "retired"]),
+  createdAt: z.iso.datetime(),
+  createdBy: id,
+  updatedAt: z.iso.datetime(),
+  updatedBy: id,
+});
+export type CommonCourse = z.infer<typeof CommonCourseSchema>;
+export const CourseSchema = CourseContentSchema.extend({
+  ...revision,
+  category: z.enum(["common", "specialized"]).default("specialized"),
+  commonCourseSource: z
+    .object({
+      id,
+      revision: z.number().int().positive(),
+      baselineHash: z.string().regex(/^[a-f0-9]{64}$/),
+    })
+    .optional(),
+  operationalStatus: z.enum(["active", "retired"]),
+  retiredAt: z.iso.datetime().optional(),
+  retiredBy: id.optional(),
+  retirementReason: z.string().trim().min(1).max(2000).optional(),
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
@@ -200,6 +250,7 @@ export const QualificationSchema = z.object({
   lifecycleStatus: z.enum(["Ready", "Active", "Hold", "Revoke"]).optional(),
   renewalLeadMonths: RenewalLeadSchema.optional(),
   renewalNoticeDaysBefore: RenewalNoticeDaysSchema.optional(),
+  commonCourseEntityIds: z.array(id).max(100).default([]),
   courseIds: z.array(id).max(100),
   englishName: z.string().max(300).default(""),
   description: text.default(""),
@@ -411,7 +462,11 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(19),
+  schemaVersion: z.literal(23),
+  organizationQualificationRequirements: z
+    .array(OrganizationQualificationRequirementSchema)
+    .default([]),
+  commonCourses: z.array(CommonCourseSchema),
   auditorPrograms: z.array(AuditorProgramSchema).default([]),
   qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
@@ -421,6 +476,7 @@ export const StateSchema = z.object({
   assignments: z.array(AssignmentSchema),
   enrollments: z.array(EnrollmentSchema),
   attempts: z.array(AttemptSchema),
+  subjectiveResponses: z.array(SubjectiveResponseSchema).default([]),
   completions: z.array(CompletionSchema),
   certifications: z.array(CertificationSchema),
   notices: z.array(NoticeSchema),
@@ -451,6 +507,7 @@ export interface ProgressSummary {
   revision: number;
   scope: ResetScope;
   counts: {
+    subjectiveResponses: number;
     objectiveAttempts: number;
     practicalAttempts: number;
     learningRecords: number;
@@ -479,6 +536,7 @@ export interface Attempt extends Partial<Draft> {
 export interface Enrollment {
   id: string;
   courseId: string;
+  subjective?: SubjectiveResponseView;
   objective: AssessmentState;
   practical: AssessmentState;
   answers: Draft["answers"];
@@ -498,8 +556,6 @@ export interface Workspace {
     entityId: string;
     qualificationId: string;
   }[];
-  requiredQualifications:
-    import("./organizations.ts").RequiredQualificationsView | null;
   requestProgress: import("./organizations.ts").RequestProgress[];
   planningOptions: import("./organizations.ts").PlanningRequestView[];
   planningReadiness: {
@@ -508,7 +564,6 @@ export interface Workspace {
     canRequest: boolean;
     reason: string;
     count: number;
-    requiredCount: number;
     draftCount: number;
   }[];
   planEligibility: { planId: string; reasons: string[] }[];
@@ -517,13 +572,14 @@ export interface Workspace {
   management: {
     lv1OrganizationId: string | null;
     canManage: boolean;
-    canManagePolicies: boolean;
+    canManageOrganizationSettings: boolean;
     canManageEligibility: boolean;
     editableOrganizationIds: string[];
   };
   organizations: OrganizationEntry[];
   users: UserView[];
   courses: (Course & {
+    teamModified?: boolean;
     typeEditing?: { canChangeType: boolean; typeChangeReason: string };
   })[];
   qualifications: Qualification[];
@@ -550,6 +606,7 @@ export interface CourseUsage {
     assignments: number;
     enrollments: number;
     attempts: number;
+    subjectiveResponses: number;
     completions: number;
     certifications: number;
     comparisons: number;
@@ -574,7 +631,7 @@ export function assessmentPrerequisite(
       }
     : undefined;
 }
-export function courseErrors(course: Course): string[] {
+export function courseErrors(course: CourseContent): string[] {
   const errors: string[] = [];
   if (!course.title.trim()) errors.push("인증Set명을 입력해 주세요.");
   if (
@@ -626,7 +683,7 @@ export function courseErrors(course: Course): string[] {
 }
 // Publication/new plans require a learner-recordable prerequisite; legacy
 // published versions keep their original structure for existing assignments.
-export function courseUseErrors(course: Course): string[] {
+export function courseUseErrors(course: CourseContent): string[] {
   return [
     ...courseErrors(course),
     ...(course.qualificationType !== "auditor" &&
@@ -701,14 +758,51 @@ export function qualificationUseErrors(
 }
 
 export function assessmentQuestions(
-  course: Course,
+  course: CourseContent,
   kind: Kind,
 ): (Question | PracticalQuestion)[] {
   return kind === "objective" ? course.questions : course.practicalQuestions;
 }
-export function assessmentPassScore(course: Course, kind: Kind) {
+export function assessmentPassScore(course: CourseContent, kind: Kind) {
   return kind === "objective" ? course.passScore : course.practicalPassScore;
 }
 
 export * from "./master-data.ts";
 export * from "./dashboard.ts";
+
+export const courseCategoryLabels = {
+  common: "공통인증Set",
+  specialized: "특화인증Set",
+};
+/** Stable content for comparison: item identity and transport codes are not curriculum. */
+export function comparableCourseContent(course: CourseContent) {
+  const content = CourseContentSchema.parse(course);
+  // Empty disabled fields preserve pre-v22 common-copy hashes.
+  const canonical = { ...content } as Partial<CourseContent>;
+  if (!content.subjectiveEnabled && !content.subjectiveQuestions.length) {
+    delete canonical.subjectiveEnabled;
+    delete canonical.subjectiveQuestions;
+  }
+  const clean = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([k]) => k !== "id" && k !== "catalogCode")
+          .map(([k, v]) => [k, clean(v)]),
+      );
+    return value;
+  };
+  return clean(canonical);
+}
+
+export function subjectiveIssues(course: CourseContent): string[] {
+  if (!course.subjectiveEnabled) return [];
+  if (course.qualificationType !== "auditee")
+    return ["주관식 평가는 Auditee에서만 사용합니다."];
+  if (!course.subjectiveQuestions.length)
+    return ["주관식 문항을 추가해 주세요."];
+  return course.subjectiveQuestions.flatMap((q, i) =>
+    q.prompt.trim() ? [] : [`주관식 ${i + 1}번 문제를 입력해 주세요.`],
+  );
+}

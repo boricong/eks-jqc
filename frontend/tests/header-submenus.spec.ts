@@ -10,14 +10,13 @@ const managementNames = [
   '인증 현황',
   '취득 대상자 상태',
   '팀 사용자 관리',
+  '조직 정보·필요자격',
   'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
   '팀 자격 설정',
-  '조직 필수 자격 설정',
   '인증Set 설정',
-  '기준 일괄 편집',
   '팀 공지 관리',
 ];
 async function multi(backend: Parameters<typeof configureDashboardFixture>[0]) {
@@ -65,6 +64,7 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
   await expect(panel(page, 'management')).toHaveCount(0);
   await expect(panel(page, 'system').getByRole('link')).toHaveText([
     '기본자격 관리',
+    '공통인증Set 관리',
     '조직 관리',
     '사용자 관리',
     '전체 업무 조회',
@@ -88,7 +88,7 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
   await expect(panel(page, 'management').getByRole('link')).toHaveText([
     '인증 현황',
     '취득 대상자 상태',
-    '조직 필수 자격 설정',
+    '조직 정보·필요자격',
   ]);
   await expect(toggle(page, 'system')).toHaveCount(0);
   await actor(page, 'admin-1');

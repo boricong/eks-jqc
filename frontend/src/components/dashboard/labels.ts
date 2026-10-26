@@ -40,8 +40,6 @@ export const renewalLabels: Record<DashboardRenewalState, string> = {
 };
 export const metricLabels: Record<DashboardMetric, string> = {
   eligiblePeople: '대상 인원',
-  requiredCoverage: '필수 자격 충족',
-  fullyRequiredPeople: '필수 전부 충족 인원',
   uniqueActiveHolders: '유효 자격 보유 인원',
   inProgress: '취득 진행',
   incompleteRequests: '미완료 계획 요청',
@@ -50,7 +48,6 @@ export const metricLabels: Record<DashboardMetric, string> = {
   overdueTargets: '목표 인증일 경과',
   overdueAssessments: '평가 예정일 경과',
   excludedPeople: '집계 제외 인원',
-  requiredMissing: '필수 자격 미충족',
   blockedProgress: '진행 제한',
 };
 export const assessmentLabels: Record<string, string> = {

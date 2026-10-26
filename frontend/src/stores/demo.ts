@@ -36,7 +36,6 @@ export const useDemo = defineStore('workspace', () => {
   const empty = (): Workspace => ({
     actor: anonymous,
     eligibilitySummary: { eligible: 0, held: 0 },
-    requiredQualifications: null,
     requestProgress: [],
     planningReadiness: [],
     planningOptions: [],
@@ -45,7 +44,7 @@ export const useDemo = defineStore('workspace', () => {
     management: {
       lv1OrganizationId: null,
       canManage: false,
-      canManagePolicies: false,
+      canManageOrganizationSettings: false,
       canManageEligibility: false,
       editableOrganizationIds: [],
     },
@@ -107,7 +106,8 @@ export const useDemo = defineStore('workspace', () => {
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
     fullManagement.value ||
-    (['dashboard', 'policies', 'targets'].includes(section) && hasRole('organization_admin'));
+    (['dashboard', 'organization-settings', 'targets'].includes(section) &&
+      hasRole('organization_admin'));
   const managementAccess = computed(
     () =>
       canEnterManagement.value &&
@@ -126,7 +126,7 @@ export const useDemo = defineStore('workspace', () => {
     () =>
       managementAccess.value &&
       !!managementLv1.value &&
-      data.value.management.canManagePolicies &&
+      data.value.management.canManageOrganizationSettings &&
       data.value.management.lv1OrganizationId === managementLv1.value,
   );
   const managementOrganization = computed(() =>
@@ -340,6 +340,7 @@ export const useDemo = defineStore('workspace', () => {
     review: {
       stateRevision: number;
       organizationRevision: number;
+      confirmInitialConfiguration?: boolean;
       versionMode?: QualificationVersionMode;
     },
   ) {

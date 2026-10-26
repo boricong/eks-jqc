@@ -4,6 +4,7 @@ import { useDemo } from './stores/demo';
 import HomeView from './views/HomeView.vue';
 import QualificationsView from './views/QualificationsView.vue';
 import QualificationView from './views/QualificationView.vue';
+import SubjectiveResponseView from './views/SubjectiveResponseView.vue';
 import AssessmentView from './views/AssessmentView.vue';
 import EvaluationsView from './views/EvaluationsView.vue';
 import CertificateView from './views/CertificateView.vue';
@@ -62,6 +63,12 @@ export const router = createRouter({
       meta: { role: 'learner', title: '자격 상세' },
     },
     {
+      path: '/qualifications/:id/courses/:courseId/subjective-response',
+      name: 'subjective-response',
+      component: SubjectiveResponseView,
+      meta: { role: 'learner' },
+    },
+    {
       path: '/qualifications/:id/courses/:courseId/:kind(objective|practical)',
       name: 'assessment',
       component: AssessmentView,
@@ -93,10 +100,12 @@ export const router = createRouter({
           meta: { management: true, managementSection: 'dashboard', title: '인증 현황' },
         },
         {
+          path: 'policies/:id?',
+          redirect: (to) => ({ path: '/admin/organization-settings', query: to.query }),
+        },
+        {
           path: 'catalog',
-          name: 'catalog',
-          component: () => import('./views/CatalogView.vue'),
-          meta: { management: true, managementSection: 'catalog' },
+          redirect: (to) => ({ path: '/admin/qualifications', query: to.query }),
         },
         {
           path: 'users',
@@ -105,7 +114,7 @@ export const router = createRouter({
           meta: { management: true, managementSection: 'users', title: '팀 사용자 관리' },
         },
         {
-          path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|notices)/:id?',
+          path: ':section(organization-settings|targets|credentials|qualifications|courses|assignments|results|notices)/:id?',
           name: 'admin',
           component: AdminView,
           meta: { management: true },
@@ -124,7 +133,7 @@ export const router = createRouter({
       meta: { role: 'system_operator', title: '문서 조회' },
     },
     {
-      path: '/system/:section(organizations|users|overview|testing|notices|qualification-templates)',
+      path: '/system/:section(organizations|users|overview|testing|notices|qualification-templates|common-courses)',
       component: SystemView,
       meta: { role: 'system_operator' },
     },

@@ -59,7 +59,7 @@ function offset(index: number) {
 <template>
   <div class="dashboard-chart-plot">
     <p class="chart-unit">
-      단위: {{ unit }}<template v-if="chart.percentage"> · 충족 / 전체 필수</template>
+      단위: {{ unit }}<template v-if="chart.percentage"> · 전체 대비</template>
     </p>
     <div
       v-if="table"
@@ -73,7 +73,7 @@ function offset(index: number) {
           <tr>
             <th scope="col">{{ chart.comparison ? '항목' : '분류' }}</th>
             <th v-for="s in chart.series" :key="s.key" scope="col">{{ s.label }}</th>
-            <th v-if="chart.percentage" scope="col">필수 충족률</th>
+            <th v-if="chart.percentage" scope="col">비율</th>
           </tr>
         </thead>
         <tbody>
@@ -93,7 +93,7 @@ function offset(index: number) {
               {{
                 g.denominator
                   ? ((g.values[0]! / g.denominator) * 100).toFixed(1) + '%'
-                  : '— · 필수 자격 없음'
+                  : '— · 집계 대상 없음'
               }}
             </td>
           </tr>
@@ -195,7 +195,7 @@ function offset(index: number) {
                   count(g.values[0]!) +
                   ' / ' +
                   count(g.denominator)
-                : '— · 필수 자격 없음'
+                : '— · 집계 대상 없음'
             }}</span>
           </div>
           <div :class="chart.kind === 'grouped' ? 'chart-grouped-bars' : 'chart-stacked-bar'">

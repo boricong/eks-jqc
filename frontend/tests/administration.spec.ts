@@ -20,7 +20,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/policies');
+  await page.goto('/admin/organization-settings');
   await page.getByLabel('조직 검색').fill('RE A조');
   await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
   await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
@@ -40,7 +40,7 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await expect(
     page
       .getByRole('navigation', { name: '업무 바로가기' })
-      .getByRole('link', { name: '조직 필수 자격 설정', exact: true }),
+      .getByRole('link', { name: '조직 정보·필요자격', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/);
@@ -49,12 +49,11 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   );
   await page
     .getByRole('navigation', { name: '관리 메뉴' })
-    .getByRole('link', { name: '조직 필수 자격 설정', exact: true })
+    .getByRole('link', { name: '조직 정보·필요자격', exact: true })
     .click();
   await expect(page.getByRole('treeitem')).toHaveCount(1);
   await expect(page.locator('.policy-pool-management')).toHaveCount(0);
   await expect(admins.getByRole('checkbox')).toHaveCount(0);
-  await page.getByRole('button', { name: '조직 정보 펼치기', exact: true }).click();
   await page.getByLabel('조직 설명', { exact: true }).fill('세부 관리자 검증 내용');
   await page.getByRole('button', { name: '조직 설정 변경 확인', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '설정 저장', exact: true }).click();
@@ -142,56 +141,6 @@ test('시스템 공지 작성·게시와 팀 공지의 홈 분리·다른 팀 �
   await expect(page.getByRole('region', { name: '내 팀 공지', exact: true })).not.toContainText(
     'Photo 팀 전용 안내',
   );
-});
-
-test('기준 일괄 관리 공통 사이드바·미저장 보호·안내 기본 접힘·네 화면 폭', async ({ page }) => {
-  await page.goto('/');
-  await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications');
-  const sidebar = page.getByRole('complementary', { name: '인증 업무 관리 탐색' });
-  await expect(sidebar).toBeVisible();
-  await sidebar.getByRole('link', { name: '기준 일괄 편집', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/catalog/);
-  await expect(sidebar).toBeVisible();
-  await expect(sidebar.getByRole('link', { name: '기준 일괄 편집', exact: true })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
-  await expect(page.getByRole('region', { name: '인증 업무 관리 대상' })).toHaveCount(1);
-  const guide = page.getByTestId('process-guide'),
-    toggle = guide.getByRole('button');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(
-    guide.getByRole('heading', { name: 'AI 검수 항목', exact: true, includeHidden: true }),
-  ).toBeHidden();
-  await expect(toggle).toHaveAttribute('aria-controls', 'process-guide-content');
-  await expect(page.locator('#process-guide-content')).toBeHidden();
-  await toggle.focus();
-  await page.keyboard.press('Enter');
-  await expect(guide).toContainText('정적 설명');
-  await toggle.click();
-  for (const width of [1920, 1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    ).toBeTruthy();
-    if (width < 1025) {
-      await page.locator('.management-menu-toggle').click();
-      await expect(sidebar.getByRole('link', { name: '인증Set 설정', exact: true })).toBeVisible();
-      await page.locator('.management-menu-toggle').click();
-    }
-    await page.screenshot({
-      path: test.info().outputPath(`catalog-shell-${width}.png`),
-      fullPage: true,
-    });
-  }
-  await page.setViewportSize({ width: 1920, height: 900 });
-  await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByLabel('인증Set명', { exact: true }).fill('보존할 기준 입력');
-  await sidebar.getByRole('link', { name: '인증Set 설정', exact: true }).click();
-  await answerConfirmation(page, false);
-  await expect(page).toHaveURL(/\/admin\/catalog/);
-  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 기준 입력');
 });
 
 test('자격 설명·개인 목표·일정 정렬과 반응형 문단 간격', async ({ page }) => {

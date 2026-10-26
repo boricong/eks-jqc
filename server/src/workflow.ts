@@ -1,11 +1,18 @@
+import {
+  previewPlanningRequest,
+  closePlanningRequest,
+} from "./organization-requirements.ts";
+import {
+  copyCommonCourses,
+  validateDefaultCommonCourses,
+} from "./common-courses.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { canContinueType } from "./personal-access.ts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
-  requiredQualifications,
   planPolicyErrors,
   planningReadiness,
-} from "./organization-policies.ts";
+} from "./organization-settings.ts";
 import {
   currentQualification,
   metadata,
@@ -73,6 +80,17 @@ export function authorizeWorkflow(
       "AUDITOR_PLANNING_REMOVED",
       { replacementPath: "/admin/auditor" },
     );
+  if (action === "planning.close") {
+    demand(
+      scope &&
+        s.planningRequests.some(
+          (r) => r.id === target && r.lv1OrganizationId === scope,
+        ),
+      403,
+      "선택한 팀의 요청만 종료할 수 있습니다.",
+    );
+    return;
+  }
   if (action === "template.import" || action === "planning.request") {
     demand(scope, 403, "관리할 Lv1 조직을 선택해 주세요.");
     if (action === "planning.request")
@@ -242,6 +260,23 @@ export function executeWorkflow(
         );
         continue;
       }
+      const expected = body.templateRevisions?.[template.id];
+      demand(
+        (expected === undefined &&
+          template.defaultCommonCourseIds.length === 0) ||
+          expected === template.revision,
+        409,
+        "기본자격 기본 목록이 변경되었습니다. 등록 목록을 다시 확인해 주세요.",
+        "TEMPLATE_CHANGED",
+      );
+      const commonIds = previous ? [] : template.defaultCommonCourseIds;
+      validateDefaultCommonCourses(
+        s,
+        template.qualificationType,
+        commonIds,
+        body.commonCourseRevisions,
+      );
+      const copies = copyCommonCourses(s, commonIds, scope);
       const id = randomUUID();
       const maximumVersion = Math.max(
         0,
@@ -267,14 +302,21 @@ export function executeWorkflow(
           description: template.description,
           lifecycleStatus: ready ? "Ready" : "Active",
           renewalLeadMonths: 3,
-          courseIds: [],
+          commonCourseEntityIds:
+            previous?.commonCourseEntityIds ?? copies.map((c) => c.entityId),
+          courseIds: copies.map((c) => c.id),
         }),
       );
       imported.push(id);
-      audit(id, "기본 자격 가져오기", undefined, { templateId });
+      audit(id, "기본 자격 가져오기", undefined, {
+        templateId,
+        commonCourseIds: copies.map((c) => c.id),
+      });
     }
     return { imported, existing };
   }
+  if (action === "planning.close")
+    return closePlanningRequest(s, u, scope!, target, body, at);
   if (action === "planning.request") {
     const input = z
       .object({
@@ -282,88 +324,130 @@ export function executeWorkflow(
         learnerIds: z.array(z.string()).min(1).max(200),
         dueOn: z.iso.date().optional(),
         message: z.string().max(2000),
+        stateRevision: z.number().int().nonnegative(),
+        organizationRevision: z.number().int().nonnegative(),
+        replaceRequestIds: z.array(z.string()).default([]),
       })
+      .strict()
       .parse(body);
     demand(
-      new Set(input.learnerIds).size === input.learnerIds.length,
+      input.stateRevision === s.revision &&
+        input.organizationRevision === organizations.revision,
+      409,
+      "확인 이후 조직·대상자·자격 기준이 변경되었습니다. 입력을 보존하고 다시 검토해 주세요.",
+      "REVISION_CONFLICT",
+    );
+    const review = previewPlanningRequest(
+      s,
+      organizations,
+      scope!,
+      input.learnerIds,
+      at,
+    );
+    demand(
+      review.rows.every((r) => r.status === "ready"),
+      409,
+      review.rows
+        .filter((r) => r.status !== "ready")
+        .map((r) => `${r.name}: ${r.reasons.join(" · ")}`)
+        .join("\n"),
+      "PLANNING_REQUIREMENTS_UNAVAILABLE",
+    );
+    demand(
+      new Set(input.replaceRequestIds).size ===
+        input.replaceRequestIds.length &&
+        input.replaceRequestIds.every((id) =>
+          review.rows.some((r) => r.existingRequestIds.includes(id)),
+        ),
       422,
-      "대상자가 중복되었습니다.",
+      "교체할 이전 미완료 요청을 확인해 주세요.",
     );
     input.dueOn ??= defaultPlanningDueOn(at);
     const ids: string[] = [];
-    for (const learnerId of input.learnerIds) {
-      const learner = userView(find(s.users, learnerId), organizations);
-      demand(
-        hasQualificationRole(learner.roles, input.qualificationType) &&
-          learner.lv1OrganizationId === scope &&
-          learner.organizationActive,
-        422,
-        "같은 Lv1에서 요청 유형에 맞는 역할을 가진 사용 중인 대상자를 선택해 주세요.",
-      );
-      requireEligible(learner);
-      const readiness = planningReadiness(
-        s,
-        organizations,
-        learner,
-        at,
-        input.qualificationType,
-      );
-      demand(readiness.canRequest, 422, `${learner.name}: ${readiness.reason}`);
-      const targets = requiredQualifications(
-        s,
-        organizations,
-        learner,
-        at,
-        input.qualificationType,
-      ).items.map((i) => ({
-        entityId: i.entityId,
-        qualificationId: i.qualificationId,
-        title: i.title,
-        version: i.version,
-        ...(i.previousCertificationId
-          ? { previousCertificationId: i.previousCertificationId }
-          : {}),
-      }));
+    for (const row of review.rows) {
       const id = randomUUID();
       ids.push(id);
+      const learner = userView(find(s.users, row.learnerId), organizations);
       s.planningRequests.push({
-        qualificationType: input.qualificationType,
+        qualificationType: "auditee",
         id,
-        lv1OrganizationId: scope,
-        learnerId,
+        lv1OrganizationId: scope!,
+        learnerId: row.learnerId,
         requestedBy: u.id,
-        organizationId: learner.organizationId,
-        organizationPath: learner.organizationPath,
-        targets,
-        selections: [],
-        mode: "learner_choice",
+        organizationId: row.organizationId,
+        organizationPath: row.organizationPath,
+        selections: row.requirements.map((q) => ({
+          entityId: q.entityId,
+          qualificationId: q.qualificationId,
+          title: q.title,
+          version: q.version,
+          ...(lastRevoked(s, learner.id, q.entityId, at)
+            ? {
+                previousCertificationId: lastRevoked(
+                  s,
+                  learner.id,
+                  q.entityId,
+                  at,
+                )!.id,
+              }
+            : {}),
+        })),
+        mode: "organization_required",
+        requirementSnapshot: {
+          stateRevision: s.revision,
+          organizationRevision: organizations.revision,
+          sources: row.requirements.map((q) => ({
+            entityId: q.entityId,
+            organizations: q.sourceOrganizations,
+          })),
+        },
         source: "requested",
         dueOn: input.dueOn,
         message: input.message,
         createdAt: at,
         revision: 1,
       });
+      for (const oldId of input.replaceRequestIds.filter((old) =>
+        row.existingRequestIds.includes(old),
+      )) {
+        const old = s.planningRequests.find((r) => r.id === oldId)!;
+        closePlanningRequest(
+          s,
+          u,
+          scope!,
+          oldId,
+          { revision: old.revision, reason: "새 조직 필요자격 요청으로 교체" },
+          at,
+          id,
+        );
+      }
       notify(
         s,
         {
           key: `planning:${id}`,
-          recipientId: learnerId,
-          lv1OrganizationId: scope,
+          recipientId: row.learnerId,
+          lv1OrganizationId: scope!,
           type: "planning",
-          qualificationType: input.qualificationType,
-          title: "개인 인증 계획을 수립해 주세요",
-          body: `계획 작성 기한 ${input.dueOn} · ${input.message}`.slice(
+          qualificationType: "auditee",
+          title: "조직 필요자격의 개인 인증 계획을 수립해 주세요",
+          body: `필요자격 ${row.requirements.length}개 · 계획 작성 기한 ${input.dueOn} · ${input.message}`.slice(
             0,
             2000,
           ),
-          href: `/plans?request=${id}${input.qualificationType === "auditor" ? "&type=auditor" : ""}`,
+          href: `/plans?request=${id}`,
         },
         at,
       );
-      audit(id, "계획 수립 요청", undefined, {
-        learnerId,
-        qualificationType: input.qualificationType,
-        recipientRoles: learner.roles,
+      audit(id, "조직 필요자격 계획 요청", undefined, {
+        learnerId: row.learnerId,
+        qualificationType: "auditee",
+        requirements: row.requirements.map((q) => ({
+          entityId: q.entityId,
+          sources: q.sourceOrganizations,
+        })),
+        replacedRequestIds: input.replaceRequestIds.filter((old) =>
+          row.existingRequestIds.includes(old),
+        ),
       });
     }
     return { ids };
@@ -371,7 +455,11 @@ export function executeWorkflow(
   if (action === "planning.select" || action === "planning.complete") {
     const r = find(s.planningRequests, target);
     expected(r, body.revision);
-    demand(!r.completion, 409, "이미 완료한 계획 요청입니다.");
+    demand(
+      !r.completion && !r.closed,
+      409,
+      "완료되거나 종료된 계획 요청입니다.",
+    );
     demand(
       r.organizationId === u.organizationId && u.organizationActive,
       409,
@@ -396,11 +484,9 @@ export function executeWorkflow(
         422,
         "선택한 자격이 중복되었습니다.",
       );
-      const ids = input.entityIds.filter(
-        (id) => !r.targets?.some((t) => t.entityId === id),
-      );
+      const ids = input.entityIds;
       for (const c of view.candidates.filter(
-        (c) => c.selected && !c.required && !ids.includes(c.entityId),
+        (c) => c.selected && !ids.includes(c.entityId),
       ))
         demand(
           !s.plans.some(
@@ -562,7 +648,6 @@ export function executeWorkflow(
       workflowVersion: WORKFLOW_VERSION,
       ...(previous ? { previousCertificationId: previous.id } : {}),
       organizationId: u.organizationId,
-      policyRevision: organizations.revision,
       status: "draft",
       revision: 1,
       createdAt: at,
@@ -591,6 +676,12 @@ export function executeWorkflow(
       "삭제된 계획입니다. 내 계획에서 다시 작성해 주세요.",
       "PLAN_DELETED",
     );
+    demand(
+      !s.planningRequests.find((r) => r.id === p.requestId)?.closed,
+      409,
+      "종료된 요청의 계획은 읽기 전용입니다.",
+      "PLANNING_CLOSED",
+    );
     expected(p, body.revision);
     const before = structuredClone(p);
     if (action === "plan.delete" || action === "plan.schedule-defaults") {
@@ -607,9 +698,10 @@ export function executeWorkflow(
         for (const r of s.planningRequests.filter(
           (r) =>
             !r.completion &&
+            !r.closed &&
+            r.mode !== "organization_required" &&
             r.learnerId === u.id &&
             r.organizationId === p.organizationId &&
-            !r.targets?.some((t) => t.entityId === q.entityId) &&
             r.selections.some(
               (t) =>
                 t.entityId === q.entityId &&

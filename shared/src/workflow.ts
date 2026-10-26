@@ -111,9 +111,27 @@ export const PlanningRequestSchema = z.object({
   revision: z.number().int().positive(),
   organizationId: id.optional(),
   organizationPath: OrganizationPathSchema.optional(),
-  mode: z.enum(["fixed", "learner_choice"]).default("fixed"),
-  targets: z.array(PlanningTargetSchema).optional(),
+  mode: z
+    .enum(["fixed", "learner_choice", "organization_required"])
+    .default("fixed"),
   selections: z.array(PlanningTargetSchema).default([]),
+  requirementSnapshot: z
+    .object({
+      stateRevision: z.number().int().nonnegative(),
+      organizationRevision: z.number().int().nonnegative(),
+      sources: z.array(
+        z.object({ entityId: id, organizations: OrganizationPathSchema }),
+      ),
+    })
+    .optional(),
+  closed: z
+    .object({
+      date: z.iso.datetime(),
+      actorId: id,
+      reason: z.string().trim().min(1).max(2000),
+      replacementRequestId: id.optional(),
+    })
+    .optional(),
   completion: z
     .object({
       date: z.iso.datetime(),

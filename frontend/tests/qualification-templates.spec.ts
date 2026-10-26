@@ -1,9 +1,10 @@
+import { requestPlan } from './workflow-helpers';
 import { test, expect, actor } from './fixtures';
 import { saveTemplate } from '../../server/src/qualification-templates';
 import { saveCriterion } from './catalog-helpers';
 import { randomUUID } from 'node:crypto';
 
-test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용과 세부조직 필수 선택', async ({
+test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용과 자격 선택 계획', async ({
   page,
   backend,
 }, testInfo) => {
@@ -75,26 +76,13 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await expect(
     page.getByRole('row').filter({ hasText: '공통 설비 운전' }).filter({ hasText: 'v1' }),
   ).toContainText('현재 기준');
-  await page.goto('/admin/policies');
-  await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
-  await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: /저장|적용/ })
-    .last()
-    .click();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
-  await page.goto('/admin/assignments');
-  await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
-  await page.getByRole('dialog').getByRole('checkbox', { name: '정하린', exact: true }).check();
-  await page.getByRole('dialog').getByRole('button', { name: '대상자에게 요청' }).click();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
-  await expect(
-    page.getByRole('option', { name: '[필수] 공통 설비 운전 · v1', exact: true }),
-  ).toHaveCount(1);
+  await expect(page.getByRole('option', { name: '공통 설비 운전 · v1', exact: true })).toHaveCount(
+    1,
+  );
 });
 
 test('기본자격 긴 정보·4해상도·미저장 취소와 키보드 초점', async ({ page, backend }, testInfo) => {
@@ -196,29 +184,6 @@ test('저장 검토 중 공통 정보 변경은 팀 입력을 보존하며 과�
     .snapshot()
     .qualifications.find((q) => q.parentId === 'demo-qualification')!;
   expect(latest.validity.months).toBe(36);
-  await page.goto('/admin/catalog');
-  await page.getByTestId(`catalog-qualification-${latest.id}`).getByRole('button').click();
-  await page.getByLabel('인증Set명', { exact: true }).fill('보존할 팀 학습 기준');
-  await backend.store.transact(
-    'operator-1',
-    randomUUID(),
-    randomUUID(),
-    () => {},
-    (s) =>
-      saveTemplate(s, 'operator-1', base.id, {
-        revision: base.revision + 1,
-        title: '최신 공통 이름 2',
-        englishName: 'Current',
-        description: '현재 공통 설명 2',
-      }),
-  );
-  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
-  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeDisabled();
-  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByRole('button', { name: '기본정보 수정', exact: true }).click();
-  await page.getByRole('button', { name: '최신 공통 정보 확인', exact: true }).click();
-  await expect(page.locator('.catalog-qualification-fields')).toContainText('최신 공통 이름 2');
-  await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('보존할 팀 학습 기준');
-  await page.getByRole('button', { name: '변경 검토 후 저장', exact: true }).click();
-  await expect(page.getByRole('button', { name: '선택 기준 저장', exact: true })).toBeEnabled();
+
+  await expect(page.getByRole('link', { name: '기준 일괄 편집', exact: true })).toHaveCount(0);
 });

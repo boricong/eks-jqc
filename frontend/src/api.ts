@@ -85,38 +85,6 @@ export async function mutate<T = { id: string; revision: number }>(
     throw error;
   }
 }
-export async function downloadWorkbook(path: string, body?: unknown) {
-  const epoch = getDataEpoch();
-  const response = await fetch(`/api${path}`, {
-    method: body ? 'POST' : 'GET',
-    credentials: 'same-origin',
-    headers: {
-      'X-Session-Tab': sessionTab,
-      ...(getDataGeneration() ? { 'X-EKS-Data-Generation': getDataGeneration() } : {}),
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const generation = response.headers.get('X-EKS-Data-Generation');
-  if (epoch !== getDataEpoch() && generation !== getDataGeneration())
-    throw new ApiError(
-      409,
-      '이전 데이터의 다운로드 응답입니다. 다시 선택해 주세요.',
-      'DATASET_CHANGED',
-    );
-  observeGeneration(generation);
-  if (!response.ok) {
-    const error = await response.json();
-    throw new ApiError(response.status, error.message);
-  }
-  const url = URL.createObjectURL(await response.blob()),
-    link = document.createElement('a');
-  link.href = url;
-  link.download = 'eks-catalog.xlsx';
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export async function downloadMasterData() {
   const file = await api<unknown>('/system/master-data/export');
   const url = URL.createObjectURL(

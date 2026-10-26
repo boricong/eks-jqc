@@ -10,14 +10,13 @@ export const managementSections = [
   { id: 'dashboard', group: 'overview', name: '인증 현황', icon: 'chart' },
   { id: 'targets', group: 'operations', name: '취득 대상자 상태', icon: 'users' },
   { id: 'users', group: 'operations', name: '팀 사용자 관리', icon: 'users' },
+  { id: 'organization-settings', group: 'operations', name: '조직 정보·필요자격', icon: 'users' },
   { id: 'auditor', group: 'operations', name: 'Auditor 운영', icon: 'award' },
   { id: 'assignments', group: 'operations', name: '계획 요청·진행', icon: 'list' },
   { id: 'results', group: 'operations', name: '평가·수료 결과', icon: 'clipboard' },
   { id: 'credentials', group: 'operations', name: '보유 자격 관리', icon: 'award' },
   { id: 'qualifications', group: 'criteria', name: '팀 자격 설정', icon: 'award' },
-  { id: 'policies', group: 'criteria', name: '조직 필수 자격 설정', icon: 'users' },
   { id: 'courses', group: 'criteria', name: '인증Set 설정', icon: 'book' },
-  { id: 'catalog', group: 'criteria', name: '기준 일괄 편집', icon: 'file' },
   { id: 'notices', group: 'communication', name: '팀 공지 관리', icon: 'notice' },
 ].map((section) => ({ ...section, path: `/admin/${section.id}` }));
 

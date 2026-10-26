@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch, useId } from 'vue';
-import type { OrganizationPoliciesView } from '@eks/contracts';
+import type { OrganizationSettingsView } from '@eks/contracts';
 const props = defineProps<{
-  entries: OrganizationPoliciesView['entries'];
+  entries: OrganizationSettingsView['entries'];
   selected: string;
   disabled?: boolean;
 }>();

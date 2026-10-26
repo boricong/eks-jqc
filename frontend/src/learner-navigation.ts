@@ -4,7 +4,8 @@ export type LearningStage = 'learning' | 'assessment';
 export function learningStage(
   route: Pick<RouteLocationNormalizedLoaded, 'name' | 'query'>,
 ): LearningStage {
-  return route.name === 'assessment' || route.query.stage === 'assessment'
+  return ['assessment', 'subjective-response'].includes(String(route.name)) ||
+    route.query.stage === 'assessment'
     ? 'assessment'
     : 'learning';
 }

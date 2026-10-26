@@ -337,15 +337,15 @@ export function qualificationImpact(
     revision: s.revision,
     organizationRevision: doc.revision,
     counts: {
-      organizations: currentTeamQualifications(s).some(
-        (p) => p.qualificationId === id,
-      )
-        ? organizationEntries(doc).filter(
-            (e) =>
-              e.lv1OrganizationId === scope &&
-              e.requiredQualifications?.includes(q.entityId),
-          ).length
-        : 0,
+      organizations: s.organizationQualificationRequirements.filter((r) =>
+        r.entityIds.includes(q.entityId),
+      ).length,
+      planningRequests: s.planningRequests.filter(
+        (r) =>
+          !r.completion &&
+          !r.closed &&
+          r.selections.some((t) => t.entityId === q.entityId),
+      ).length,
       draftPlans: s.plans.filter(
         (p) => p.qualificationId === id && p.status === "draft" && !p.deletedAt,
       ).length,

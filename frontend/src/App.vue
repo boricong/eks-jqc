@@ -43,7 +43,9 @@ watch(
     if (
       store.signedIn &&
       ((required && !(required === 'learner' ? store.canEnterPersonal : store.hasRole(required))) ||
-        (route.meta.management && !store.managementAccess && route.params.section !== 'policies'))
+        (route.meta.management &&
+          !store.managementAccess &&
+          route.params.section !== 'organization-settings'))
     )
       void router.replace('/');
   },
@@ -78,24 +80,21 @@ function revealFocusedInput(event: FocusEvent) {
     !element.matches('input, textarea, select, [role="tab"]')
   )
     return;
-  // Dialogs and the virtual table manage their own scroll/focus. Moving the
-  // page while a table editor opens can retarget the second click to another row.
-  if (element.closest('dialog[open], .tabulator')) return;
+  // Dialogs manage their own scroll and focus.
+  if (element.closest('dialog[open]')) return;
   const bounds = element.getBoundingClientRect();
-  const covered = [...document.querySelectorAll<HTMLElement>('.actionbar, .catalog-save-bar')].some(
-    (bar) => {
-      if (bar.contains(element)) return false;
-      const area = bar.getBoundingClientRect();
-      return (
-        area.height > 0 &&
-        area.top < innerHeight &&
-        bounds.bottom > area.top &&
-        bounds.top < area.bottom &&
-        bounds.right > area.left &&
-        bounds.left < area.right
-      );
-    },
-  );
+  const covered = [...document.querySelectorAll<HTMLElement>('.actionbar')].some((bar) => {
+    if (bar.contains(element)) return false;
+    const area = bar.getBoundingClientRect();
+    return (
+      area.height > 0 &&
+      area.top < innerHeight &&
+      bounds.bottom > area.top &&
+      bounds.top < area.bottom &&
+      bounds.right > area.left &&
+      bounds.left < area.right
+    );
+  });
   if (covered) element.scrollIntoView({ block: 'center', behavior: 'instant' });
 }
 onMounted(() => {

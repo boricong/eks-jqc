@@ -21,7 +21,6 @@ const filterKeys = [
   'qualificationType',
   'search',
   'entityId',
-  'required',
   'efficacy',
   'progress',
   'qualificationScope',
@@ -39,6 +38,42 @@ export function useDashboard() {
   const store = useDemo(),
     route = useRoute(),
     router = useRouter();
+  watch(
+    () => route.fullPath,
+    () => {
+      const q = { ...route.query };
+      let removed = false;
+      if (q.required !== undefined) {
+        delete q.required;
+        removed = true;
+      }
+      if (q.sort === 'coverage') {
+        delete q.sort;
+        delete q.order;
+        removed = true;
+      }
+      if (
+        ['requiredCoverage', 'requiredMissing', 'fullyRequiredPeople'].includes(String(q.metric))
+      ) {
+        for (const key of ['metric', 'detailPage', 'detailEntity']) delete q[key];
+        removed = true;
+      }
+      if (
+        [
+          'required-coverage',
+          'organization-coverage',
+          'qualification-coverage',
+          'member-coverage',
+        ].includes(String(q.chartId || q.chart))
+      ) {
+        for (const key of ['chartId', 'groupKey', 'seriesKey', 'chart', 'series', 'group'])
+          delete q[key];
+        removed = true;
+      }
+      if (removed) void router.replace({ query: q });
+    },
+    { immediate: true },
+  );
   const data = ref<DashboardResponse | null>(null),
     options = ref<DashboardOptions | null>(null);
   const loading = ref(false),
@@ -100,13 +135,13 @@ export function useDashboard() {
       result.search = one(q.search);
       result.sort = choice(
         one(q.sort),
-        ['name', 'organization', 'qualification', 'coverage', 'expiresOn', 'targetOn', 'dueOn'],
+        ['name', 'organization', 'qualification', 'expiresOn', 'targetOn', 'dueOn'],
         tab.value === 'renewals' ? 'expiresOn' : tab.value === 'members' ? 'organization' : 'name',
       );
       result.order = choice(one(q.order), ['asc', 'desc'], 'asc');
     }
     if (tab.value === 'organizations') {
-      result.sort = choice(one(q.sort), ['name', 'coverage'], 'name');
+      result.sort = choice(one(q.sort), ['name'], 'name');
       result.order = choice(one(q.order), ['asc', 'desc'], 'asc');
     }
     if (tab.value === 'qualifications')
@@ -120,7 +155,6 @@ export function useDashboard() {
       result.entityId = one(q.entityId);
     }
     if (tab.value === 'members') {
-      result.required = choice(one(q.required), ['all', 'required', 'optional'], 'all');
       if (['Active', 'Hold', 'Revoke', 'none'].includes(one(q.efficacy)))
         result.efficacy = one(q.efficacy) as DashboardQuery['efficacy'];
       if (
@@ -272,7 +306,6 @@ export function useDashboard() {
         for (const field of [
           'search',
           'entityId',
-          'required',
           'efficacy',
           'progress',
           'population',

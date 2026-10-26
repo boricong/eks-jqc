@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { kindLabels, learningTypeLabels, type Course } from '@eks/contracts';
+import CourseCategory from './CourseCategory.vue';
+import { kindLabels, learningTypeLabels, type Course, type CourseContent } from '@eks/contracts';
 import { computed, nextTick, ref, watch } from 'vue';
 import AppDialog from './AppDialog.vue';
 import CourseMaterials from './CourseMaterials.vue';
 import StatusBadge from './StatusBadge.vue';
-const props = defineProps<{ open: boolean; course: Course | null }>();
+const props = defineProps<{
+  open: boolean;
+  course: (CourseContent & { id: string } & Partial<Course>) | null;
+}>();
 const emit = defineEmits<{ 'update:open': [value: boolean] }>();
 const content = ref<HTMLElement>();
 watch(
@@ -34,7 +38,8 @@ const assessmentSummary = computed(
       <section aria-label="기본정보">
         <div class="course-preview-heading">
           <h3>{{ course.title || '이름 없는 인증Set' }}</h3>
-          <span class="small-label">v{{ course.version }}</span>
+          <CourseCategory v-if="course.category" :course="course" />
+          <span v-if="course.version" class="small-label">v{{ course.version }}</span>
           <StatusBadge :status="course.operationalStatus === 'retired' ? 'retired' : 'active'" />
         </div>
         <p v-if="course.deletedAt" class="qualification-note">
@@ -81,6 +86,16 @@ const assessmentSummary = computed(
       </section>
       <section v-if="course.qualificationType !== 'auditor'" aria-label="평가 요약">
         <h3>평가 요약</h3>
+        <section v-if="course.subjectiveEnabled" aria-label="주관식 문항">
+          <h4>주관식 평가 · 수료에 영향 없음 · {{ course.subjectiveQuestions.length }}문항</h4>
+          <p
+            v-for="(q, i) in course.subjectiveQuestions"
+            :key="q.id"
+            style="white-space: pre-wrap; overflow-wrap: anywhere"
+          >
+            {{ i + 1 }}. {{ q.prompt || '문제 미입력' }}
+          </p>
+        </section>
         <dl v-if="course.assessmentKinds.length" class="course-preview-assessments">
           <div v-for="kind in course.assessmentKinds" :key="kind">
             <dt>{{ kindLabels[kind] }}</dt>

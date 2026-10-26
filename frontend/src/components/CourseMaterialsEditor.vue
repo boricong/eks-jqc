@@ -2,14 +2,14 @@
 import { randomUUID } from '../uuid';
 import { confirmAction } from '../composables/useConfirmation';
 import { ref, computed, watch, nextTick } from 'vue';
-import { materialTypeLabels, type Course, type LearningMaterial } from '@eks/contracts';
+import { materialTypeLabels, type CourseContent, type LearningMaterial } from '@eks/contracts';
 import type { CourseIssue } from '../course-editor';
 import AppIcon from './AppIcon.vue';
-const props = defineProps<{ course: Course; disabled: boolean }>();
+const props = defineProps<{ course: CourseContent; disabled: boolean }>();
 const editing = ref<LearningMaterial | null>(null),
   error = ref('');
 watch(
-  () => props.course.id,
+  () => props.course,
   () => {
     editing.value = null;
     error.value = '';

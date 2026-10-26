@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CourseCategory from '../components/CourseCategory.vue';
 import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
@@ -47,6 +48,7 @@ const back = computed(() =>
     <section class="panel award-document">
       <p>{{ record.snapshot?.learnerName || store.username(a.learnerId) }}</p>
       <h2>{{ record.snapshot?.title || store.course(record.courseId).title }}</h2>
+      <CourseCategory :course="store.course(record.courseId)" />
       <p>v{{ record.snapshot?.version || store.course(record.courseId).version }}</p>
       <p>
         {{

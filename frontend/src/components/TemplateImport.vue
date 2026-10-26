@@ -15,6 +15,8 @@ const store = useDemo(),
 let generation = 0;
 const templates = ref<
   {
+    revision: number;
+    commonCourses: { id: string; title: string; revision: number; readiness: string[] }[];
     id: string;
     title: string;
     englishName: string;
@@ -60,6 +62,10 @@ async function save() {
   error.value = '';
   try {
     await store.command('/qualification-templates/import', {
+      templateRevisions: Object.fromEntries(templates.value.map((t) => [t.id, t.revision])),
+      commonCourseRevisions: Object.fromEntries(
+        templates.value.flatMap((t) => t.commonCourses.map((c) => [c.id, c.revision])),
+      ),
       qualificationType: props.qualificationType,
       templateIds: chosen.value.filter((id) =>
         listed.value.some((t) => t.id === id && !t.imported),
@@ -115,6 +121,9 @@ onBeforeRouteUpdate(leave);
         >기본자격 관리</RouterLink
       >
     </div>
+    <p class="muted">
+      공통인증Set은 기본 목록으로 포함됩니다. 팀 자격 설정에서 내용을 수정하거나 제외할 수 있습니다.
+    </p>
     <div class="template-list">
       <label v-for="t in listed" :key="t.id" class="choice"
         ><input
@@ -127,6 +136,12 @@ onBeforeRouteUpdate(leave);
           }}<small class="muted"
             >{{ qualificationTypeLabels[t.qualificationType] }} · {{ t.englishName
             }}{{ t.imported ? ' · 등록됨' : '' }}</small
+          ><small v-if="t.commonCourses.length" class="muted"
+            >공통인증Set {{ t.commonCourses.length }}개:
+            {{ t.commonCourses.map((c) => c.title || '이름 없음').join(', ')
+            }}{{
+              t.commonCourses.some((c) => c.readiness.length) ? ' · 보완 필요 항목 포함' : ''
+            }}</small
           ></span
         ></label
       >

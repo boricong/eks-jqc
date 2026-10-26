@@ -1,3 +1,4 @@
+import { OrganizationQualificationRequirementSchema } from "@eks/contracts";
 import { classifyCourseTypes } from "./course-types.ts";
 import { upgradeTemplateData } from "./template-migration.ts";
 import { createHash } from "node:crypto";
@@ -7,8 +8,10 @@ import {
   QualificationTemplateSchema,
   UserSchema,
   CourseSchema,
+  CommonCourseSchema,
   QualificationSchema,
   OrganizationDocumentSchema,
+  LegacyOrganizationNodeSchema,
   organizationEntries,
   clearedDataLabels,
   type State,
@@ -22,7 +25,7 @@ import { validateState } from "./integrity.ts";
 import { validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
 
-export const MASTER_LIMIT = 25 * 1024 * 1024;
+export const MASTER_LIMIT = 64 * 1024 * 1024;
 export function contentHash(value: unknown): string {
   const canonical = (v: any): any =>
     Array.isArray(v)
@@ -44,6 +47,9 @@ export function masterPayload(
   org: OrganizationDocument,
 ): MasterPayload {
   return structuredClone({
+    organizationQualificationRequirements:
+      state.organizationQualificationRequirements,
+    commonCourses: state.commonCourses,
     auditorPrograms: state.auditorPrograms,
     qualificationTemplates: state.qualificationTemplates,
     users: state.users,
@@ -56,12 +62,20 @@ export function masterPayload(
 }
 export function masterCounts(p: MasterPayload): MasterCounts {
   return {
+    organizationQualificationRequirements: (
+      p.organizationQualificationRequirements || []
+    ).reduce((n, r) => n + r.entityIds.length, 0),
+    commonCourses: p.commonCourses?.length || 0,
     qualificationTemplates: p.qualificationTemplates?.length || 0,
     users: p.users.length,
     organizations: organizationEntries(p.organizations).length,
     qualifications: p.qualifications.length,
     courses: p.courses.length,
     knowledgeQuestions: p.courses.reduce((n, c) => n + c.questions.length, 0),
+    subjectiveQuestions: p.courses.reduce(
+      (n, c) => n + c.subjectiveQuestions.length,
+      0,
+    ),
     scenarioQuestions: p.courses.reduce(
       (n, c) => n + c.practicalQuestions.length,
       0,
@@ -92,7 +106,7 @@ export function masterCandidate(
   organizationRevision: number,
 ) {
   const org = validateOrganizations({
-    schemaVersion: 3,
+    schemaVersion: 4,
     revision: organizationRevision,
     ...structuredClone(p.organizations),
     audits: [],
@@ -105,7 +119,11 @@ export function masterCandidate(
   );
   const state = validateState(
     {
-      schemaVersion: 19,
+      schemaVersion: 23,
+      organizationQualificationRequirements: structuredClone(
+        p.organizationQualificationRequirements || [],
+      ),
+      commonCourses: structuredClone(p.commonCourses || []),
       auditorPrograms: structuredClone(p.auditorPrograms || []),
       qualificationTemplates: structuredClone(p.qualificationTemplates),
       revision: stateRevision,
@@ -126,9 +144,9 @@ export function exportMaster(
   const payload = masterPayload(s, org);
   return {
     format: "eks-master",
-    formatVersion: 9,
-    stateSchemaVersion: 19,
-    organizationSchemaVersion: 3,
+    formatVersion: 13,
+    stateSchemaVersion: 23,
+    organizationSchemaVersion: 4,
     createdAt: at,
     counts: masterCounts(payload),
     sha256: contentHash(payload),
@@ -154,6 +172,10 @@ function knownFields(raw: any, parsed: any, at = "파일") {
 }
 const payloadSchema = z
   .object({
+    organizationQualificationRequirements: z
+      .array(OrganizationQualificationRequirementSchema)
+      .default([]),
+    commonCourses: z.array(CommonCourseSchema).default([]),
     auditorPrograms: z.array(AuditorProgramSchema).default([]),
     qualificationTemplates: z.array(QualificationTemplateSchema),
     users: z.array(UserSchema),
@@ -167,6 +189,31 @@ const payloadSchema = z
 export function readMaster(input: unknown): MasterFile {
   try {
     const version = (input as any)?.formatVersion;
+    if (version < 13)
+      demand(
+        !(input as any)?.payload?.organizationQualificationRequirements?.length,
+        422,
+        "조직 필요자격은 JSON13 이상에서만 사용할 수 있습니다.",
+        "MASTER_FILE_INVALID",
+      );
+    if (version < 10) {
+      const p = (input as any)?.payload;
+      demand(
+        !p?.commonCourses?.length &&
+          !(p?.courses || []).some(
+            (c: any) => c.category === "common" || c.commonCourseSource,
+          ) &&
+          !(p?.qualifications || []).some(
+            (q: any) => q.commonCourseEntityIds?.length,
+          ) &&
+          !(p?.qualificationTemplates || []).some(
+            (t: any) => t.defaultCommonCourseIds?.length,
+          ),
+        422,
+        "공통인증Set 정보는 기본정보 JSON10 이상에서만 사용할 수 있습니다.",
+        "MASTER_FILE_INVALID",
+      );
+    }
     if (version < 9)
       demand(
         ((input as any)?.payload?.qualifications || []).every(
@@ -176,7 +223,7 @@ export function readMaster(input: unknown): MasterFile {
         "Ready 자격은 기본정보 JSON v9 이상에서만 사용할 수 있습니다.",
         "MASTER_FILE_INVALID",
       );
-    if (version >= 4 && version <= 9) {
+    if (version >= 4 && version <= 13) {
       const payload = (input as any)?.payload;
       for (const item of [
         ...(payload?.qualificationTemplates || []),
@@ -191,15 +238,34 @@ export function readMaster(input: unknown): MasterFile {
           "MASTER_FILE_INVALID",
         );
     }
+    if (version < 12)
+      for (const c of [
+        ...((input as any)?.payload?.courses || []),
+        ...((input as any)?.payload?.commonCourses || []),
+      ])
+        demand(
+          !c.subjectiveEnabled && !c.subjectiveQuestions?.length,
+          422,
+          "구형 파일에는 주관식 설정을 추가할 수 없습니다.",
+          "MASTER_FILE_INVALID",
+        );
     const legacy = version === 1,
       old = version === 1 || version === 2;
     const oldQ = QualificationSchema.extend({
       templateId: z.string().optional(),
       templateRevision: z.number().int().positive().optional(),
     });
+    const basePayloadSchema =
+      version < 11
+        ? payloadSchema.extend({
+            organizations: z
+              .object({ roots: z.array(LegacyOrganizationNodeSchema) })
+              .strict(),
+          })
+        : payloadSchema;
     const compatiblePayloadSchema =
       version < 8
-        ? payloadSchema.extend({
+        ? basePayloadSchema.extend({
             auditorPrograms: z
               .array(
                 AuditorProgramSchema.extend({
@@ -218,7 +284,7 @@ export function readMaster(input: unknown): MasterFile {
                 }),
               )
               .default([]),
-            organizations: payloadSchema.shape.organizations.extend({
+            organizations: basePayloadSchema.shape.organizations.extend({
               qualificationPools: z
                 .array(
                   z.object({
@@ -230,7 +296,7 @@ export function readMaster(input: unknown): MasterFile {
                 .default([]),
             }),
           })
-        : payloadSchema;
+        : basePayloadSchema;
     const selectedSchema = old
       ? compatiblePayloadSchema.omit({ qualificationTemplates: true }).extend({
           qualifications: z.array(
@@ -271,7 +337,15 @@ export function readMaster(input: unknown): MasterFile {
                         ? 7
                         : version === 8
                           ? 8
-                          : 9,
+                          : version === 9
+                            ? 9
+                            : version === 10
+                              ? 10
+                              : version === 11
+                                ? 11
+                                : version === 12
+                                  ? 12
+                                  : 13,
         ),
         stateSchemaVersion: legacy
           ? z.literal(10)
@@ -289,8 +363,18 @@ export function readMaster(input: unknown): MasterFile {
                       ? z.literal(17)
                       : version === 8
                         ? z.literal(18)
-                        : z.literal(19),
-        organizationSchemaVersion: z.literal(version < 8 ? 2 : 3),
+                        : version === 9
+                          ? z.literal(19)
+                          : version === 10
+                            ? z.literal(20)
+                            : version === 11
+                              ? z.literal(21)
+                              : version === 12
+                                ? z.literal(22)
+                                : z.literal(23),
+        organizationSchemaVersion: z.literal(
+          version < 8 ? 2 : version < 11 ? 3 : 4,
+        ),
         createdAt: z.iso.datetime(),
         counts: z.record(z.string(), z.number().int().nonnegative()),
         sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -340,6 +424,14 @@ export function readMaster(input: unknown): MasterFile {
           program[level] = { templateId: ref.templateId, entityId: q.entityId };
         }
     }
+    if (version < 11) {
+      const pending = [...converted.organizations.roots];
+      while (pending.length) {
+        const node = pending.pop();
+        delete node.requiredQualifications;
+        pending.push(...node.children);
+      }
+    }
     const payload = payloadSchema.parse(converted);
     if (version < 5) {
       for (const c of payload.courses) {
@@ -377,6 +469,10 @@ export function readMaster(input: unknown): MasterFile {
     masterCandidate(payload, 0, 0);
     const counts = masterCounts(payload);
     const previousCounts = { ...counts } as Record<string, number>;
+    if (version < 13)
+      delete previousCounts.organizationQualificationRequirements;
+    if (version < 12) delete previousCounts.subjectiveQuestions;
+    if (version < 10) delete previousCounts.commonCourses;
     if (old) delete previousCounts.qualificationTemplates;
     if (version < 8)
       previousCounts.poolEntries = (
@@ -390,9 +486,9 @@ export function readMaster(input: unknown): MasterFile {
     );
     return {
       ...result,
-      formatVersion: 9,
-      stateSchemaVersion: 19,
-      organizationSchemaVersion: 3,
+      formatVersion: 13,
+      stateSchemaVersion: 23,
+      organizationSchemaVersion: 4,
       payload,
       sha256: contentHash(payload),
       counts,
@@ -401,7 +497,7 @@ export function readMaster(input: unknown): MasterFile {
     if (e instanceof DomainError) throw e;
     throw new DomainError(
       422,
-      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v9(업무19·조직3), 호환 형식 v1~v8(업무10~18·조직2~3)입니다. ${e instanceof Error ? e.message : ""}`,
+      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v13(업무23·조직4), 호환 형식 v1~v12(업무10~22·조직2~4)입니다. ${e instanceof Error ? e.message : ""}`,
       "MASTER_FILE_INVALID",
     );
   }

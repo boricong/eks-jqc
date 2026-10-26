@@ -1,3 +1,4 @@
+import { configureNeeds } from './workflow-helpers';
 import { test, expect, actor } from './fixtures';
 import type { Page } from '@playwright/test';
 import {
@@ -377,6 +378,7 @@ test('Auditor 운영·선택 재발송·설정 충돌 입력 보존과 Auditee �
           .length,
     )
     .toBe(2);
+  await configureNeeds(page);
   await page.goto('/admin/assignments');
   await expect(page.getByRole('tab', { name: /Auditor/ })).toHaveCount(0);
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();

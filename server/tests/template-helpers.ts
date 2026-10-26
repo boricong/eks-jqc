@@ -14,6 +14,7 @@ export function linkFixtureTemplates(s: State) {
     q.templateRevision ??= 1;
     if (!s.qualificationTemplates.some((t) => t.id === q.templateId))
       s.qualificationTemplates.push({
+        defaultCommonCourseIds: [],
         id: q.templateId,
         qualificationType: q.qualificationType,
         revision: 1,

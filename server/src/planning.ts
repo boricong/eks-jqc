@@ -20,10 +20,9 @@ export function candidate(
   at: string,
   request?: PlanningRequest,
 ): PlanningCandidate {
-  const target = [
-    ...(request?.targets || []),
-    ...(request?.selections || []),
-  ].find((t) => t.entityId === entityId);
+  const target = (request?.selections || []).find(
+    (t) => t.entityId === entityId,
+  );
   const pool = currentTeamQualifications(s).find(
     (p) =>
       p.lv1OrganizationId === u.lv1OrganizationId && p.entityId === entityId,
@@ -53,6 +52,8 @@ export function candidate(
     .find(
       (p) =>
         !p.deletedAt &&
+        (p.status === "completed" ||
+          !s.planningRequests.find((r) => r.id === p.requestId)?.closed) &&
         p.learnerId === u.id &&
         s.qualifications.find((q) => q.id === p.qualificationId)?.entityId ===
           entityId &&
@@ -68,7 +69,6 @@ export function candidate(
     qualificationId: q?.id || target?.qualificationId || "",
     title: q?.title || target?.title || "",
     version: q?.version || target?.version || 1,
-    required: !!request?.targets?.some((t) => t.entityId === entityId),
     selected: !!target,
     status: "available",
     reason: "계획을 작성할 수 있습니다.",
@@ -124,6 +124,7 @@ export function candidate(
   row.canStart =
     !!request &&
     !request.completion &&
+    !request.closed &&
     (row.selected || request.mode === "learner_choice") &&
     ["available", "draft"].includes(row.status) &&
     request.organizationId === u.organizationId &&
@@ -139,6 +140,19 @@ export function planningView(
   request: PlanningRequest,
   at: string,
 ): PlanningRequestView {
+  if (request.closed)
+    return {
+      requestId: request.id,
+      revision: request.revision,
+      candidates: request.selections.map((t) => ({
+        ...candidate(s, doc, u, t.entityId, at, request),
+        canStart: false,
+      })),
+      errors: ["종료된 요청입니다. 새 요청을 확인해 주세요."],
+      canComplete: false,
+      noAdditional: false,
+      stage: "요청 종료",
+    };
   if (request.completion) {
     const candidates: PlanningCandidate[] = request.completion.evidence.map(
       (e) => {
@@ -148,7 +162,7 @@ export function planningView(
           (a) =>
             a.id === (e.assignmentId || p?.assignmentId || c?.assignmentId),
         );
-        const target = [...(request.targets || []), ...request.selections].find(
+        const target = request.selections.find(
           (t) => t.entityId === e.entityId,
         );
         const q = s.qualifications.find(
@@ -170,7 +184,6 @@ export function planningView(
             q?.title ||
             "",
           version: q?.version || 1,
-          required: !!request.targets?.some((t) => t.entityId === e.entityId),
           selected: true,
           status: e.certificationId ? "valid" : "planned",
           reason: e.certificationId
@@ -193,11 +206,7 @@ export function planningView(
           : "계획 완료",
     };
   }
-  const ids = new Set(
-    [...(request.targets || []), ...(request.selections || [])].map(
-      (t) => t.entityId,
-    ),
-  );
+  const ids = new Set(request.selections.map((t) => t.entityId));
   if (request.mode === "learner_choice")
     currentTeamQualifications(s)
       .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
@@ -220,7 +229,16 @@ export function planningView(
   const covered = (c: PlanningCandidate) =>
     ["valid", "planned"].includes(c.status);
   const noAdditional =
-    !selected.length && candidates.length > 0 && candidates.every(covered);
+    ((request.mode === "organization_required" &&
+      !s.plans.some(
+        (p) =>
+          p.requestId === request.id &&
+          p.status === "completed" &&
+          !p.deletedAt,
+      )) ||
+      !selected.length) &&
+    candidates.length > 0 &&
+    candidates.every(covered);
   const errors: string[] = [];
   if (
     request.organizationId !== u.organizationId ||
@@ -232,8 +250,6 @@ export function planningView(
   if (!u.organizationActive) errors.push("사용 중지된 소속입니다.");
   if (u.certificationEligibility === "hold")
     errors.push("취득 대상자 Hold 상태입니다.");
-  if (!request.targets)
-    errors.push("이전 요청의 범위를 확인할 수 없습니다. 새 요청이 필요합니다.");
   if (!candidates.length)
     errors.push("현재 팀 자격이 없어 자격 준비를 기다리고 있습니다.");
   if (!selected.length && !noAdditional && candidates.length)
@@ -291,7 +307,8 @@ export function planRequestErrors(
     return ["취득 대상자 Hold 또는 사용 중지된 소속입니다."];
   if (r.qualificationType !== q.qualificationType)
     return ["요청과 자격의 인증 유형이 다릅니다."];
-  if (r.completion) return ["완료된 계획 요청입니다. 새 요청을 확인해 주세요."];
+  if (r.completion || r.closed)
+    return ["완료되거나 종료된 계획 요청입니다. 새 요청을 확인해 주세요."];
   const c = candidate(s, doc, u, q.entityId, at, r);
   if (!c.selected && !(starting && r.mode === "learner_choice"))
     return ["이 요청에 포함된 자격이 아닙니다. 요청 범위를 확인해 주세요."];

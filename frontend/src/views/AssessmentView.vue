@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CourseCategory from '../components/CourseCategory.vue';
 import PropertyList from '../components/PropertyList.vue';
 import ActionBar from '../components/ActionBar.vue';
 import SaveFeedback from '../components/SaveFeedback.vue';
@@ -402,7 +403,7 @@ onBeforeRouteUpdate(leave);
         </button>
       </div>
       <p class="assessment-context">
-        <strong>{{ c.title }}</strong
+        <CourseCategory :course="c" /><strong>{{ c.title }}</strong
         ><span>v{{ c.version }} · {{ kindLabels[kind] }}</span>
       </p>
       <section v-show="infoOpen" :id="uid + '-info'" class="assessment-info" aria-label="평가 정보">
@@ -695,6 +696,19 @@ onBeforeRouteUpdate(leave);
           </p>
         </div>
         <div class="assessment-submit-actions">
+          <p
+            v-if="
+              stage === 'review' &&
+              c.subjectiveEnabled &&
+              !e.completion &&
+              e.subjective?.status !== 'submitted' &&
+              c.assessmentKinds.every((k) => k === kind || e?.[k] === 'passed')
+            "
+            class="submission-warning"
+          >
+            이 평가를 통과하면 인증Set이 수료되어 미제출 주관식 답변을 더 이상 작성·제출할 수
+            없습니다. 주관식 미제출은 수료에 영향을 주지 않습니다.
+          </p>
           <p v-if="stage === 'review'" class="submission-warning">
             <AppIcon name="lock" :size="16" />최종 제출 후에는 답안을 수정할 수 없습니다.
           </p>

@@ -1,5 +1,5 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import { registerFixtureQualification } from "./template-helpers.ts";
-import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
@@ -551,9 +551,8 @@ async function invitation(
   ftId: string | null = null,
   root = "org-photo",
 ) {
-  await configureTestPolicies(f.store, root);
   return (
-    await f.call("operator-1", scope("/planning-requests", root), {
+    await legacyRequestFixture(f.store, "operator-1", {
       learnerIds: [learner],
       dueOn: "2026-10-31",
       message: "자격별 계획을 작성하세요.",
@@ -805,7 +804,6 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
       (q: any) => q.id === custom,
     ),
   );
-  await configureTestPolicies(f.store);
   assert.ok(
     (await f.call("learner-2", "/workspace")).qualifications.some(
       (q: any) => q.id === custom,
@@ -1185,17 +1183,10 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
     dueOn: "2027-01-31",
     message: "추가 직무 자격을 계획하세요.",
   };
-  const second = await f.call(
-    "admin-1",
-    "/planning-requests",
-    body,
-    200,
-    "POST",
-    key,
-  );
+  const second = await legacyRequestFixture(f.store, "admin-1", body, key);
   assert.notEqual(second.ids[0], first.request);
   assert.deepEqual(
-    await f.call("admin-1", "/planning-requests", body, 200, "POST", key),
+    await legacyRequestFixture(f.store, "admin-1", body, key),
     second,
   );
   const after = f.store.snapshot();

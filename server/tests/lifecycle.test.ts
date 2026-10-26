@@ -1,10 +1,10 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import ExcelJS from "exceljs";
 import {
   addCalendarMonths,
   renewalOpensOn,
@@ -18,12 +18,6 @@ import { JsonStore } from "../src/storage.ts";
 import { buildApp } from "../src/app.ts";
 import { validateState } from "../src/integrity.ts";
 import { migrateLifecycle } from "../src/lifecycle-migration.ts";
-import { configureTestPolicies } from "./policy-helpers.ts";
-import { exportCatalog, prepareCatalog } from "../src/catalog.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 const qid = "demo-qualification",
   learner = "learner-2";
 const at = "2026-01-31T01:00:00.000Z";
@@ -51,7 +45,6 @@ async function fixture(t: TestContext, months = 12) {
   await new JsonStore(file).initialize(seed);
   let store = await new JsonStore(file).load(),
     now = at;
-  await configureTestPolicies(store, "org-photo", undefined, [qid]);
   let app = await buildApp(store, { clock: () => now });
   const sessions = new Map<string, string>();
   async function call(
@@ -120,7 +113,7 @@ async function fixture(t: TestContext, months = 12) {
 type F = Awaited<ReturnType<typeof fixture>>;
 async function request(f: F) {
   return (
-    await f.call("admin-1", "/planning-requests", {
+    await legacyRequestFixture(f.store, "admin-1", {
       learnerIds: [learner],
       message: "취득 계획",
     })
@@ -352,7 +345,12 @@ test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 �
   await f.call(
     "admin-1",
     "/planning-requests",
-    { learnerIds: [learner], message: "요청" },
+    {
+      stateRevision: f.store.snapshot().revision,
+      organizationRevision: f.store.organizations.snapshot().revision,
+      learnerIds: [learner],
+      message: "요청",
+    },
     409,
   );
   const w = await f.call("admin-1", "/workspace");
@@ -496,7 +494,6 @@ test("재인증 적용 버전 변경은 완료를 거부하고 새 시작 후 �
       validity: { type: "unlimited", months: null, reminderDays: [] },
     });
   });
-  await configureTestPolicies(f.store, "org-photo", undefined, ["renewal-v2"]);
   assert.equal(
     (await complete(f, c.id, r, 409)).code,
     "RENEWAL_CRITERIA_CHANGED",
@@ -520,10 +517,7 @@ test("개인 Hold·해제·대상자 Hold와 관계없이 만료 자동 폐기·
     status: "Hold",
     reason: "효력 검토",
   });
-  assert.equal(
-    (await f.call(learner, "/me/required-qualifications")).items[0].status,
-    "unknown",
-  );
+
   let h = await history(f, c.id);
   assert.equal(h.renewal.canStart, false);
   await f.call("admin-1", `/certifications/${c.id}/status`, {
@@ -699,48 +693,6 @@ test("스키마 9 보존 이관·기간 미정 Hold와 근거 정정·반복 이
     409,
   );
 });
-test("Excel v4·v3 호환 왕복은 재인증 정책 보존, 운영 상태 조작은 기준에 반영하지 않는다", async (t) => {
-  const f = await fixture(t);
-  await f.mutate((s) => {
-    s.qualifications.find((q) => q.id === qid)!.renewalLeadMonths = 5;
-  });
-  const state = f.store.snapshot(),
-    data = exportCatalog(state, "org-photo", [qid]);
-  const bytes = await writeCatalogWorkbook(data),
-    parsed = await readCatalogWorkbook(bytes);
-  assert.equal(parsed.workbook.format, "eks-catalog-v12");
-  assert.equal(parsed.workbook.sheets[0]!.renewalLeadMonths, 5);
-  assert.equal(
-    prepareCatalog(state, parsed.workbook, "org-photo").changes[0]!.kind,
-    "unchanged",
-  );
-  const book = new ExcelJS.Workbook();
-  await book.xlsx.load(bytes as any);
-  book.subject = "eks-catalog-v3";
-  const ws = book.worksheets[2]!;
-  ws.eachRow((row) => {
-    if (
-      row.getCell(1).text.includes("재인증 시작") ||
-      row.getCell(1).text.includes("운영 상태")
-    ) {
-      row.getCell(1).value = null;
-      row.getCell(2).value = null;
-    }
-  });
-  const old = await readCatalogWorkbook(
-    Buffer.from(await book.xlsx.writeBuffer()),
-  );
-  delete old.workbook.sheets[0]!.renewalLeadMonths;
-  assert.equal(
-    prepareCatalog(state, old.workbook, "org-photo").changes[0]!.kind,
-    "unchanged",
-  );
-  parsed.workbook.sheets[0]!.lifecycleStatus = "Revoke";
-  assert.equal(
-    prepareCatalog(state, parsed.workbook, "org-photo").changes[0]!.kind,
-    "unchanged",
-  );
-});
 
 test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 실패 복구·반복 실행 무변경", async (t) => {
   const f = await fixture(t);
@@ -790,7 +742,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 19);
+  assert.equal(candidate.schemaVersion, 23);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

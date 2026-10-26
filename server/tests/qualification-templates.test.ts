@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -10,7 +11,6 @@ import { JsonStore } from "../src/storage.ts";
 import { buildApp } from "../src/app.ts";
 import { migrateTemplates } from "../src/template-migration.ts";
 import { currentQualification } from "../src/qualification-templates.ts";
-import { exportCatalog, prepareCatalog } from "../src/catalog.ts";
 import { exportMaster, readMaster } from "../src/master-data.ts";
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-template-")),
@@ -63,7 +63,7 @@ async function fixture(t: TestContext) {
   }
   return { store, app, call, file };
 }
-test("기본자격 생성 권한·팀 등록 중복·공통 필드 위조와 Excel 신규 우회를 차단한다", async (t) => {
+test("기본자격 생성 권한·팀 등록 중복·공통 필드 위조와 개별 신규 우회를 차단한다", async (t) => {
   const { store, call } = await fixture(t),
     body = {
       title: "공통 검증 자격",
@@ -123,13 +123,6 @@ test("기본자격 생성 권한·팀 등록 중복·공통 필드 위조와 Exc
     403,
     "PUT",
   );
-  const w = exportCatalog(store.snapshot(), "org-photo", [q.id]);
-  w.sheets[0]!.mode = "new";
-  assert.ok(
-    prepareCatalog(store.snapshot(), w, "org-photo").issues.some(
-      (i) => i.column === "mode",
-    ),
-  );
   const exportFile = exportMaster(
     store.snapshot(),
     store.organizations.snapshot(),
@@ -187,17 +180,16 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
   );
   await call(
     "detail",
-    "/organization-policies/org-photo",
+    "/organization-settings/org-photo",
     {
       revision: store.organizations.snapshot().revision,
       description: "",
       duties: "",
-      requiredQualifications: [q.entityId],
     },
     200,
     "PUT",
   );
-  const req = await call("admin-1", "/planning-requests", {
+  const req = await legacyRequestFixture(store, "admin-1", {
     learnerIds: ["learner-2"],
     message: "",
   });
@@ -235,11 +227,6 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     },
     200,
     "PUT",
-  );
-  assert.equal(
-    (await call("learner-2", "/workspace")).requiredQualifications.items[0]
-      .title,
-    "최신 이름",
   );
   assert.deepEqual(
     store.snapshot().assignments.find((a) => a.id === before.id),
@@ -295,7 +282,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 19);
+  assert.equal(next.state.schemaVersion, 23);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -437,16 +424,9 @@ test("공통 정보 충돌·저장 실패는 원본을 보존하고 팀 설정�
   assert.notDeepEqual(teamA.courseIds, teamB.courseIds);
   assert.equal(teamA.validity.type, "unlimited");
   assert.equal(teamB.validity.months, 12);
-  const w = exportCatalog(store.snapshot(), "org-photo", [teamA.id]);
-  w.sheets[0]!.description = "팀에서 위조";
-  assert.ok(
-    prepareCatalog(store.snapshot(), w, "org-photo").issues.some(
-      (i) => i.column === "description",
-    ),
-  );
 });
 
-test("삭제된 팀 자격 재등록은 같은 계보의 다음 버전이며 Excel 구형 파일도 등록된 자격만 수정한다", async (t) => {
+test("삭제된 팀 자격 재등록은 같은 계보의 다음 버전이며 기존 버전과 삭제 이력을 보존한다", async (t) => {
   const { store, call } = await fixture(t),
     base = await call("operator-1", "/system/qualification-templates", {
       title: "재등록",
@@ -499,22 +479,6 @@ test("삭제된 팀 자격 재등록은 같은 계보의 다음 버전이며 Exc
   assert.equal(q.parentId, old.id);
   assert.ok(
     store.snapshot().qualifications.find((q) => q.id === old.id)!.deletedAt,
-  );
-  const w = exportCatalog(store.snapshot(), "org-photo", [q.id]);
-  w.format = "eks-catalog-v6";
-  delete w.sheets[0]!.templateId;
-  delete w.sheets[0]!.templateRevision;
-  w.sheets[0]!.renewalLeadMonths = 4;
-  assert.ok(
-    !prepareCatalog(store.snapshot(), w, "org-photo").issues.some(
-      (i) => i.severity === "structure",
-    ),
-  );
-  w.sheets[0]!.sourceId = "missing";
-  assert.ok(
-    prepareCatalog(store.snapshot(), w, "org-photo").issues.some(
-      (i) => i.column === "sourceId",
-    ),
   );
 });
 
@@ -577,7 +541,11 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
   );
   assert.equal(await readFile(file, "utf8"), migrated);
   const legacy: any = exportMaster(initial, org, new Date().toISOString());
+  delete legacy.payload.commonCourses;
+  delete legacy.counts.commonCourses;
   legacy.formatVersion = 2;
+  delete legacy.counts.organizationQualificationRequirements;
+  delete legacy.counts.subjectiveQuestions;
   legacy.organizationSchemaVersion = 2;
   legacy.payload.organizations.qualificationPools = [];
   legacy.counts.poolEntries = 0;

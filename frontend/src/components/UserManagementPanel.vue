@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
           >
         </section>
         <p v-if="selected?.organizationAdministration" class="notice-body">
-          세부 조직 관리자 지정은 조직 필수 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재
+          세부 조직 관리자 지정은 조직 정보·필요자격에서 관리합니다. 소속 조직을 변경하면 현재
           지정이 해제되며 새 소속에서 다시 지정해야 합니다.
         </p>
         <p v-if="selected" class="muted">

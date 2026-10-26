@@ -1,8 +1,8 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import {
   linkFixtureTemplates,
   registerFixtureQualification,
 } from "./template-helpers.ts";
-import { configureTestPolicies } from "./policy-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -619,16 +619,11 @@ async function planAssignment(
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === input.qualificationId)!;
-  await configureTestPolicies(f.store, q.lv1OrganizationId, undefined, [q.id]);
-  const request = await f.call(
-    manager,
-    scoped("/planning-requests", q.lv1OrganizationId),
-    {
-      learnerIds: [input.learnerId],
-      dueOn: "2026-10-31",
-      message: "검증용 계획 요청",
-    },
-  );
+  const request = await legacyRequestFixture(f.store, manager, {
+    learnerIds: [input.learnerId],
+    dueOn: "2026-10-31",
+    message: "검증용 계획 요청",
+  });
   const p = await f.call(input.learnerId, "/plans", {
     requestRevision: f.store
       .snapshot()
@@ -1392,6 +1387,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
       c.questions[1]!.points = 1;
       s.courses.push(c);
       s.qualifications.push({
+        commonCourseEntityIds: [],
         templateId: "rounding-fixture",
         qualificationType: "auditee",
         templateRevision: 1,
@@ -1456,6 +1452,7 @@ test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회�
     renewals: 0,
     certificationPeriods: 1,
     credentialEvents: 1,
+    subjectiveResponses: 0,
     objectiveAttempts: 2,
     practicalAttempts: 3,
     learningRecords: 0,

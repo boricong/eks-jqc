@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import CourseCategory from '../components/CourseCategory.vue';
 import { randomUUID } from '../uuid';
 import PageHeading from '../components/PageHeading.vue';
 import CompactTabs from '../components/CompactTabs.vue';
 import { withCriteriaType, managementTitle } from '../management-navigation';
 import ActionBar from '../components/ActionBar.vue';
+import OrganizationRequirements from '../components/OrganizationRequirements.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import CourseEditor from '../components/CourseEditor.vue';
 import QualificationDelete from '../components/QualificationDelete.vue';
@@ -28,7 +30,7 @@ import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
 import { useListView } from '../composables/useListView';
 import PlanningPanel from '../components/PlanningPanel.vue';
-import OrganizationPolicies from '../components/OrganizationPolicies.vue';
+import OrganizationSettings from '../components/OrganizationSettings.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
 import {
   kindLabels,
@@ -149,8 +151,34 @@ const courseSaveResult = ref<{
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
 );
+const needsOpen = ref(false),
+  needsEditor = ref<InstanceType<typeof OrganizationRequirements>>();
+async function closeNeeds(value: boolean) {
+  if (value) {
+    needsOpen.value = true;
+    return;
+  }
+  if (await needsEditor.value?.canLeave()) needsOpen.value = false;
+}
 const courseDraft = ref<Course | null>(null),
   qualificationDraft = ref<Qualification | null>(null);
+watch(
+  () => [courseDraft.value?.id, courseDraft.value?.qualificationType],
+  async ([id, type], [previousId, previousType]) => {
+    const target = courseDraft.value;
+    if (!target || id !== previousId || type !== 'auditor' || previousType !== 'auditee') return;
+    if (!target.subjectiveEnabled && !target.subjectiveQuestions.length) return;
+    const confirmed = await confirmAction(
+      'Auditor는 주관식 평가를 사용하지 않습니다. 작성한 주관식 문항을 제외하고 Auditor로 변경할까요?',
+      '주관식 제외 후 변경',
+    );
+    if (courseDraft.value !== target) return;
+    if (confirmed) {
+      target.subjectiveEnabled = false;
+      target.subjectiveQuestions = [];
+    } else target.qualificationType = 'auditee';
+  },
+);
 const previewCourseId = ref('');
 const previewCourse = computed(
   () =>
@@ -260,6 +288,7 @@ watch(
   },
   { immediate: true },
 );
+const categoryFilter = ref('all');
 const matches = (text: string) => text.toLowerCase().includes(query.value.toLowerCase());
 const qualifications = computed(() =>
   organizationData.value.qualifications.filter(
@@ -276,6 +305,7 @@ const courses = computed(() =>
   organizationData.value.courses.filter(
     (c) =>
       c.qualificationType === selectedType.value &&
+      (categoryFilter.value === 'all' || c.category === categoryFilter.value) &&
       matches(c.title) &&
       (filter.value === 'all' ||
         (filter.value === 'active' && c.operationalStatus !== 'retired') ||
@@ -289,6 +319,19 @@ const selectableCourses = computed(() => {
     .filter((c) => c.qualificationType === qualificationDraft.value?.qualificationType)
     .filter(
       (c) =>
+        c.category !== 'common' ||
+        qualificationDraft.value?.commonCourseEntityIds.includes(c.entityId),
+    )
+    .filter(
+      (c) =>
+        c.category !== 'common' ||
+        selected.has(c.id) ||
+        !organizationData.value.courses.some(
+          (other) => other.entityId === c.entityId && other.version > c.version && !other.deletedAt,
+        ),
+    )
+    .filter(
+      (c) =>
         selected.has(c.id) ||
         !term ||
         `${c.title} v${c.version}`.toLocaleLowerCase().includes(term),
@@ -300,6 +343,17 @@ const selectableCourses = computed(() => {
         a.title.localeCompare(b.title, 'ko'),
     );
 });
+const groupedCourses = computed(() =>
+  [
+    { title: '공통인증Set', category: 'common' },
+    { title: '특화인증Set', category: 'specialized' },
+  ].map((g) => ({ ...g, items: selectableCourses.value.filter((c) => c.category === g.category) })),
+);
+const confirmInitial = computed(
+  () =>
+    qualificationDraft.value?.version === null &&
+    !!qualificationDraft.value.commonCourseEntityIds.length,
+);
 const resultAssignmentId = computed(() =>
   section.value === 'results' ? String(route.params.id || route.query.assignmentId || '') : '',
 );
@@ -427,7 +481,9 @@ async function reviewSave(mode: QualificationVersionMode = versionMode.value) {
         method: 'POST',
         body: JSON.stringify({
           ...plain(editor.value),
-          ...(section.value === 'qualifications' ? { versionMode: mode } : {}),
+          ...(section.value === 'qualifications'
+            ? { versionMode: mode, confirmInitialConfiguration: confirmInitial.value }
+            : {}),
         }),
       },
     );
@@ -460,6 +516,7 @@ async function saveCatalog(confirm = false) {
   errors.value = [];
   try {
     const result = await store.saveCatalog(section.value, plain(editor.value), {
+      confirmInitialConfiguration: confirmInitial.value,
       stateRevision: savePreview.value.stateRevision,
       organizationRevision: savePreview.value.organizationRevision,
       ...(savePreview.value.versionPolicy
@@ -660,7 +717,7 @@ onBeforeRouteUpdate(canLeave);
         if (!busy) createOpen = value;
       }
     "
-    :title="`${qualificationTypeLabels[selectedType]} 인증Set 만들기`"
+    :title="`${qualificationTypeLabels[selectedType]} 특화인증Set 만들기`"
   >
     <p class="muted">{{ qualificationTypeLabels[selectedType] }} 전용 인증Set을 만듭니다.</p>
     <label v-if="createOpen" class="field"
@@ -675,7 +732,7 @@ onBeforeRouteUpdate(canLeave);
     >
   </AppDialog>
   <div class="admin-section" :class="{ 'individual-editor': !!editor }">
-    <div v-if="!store.managementReady && section !== 'policies'" class="empty-state">
+    <div v-if="!store.managementReady && section !== 'organization-settings'" class="empty-state">
       관리할 Lv1 조직을 선택하면 인증 업무를 관리할 수 있습니다.
     </div>
     <div v-else class="admin-content">
@@ -693,7 +750,12 @@ onBeforeRouteUpdate(canLeave);
         <PageHeading class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
-            <span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
+            <CourseCategory
+              v-if="courseDraft"
+              :course="
+                organizationData.courses.find((c) => c.id === courseDraft?.id) || courseDraft
+              "
+            /><span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
             <span class="small-label">{{ qualificationVersionLabel(editor.version) }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
@@ -770,6 +832,26 @@ onBeforeRouteUpdate(canLeave);
           :key="qualificationContext"
           class="team-qualification-detail"
         >
+          <button
+            v-if="
+              qualificationDraft.qualificationType === 'auditee' && !qualificationDraft.deletedAt
+            "
+            class="button secondary"
+            :disabled="
+              busy ||
+              JSON.stringify(qualificationDraft) !==
+                JSON.stringify(plain(store.qualification(qualificationDraft.id)))
+            "
+            @click="needsOpen = true"
+          >
+            필요 조직 설정
+          </button>
+          <AppDialog :open="needsOpen" title="필요 조직 설정" @update:open="closeNeeds"
+            ><OrganizationRequirements
+              v-if="needsOpen"
+              ref="needsEditor"
+              :entity-id="qualificationDraft.entityId"
+          /></AppDialog>
           <p
             v-if="qualificationDraft.qualificationType === 'auditor'"
             class="qualification-save-notice"
@@ -864,9 +946,14 @@ onBeforeRouteUpdate(canLeave);
                   aria-label="필수 인증Set 검색"
                 />
               </label>
-              <div class="course-selection-list">
+              <div
+                v-for="group in groupedCourses"
+                :key="group.category"
+                class="course-selection-list"
+              >
+                <h3>{{ group.title }}</h3>
                 <div
-                  v-for="c in selectableCourses"
+                  v-for="c in group.items"
                   :key="c.id"
                   class="qualification-course-row"
                   :data-course-id="c.id"
@@ -880,22 +967,36 @@ onBeforeRouteUpdate(canLeave);
                     /><span>{{ c.title || '이름 없음' }}</span></label
                   >
                   <div class="qualification-course-meta">
-                    <span class="muted">v{{ c.version }}</span>
+                    <CourseCategory :course="c" /><span class="muted">v{{ c.version }}</span>
                     <StatusBadge
                       :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
                     />
                     <span v-if="c.deletedAt" class="muted">삭제됨</span>
                   </div>
-                  <button
-                    type="button"
-                    class="button secondary"
-                    :aria-label="`${c.title || '이름 없는 인증Set'} v${c.version} 내용 조회`"
-                    @click="previewCourseId = c.id"
-                  >
-                    내용 조회
-                  </button>
+                  <div class="qualification-course-actions">
+                    <RouterLink
+                      v-if="!readOnly"
+                      class="text-link"
+                      :to="criteriaLink(`/admin/courses/${c.id}`, c.qualificationType)"
+                      >내용 수정</RouterLink
+                    >
+                    <button
+                      type="button"
+                      class="button secondary"
+                      :aria-label="`${c.title || '이름 없는 인증Set'} v${c.version} 내용 조회`"
+                      @click="previewCourseId = c.id"
+                    >
+                      내용 조회
+                    </button>
+                  </div>
                 </div>
-                <p v-if="!selectableCourses.length" class="muted">검색 결과가 없습니다.</p>
+                <p v-if="!group.items.length" class="muted">
+                  {{
+                    group.category === 'common'
+                      ? '등록 당시 공통 목록에 항목이 없거나 검색 결과가 없습니다.'
+                      : '검색 결과가 없습니다.'
+                  }}
+                </p>
               </div>
             </fieldset>
           </CollapsibleSection>
@@ -939,7 +1040,7 @@ onBeforeRouteUpdate(canLeave);
             :disabled="busy || previewPending"
             @click="saveCatalog()"
           >
-            저장
+            {{ confirmInitial ? '최초 설정 저장' : '저장' }}
           </button>
         </ActionBar>
         <AppDialog
@@ -1113,8 +1214,10 @@ onBeforeRouteUpdate(canLeave);
               createOpen = true;
             "
           >
-            <AppIcon name="plus" :size="18" />{{ qualificationTypeLabels[selectedType] }} 인증Set
-            추가</button
+            <AppIcon name="plus" :size="18" />{{
+              qualificationTypeLabels[selectedType]
+            }}
+            특화인증Set 추가</button
           ><button
             v-else-if="section === 'notices'"
             class="button primary"
@@ -1288,7 +1391,7 @@ onBeforeRouteUpdate(canLeave);
         <div
           v-if="
             !resultAssignmentId &&
-            !['policies', 'targets', 'credentials', 'assignments'].includes(section)
+            !['organization-settings', 'targets', 'credentials', 'assignments'].includes(section)
           "
           class="list-toolbar"
         >
@@ -1327,6 +1430,15 @@ onBeforeRouteUpdate(canLeave);
                 <option value="excluded">검증 제외</option></template
               >
             </select>
+            <select
+              v-if="section === 'courses'"
+              v-model="categoryFilter"
+              aria-label="인증Set 구분 필터"
+            >
+              <option value="all">전체 인증Set</option>
+              <option value="common">공통인증Set</option>
+              <option value="specialized">특화인증Set</option>
+            </select>
           </div>
         </div>
 
@@ -1335,7 +1447,7 @@ onBeforeRouteUpdate(canLeave);
           v-else-if="section === 'targets'"
           :key="`${store.actorId}:${store.managementLv1}`"
         />
-        <OrganizationPolicies v-if="section === 'policies'" :key="store.actorId" />
+        <OrganizationSettings v-if="section === 'organization-settings'" :key="store.actorId" />
         <div
           v-if="section === 'qualifications'"
           id="criteria-type-panel"
@@ -1433,6 +1545,7 @@ onBeforeRouteUpdate(canLeave);
             <thead>
               <tr>
                 <th>인증Set명</th>
+                <th>구분</th>
                 <th>버전</th>
                 <th>필수 평가</th>
                 <th>상태</th>
@@ -1446,6 +1559,7 @@ onBeforeRouteUpdate(canLeave);
                     c.title || '이름 없음'
                   }}</RouterLink>
                 </td>
+                <td><CourseCategory :course="c" /></td>
                 <td>v{{ c.version }}</td>
                 <td class="muted">
                   {{
@@ -1532,6 +1646,30 @@ onBeforeRouteUpdate(canLeave);
                     status="retired"
                   />
                 </div>
+                <details
+                  v-if="e.subjective?.response?.status === 'submitted'"
+                  class="attempt-detail"
+                >
+                  <summary>
+                    주관식 평가 · 답변 제출 완료 ·
+                    {{ new Date(e.subjective.response.submittedAt!).toLocaleString('ko-KR') }}
+                  </summary>
+                  <div class="attempt-items">
+                    <section
+                      v-for="(question, index) in e.subjective.response.questions"
+                      :key="question.id"
+                    >
+                      <h3>{{ index + 1 }}번 문제</h3>
+                      <p style="white-space: pre-wrap; overflow-wrap: anywhere">
+                        {{ question.prompt }}
+                      </p>
+                      <h4>제출 답변</h4>
+                      <p style="white-space: pre-wrap; overflow-wrap: anywhere">
+                        {{ e.subjective.response.answers[question.id] }}
+                      </p>
+                    </section>
+                  </div>
+                </details>
                 <details v-for="h in [...e.history].reverse()" :key="h.id" class="attempt-detail">
                   <summary>
                     <span>{{ labels[h.kind] }} {{ h.round }}회</span
@@ -1659,7 +1797,9 @@ onBeforeRouteUpdate(canLeave);
           <p v-if="!notices.length" class="empty-state">등록된 공지가 없습니다.</p>
         </div>
         <ListControls
-          v-if="!['policies', 'targets', 'credentials', 'assignments'].includes(section)"
+          v-if="
+            !['organization-settings', 'targets', 'credentials', 'assignments'].includes(section)
+          "
           :count="list.count"
           :pages="list.pages"
           v-model:page="list.page"

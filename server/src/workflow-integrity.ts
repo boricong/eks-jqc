@@ -67,7 +67,7 @@ export function validateWorkflow(s: State) {
         );
       }
       check(
-        [...(r.targets || []), ...r.selections].every((t) =>
+        r.selections.every((t) =>
           r.completion!.evidence.some((e) => e.entityId === t.entityId),
         ),
         "필수 및 선택 완료 근거 누락",

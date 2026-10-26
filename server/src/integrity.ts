@@ -1,5 +1,8 @@
+import { validateRequirements } from "./organization-requirements.ts";
+import { validateSubjective } from "./subjective.ts";
+import { validateCommonSelection } from "./common-courses.ts";
 import { validateCatalogStructure } from "./catalog-editing.ts";
-import { validatePolicies } from "./organization-policies.ts";
+import { validatePolicies } from "./organization-settings.ts";
 import {
   StateSchema,
   LegacyStateSchema,
@@ -23,7 +26,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 19) {
+  if (!legacy && (input as any)?.schemaVersion === 23) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -43,10 +46,126 @@ export function validateState(
         "업무16 인증 유형 누락 또는 알 수 없는 유형",
       );
   }
+  if (!legacy)
+    for (const r of (input as any)?.planningRequests || [])
+      check(
+        !Object.hasOwn(r, "targets"),
+        "폐지된 요청 필수 대상은 명시적으로 이관해 주세요.",
+      );
   const s = (
     legacy ? LegacyStateSchema.parse(input) : StateSchema.parse(input)
   ) as State;
   if (!legacy) {
+    validateSubjective(s);
+    if (organizations) validateRequirements(s, organizations);
+    check(
+      new Set(s.commonCourses.map((c) => c.id)).size === s.commonCourses.length,
+      "공통인증Set ID 중복",
+    );
+    for (const c of s.commonCourses) {
+      check(
+        s.users.some((u) => u.id === c.createdBy) &&
+          s.users.some((u) => u.id === c.updatedBy),
+        "공통인증Set 작성자 누락",
+      );
+      validateCatalogStructure(s, "courses", {
+        ...c,
+        entityId: c.id,
+        lv1OrganizationId: "system",
+        version: 1,
+        category: "specialized",
+      });
+    }
+    for (const t of s.qualificationTemplates) {
+      check(
+        new Set(t.defaultCommonCourseIds).size ===
+          t.defaultCommonCourseIds.length,
+        "기본 공통 목록 중복",
+      );
+      check(
+        t.defaultCommonCourseIds.every((id) =>
+          s.commonCourses.some(
+            (c) =>
+              c.id === id &&
+              c.operationalStatus === "active" &&
+              c.qualificationType === t.qualificationType,
+          ),
+        ),
+        "기본 공통 목록 참조 오류",
+      );
+      check(
+        t.scope !== "team" || !t.defaultCommonCourseIds.length,
+        "팀 소유 기본자격 공통 목록 변경 불가",
+      );
+    }
+    for (const c of s.courses) {
+      check(
+        (c.category === "common") === !!c.commonCourseSource,
+        "공통 분류·출처 불일치",
+      );
+      if (c.commonCourseSource)
+        check(
+          s.commonCourses.some(
+            (x) =>
+              x.id === c.commonCourseSource!.id &&
+              x.revision >= c.commonCourseSource!.revision &&
+              x.qualificationType === c.qualificationType,
+          ),
+          "공통 원본 참조 오류",
+        );
+      check(
+        s.courses
+          .filter((x) => x.entityId === c.entityId)
+          .every(
+            (x) =>
+              x.category === c.category &&
+              JSON.stringify(x.commonCourseSource) ===
+                JSON.stringify(c.commonCourseSource),
+          ),
+        "인증Set 계보의 공통 출처 불일치",
+      );
+    }
+    for (const q of s.qualifications) {
+      check(
+        new Set(q.commonCourseEntityIds).size ===
+          q.commonCourseEntityIds.length,
+        "공통 선택 범위 중복",
+      );
+      check(
+        q.commonCourseEntityIds.every((id) =>
+          s.courses.some(
+            (c) =>
+              c.entityId === id &&
+              c.category === "common" &&
+              c.lv1OrganizationId === q.lv1OrganizationId &&
+              c.qualificationType === q.qualificationType,
+          ),
+        ),
+        "공통 선택 범위 참조 오류",
+      );
+      check(
+        !s.qualifications.some(
+          (other) =>
+            other.entityId !== q.entityId &&
+            q.commonCourseEntityIds.some((id) =>
+              other.commonCourseEntityIds.includes(id),
+            ),
+        ),
+        "서로 다른 자격의 공통 사본 공유",
+      );
+      check(
+        s.qualifications
+          .filter((other) => other.entityId === q.entityId)
+          .every(
+            (other) =>
+              JSON.stringify(other.commonCourseEntityIds) ===
+              JSON.stringify(q.commonCourseEntityIds),
+          ),
+        "자격 계보의 공통 선택 범위 변경",
+      );
+      validateCommonSelection(s, q);
+    }
+
     check(
       new Set(s.auditorPrograms.map((p) => p.lv1OrganizationId)).size ===
         s.auditorPrograms.length,
@@ -289,6 +408,7 @@ export function validateState(
     "assignments",
     "enrollments",
     "attempts",
+    "subjectiveResponses",
     "completions",
     "certifications",
     "notices",
@@ -380,9 +500,7 @@ export function validateState(
       );
       check(
         !s.planningRequests.some((r) =>
-          [...(r.targets || []), ...(r.selections || [])].some(
-            (t) => t.qualificationId === q.id,
-          ),
+          (r.selections || []).some((t) => t.qualificationId === q.id),
         ),
         "Ready 자격의 계획 요청 참조",
       );

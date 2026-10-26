@@ -156,72 +156,6 @@ test("세션 이후 역할 해제와 구성원 소속 변경도 조회 시 다�
   await f.call("dept-admin", "/dashboard", 403);
 });
 
-test("필수 사람×자격·완전 충족 사람·요청 단위를 분리하고 이전 버전 Active를 인정한다", async (t) => {
-  const seed = dashboardSeed(),
-    q2 = addQualification(seed, "second");
-
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_A,
-  )!.requiredQualifications = [Q, q2.entityId];
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_B,
-  )!.requiredQualifications = [Q];
-  addCertification(seed, "alice-one");
-  addCertification(seed, "bob-one", "bob");
-  const latest = addQualification(seed, "q-v2", {
-    entityId: Q,
-    templateId: seed.state.qualifications[0]!.templateId,
-    version: 2,
-    parentId: Q,
-  });
-
-  addRequest(seed, "request-one", "alice", [q2.entityId]);
-  addRequest(seed, "request-two", "alice", [q2.entityId]);
-  addDraft(seed, "shared-draft", "request-one", q2.id);
-  const f = await dashboardFixture(t, seed);
-  const view: DashboardResponse = await f.call(
-    "admin-1",
-    "/dashboard?view=members",
-  );
-  assert.equal(view.summary.eligiblePeople, 2);
-  assert.deepEqual(view.summary.requiredCoverage, {
-    fulfilled: 2,
-    total: 3,
-    rate: (2 / 3) * 100,
-  });
-  assert.equal(view.summary.fullyRequiredPeople, 1);
-  assert.equal(view.summary.peopleWithRequirements, 2);
-  assert.equal(view.summary.uniqueActiveHolders, 2);
-  assert.equal(view.summary.incompleteRequests, 2);
-  assert.equal(
-    view.summary.inProgress,
-    1,
-    "두 요청이 공유하는 초안은 진행 한 건",
-  );
-  const alice: DashboardMemberDetail = await f.call(
-    "admin-1",
-    "/dashboard/members/alice",
-  );
-  assert.equal(
-    alice.qualifications.find((c) => c.entityId === Q)!.recordVersion,
-    1,
-  );
-  const required = await f.call(
-    "admin-1",
-    "/dashboard/details?metric=requiredCoverage",
-  );
-  assert.equal(required.unit, "person_qualification");
-  assert.equal(required.numerator, 2);
-  assert.equal(required.denominator, 3);
-  assert.equal(required.rows.total, 3);
-  const requests = await f.call(
-    "admin-1",
-    "/dashboard/details?metric=incompleteRequests",
-  );
-  assert.equal(requests.unit, "requests");
-  assert.equal(requests.rows.total, 2);
-});
-
 test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비활성 소속을 혼동하지 않는다", async (t) => {
   const seed = dashboardSeed();
   seed.state.users.push(
@@ -260,11 +194,6 @@ test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비�
   );
   assert.equal(v.summary.eligiblePeople, 2);
   assert.equal(v.summary.uniqueActiveHolders, 1);
-  assert.equal(
-    v.summary.requiredCoverage.fulfilled,
-    1,
-    "기준 Hold는 이미 유효한 개인 인증을 정지시키지 않음",
-  );
   assert.equal(v.snapshot.exclusions.excludedPeople, 3);
   assert.equal(v.snapshot.exclusions.heldAndInactivePeople, 1);
   const excluded = await f.call(
@@ -281,21 +210,10 @@ test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비�
     new Set(["held", "inactive", "both"]),
   );
   assert.equal(v.members.total, 5);
-  assert.equal(
-    v.members.items.find((m) => m.userId === "bob")!.requiredCoverage.rate,
-    null,
-  );
   const own: DashboardResponse = await f.call(
     "admin-1",
     `/dashboard?organizationId=${ORG_B}&includeDescendants=false`,
   );
-  assert.deepEqual(own.summary.requiredCoverage, {
-    fulfilled: 0,
-    total: 0,
-    rate: null,
-  });
-  assert.equal(own.summary.fullyRequiredPeople, 0);
-  assert.equal(own.summary.peopleWithoutRequirements, 1);
 });
 
 test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하지 않은 비필수 자격을 경고하지 않는다", async (t) => {
@@ -305,12 +223,6 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     lifecycleStatus: "Hold",
   });
   const certificateQ = addQualification(seed, "credential-state");
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_A,
-  )!.requiredQualifications = [Q, draftQ.entityId, certificateQ.entityId];
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_B,
-  )!.requiredQualifications = [certificateQ.entityId];
   seed.state.qualifications[0]!.lifecycleStatus = "Hold";
   const request = addRequest(seed, "blocked-requirements", "alice", [
     Q,
@@ -347,14 +259,11 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     "admin-1",
     "/dashboard?view=matrix&population=all",
   );
-  assert.equal(v.summary.requiredMissing, 3, "대상자 Hold 제외: alice2+bob1");
   assert.equal(
     v.summary.blockedProgress,
     3,
     "기준 보류·초안 버전 변경·개인 효력 Hold 각1건",
   );
-  assert.equal(v.summary.requiredCoverage.total, 4);
-  assert.equal(v.summary.requiredCoverage.fulfilled, 1);
   const cells = (id: string) =>
     v.matrix.members.items.find((m) => m.userId === id)!.cells;
   assert.deepEqual(
@@ -377,9 +286,8 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     "확정된 배정은 기준 Hold 이후에도 진행 가능",
   );
   assert.ok(
-    cells("target-held")
-      .find((c) => c.entityId === Q)!
-      .acquisitionBlockCodes.includes("TARGET_HOLD"),
+    cells("target-held").find((c) => c.entityId === Q)!.acquisitionBlockCodes
+      .length === 0,
   );
   assert.ok(
     v.matrix.members.items.every(
@@ -388,7 +296,7 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
           .acquisitionBlockCodes.length === 0,
     ),
   );
-  for (const metric of ["requiredMissing", "blockedProgress"] as const) {
+  for (const metric of ["blockedProgress"] as const) {
     const details = await f.call(
       "admin-1",
       `/dashboard/details?metric=${metric}`,
@@ -441,63 +349,6 @@ test("인증만 남은 셀도 연결된 인증Set 수료 건수와 상세 근거
     detail.qualifications[0]!.courses.filter((c) => c.completed).length,
     cell.completedCourses,
   );
-});
-
-test("자격·효력 필터가 미충족 자격을 숨겨도 사람의 전체 필수 충족률과 완전 충족 인원을 부풀리지 않는다", async (t) => {
-  const seed = dashboardSeed();
-  const missing = addQualification(seed, "missing-mandatory");
-
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_A,
-  )!.requiredQualifications = [Q, missing.entityId];
-  addCertification(seed, "one-of-two-required", "alice");
-  const f = await dashboardFixture(t, seed);
-  for (const filter of [`entityId=${Q}`, "efficacy=Active"]) {
-    const v: DashboardResponse = await f.call(
-      "admin-1",
-      `/dashboard?view=members&${filter}`,
-    );
-    const alice = v.members.items.find((m) => m.userId === "alice")!;
-    assert.deepEqual(
-      alice.requiredCoverage,
-      { fulfilled: 1, total: 2, rate: 50 },
-      "구성원 충족률은 현재 필수 전체",
-    );
-    assert.equal(v.summary.fullyRequiredPeople, 0);
-    assert.equal(v.summary.peopleWithRequirements, 1);
-    assert.deepEqual(
-      v.summary.requiredCoverage,
-      { fulfilled: 1, total: 1, rate: 100 },
-      "선택 필터의 사람×자격 집계는 별도 유지",
-    );
-    assert.equal(v.summary.requiredMissing, 0);
-    const fully = await f.call(
-      "admin-1",
-      `/dashboard/details?metric=fullyRequiredPeople&${filter}`,
-    );
-    assert.equal(fully.rows.total, 0);
-    const pairs = await f.call(
-      "admin-1",
-      `/dashboard/details?metric=requiredCoverage&${filter}`,
-    );
-    assert.equal(pairs.denominator, 1);
-    assert.equal(pairs.numerator, 1);
-    assert.equal(pairs.rows.total, 1);
-    assert.equal(pairs.rows.items[0].entityId, Q);
-  }
-  const unfiltered: DashboardResponse = await f.call("admin-1", "/dashboard");
-  assert.deepEqual(unfiltered.summary.requiredCoverage, {
-    fulfilled: 1,
-    total: 2,
-    rate: 50,
-  });
-  assert.equal(unfiltered.summary.requiredMissing, 1);
-  const filteredMissing: DashboardResponse = await f.call(
-    "admin-1",
-    `/dashboard?entityId=${missing.entityId}`,
-  );
-  assert.equal(filteredMissing.summary.requiredMissing, 1);
-  assert.equal(filteredMissing.summary.fullyRequiredPeople, 0);
 });
 
 test("수동 폐기는 만료와 별도 구간으로 보존하며 두 종류 모두 만료 예정에 포함하지 않는다", async (t) => {
@@ -647,10 +498,16 @@ test("구성원·매트릭스와 일반 명세의 기본 정렬은 조직·자�
   )!.title = "후기 자격";
   const first = addQualification(seed, "first-in-sort", { title: "기초 자격" });
 
-  for (const org of seed.orgs.roots[0]!.children.filter((o) =>
-    [ORG_A, ORG_B].includes(o.id),
-  ))
-    org.requiredQualifications = [Q, first.entityId];
+  for (const person of ["a-id", "b-id", "alice", "bob"]) {
+    const request = addRequest(seed, "sort-" + person, person, [
+      Q,
+      first.entityId,
+    ]);
+    for (const entityId of [Q, first.entityId]) {
+      const q = seed.state.qualifications.find((q) => q.entityId === entityId)!;
+      addDraft(seed, "sort-" + person + entityId, request.id, q.id);
+    }
+  }
   const f = await dashboardFixture(t, seed);
   for (const view of ["members", "matrix"]) {
     for (const suffix of ["", "&sort=organization"]) {
@@ -678,7 +535,7 @@ test("구성원·매트릭스와 일반 명세의 기본 정렬은 조직·자�
   }
   const details = await f.call(
     "admin-1",
-    "/dashboard/details?metric=requiredCoverage",
+    "/dashboard/details?metric=inProgress",
   );
   assert.deepEqual(
     details.rows.items.map((r: any) => `${r.userId}:${r.entityId}`),
@@ -870,7 +727,7 @@ test("카탈로그는 미완성 등록 자격도 포함하며 다른 소속의 �
   assert.notEqual(
     v.members.items
       .find((m) => m.userId === "alice")!
-      .cells.find((c) => c.entityId === Q)!.progress,
+      .cells.find((c) => c.entityId === Q)?.progress,
     "draft",
   );
   const detail: DashboardMemberDetail = await f.call(
@@ -1168,8 +1025,6 @@ test("요청 완료 근거는 후속 필수 변경·인증 만료로 다시 미�
     expiresOn: "2026-10-23",
   });
   const r = addRequest(seed, "completed-request");
-  r.targets = r.selections;
-  r.selections = [];
   r.completion = {
     date: "2026-10-20T00:00:00.000Z",
     reason: "no_additional",
@@ -1178,26 +1033,17 @@ test("요청 완료 근거는 후속 필수 변경·인증 만료로 다시 미�
     ],
   };
   const newRequirement = addQualification(seed, "later-required");
-
-  seed.orgs.roots[0]!.children.find(
-    (o) => o.id === ORG_A,
-  )!.requiredQualifications = [newRequirement.entityId];
   const f = await dashboardFixture(t, seed);
   await f.call("admin-1", "/dashboard/options");
   f.setTime("2026-10-23T15:00:00.000Z");
   const v: DashboardResponse = await f.call("admin-1", "/dashboard");
   assert.equal(v.summary.incompleteRequests, 0);
-  assert.deepEqual(v.summary.requiredCoverage, {
-    fulfilled: 0,
-    total: 1,
-    rate: 0,
-  });
   const detail: DashboardMemberDetail = await f.call(
     "admin-1",
     "/dashboard/members/alice",
   );
   assert.equal(detail.requests[0]!.completedOn, "2026-10-20");
-  assert.deepEqual(detail.requests[0]!.requiredTitles, [
+  assert.deepEqual(detail.requests[0]!.selectedTitles, [
     seed.state.qualifications[0]!.title,
   ]);
   assert.deepEqual(
@@ -1227,10 +1073,6 @@ test("재인증 가능성은 팀 적용·기준 상태·인증Set 종료와 개�
         c.retiredAt = DASHBOARD_NOW;
         c.retiredBy = "operator-1";
         c.retirementReason = DASHBOARD_SECRET;
-      }
-      if (condition === "deleted") {
-        for (const org of seed.orgs.roots[0]!.children)
-          org.requiredQualifications = [];
       }
       const f = await dashboardFixture(sub, seed);
       const v: DashboardResponse = await f.call(
@@ -1441,7 +1283,7 @@ test("1,000명×100자격 조회 p95 1초 이내이며 매트릭스 응답은 25
     );
     chartSamples.push(performance.now() - start);
     chartBytes = Math.max(chartBytes, Buffer.byteLength(JSON.stringify(value)));
-    assert.equal(value.charts.length, 3);
+    assert.equal(value.charts.length, 2);
     assert.ok(value.charts.every((chart) => chart.groups.length === 100));
     assert.equal(value.qualifications.items.length, 25);
   }

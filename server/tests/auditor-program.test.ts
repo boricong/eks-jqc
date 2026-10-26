@@ -15,11 +15,6 @@ import {
   masterCandidate,
   contentHash,
 } from "../src/master-data.ts";
-import { exportCatalog, prepareCatalog } from "../src/catalog.ts";
-import {
-  writeCatalogWorkbook,
-  readCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 
 async function setup(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-auditor-program-")),
@@ -564,14 +559,14 @@ test("갱신 확인 중 이름·교육 기준이 바뀌면 다시 확인하고 �
   );
 });
 
-test("업무17·JSON7·Excel11은 팀 소유 기준을 보존하고 변조·정상 시작 자동 이관을 거부한다", async (t) => {
+test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시작 자동 이관을 거부한다", async (t) => {
   const f = await setup(t),
     qid = await f.program();
   await f.designate();
   const s = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
     master = exportMaster(s, org, "2026-10-26T00:00:00.000Z");
-  assert.equal(master.formatVersion, 9);
+  assert.equal(master.formatVersion, 13);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const reset = masterCandidate(
     master.payload,
@@ -581,29 +576,16 @@ test("업무17·JSON7·Excel11은 팀 소유 기준을 보존하고 변조·정�
   assert.deepEqual(reset.state.auditorPrograms, s.auditorPrograms);
   assert.equal(reset.state.notifications.length, 0);
   assert.deepEqual(reset.state.users, s.users);
-  const book = exportCatalog(s, "org-photo", [qid]);
-  assert.equal(book.format, "eks-catalog-v12");
-  assert.equal(book.sheets[0]!.auditorLevel, "general");
-  const read = await readCatalogWorkbook(await writeCatalogWorkbook(book));
-  assert.equal(read.workbook.sheets[0]!.auditorLevel, "general");
-  assert.equal(
-    prepareCatalog(s, read.workbook, "org-photo", org).issues.filter(
-      (i) => i.severity === "structure",
-    ).length,
-    0,
-  );
-  book.sheets[0]!.auditorLevel = "main";
-  assert(
-    prepareCatalog(s, book, "org-photo", org).issues.some(
-      (i) => i.column === "auditorLevel",
-    ),
-  );
   const oldExport: any = exportMaster(
     seedState(true),
     org,
     "2026-10-26T00:00:00.000Z",
   );
+  delete oldExport.payload.commonCourses;
+  delete oldExport.counts.commonCourses;
   oldExport.formatVersion = 6;
+  delete oldExport.counts.organizationQualificationRequirements;
+  delete oldExport.counts.subjectiveQuestions;
   oldExport.organizationSchemaVersion = 2;
   oldExport.payload.organizations.qualificationPools = [];
   oldExport.counts.poolEntries = 0;
@@ -629,7 +611,7 @@ test("업무17·JSON7·Excel11은 팀 소유 기준을 보존하고 변조·정�
   delete legacy.auditorPrograms;
   legacy.users.find((u: any) => u.id === "learner-2").roles = ["evaluator"];
   const migrated = migrateAuditorProgram(legacy, org);
-  assert.equal(migrated.state.schemaVersion, 19);
+  assert.equal(migrated.state.schemaVersion, 23);
   assert.equal(
     migrated.state.users.find((u) => u.id === "learner-2")!.auditorDesignation
       ?.source,
@@ -642,7 +624,7 @@ test("업무17·JSON7·Excel11은 팀 소유 기준을 보존하고 변조·정�
   );
   assert.throws(() => validateState(legacy, org));
   const bytes = await readFile(f.file);
-  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 19);
+  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 23);
 });
 
 test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 다시 시작해도 중복 발급하지 않는다", async (t) => {
@@ -744,7 +726,11 @@ test("명시적 16→17 이관의 실패는 세 파일을 복구하고 재실행
   const after = await readFile(f.file),
     afterMaintenance = await readFile(disk.maintenanceFile);
   await disk.migratePolicies(
-    { ...expected, revision: JSON.parse(after.toString()).revision, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateAuditorProgram,
     "auditor-workflow",
   );

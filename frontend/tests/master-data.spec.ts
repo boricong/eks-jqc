@@ -2,10 +2,8 @@ import { test, expect, actor } from './fixtures';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { exportMaster, masterPayload } from '../../server/src/master-data';
-import { configureTestPolicies } from '../../server/tests/policy-helpers';
 
 test('설정·기준 내보내기와 전체 초기화 확인·취소·보존 결과', async ({ page, backend }) => {
-  await configureTestPolicies(backend.store);
   const before = masterPayload(backend.store.snapshot(), backend.store.organizations.snapshot());
   await page.goto('/');
   await actor(page, 'operator-1');
@@ -62,7 +60,7 @@ test('다른 서버 파일 검사·전체 교체와 불러온 운영자 계정',
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/testing');
-  const input = page.getByLabel('설정·기준 JSON 파일 (최대 25MB)', { exact: true });
+  const input = page.getByLabel('설정·기준 JSON 파일 (최대 64MB)', { exact: true });
   await input.setInputFiles({
     name: '잘못된.json',
     mimeType: 'application/json',
@@ -101,7 +99,7 @@ test('확인 중 데이터가 바뀌면 파일·확인 입력을 보존하고 �
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/testing');
-  await page.getByLabel('설정·기준 JSON 파일 (최대 25MB)', { exact: true }).setInputFiles({
+  await page.getByLabel('설정·기준 JSON 파일 (최대 64MB)', { exact: true }).setInputFiles({
     name: '보존.eksmaster.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(file)),
@@ -174,51 +172,6 @@ test('초기화 응답이 유실되어도 재접속 후 최초 영수증을 확�
     page.getByRole('heading', { name: '설정·기준 보존 초기화 완료', exact: true }),
   ).toBeVisible();
   expect(backend.store.snapshot().notices).toHaveLength(1);
-});
-
-test('다른 탭 초기화는 기준 자동 저장을 중단하고 구형 브라우저 복구 초안을 제거한다', async ({
-  page,
-  context,
-  backend,
-}) => {
-  await page.goto('/');
-  await actor(page, 'admin-1');
-  await page.goto('/admin/catalog');
-  await page.getByTestId('catalog-qualification-demo-qualification').getByRole('button').click();
-  await page.getByLabel('인증Set명', { exact: true }).fill('이전 세대 입력');
-  await expect(page.getByText('이 브라우저에 보관됨', { exact: true })).toBeVisible();
-  const other = await context.newPage();
-  await other.goto('/');
-  await actor(other, 'operator-1');
-  await other.goto('/system/testing');
-  await other.getByRole('button', { name: '보존·삭제 내역 확인', exact: true }).click();
-  await other.getByRole('button', { name: '설정·기준 보존 전체 초기화', exact: true }).click();
-  await other.getByRole('dialog').getByLabel('전체 작업 확인 문구').fill('전체 초기화');
-  await other.getByRole('button', { name: '전체 초기화 실행', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '접속 계정 선택', exact: true })).toBeVisible();
-  expect(backend.store.snapshot().courses.some((c) => c.title === '이전 세대 입력')).toBeFalsy();
-  const recoveryCount = () =>
-    page.evaluate(
-      async () =>
-        new Promise<number>((resolve, reject) => {
-          const r = indexedDB.open('eks-catalog-recovery');
-          r.onerror = () => reject(r.error);
-          r.onsuccess = () => {
-            const db = r.result,
-              q = db.transaction('works').objectStore('works').count();
-            q.onsuccess = () => {
-              resolve(q.result);
-              db.close();
-            };
-          };
-        }),
-    );
-  await expect.poll(recoveryCount).toBe(0);
-  await page.goto('/');
-  await actor(page, 'admin-1');
-  await page.goto('/admin/catalog');
-  await expect(page.getByRole('button', { name: '이어서 작성', exact: true })).toHaveCount(0);
-  await other.close();
 });
 
 test('테스트 관리의 두 초기화·이전 화면은 네 가지 폭에서 조작·구분·가로 넘침이 정상이다', async ({

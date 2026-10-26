@@ -4,7 +4,6 @@ import { mkdtemp, rm, readFile, writeFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import ExcelJS from "exceljs";
 import {
   assessmentQuestions,
   renewalNoticeOn,
@@ -18,11 +17,6 @@ import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
 import { buildApp } from "../src/app.ts";
 import { migrateAssessmentFlow } from "../src/assessment-flow-migration.ts";
-import { exportCatalog, prepareCatalog } from "../src/catalog.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 const clock = "2028-01-31T01:00:00.000Z";
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-flow-")),
@@ -287,7 +281,7 @@ test("실기 시작·저장·제출은 같은 수강의 지식 통과가 필요�
     "passed",
   );
 });
-test("실기 전용 사용 등록은 개별·일괄 모두 차단하고 지식 전용은 허용한다", async (t) => {
+test("실기 전용 신규 사용은 차단하고 지식 전용은 허용한다", async (t) => {
   const f = await fixture(t),
     s = f.store.snapshot(),
     c = s.courses.find((c) => c.id === "demo-course-2")!;
@@ -317,50 +311,6 @@ test("실기 전용 사용 등록은 개별·일괄 모두 차단하고 지식 �
     "admin-1",
     "PUT",
   );
-  const data = exportCatalog(s, "org-photo", ["demo-qualification"]);
-  const row = data.sheets[0]!.tables.courses.find(
-    (r) => r.sourceId === "demo-course-2",
-  )!;
-  row.kinds = "practical";
-  assert.ok(
-    prepareCatalog(s, data, "org-photo").issues.some((i) =>
-      i.message.includes("지식 평가도"),
-    ),
-  );
-});
-test("v5 왕복과 v3/v4 누락 정책은 새 버전 없이 유지하며 기존 알림 배열을 재해석하지 않는다", async (t) => {
-  const f = await fixture(t);
-  await f.mutate((s) => {
-    s.qualifications.find(
-      (q) => q.id === "demo-qualification",
-    )!.renewalNoticeDaysBefore = 14;
-  });
-  const s = f.store.snapshot(),
-    data = exportCatalog(s, "org-photo", ["demo-qualification"]);
-  const parsed = await readCatalogWorkbook(await writeCatalogWorkbook(data));
-  assert.equal(parsed.workbook.format, "eks-catalog-v12");
-  assert.equal(parsed.workbook.sheets[0]!.renewalNoticeDaysBefore, 14);
-  assert.equal(
-    prepareCatalog(s, parsed.workbook, "org-photo").changes[0]!.kind,
-    "unchanged",
-  );
-  for (const format of ["eks-catalog-v3", "eks-catalog-v4"] as const) {
-    const old = structuredClone(data);
-    old.format = format;
-    delete old.sheets[0]!.renewalNoticeDaysBefore;
-    old.sheets[0]!.reminderDays = [1, 20, 100];
-    const p = prepareCatalog(s, old, "org-photo");
-    assert.equal(p.changes[0]!.kind, "unchanged");
-    assert.equal(p.workbook.sheets[0]!.renewalNoticeDaysBefore, 14);
-  }
-  const b = new ExcelJS.Workbook();
-  await b.xlsx.load((await writeCatalogWorkbook(data)) as any);
-  assert.equal(b.subject, "eks-catalog-v12");
-  assert.ok(
-    b.worksheets[2]!.getSheetValues()
-      .flat()
-      .some((x: any) => x === "재인증 시작 N일 전 알림"),
-  );
 });
 test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이관 무변경을 확인한다", async (t) => {
   const f = await fixture(t);
@@ -374,8 +324,8 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 19);
-  assert.equal(next.state.revision, raw.revision + 10);
+  assert.equal(next.state.schemaVersion, 23);
+  assert.equal(next.state.revision, raw.revision + 14);
   for (const key of [
     "attempts",
     "completions",

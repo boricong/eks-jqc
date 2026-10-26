@@ -11,16 +11,7 @@ import { buildApp } from "../src/app.ts";
 import { courseTypeEditing } from "../src/course-types.ts";
 import { migrateCourseTypes } from "../src/course-type-migration.ts";
 import { validateState } from "../src/integrity.ts";
-import {
-  exportCatalog,
-  prepareCatalog,
-  saveCatalogBatch,
-} from "../src/catalog.ts";
 import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 import { addQualification } from "./dashboard-fixtures.ts";
 async function fixture(
   t: TestContext,
@@ -278,73 +269,6 @@ test("유형 변경 검토 뒤 자격 연결 또는 동시 수정이 생기면 �
     "PUT",
   );
 });
-test("Excel v9 유형 보존·읽기 전용 검토와 구형 새 행 상속·다른 유형 연결 차단", async (t) => {
-  const f = await fixture(t),
-    q = await auditorQualification(f),
-    s = f.store.snapshot();
-  const book = exportCatalog(s, "org-photo", [q.id]);
-  book.sheets[0]!.tables.courses.push({
-    code: "new-auditor",
-    title: "심사 준비",
-    order: 1,
-    kinds: "",
-    sourceId: "",
-    sourceRevision: null,
-    passScore: null,
-    practicalPassScore: null,
-  });
-  book.format = "eks-catalog-v8";
-  const p = prepareCatalog(s, book, "org-photo");
-  assert(!p.issues.some((x) => x.severity === "structure"));
-  assert.equal(
-    p.workbook.sheets[0]!.tables.courses[0]!.qualificationType,
-    "auditor",
-  );
-  await f.store.transact(
-    "admin-1",
-    randomUUID(),
-    "new auditor bulk",
-    () => {},
-    (state) =>
-      saveCatalogBatch(
-        state,
-        book,
-        "org-photo",
-        "admin-1",
-        undefined,
-        f.store.organizations.snapshot(),
-      ),
-  );
-  const now = f.store.snapshot(),
-    updated = now.qualifications
-      .filter((x) => x.entityId === q.entityId)
-      .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
-  const exported = exportCatalog(now, "org-photo", [updated.id]);
-  assert.equal(exported.format, "eks-catalog-v12");
-  assert.deepEqual(
-    (await readCatalogWorkbook(await writeCatalogWorkbook(exported))).workbook,
-    exported,
-  );
-  const altered = structuredClone(exported);
-  altered.sheets[0]!.tables.courses[0]!.qualificationType = "auditee";
-  assert(
-    prepareCatalog(now, altered, "org-photo").issues.some(
-      (x) => x.column === "qualificationType" && x.severity === "structure",
-    ),
-  );
-  const crossed = structuredClone(exported),
-    source = now.courses.find((c) => c.id === "demo-course-1")!;
-  Object.assign(crossed.sheets[0]!.tables.courses[0]!, {
-    sourceId: source.id,
-    sourceRevision: source.revision,
-    qualificationType: "auditee",
-  });
-  assert(
-    prepareCatalog(now, crossed, "org-photo").issues.some(
-      (x) => x.column === "qualificationType" && x.severity === "structure",
-    ),
-  );
-});
 test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를 분류하고 혼합 계보는 보류한다", () => {
   const state = seedState(true),
     org = seedOrganizations();
@@ -375,7 +299,7 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   const before = structuredClone(raw),
     result = migrateCourseTypes(raw, org);
   assert.deepEqual(raw, before);
-  assert.equal(result.state.schemaVersion, 19);
+  assert.equal(result.state.schemaVersion, 23);
   for (const id of [c.id, "future-version"])
     assert.equal(
       result.state.courses.find((c) => c.id === id)!.qualificationType,
@@ -387,8 +311,8 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   );
   const stripped: any = structuredClone(result.state);
   stripped.schemaVersion = 14;
-  stripped.revision -= 5;
-  stripped.audits.splice(-5);
+  stripped.revision -= 9;
+  stripped.audits.splice(-9 - raw.planningRequests.length);
   stripped.qualificationTemplates.forEach((t: any) => delete t.scope);
   stripped.courses.forEach((c: any) => delete c.qualificationType);
   assert.deepEqual(stripped, raw);
@@ -454,11 +378,16 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
     restarted.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 9);
-  assert.equal(file.stateSchemaVersion, 19);
+  assert.equal(file.formatVersion, 13);
+  assert.equal(file.stateSchemaVersion, 23);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
+  delete old.payload.commonCourses;
+  delete old.counts.commonCourses;
   old.formatVersion = 4;
+  delete old.counts.organizationQualificationRequirements;
+  delete old.counts.organizationQualificationRequirements;
+  delete old.counts.subjectiveQuestions;
   old.organizationSchemaVersion = 2;
   old.payload.organizations.qualificationPools = [];
   old.counts.poolEntries = 0;

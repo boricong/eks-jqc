@@ -15,8 +15,8 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/demo-course-1');
-  const group = page.getByRole('group', { name: '필수 평가' });
-  await expect(group.getByRole('checkbox')).toHaveCount(2);
+  const group = page.getByRole('group', { name: '평가 유형' });
+  await expect(group.getByRole('checkbox')).toHaveCount(3);
   await courseSection(page, '학습 항목');
   await page.getByRole('button', { name: '학습 항목 추가' }).click();
   await expect(page.getByRole('tablist', { name: '학습 항목' }).getByRole('tab')).toHaveCount(2);

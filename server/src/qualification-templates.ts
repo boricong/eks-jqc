@@ -1,3 +1,4 @@
+import { validateDefaultCommonCourses } from "./common-courses.ts";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -35,6 +36,7 @@ export function initialTemplates(
 ) {
   return qualificationTemplates.map((t) => ({
     ...t,
+    defaultCommonCourseIds: [] as string[],
     qualificationType: "auditee" as const,
     description: "",
     revision: 1,
@@ -102,6 +104,13 @@ export function saveTemplate(
 ) {
   const input = z
     .object({
+      defaultCommonCourseIds: z
+        .array(z.string().min(1).max(160))
+        .max(100)
+        .optional(),
+      commonCourseRevisions: z
+        .record(z.string(), z.number().int().positive())
+        .optional(),
       revision: z.number().int().positive().optional(),
       qualificationType: QualificationTypeSchema.optional(),
       title: z.string().trim().min(1).max(300),
@@ -136,9 +145,18 @@ export function saveTemplate(
     "팀 등록 이력이 있는 기본자격은 유형을 변경할 수 없습니다. 새 기본자격을 만들어 주세요.",
     "QUALIFICATION_TYPE_LOCKED",
   );
+  const defaultCommonCourseIds =
+    input.defaultCommonCourseIds ?? old?.defaultCommonCourseIds ?? [];
+  validateDefaultCommonCourses(
+    s,
+    qualificationType,
+    defaultCommonCourseIds,
+    input.commonCourseRevisions,
+  );
   const at = new Date().toISOString();
   const next = QualificationTemplateSchema.parse({
     ...input,
+    defaultCommonCourseIds,
     qualificationType,
     id: old?.id || randomUUID(),
     revision: (old?.revision || 0) + 1,

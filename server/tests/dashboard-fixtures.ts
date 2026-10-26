@@ -85,7 +85,7 @@ export function dashboardSeed() {
   state.qualifications[0]!.lifecycleStatus = "Active";
   state.qualifications[0]!.renewalLeadMonths = 3;
   const orgs: OrganizationDocument = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     revision: 0,
     audits: [],
     requests: [],
@@ -94,19 +94,16 @@ export function dashboardSeed() {
         id: TEAM,
         name: "가상 Photo 팀",
         active: true,
-        requiredQualifications: [],
         children: [
           {
             id: ORG_A,
             name: "가 조직",
             active: true,
-            requiredQualifications: [Q],
             children: [
               {
                 id: ORG_CHILD,
                 name: "가 하위 조직",
                 active: true,
-                requiredQualifications: [],
                 children: [],
               },
             ],
@@ -115,14 +112,12 @@ export function dashboardSeed() {
             id: ORG_B,
             name: "나 조직",
             active: true,
-            requiredQualifications: [],
             children: [],
           },
           {
             id: ORG_INACTIVE,
             name: "비활성 조직",
             active: false,
-            requiredQualifications: [Q],
             children: [],
           },
         ],
@@ -131,7 +126,6 @@ export function dashboardSeed() {
         id: "org-etch",
         name: "다른 팀",
         active: true,
-        requiredQualifications: [],
         children: [],
       },
     ],
@@ -171,6 +165,7 @@ export function addQualification(
   seed.state.qualifications.push(q);
   if (!seed.state.qualificationTemplates.some((t) => t.id === q.templateId))
     seed.state.qualificationTemplates.push({
+      defaultCommonCourseIds: [],
       id: q.templateId,
       qualificationType: q.qualificationType,
       revision: 1,
@@ -207,7 +202,6 @@ export function addRequest(
     createdAt: "2026-10-01T00:00:00.000Z",
     revision: 1,
     mode: "learner_choice",
-    targets: [],
     selections: entities.map((entityId) => {
       const q = seed.state.qualifications.find((q) => q.entityId === entityId)!;
       return {

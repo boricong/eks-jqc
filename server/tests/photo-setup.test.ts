@@ -1,4 +1,4 @@
-import { configureTestPolicies } from "./policy-helpers.ts";
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -233,7 +233,6 @@ test("Photo 5과정 계획·학습·지식·상황 대응 완료 후 36개월 �
   const file = path.join(dir, "runtime", "state.json");
   await new JsonStore(file).initialize(state);
   const store = await new JsonStore(file).load();
-  await configureTestPolicies(store);
   const app = await buildApp(store, {
     clock: () => "2026-10-19T01:00:00.000Z",
   });
@@ -275,7 +274,7 @@ test("Photo 5과정 계획·학습·지식·상황 대응 완료 후 36개월 �
   const qualification = store
     .snapshot()
     .qualifications.find((q) => q.templateId === "eqp-backup")!;
-  const request = await call("admin-1", "/planning-requests", {
+  const request = await legacyRequestFixture(store, "admin-1", {
     learnerIds: ["learner-1"],
     dueOn: "2026-10-31",
     message: "Photo 시험 계획",

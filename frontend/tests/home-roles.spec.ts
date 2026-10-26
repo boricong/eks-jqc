@@ -67,7 +67,7 @@ test('보유 역할·기존 최초 홈·사용자별 세션 복원과 새 접속
     'aria-selected',
     'true',
   );
-  await expect(stats(page)).toHaveCount(3);
+  await expect(stats(page)).toHaveCount(2);
   const menu = await page.getByRole('navigation', { name: '주 메뉴', exact: true }).innerText();
   const url = page.url();
   const history = await page.evaluate(() => window.history.length);
@@ -158,9 +158,6 @@ test('전체 역할의 순서·팀/직속 집계·이동 범위·학습 개인 �
     const data = await expectedSummary(page, direct);
     await expect(stats(page)).toHaveText([
       String(data.summary.eligiblePeople),
-      data.summary.requiredCoverage.rate === null
-        ? '해당 없음'
-        : `${Math.round(data.summary.requiredCoverage.rate)}%`,
       String(data.summary.overdueRequests),
     ]);
     await expect(page.locator('.home-scope')).toContainText(
@@ -190,7 +187,10 @@ test('전체 역할의 순서·팀/직속 집계·이동 범위·학습 개인 �
   expect(backend.store.organizations.snapshot()).toEqual(organizations);
 });
 
-test('관리 요약 실패는 0건을 만들지 않고 재시도·빈 분모를 안내한다', async ({ page, backend }) => {
+test('관리 요약 실패는 0건을 만들지 않고 재시도로 실제 현황을 확인한다', async ({
+  page,
+  backend,
+}) => {
   await prepare(backend.store);
   await page.route('**/api/dashboard?**', (route) =>
     route.fulfill({ status: 503, json: { message: '일시적인 조회 오류' } }),
@@ -201,19 +201,12 @@ test('관리 요약 실패는 0건을 만들지 않고 재시도·빈 분모를 
   await expect(stats(page)).toHaveCount(0);
   await page.unroute('**/api/dashboard?**');
   await page.getByRole('button', { name: '현황 다시 조회' }).click();
-  await expect(stats(page)).toHaveCount(3);
+  await expect(stats(page)).toHaveCount(2);
   await roles(page).getByRole('tab', { name: '학습자 인증 · Auditee' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await actor(page, 'admin-1');
   await roles(page).getByRole('tab', { name: '팀 관리' }).click();
-  await page.route('**/api/dashboard?**', async (route) => {
-    const response = await route.fetch();
-    const data = await response.json();
-    data.summary.requiredCoverage = { fulfilled: 0, total: 0, rate: null };
-    await route.fulfill({ json: data });
-  });
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.locator('.stat-value').nth(1)).toHaveText('해당 없음');
+  await expect(page.locator('.home-hero')).not.toContainText('필수 자격 충족률');
 });
 
 test('늦은 역할·계정 응답 무시와 역할 회수 시 유효 홈 복귀', async ({ page, backend }) => {
@@ -242,7 +235,7 @@ test('늦은 역할·계정 응답 무시와 역할 회수 시 유효 홈 복귀
   release();
   await page.unroute('**/api/dashboard?**');
   await roles(page).getByRole('tab', { name: '조직 관리' }).click();
-  await expect(stats(page)).toHaveCount(3);
+  await expect(stats(page)).toHaveCount(2);
   await backend.store.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -283,7 +276,7 @@ test('네 화면 폭·키보드·패널 연결·실제 대비와 네 역할 화�
     await page.setViewportSize({ width, height: 900 });
     for (const label of ['학습자 인증 · Auditee', '팀 관리', '조직 관리', '시스템 운영']) {
       await roles(page).getByRole('tab', { name: label, exact: true }).click();
-      await expect(stats(page)).toHaveCount(3);
+      await expect(stats(page)).toHaveCount(label.includes('관리') ? 2 : 3);
       const active = roles(page).getByRole('tab', { name: label, exact: true });
       const ids = (await active.getAttribute('aria-controls'))!.split(' ');
       for (const id of ids)
@@ -418,7 +411,7 @@ test('긴 이름·소속·Hold·잘못된 기억과 비어 있는 역할 화면�
     await page.setViewportSize({ width, height: 900 });
     for (const label of ['조직 관리', '학습자 인증 · Auditee']) {
       await roles(page).getByRole('tab', { name: label }).click();
-      await expect(stats(page)).toHaveCount(3);
+      await expect(stats(page)).toHaveCount(label.includes('관리') ? 2 : 3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );

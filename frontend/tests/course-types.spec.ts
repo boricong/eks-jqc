@@ -43,8 +43,8 @@ test('유형별 목록·생성 취소·유형 변경 저장과 주소/검색/상
   await expect(page.getByLabel('목록 정렬')).toHaveValue('original');
   await expect(page.getByText('Auditor 인증Set이 없습니다.', { exact: false })).toBeVisible();
   const before = backend.store.snapshot();
-  await page.getByRole('button', { name: 'Auditor 인증Set 추가', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Auditor 인증Set 만들기', exact: true });
+  await page.getByRole('button', { name: 'Auditor 특화인증Set 추가', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Auditor 특화인증Set 만들기', exact: true });
   await expect(modal.getByRole('button', { name: '생성 후 편집' })).toBeDisabled();
   await modal.getByLabel('인증Set명', { exact: true }).fill('취소할 초안');
   await page.keyboard.press('Escape');
@@ -224,8 +224,8 @@ test('생성 실패 재시도와 검토 이후 연결 충돌은 입력·유형 �
       });
     else await route.continue();
   });
-  await page.getByRole('button', { name: 'Auditee 인증Set 추가', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Auditee 인증Set 만들기', exact: true });
+  await page.getByRole('button', { name: 'Auditee 특화인증Set 추가', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Auditee 특화인증Set 만들기', exact: true });
   await modal.getByLabel('인증Set명', { exact: true }).fill('입력 보존 인증Set');
   await modal.getByRole('button', { name: '생성 후 편집' }).click();
   await expect(modal.getByRole('alert')).toContainText('일시적인 저장 오류');

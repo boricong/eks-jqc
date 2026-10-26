@@ -18,7 +18,6 @@ export interface OrganizationNode {
   children: OrganizationNode[];
   description?: string;
   duties?: string;
-  requiredQualifications?: string[] | null;
 }
 export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
   z.object({
@@ -26,6 +25,19 @@ export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
     name: z.string().trim().min(1).max(200),
     active: z.boolean(),
     children: z.array(OrganizationNodeSchema),
+    description: z.string().max(4000).default(""),
+    duties: z.string().max(4000).default(""),
+  }),
+);
+/** Read-only compatibility schema. Never accepted by current organization writes. */
+export const LegacyOrganizationNodeSchema: z.ZodType<
+  OrganizationNode & { requiredQualifications?: string[] | null }
+> = z.lazy(() =>
+  z.object({
+    id: organizationId,
+    name: z.string().trim().min(1).max(200),
+    active: z.boolean(),
+    children: z.array(LegacyOrganizationNodeSchema),
     description: z.string().max(4000).default(""),
     duties: z.string().max(4000).default(""),
     requiredQualifications: z.array(organizationId).nullable().default(null),
@@ -43,7 +55,7 @@ export const RequestRecordSchema = z.object({
   action: z.string().optional(),
 });
 export const OrganizationDocumentSchema = z.object({
-  schemaVersion: z.literal(3),
+  schemaVersion: z.literal(4),
   revision: z.number().int().nonnegative(),
   roots: z.array(OrganizationNodeSchema).min(1),
   audits: z.array(
@@ -78,7 +90,6 @@ export interface OrganizationEntry {
   path: { id: string; name: string }[];
   description: string;
   duties: string;
-  requiredQualifications: string[] | null;
 }
 export function organizationEntries(
   doc: Pick<OrganizationDocument, "roots">,
@@ -105,7 +116,6 @@ export function organizationEntries(
       path: [...(parent?.path ?? []), { id: node.id, name: node.name }],
       description: node.description ?? "",
       duties: node.duties ?? "",
-      requiredQualifications: node.requiredQualifications ?? null,
     };
     entries.push(entry);
     for (let i = node.children.length - 1; i >= 0; i--)
@@ -122,38 +132,6 @@ export const ResetScopeSchema = z.discriminatedUnion("type", [
 ]);
 export type ResetScope = z.infer<typeof ResetScopeSchema>;
 
-export interface RequiredQualification {
-  previousCertificationId?: string;
-  entityId: string;
-  qualificationId: string;
-  title: string;
-  version: number;
-  status:
-    | "fulfilled"
-    | "expired"
-    | "unknown"
-    | "draft"
-    | "progress"
-    | "ready"
-    | "waiting"
-    | "blocked";
-  reason: string;
-  canStart: boolean;
-  requestId?: string;
-  requestedVersion?: number;
-  planId?: string;
-  assignmentId?: string;
-  certificationId?: string;
-}
-export interface RequiredQualificationsView {
-  revision: number;
-  organizationId: string;
-  organizationPath: OrganizationEntry["path"];
-  description: string;
-  duties: string;
-  configured: boolean;
-  items: RequiredQualification[];
-}
 export interface RequestProgress {
   id: string;
   learnerId: string;
@@ -163,20 +141,12 @@ export interface RequestProgress {
   excluded: number;
   stage: string;
 }
-export interface OrganizationPoliciesView {
+export interface OrganizationSettingsView {
   revision: number;
   stateRevision: number;
   lv1OrganizationId: string;
-  canManageQualifications: boolean;
   canAssignAdministrators: boolean;
-  entries: (OrganizationEntry & { userCount: number; draftCount: number })[];
-  qualifications: {
-    entityId: string;
-    qualificationId: string;
-    title: string;
-    version: number;
-    errors: string[];
-  }[];
+  entries: (OrganizationEntry & { userCount: number })[];
 }
 export interface OrganizationAdministratorsView {
   revision: number;
@@ -190,7 +160,6 @@ export interface PlanningCandidate {
   qualificationId: string;
   title: string;
   version: number;
-  required: boolean;
   selected: boolean;
   status: "available" | "draft" | "planned" | "valid" | "blocked";
   reason: string;

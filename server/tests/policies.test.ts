@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import {
   linkFixtureTemplates,
   registerFixtureQualification,
@@ -87,12 +88,11 @@ async function fixture(t: TestContext) {
   const required = (org: string, ids: string[] | null, status = 200) =>
     call(
       "admin-1",
-      `/organization-policies/${org}`,
+      `/organization-settings/${org}`,
       {
         revision: revision(),
         description: "장비 운영",
         duties: "기준 확인·진단",
-        requiredQualifications: ids,
       },
       status,
       "PUT",
@@ -108,12 +108,22 @@ async function fixture(t: TestContext) {
   };
   const invite = async (learner = "learner-2", status = 200) =>
     (
-      await call(
-        "admin-1",
-        "/planning-requests",
-        { learnerIds: [learner], message: "필수 자격별 계획 요청" },
-        status,
-      )
+      await (status === 200
+        ? legacyRequestFixture(store, "admin-1", {
+            learnerIds: [learner],
+            message: "기존 선택형 요청",
+          })
+        : call(
+            "admin-1",
+            "/planning-requests",
+            {
+              learnerIds: [learner],
+              message: "",
+              stateRevision: store.snapshot().revision,
+              organizationRevision: store.organizations.snapshot().revision,
+            },
+            status,
+          ))
     ).ids?.[0];
   const plan = async (requestId: string, q = q1, learner = "learner-2") => {
     const { id } = await call(learner, "/plans", {
@@ -276,97 +286,6 @@ test("Lv5·Lv10·100단계 조직의 생성·소속·경로·직속 및 순환 �
   assert.throws(() => validateOrganizations(doc), /순환/);
 });
 
-test("필수 자격은 실제 소속만 적용하고 빈 목록에도 요청을 허용하며 요청 전 접근은 차단", async (t) => {
-  const f = await fixture(t);
-  await f.setup();
-  const child = "org-photo-pyeongtaek-1";
-  await f.call(
-    "operator-1",
-    "/system/users/learner-2",
-    { name: "정하린", roles: ["learner"], revision: 1, organizationId: child },
-    200,
-    "PATCH",
-  );
-  let view = await f.call("learner-2", "/me/required-qualifications");
-  assert.equal(view.configured, false);
-  assert.equal(view.items.length, 0);
-  await f.invite("learner-2");
-  await f.required(child, []);
-  view = await f.call("learner-2", "/me/required-qualifications");
-  assert.equal(view.configured, true);
-  assert.equal(view.items.length, 0);
-  await f.required(child, f.entities([q1]));
-  view = await f.call("learner-2", "/me/required-qualifications");
-  assert.equal(view.items[0].status, "waiting");
-  await f.call(
-    "learner-2",
-    "/plans",
-    { requestRevision: 1, requestId: "fake", qualificationId: q1 },
-    404,
-  );
-  await f.invite();
-  view = await f.call("learner-2", "/me/required-qualifications");
-  assert.equal(view.items[0].canStart, true);
-});
-
-test("팀 목록은 게시·같은 Lv1만, 참조 중 제거 차단·revision·요청 재시도·최신 역할", async (t) => {
-  const f = await fixture(t);
-  await f.setup();
-  const doc = f.store.organizations.snapshot();
-  await f.required(root, ["not-in-pool"], 422);
-  await f.pool([], 409);
-  const d = await registerFixtureQualification(f.store);
-  await f.pool([d.id], 422);
-  await f.call(
-    "admin-1",
-    "/organization-policies?lv1OrganizationId=org-etch",
-    undefined,
-    403,
-  );
-  await f.call("learner-2", "/organization-policies", undefined, 403);
-  await f.call(
-    "admin-1",
-    "/system/organizations",
-    { revision: f.revision(), parentId: root, name: "권한없음" },
-    403,
-  );
-  const url = `/organization-policies/${root}`,
-    payload = {
-      revision: f.revision(),
-      description: "새 설명",
-      duties: "업무",
-      requiredQualifications: f.entities([q1]),
-    },
-    key = randomUUID();
-  const r = await f.call("admin-1", url, payload, 200, "PUT", key);
-  assert.deepEqual(await f.call("admin-1", url, payload, 200, "PUT", key), r);
-  await f.call("admin-1", url, { ...payload, description: "충돌" }, 409, "PUT");
-  await f.call(
-    "admin-1",
-    url,
-    { ...payload, revision: f.revision() },
-    409,
-    "PUT",
-    key,
-  );
-  await f.call(
-    "operator-1",
-    "/system/users/admin-1",
-    { name: "이서연", roles: ["learner"], revision: 1, organizationId: root },
-    200,
-    "PATCH",
-  );
-  await f.call("admin-1", url, payload, 403, "PUT", key);
-  assert.deepEqual(
-    f.store.snapshot().users.find((u) => u.id === "operator-1")!.organizationId,
-    root,
-  );
-  assert.equal(
-    doc.roots.find((o) => o.id === root)!.requiredQualifications?.length,
-    1,
-  );
-});
-
 test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재시도 대상 변경은 차단한다", async (t) => {
   const f = await fixture(t),
     before = f.store.snapshot().users.find((u) => u.id === "operator-1"),
@@ -375,20 +294,19 @@ test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재�
       revision: f.revision(),
       description: "Etch 조직 기준",
       duties: "설비 운영",
-      requiredQualifications: [],
     };
-  await f.call("operator-1", "/organization-policies", undefined, 403);
+  await f.call("operator-1", "/organization-settings", undefined, 403);
   const scope = "?lv1OrganizationId=org-etch";
   await f.call(
     "operator-1",
-    "/organization-policies/org-etch",
+    "/organization-settings/org-etch",
     body,
     403,
     "PUT",
   );
   const result = await f.call(
     "operator-1",
-    "/organization-policies/org-etch" + scope,
+    "/organization-settings/org-etch" + scope,
     body,
     200,
     "PUT",
@@ -397,7 +315,7 @@ test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재�
   assert.deepEqual(
     await f.call(
       "operator-1",
-      "/organization-policies/org-etch" + scope,
+      "/organization-settings/org-etch" + scope,
       body,
       200,
       "PUT",
@@ -407,13 +325,13 @@ test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재�
   );
   await f.call(
     "operator-1",
-    "/organization-policies/org-photo?lv1OrganizationId=org-photo",
+    "/organization-settings/org-photo?lv1OrganizationId=org-photo",
     body,
     409,
     "PUT",
     key,
   );
-  const view = await f.call("operator-1", "/organization-policies" + scope);
+  const view = await f.call("operator-1", "/organization-settings" + scope);
   assert.ok(view.entries.every((e: any) => e.lv1OrganizationId === "org-etch"));
   assert.equal(view.entries[0].description, body.description);
   assert.deepEqual(
@@ -424,52 +342,6 @@ test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재�
   assert.equal(master.audits.at(-1)?.actorId, "operator-1");
   assert.equal(master.audits.at(-1)?.targetId, "org-etch");
   assert.equal(master.requests.at(-1)?.lv1OrganizationId, "org-etch");
-});
-
-test("요청 필수 대상 고정·새 팀 자격 직접 시작·일부 계획은 전체 완료 아님", async (t) => {
-  const f = await fixture(t);
-  await f.setup();
-  const first = await f.invite();
-  await f.setup([q1, q2]);
-  await f.call(
-    "learner-2",
-    "/plans",
-    {
-      requestRevision: f.store
-        .snapshot()
-        .planningRequests.find((r) => r.id === first)!.revision,
-      requestId: first,
-      qualificationId: q2,
-    },
-    200,
-  );
-  const request = await f.invite(),
-    p = await f.plan(request);
-  await f.complete(p.id);
-  let ws = await f.call("admin-1", "/workspace"),
-    summary = ws.requestProgress.find((r: any) => r.id === request);
-  assert.deepEqual(
-    [
-      summary.total,
-      summary.planned,
-      summary.valid,
-      summary.excluded,
-      summary.stage,
-    ],
-    [2, 1, 0, 0, "작성 중"],
-  );
-  await f.required(root, f.entities([q1]));
-  ws = await f.call("admin-1", "/workspace");
-  summary = ws.requestProgress.find((r: any) => r.id === request);
-  assert.deepEqual(
-    [summary.planned, summary.excluded, summary.stage],
-    [1, 0, "작성 중"],
-  );
-  assert.equal(
-    f.store.snapshot().planningRequests.find((r) => r.id === first)!.targets!
-      .length,
-    1,
-  );
 });
 
 test("적용 버전·소속 변경은 초안 확정을 막고 입력과 요청 스냅샷을 보존", async (t) => {
@@ -496,9 +368,11 @@ test("적용 버전·소속 변경은 초안 확정을 막고 입력과 요청 �
   );
   const newer = await f.plan(request, v.id);
   assert.equal(newer.qualificationId, v.id);
-  const required = await f.call("learner-2", "/me/required-qualifications");
-  assert.equal(required.items[0].requestedVersion, 1);
-  assert.equal(required.items[0].version, 2);
+  assert.equal(
+    f.store.snapshot().planningRequests.find((r) => r.id === request)!
+      .selections[0]!.version,
+    2,
+  );
   await f.call(
     "operator-1",
     "/system/users/learner-2",
@@ -554,10 +428,7 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
     "PUT",
   );
   await f.pool([v.id]);
-  assert.equal(
-    (await f.call("learner-2", "/me/required-qualifications")).items[0].status,
-    "fulfilled",
-  );
+
   const summary = (await f.call("admin-1", "/workspace")).requestProgress.find(
     (r: any) => r.id === request,
   );
@@ -595,41 +466,13 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
     },
   );
   f.clock("2026-11-22T01:00:00Z");
-  assert.equal(
-    (await f.call("learner-2", "/me/required-qualifications")).items[0].status,
-    "waiting",
-  );
+
   assert.equal(
     f.store
       .snapshot()
       .certifications.filter((c) => c.assignmentId === a.assignmentId).length,
     1,
   );
-});
-
-test("조직 정책 변경과 계획 확정의 공통 대기열·기존 배정은 계속 진행", async (t) => {
-  const f = await fixture(t);
-  await f.setup();
-  const p = await f.plan(await f.invite());
-  await Promise.all([f.required(root, []), f.complete(p.id)]);
-  assert.equal(
-    f.store.snapshot().assignments.some((a) => a.planId === p.id),
-    true,
-  );
-  await f.required(root, f.entities([q1]));
-  const snapshot = f.store.snapshot();
-  await f.required(root, []);
-  assert.deepEqual(f.store.snapshot().assignments, snapshot.assignments);
-  const e = f.store
-    .snapshot()
-    .enrollments.find(
-      (e) =>
-        e.assignmentId ===
-        f.store.snapshot().plans.find((x) => x.id === p.id)!.assignmentId,
-    )!;
-  await f.finish(e.id, "objective");
-  const ws = await f.call("learner-2", "/workspace");
-  assert.ok(ws.assignments.some((a: any) => a.planId === p.id));
 });
 
 test("운영 종료는 새 계획을 막고 설정과 확정 진행·복구 참조를 보존", async (t) => {
@@ -655,11 +498,9 @@ test("운영 종료는 새 계획을 막고 설정과 확정 진행·복구 참�
   const wrong = f.store.snapshot();
   wrong.qualifications = wrong.qualifications.filter((q) => q.id !== q1);
   assert.throws(() => validateState(wrong, f.store.organizations.snapshot()));
-  const candidate = f.store.organizations.snapshot();
-  candidate.roots.find((o) => o.id === root)!.requiredQualifications = [
-    "missing",
-  ];
-  assert.throws(() => validateState(f.store.snapshot(), candidate));
+  assert.doesNotThrow(() =>
+    validateState(f.store.snapshot(), f.store.organizations.snapshot()),
+  );
 });
 
 const hash = (b: Buffer | string) =>
@@ -678,7 +519,6 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
     const n: any = nodeFor(org.roots, e.id);
     delete n.description;
     delete n.duties;
-    delete n.requiredQualifications;
   }
   raw.plans.forEach((p: any) => {
     p.workflowVersion = "personal-certification-v2";
@@ -688,7 +528,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   raw.planningRequests.forEach((r: any) => {
     delete r.organizationId;
     delete r.organizationPath;
-    delete r.targets;
+    delete r.selections;
     delete r.source;
   });
   const e = raw.enrollments.find(
@@ -742,8 +582,8 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 19);
-  assert.equal(master.schemaVersion, 3);
+  assert.equal(migrated.schemaVersion, 23);
+  assert.equal(master.schemaVersion, 4);
   for (const key of [
     "users",
     "courses",
@@ -778,9 +618,6 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   assert.equal(migrated.plans[0]!.workflowVersion, "personal-certification-v2");
   assert.equal(migrated.planningRequests[0]!.source, "migration");
   assert.equal("qualificationPools" in master, false);
-  assert.ok(
-    organizationEntries(master).every((e) => e.requiredQualifications === null),
-  );
   const after = await readFile(file),
     orgAfter = await readFile(orgFile),
     backups = await readdir(path.join(directory, "backups"));

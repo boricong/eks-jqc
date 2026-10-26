@@ -99,7 +99,7 @@ async function complete() {
   if (
     !(await confirmAction(
       props.view.noAdditional
-        ? '모든 팀 자격을 취득했거나 확정 계획으로 진행 중입니다. 추가 계획 대상 없이 완료할까요?'
+        ? '이번 요청의 모든 자격을 취득했거나 확정 계획으로 진행 중입니다. 추가 계획 대상 없이 완료할까요?'
         : '필수 및 선택 자격의 계획을 확인했습니다. 이번 요청의 계획 수립을 완료할까요?',
       '계획 수립 완료',
     ))
@@ -119,6 +119,10 @@ onBeforeRouteUpdate(() => !busy.value);
 </script>
 <template>
   <section class="request-planning" aria-label="이번 요청의 계획 현황">
+    <p v-if="request.mode === 'organization_required'" class="muted">
+      이번 요청의 필요자격 전체를 계획해야 합니다. 임의 제외·목록 밖 추가는 할 수 없습니다.
+    </p>
+    <p v-if="request.closed" class="muted">요청 종료 · {{ request.closed.reason }}</p>
     <div class="section-heading">
       <h3>이번 요청 · {{ view.stage }}</h3>
       <span v-if="request.completion" class="muted"
@@ -128,7 +132,7 @@ onBeforeRouteUpdate(() => !busy.value);
         }}</span
       >
     </div>
-    <p v-if="request.mode === 'fixed'" class="muted">이전 요청은 당시 대상 범위를 유지합니다.</p>
+
     <p v-if="!rows.length" class="muted">
       {{
         request.completion ? '추가 계획 대상 없이 완료했습니다.' : '아직 시작한 계획이 없습니다.'
@@ -139,7 +143,17 @@ onBeforeRouteUpdate(() => !busy.value);
       <div v-for="c in group" :key="c.entityId" class="planning-choice-row">
         <div class="planning-choice-title">
           <span>
-            <strong>{{ c.required ? '[필수] ' : '' }}{{ c.title }}</strong>
+            <strong>{{ c.title }}</strong
+            ><span v-if="request.requirementSnapshot" class="muted">
+              ·
+              {{
+                request.requirementSnapshot.sources
+                  .find((s) => s.entityId === c.entityId)
+                  ?.organizations.map((o) => o.name)
+                  .join(', ')
+              }}
+              지정</span
+            >
             <small>v{{ c.version }} · {{ labels[c.status] }}</small>
           </span>
         </div>
@@ -167,7 +181,13 @@ onBeforeRouteUpdate(() => !busy.value);
           >인증서 보기</RouterLink
         >
         <button
-          v-else-if="c.selected && !c.required && !request.completion && !c.planId"
+          v-else-if="
+            request.mode !== 'organization_required' &&
+            c.selected &&
+            !request.completion &&
+            !request.closed &&
+            !c.planId
+          "
           class="button ghost small"
           :disabled="locked || !!pending"
           @click="remove(c)"
@@ -177,7 +197,10 @@ onBeforeRouteUpdate(() => !busy.value);
       </div>
     </template>
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>
-    <ul v-if="!request.completion && view.errors.length" class="request-planning-help">
+    <ul
+      v-if="!request.completion && !request.closed && view.errors.length"
+      class="request-planning-help"
+    >
       <li v-for="message in view.errors" :key="message">{{ message }}</li>
     </ul>
     <div class="request-planning-actions">
@@ -189,7 +212,7 @@ onBeforeRouteUpdate(() => !busy.value);
         다시 불러오기
       </button>
       <button
-        v-if="!request.completion"
+        v-if="!request.completion && !request.closed"
         class="button primary"
         :disabled="locked || !!pending || !view.canComplete"
         @click="complete"

@@ -79,7 +79,7 @@ async function fixture(t: TestContext) {
   ) =>
     call(
       actor,
-      `/organization-policies/${target}/administrators`,
+      `/organization-settings/${target}/administrators`,
       grantBody(ids),
       status,
       "PUT",
@@ -88,7 +88,6 @@ async function fixture(t: TestContext) {
     revision: store.organizations.snapshot().revision,
     description: "설비 검증 조직",
     duties: "설정 관리",
-    requiredQualifications: [],
   });
   return { store, app, call, grant, grantBody, policy, file, dir };
 }
@@ -100,15 +99,15 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   const actor = (await call("learner-2", "/session")).actor;
   assert.deepEqual(actor.roles, ["learner", "organization_admin"]);
   assert.equal(actor.revision, before.revision + 1);
-  const view = await call("learner-2", "/organization-policies");
+  const view = await call("learner-2", "/organization-settings");
   assert.deepEqual(
     view.entries.map((e: any) => e.id),
     [own],
   );
-  assert.equal(view.canManageQualifications, false);
+  assert.equal(view.canAssignAdministrators, false);
   await call(
     "learner-2",
-    `/organization-policies/${own}`,
+    `/organization-settings/${own}`,
     policy(),
     200,
     "PUT",
@@ -121,7 +120,7 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   ])
     await call(
       "learner-2",
-      `/organization-policies/${target}`,
+      `/organization-settings/${target}`,
       policy(),
       403,
       "PUT",
@@ -145,7 +144,7 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
     await call("learner-2", url, body, 403, method);
   const ws = await call("learner-2", "/workspace");
   assert.equal(ws.management.canManage, false);
-  assert.equal(ws.management.canManagePolicies, true);
+  assert.equal(ws.management.canManageOrganizationSettings, true);
   assert.deepEqual(ws.management.editableOrganizationIds, [own]);
   assert.equal(ws.assignments.length, 0);
   assert.equal("comparisons" in ws, false);
@@ -159,12 +158,12 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   );
   const administrators = await call(
     "learner-2",
-    `/organization-policies/${own}/administrators`,
+    `/organization-settings/${own}/administrators`,
   );
   assert.equal(administrators.candidates.length, 2);
   await call(
     "learner-2",
-    `/organization-policies/${root}/administrators`,
+    `/organization-settings/${root}/administrators`,
     undefined,
     403,
   );
@@ -173,7 +172,7 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
   await grant([]);
   await call(
     "learner-2",
-    `/organization-policies/${own}`,
+    `/organization-settings/${own}`,
     policy(),
     403,
     "PUT",
@@ -203,7 +202,7 @@ test("관리자 후보와 저장은 정확한 소속만 사용하고 부모·자
   }
   const candidates = await call(
     "admin-1",
-    `/organization-policies/${own}/administrators`,
+    `/organization-settings/${own}/administrators`,
   );
   assert.deepEqual(candidates.candidates.map((u: any) => u.id).sort(), [
     "ft-1",
@@ -226,7 +225,7 @@ test("지정 대상·revision·중복 요청·권한 회수·백업 실패를 �
   await grant(["learner-1"], 422);
   const body = grantBody(["learner-2"]),
     key = randomUUID(),
-    url = `/organization-policies/${own}/administrators`;
+    url = `/organization-settings/${own}/administrators`;
   const first = await call("admin-1", url, body, 200, "PUT", key),
     state = store.snapshot();
   assert.deepEqual(await call("admin-1", url, body, 200, "PUT", key), first);
@@ -257,7 +256,7 @@ test("지정 대상·revision·중복 요청·권한 회수·백업 실패를 �
   assert.deepEqual(moved.roles, ["learner"]);
   await call(
     "learner-2",
-    `/organization-policies/${own}`,
+    `/organization-settings/${own}`,
     policy(),
     403,
     "PUT",
@@ -289,34 +288,34 @@ test("Lv1 직속 세부 관리자도 팀 전체 권한을 갖지 않으며 복�
   const { store, call, grantBody, grant } = await fixture(t);
   await grant(["learner-1"], 200, "admin-1", root);
   assert.deepEqual(
-    (await call("learner-1", "/organization-policies")).entries.map(
+    (await call("learner-1", "/organization-settings")).entries.map(
       (e: any) => e.id,
     ),
     [root],
   );
   await call(
     "admin-1",
-    "/organization-policies?lv1OrganizationId=org-etch",
+    "/organization-settings?lv1OrganizationId=org-etch",
     undefined,
     403,
   );
   await call(
     "operator-1",
-    `/organization-policies/${own}/administrators`,
+    `/organization-settings/${own}/administrators`,
     grantBody([]),
     403,
     "PUT",
   );
   await call(
     "operator-1",
-    `/organization-policies/${own}/administrators?lv1OrganizationId=org-etch`,
+    `/organization-settings/${own}/administrators?lv1OrganizationId=org-etch`,
     grantBody([]),
     403,
     "PUT",
   );
   await call(
     "operator-1",
-    `/organization-policies/${own}/administrators?lv1OrganizationId=org-photo`,
+    `/organization-settings/${own}/administrators?lv1OrganizationId=org-photo`,
     grantBody(["ft-1"]),
     200,
     "PUT",
@@ -468,8 +467,8 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "administration",
   );
   const after = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(after.schemaVersion, 19);
-  assert.equal(after.revision, raw.revision + 12);
+  assert.equal(after.schemaVersion, 23);
+  assert.equal(after.revision, raw.revision + 16);
   for (const key of [
     "users",
     "plans",
@@ -634,19 +633,18 @@ test("조직 추가·수정·이동·사용 상태는 새 감사 이력 없이 �
   assert.deepEqual(returned.audits, auditBefore);
   await call(
     "admin-1",
-    `/organization-policies/${root}`,
+    `/organization-settings/${root}`,
     {
       revision: store.organizations.snapshot().revision,
       description: "보존할 정책 이력",
       duties: "",
-      requiredQualifications: [],
     },
     200,
     "PUT",
   );
   assert.equal(
     store.organizations.snapshot().audits.at(-1)!.action,
-    "organization.policy",
+    "organization.settings",
   );
   assert.deepEqual(
     store.organizations.snapshot().audits.slice(0, -1),
@@ -667,7 +665,7 @@ test("조직 추가·수정·이동·사용 상태는 새 감사 이력 없이 �
   );
   assert.equal(
     reopened.organizations.snapshot().audits.at(-1)!.action,
-    "organization.policy",
+    "organization.settings",
   );
   assert.equal(
     reopened.organizations.snapshot().roots[0]!.children[0]!.id,

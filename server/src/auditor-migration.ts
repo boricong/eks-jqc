@@ -9,11 +9,11 @@ export function migrateAuditorWorkflow(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![15, 16, 17, 18, 19].includes(raw?.schemaVersion))
+  if (![15, 16, 17, 18, 19, 20, 21, 22, 23].includes(raw?.schemaVersion))
     throw new Error("Auditor 학습 확인 이관에는 업무15·조직2가 필요합니다.");
   const next = structuredClone(raw),
     organizations = validateOrganizations(organizationInput);
-  const alreadyApplied = raw.schemaVersion === 19;
+  const alreadyApplied = raw.schemaVersion === 23;
   if (raw.schemaVersion === 15) {
     if ((next.learningChecklists || []).length)
       throw new Error("구형 데이터의 학습 확인 기록을 먼저 검토해 주세요.");

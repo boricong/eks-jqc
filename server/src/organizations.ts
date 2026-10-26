@@ -28,6 +28,12 @@ export function validateOrganizations(input: unknown): OrganizationDocument {
       422,
       "조직 트리에 순환 또는 중복 노드가 있습니다.",
     );
+    demand(
+      !Object.hasOwn(node, "requiredQualifications"),
+      422,
+      "조직별 필수자격 설정 기능이 종료되었습니다.",
+      "FEATURE_REMOVED",
+    );
     visited.add(node);
     if (Array.isArray(node.children)) pending.push(...node.children);
   }

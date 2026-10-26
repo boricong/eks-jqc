@@ -51,7 +51,7 @@ const history = computed(
       <h2>자격 현황</h2>
       <p v-if="!qualifications.length" class="dashboard-empty">조회할 자격이 없습니다.</p>
       <article v-for="q in qualifications" :key="q.entityId" class="dashboard-person-record">
-        <h3><span v-if="q.required" class="dashboard-required">[필수] </span>{{ q.title }}</h3>
+        <h3>{{ q.title }}</h3>
         <div class="dashboard-record-attributes">
           <span class="dashboard-status" :class="q.efficacy.toLowerCase()">{{
             efficacyLabels[q.efficacy]
@@ -181,14 +181,17 @@ const history = computed(
       <h2>계획 요청</h2>
       <ul>
         <li v-for="request in detail.requests" :key="request.id">
-          <strong>{{ request.completedOn ? '계획 수립 완료' : '미완료' }}</strong> · 작성 기한
+          <strong>{{
+            request.closedOn ? '요청 종료' : request.completedOn ? '계획 수립 완료' : '미완료'
+          }}</strong>
+          · 작성 기한
           {{ request.dueOn }}
+          <p v-if="request.closedOn" class="dashboard-meta">
+            종료일 {{ request.closedOn }} · {{ request.closeReason }}
+          </p>
           <p class="dashboard-meta">
             요청일 {{ request.createdOn
             }}{{ request.completedOn ? ` · 완료일 ${request.completedOn}` : '' }}
-          </p>
-          <p v-if="request.requiredTitles.length">
-            요청 당시 필수: {{ request.requiredTitles.join(', ') }}
           </p>
         </li>
       </ul>

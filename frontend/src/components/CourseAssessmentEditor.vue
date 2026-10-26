@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { randomUUID } from '../uuid';
 import { computed, nextTick, ref, useId, watch } from 'vue';
-import { kindLabels, type Course, type Kind } from '@eks/contracts';
+import { kindLabels, type CourseContent, type Kind } from '@eks/contracts';
 import { courseIssues, type CourseIssue } from '../course-editor';
 import CompactTabs from './CompactTabs.vue';
 import ObjectiveChoices from './ObjectiveChoices.vue';
 import AppDialog from './AppDialog.vue';
 const props = defineProps<{
-  course: Course;
+  course: CourseContent;
   disabled: boolean;
   showErrors: boolean;
   kind?: Kind;

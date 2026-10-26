@@ -33,7 +33,6 @@ type Impact = {
   blockers: string[];
   mode: 'archive' | 'remove';
   replacement: { id: string; version: number | null; title: string } | null;
-  affectedOrganizations: { id: string; name: string }[];
 };
 const impact = ref<Impact>();
 watch(
@@ -139,10 +138,7 @@ async function remove() {
         {{ qualificationVersionLabel(impact.replacement.version) }}
       </p>
       <p v-else>남은 기준이 없어 신규 계획·학습·갱신 시작을 제한합니다.</p>
-      <p v-if="impact.affectedOrganizations.length">
-        필수 지정 함께 해제: {{ impact.affectedOrganizations.map((o) => o.name).join(', ') }}. 과거
-        요청과 확정 근거는 보존합니다.
-      </p>
+
       <dl class="deletion-counts">
         <div v-for="(count, key) in impact.references" :key="key">
           <dt>{{ labels[key] || key }}</dt>
@@ -158,9 +154,11 @@ async function remove() {
         다른 자격 버전과 연결된 인증Set은 삭제하지 않습니다.
       </p>
       <p v-else class="error-message">{{ impact.blockers.join(' ') }}</p>
-      <RouterLink v-if="!impact.canDelete" :to="store.managementLink('/admin/policies')">{{
-        managementTitle('policies')
-      }}</RouterLink>
+      <RouterLink
+        v-if="!impact.canDelete"
+        :to="store.managementLink('/admin/organization-settings')"
+        >{{ managementTitle('organization-settings') }}</RouterLink
+      >
       <label v-if="impact.canDelete" class="field"
         ><span>삭제 사유</span
         ><textarea v-model="reason" rows="3" maxlength="2000" :disabled="busy" />

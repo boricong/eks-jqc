@@ -13,11 +13,6 @@ import {
   metadata,
   currentQualification,
 } from "../src/qualification-templates.ts";
-import {
-  exportCatalog,
-  prepareCatalog,
-  saveCatalogBatch,
-} from "../src/catalog.ts";
 import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
 async function fixture(
   t: TestContext,
@@ -79,10 +74,6 @@ async function fixture(
 }
 import { migrateQualificationTypes } from "../src/qualification-type-migration.ts";
 import { validateState } from "../src/integrity.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 import { addQualification, addCertification } from "./dashboard-fixtures.ts";
 import {
   WORKFLOW_VERSION,
@@ -237,7 +228,7 @@ test("등록과 유형 수정이 동시에 요청되어도 팀/기본자격 유�
   validateState(s, f.store.organizations.snapshot());
 });
 
-test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하고 팀 적용·일괄 유형 변경은 거부한다", async (t) => {
+test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적용과 유형 위조를 거부한다", async (t) => {
   const f = await fixture(t);
   const template = await f.call(
     "operator-1",
@@ -286,58 +277,22 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
   );
   await f.call(
     "admin-1",
-    "/organization-policies/org-photo",
+    "/organization-settings/org-photo",
     {
       revision: f.store.organizations.snapshot().revision,
       description: "",
       duties: "",
-      requiredQualifications: [q.entityId],
     },
     200,
     "PUT",
-  );
-  const workbook = exportCatalog(f.store.snapshot(), "org-photo", [q.id]);
-  assert.equal(workbook.format, "eks-catalog-v12");
-  const xlsx = await readCatalogWorkbook(await writeCatalogWorkbook(workbook));
-  assert.deepEqual(xlsx.workbook, workbook);
-  const altered = structuredClone(workbook);
-  altered.sheets[0]!.qualificationType = "auditee";
-  assert(
-    prepareCatalog(f.store.snapshot(), altered, "org-photo").issues.some(
-      (i) => i.column === "qualificationType" && i.severity === "structure",
-    ),
-  );
-  const old = structuredClone(workbook);
-  old.format = "eks-catalog-v7";
-  delete old.sheets[0]!.qualificationType;
-  assert.equal(
-    prepareCatalog(f.store.snapshot(), old, "org-photo").workbook.sheets[0]!
-      .qualificationType,
-    "auditor",
-  );
-  workbook.sheets[0]!.months = 24;
-  await f.store.transact(
-    "admin-1",
-    randomUUID(),
-    "auditor batch",
-    () => {},
-    (s) =>
-      saveCatalogBatch(
-        s,
-        workbook,
-        "org-photo",
-        "admin-1",
-        undefined,
-        f.store.organizations.snapshot(),
-      ),
   );
   const master = exportMaster(
     f.store.snapshot(),
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 9);
-  assert.equal(master.stateSchemaVersion, 19);
+  assert.equal(master.formatVersion, 13);
+  assert.equal(master.stateSchemaVersion, 23);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -392,7 +347,7 @@ function auditorProgress(s: ReturnType<typeof seedState>) {
     revision: 1,
     organizationId: "org-photo",
     mode: "fixed",
-    targets: [
+    selections: [
       {
         entityId: q.entityId,
         qualificationId: q.id,
@@ -400,7 +355,6 @@ function auditorProgress(s: ReturnType<typeof seedState>) {
         version: q.version!,
       },
     ],
-    selections: [],
   });
   s.plans.push({
     id: "auditor-plan",
@@ -463,12 +417,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 19);
-  assert.equal(preview.state.revision, raw.revision + 6);
+  assert.equal(preview.state.schemaVersion, 23);
+  assert.equal(preview.state.revision, raw.revision + 10);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 6;
-  normalized.audits.splice(-6);
+  normalized.revision -= 10;
+  normalized.audits.splice(-10 - raw.planningRequests.length);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,
@@ -544,7 +498,13 @@ test("구형 기본정보는 Auditee로 변환하며 인증서 유형은 URL 대
   const s = seedState(true),
     org = seedOrganizations();
   const file: any = exportMaster(s, org, new Date().toISOString());
+  delete file.payload.commonCourses;
+  delete file.counts.commonCourses;
+  delete file.payload.commonCourses;
+  delete file.counts.commonCourses;
   file.formatVersion = 3;
+  delete file.counts.organizationQualificationRequirements;
+  delete file.counts.subjectiveQuestions;
   file.organizationSchemaVersion = 2;
   file.payload.organizations.qualificationPools = [];
   file.counts.poolEntries = 0;

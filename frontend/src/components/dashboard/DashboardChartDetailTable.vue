@@ -46,17 +46,7 @@ defineEmits<{ member: [string, string?]; page: [number] }>();
           <td>{{ row.organizationName }}</td>
           <td>{{ row.title || '—' }}</td>
           <td>
-            <span v-if="row.requiredCoverage && detail.unit === 'people'"
-              >필수 {{ row.requiredCoverage.fulfilled }} / {{ row.requiredCoverage.total
-              }}{{ !row.requiredCoverage.total ? ' · 필수 없음' : '' }}</span
-            >
-            <span
-              v-else-if="
-                detail.selection.chartId.endsWith('coverage') && row.fulfilled !== undefined
-              "
-              >{{ row.fulfilled ? '충족' : '미충족' }}</span
-            >
-            <span v-else-if="row.efficacy">{{ efficacyLabels[row.efficacy] }}</span>
+            <span v-if="row.efficacy">{{ efficacyLabels[row.efficacy] }}</span>
             <small v-if="row.progress && row.progress !== 'none'" class="dashboard-meta">{{
               progressLabels[row.progress]
             }}</small>

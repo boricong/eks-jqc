@@ -1,5 +1,4 @@
 import { test, expect, actor } from './fixtures';
-import { configureTestPolicies } from '../../server/tests/policy-helpers';
 import { assessmentQuestions, credentialCurrent } from '@eks/contracts';
 
 async function finishOwn(page: any, store: any) {
@@ -53,7 +52,6 @@ async function prepared(page: any, backend: any) {
       return {};
     },
   );
-  await configureTestPolicies(backend.store);
   await page.goto('/');
   await actor(page, 'learner-1');
   return finishOwn(page, backend.store);
@@ -166,7 +164,6 @@ test('기준 상태 영향 확인·사유·Revoke 이력과 신규 인증Set 명
       return {};
     },
   );
-  await configureTestPolicies(backend.store);
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications/demo-qualification');
@@ -174,7 +171,7 @@ test('기준 상태 영향 확인·사유·Revoke 이력과 신규 인증Set 명
   await expect(page.getByLabel('재인증 시작 · 만료 전 개월', { exact: true })).toHaveValue('3');
   await page.getByRole('button', { name: '운영 상태 변경', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('필수 지정 조직');
+  await expect(dialog).not.toContainText('필수 지정 조직');
   await dialog.getByLabel('변경할 운영 상태').selectOption('Revoke');
   await dialog.getByLabel('변경 사유').fill('기준 폐기 검토');
   await dialog.getByRole('button', { name: '상태 변경 저장' }).click();

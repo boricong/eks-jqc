@@ -1,3 +1,4 @@
+import { validateCommonSelection } from "./common-courses.ts";
 import {
   latestQualification,
   organizationEntries,
@@ -42,6 +43,9 @@ export function catalogReferences(
       qualifications: s.qualifications.filter((q) => q.courseIds.includes(id))
         .length,
       enrollments: s.enrollments.filter((e) => e.courseId === id).length,
+      subjectiveResponses: s.subjectiveResponses.filter(
+        (r) => r.courseId === id,
+      ).length,
       attempts: s.attempts.filter((a) => a.courseId === id).length,
       completions: s.completions.filter((c) => c.courseId === id).length,
       comparisons: s.comparisons.filter((c) => c.courseId === id).length,
@@ -49,9 +53,7 @@ export function catalogReferences(
     };
   return {
     requests: s.planningRequests.filter((r) =>
-      [...(r.targets || []), ...(r.selections || [])].some(
-        (t) => t.qualificationId === id,
-      ),
+      (r.selections || []).some((t) => t.qualificationId === id),
     ).length,
     plans: s.plans.filter((p) => p.qualificationId === id).length,
     assignments: s.assignments.filter((a) => a.qualificationId === id).length,
@@ -140,6 +142,12 @@ function editingChanges(
             `${m.title} · ${m.required ? "필수" : "선택"} · ${m.type === "mtc" ? "MTC교육" : m.type === "team" ? "팀 특화 교육" : "현업 OJT"}`,
         )
         .join("\n"),
+      "주관식 사용": item.subjectiveEnabled
+        ? "사용 · 수료 영향 없음"
+        : "사용 안 함",
+      "주관식 문항": item.subjectiveQuestions
+        .map((q, i) => `${i + 1}. ${q.prompt}`)
+        .join("\n\n"),
       "지식 문항": questions("objective"),
       "상황 대응 문항": questions("practical"),
     };
@@ -159,6 +167,7 @@ export function validateCatalogStructure(
 ) {
   if (section === "qualifications") {
     const q = item as Qualification;
+    validateCommonSelection(s, q);
     demand(
       new Set(q.courseIds).size === q.courseIds.length,
       422,
@@ -188,10 +197,16 @@ export function validateCatalogStructure(
     );
   } else {
     const c = item as Course;
+    demand(
+      c.qualificationType === "auditee" ||
+        (!c.subjectiveEnabled && !c.subjectiveQuestions.length),
+      422,
+      "Auditor는 주관식 평가를 사용할 수 없습니다.",
+    );
     for (const list of [
       c.learningItems,
       c.materials,
-      [...c.questions, ...c.practicalQuestions],
+      [...c.questions, ...c.practicalQuestions, ...c.subjectiveQuestions],
     ])
       demand(
         new Set(list.map((i) => i.id)).size === list.length,
@@ -267,6 +282,17 @@ export function prepareCatalogSave(
     deletedBy: undefined,
     deletionReason: undefined,
   };
+  for (const field of section === "courses"
+    ? ["category", "commonCourseSource"]
+    : ["commonCourseEntityIds"]) {
+    demand(
+      body[field] === undefined ||
+        isDeepStrictEqual(body[field], (source as any)[field]),
+      422,
+      "공통인증Set 구분과 등록 범위는 변경할 수 없습니다.",
+      "COMMON_COURSE_METADATA_READ_ONLY",
+    );
+  }
   const candidate =
     section === "courses"
       ? CourseSchema.parse({
@@ -285,6 +311,13 @@ export function prepareCatalogSave(
           lifecycleStatus: (source as Qualification).lifecycleStatus,
           templateId: (source as Qualification).templateId,
         });
+  if (section === "courses" && (source as Course).category === "common")
+    demand(
+      candidate.qualificationType === source.qualificationType,
+      409,
+      "공통인증Set의 인증 유형은 변경할 수 없습니다.",
+      "COURSE_TYPE_LOCKED",
+    );
   if (section === "courses")
     requireCourseTypeChange(s, source as Course, candidate.qualificationType);
   if (section === "courses")
@@ -309,19 +342,30 @@ export function prepareCatalogSave(
       ...(source as Qualification).courseIds,
     ];
   validateCatalogStructure(s, section, candidate);
-  const unchanged = isDeepStrictEqual(
+  let unchanged = isDeepStrictEqual(
     catalogContent(candidate),
     catalogContent(source),
   );
   const references = catalogReferences(s, section, id, org);
   const requiresNewVersion = section === "qualifications" && !sameCourses;
-  const initialConfiguration =
+  let initialConfiguration =
     section === "qualifications" &&
     configureInitialQualification(
       source as Qualification,
       candidate as Qualification,
       !unchanged,
     );
+  if (
+    section === "qualifications" &&
+    source.version === null &&
+    body.confirmInitialConfiguration === true &&
+    (source as Qualification).commonCourseEntityIds.length > 0
+  ) {
+    initialConfiguration = true;
+    (candidate as Qualification).version = 1;
+    (candidate as Qualification).lifecycleStatus = "Active";
+    unchanged = false;
+  }
   const automatic = Object.values(references).some((n) => n > 0);
   const newVersion =
     !unchanged &&
@@ -433,6 +477,12 @@ export function saveCatalogItem(
         )
           return courseId;
         const source = s.courses.find((c) => c.id === courseId)!;
+        demand(
+          source.category !== "common",
+          422,
+          "다른 자격의 공통인증Set을 연결할 수 없습니다.",
+          "COMMON_COURSE_NOT_ALLOWED",
+        );
         const copyId = randomUUID();
         s.courses.push(
           CourseSchema.parse({
@@ -532,15 +582,6 @@ export function qualificationDeletionImpact(
     scope,
     q.entityId,
   );
-  const affectedOrganizations = remaining
-    ? []
-    : organizationEntries(org)
-        .filter(
-          (o) =>
-            o.lv1OrganizationId === scope &&
-            o.requiredQualifications?.includes(q.entityId),
-        )
-        .map((o) => ({ id: o.id, name: o.name }));
   return {
     id,
     title: q.title,
@@ -549,12 +590,23 @@ export function qualificationDeletionImpact(
     stateRevision: s.revision,
     organizationRevision: org.revision,
     references,
-    canDelete: !q.deletedAt,
-    blockers: q.deletedAt ? ["이미 삭제된 자격입니다."] : [],
+    canDelete:
+      !q.deletedAt &&
+      !s.organizationQualificationRequirements.some((r) =>
+        r.entityIds.includes(q.entityId),
+      ),
+    blockers: [
+      ...(q.deletedAt ? ["이미 삭제된 자격입니다."] : []),
+      ...s.organizationQualificationRequirements
+        .filter((r) => r.entityIds.includes(q.entityId))
+        .map(
+          (r) =>
+            `조직 필요자격 지정 해제 필요: ${organizationEntries(org).find((e) => e.id === r.organizationId)?.name || r.organizationId}`,
+        ),
+    ],
     replacement: remaining
       ? { id: remaining.id, version: remaining.version, title: remaining.title }
       : null,
-    affectedOrganizations,
     mode:
       !!q.templateId || Object.values(references).some((n) => n > 0)
         ? ("archive" as const)
@@ -597,22 +649,6 @@ export function deleteQualification(
     q.deletedBy = actorId;
     q.deletionReason = body.reason;
     q.revision++;
-  }
-  for (const affected of impact.affectedOrganizations) {
-    const node = nodeFor(org.roots, affected.id)!;
-    const before = [...(node.requiredQualifications || [])];
-    node.requiredQualifications = before.filter(
-      (requiredEntityId) => requiredEntityId !== entityId,
-    );
-    org.audits.push({
-      id: randomUUID(),
-      actorId,
-      date: new Date().toISOString(),
-      targetId: node.id,
-      action: "qualification.delete.required-detach",
-      before,
-      after: node.requiredQualifications,
-    });
   }
   return { id, mode: impact.mode, reason: body.reason, impact };
 }

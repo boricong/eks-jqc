@@ -2,7 +2,6 @@ import { answerConfirmation } from './fixtures';
 import { test, expect, actor } from './fixtures';
 import type { JsonStore } from '../../server/src/storage';
 import { nodeFor } from '../../server/src/organizations';
-import { configureTestPolicies } from '../../server/tests/policy-helpers';
 
 const own = 'org-photo-pyeongtaek-1';
 
@@ -33,7 +32,6 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   backend,
 }) => {
   const longName = '설비 구성 및 공정 기준의 변경 대응 능력을 검증하는 상세 운영 조직';
-  await configureTestPolicies(backend.store);
   await backend.store.organizations.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -46,7 +44,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/policies');
+  await page.goto('/admin/organization-settings');
   const tree = page.getByRole('tree', { name: '설정 가능한 조직', includeHidden: true });
   await expect(tree).toBeVisible();
   await expect(page.getByText('관리할 조직을 먼저 선택한 뒤', { exact: false })).toHaveCount(0);
@@ -71,7 +69,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   await expect(page.locator('.policy-detail-stack > section > h2')).toHaveText(longName);
   await expect(
     page.getByRole('link', { name: '팀 자격 설정 · 등록·현재 팀 기준', exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const panel = page.locator('.policy-tree-panel'),
@@ -109,20 +107,13 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       await expect(tree).toBeHidden();
     }
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('font-size', '14px');
-    const search = page.getByLabel('자격 검색', { exact: true }),
-      searchLabel = page.locator('.policy-qualification-search > span'),
-      list = page.locator('.policy-qualification-list');
-    const searchBox = (await search.boundingBox())!,
-      labelBox = (await searchLabel.boundingBox())!,
-      listBox = (await list.boundingBox())!;
-    expect(
-      Math.abs(labelBox.y + labelBox.height / 2 - searchBox.y - searchBox.height / 2),
-    ).toBeLessThan(1);
-    expect(searchBox.x).toBeGreaterThan(labelBox.x + labelBox.width);
-    expect(listBox.y - searchBox.y - searchBox.height).toBeGreaterThanOrEqual(12);
-    await expect(list).toHaveCSS('border-top-width', '1px');
-    await expect(list).toHaveCSS('border-color', 'rgb(227, 232, 238)');
-    await expect(list.getByRole('checkbox').first()).toBeChecked();
+    await expect(page.getByLabel('자격 검색', { exact: true })).toHaveCount(0);
+    const description = page.getByLabel('조직 설명', { exact: true });
+    await expect(description).toBeVisible();
+    const inputBox = (await description.boundingBox())!,
+      detailBox = (await detail.boundingBox())!;
+    expect(inputBox.x).toBeGreaterThanOrEqual(detailBox.x);
+    expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(detailBox.x + detailBox.width);
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS('border-radius', '0px');
     await expect(tree.locator(`[data-id="${own}"]`)).toHaveCSS(
       'border-left-color',
@@ -136,12 +127,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
       fullPage: true,
     });
   }
-  await page.getByLabel('자격 검색', { exact: true }).fill('검색 결과 없는 자격');
-  await expect(page.locator('.policy-qualification-list')).toHaveText('검색 결과가 없습니다.');
-  await page.getByLabel('자격 검색', { exact: true }).fill('');
-  await expect(
-    page.locator('.policy-qualification-list').getByRole('checkbox').first(),
-  ).toBeChecked();
+  await expect(page.locator('.policy-qualification-list')).toHaveCount(0);
   await page.locator('.policy-tree-toggle').click();
   await tree.locator('[data-id="org-photo-pyeongtaek-2"]').click();
   await expect(tree).toBeHidden();
@@ -159,7 +145,7 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
   await members(backend.store);
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/policies');
+  await page.goto('/admin/organization-settings');
   const tree = page.getByRole('tree');
   await tree.locator(`[data-id="${own}"]`).click();
   await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
@@ -208,7 +194,7 @@ test('관리자 후보 검색·별도 선택 목록·저장 실패와 재조회�
   expect(backend.store.snapshot().users.filter((u) => u.organizationAdministration)).toHaveLength(
     0,
   );
-  const url = '**/api/organization-policies/*/administrators?*';
+  const url = '**/api/organization-settings/*/administrators?*';
   await page.route(url, async (route) => {
     if (route.request().method() === 'PUT')
       await route.fulfill({ status: 503, json: { message: '시험 저장 실패' } });

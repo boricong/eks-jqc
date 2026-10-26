@@ -1,4 +1,4 @@
-import { configureTestPolicies } from "./policy-helpers.ts";
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -28,12 +28,6 @@ import {
   convertCourseFields,
 } from "../src/assessment-transition.ts";
 import { preparePhotoSetup } from "../src/photo-setup.ts";
-import { exportCatalog, prepareCatalog } from "../src/catalog.ts";
-import {
-  writeCatalogWorkbook,
-  readCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
-import { writeCatalogWorkbook as writeLegacy } from "../src/catalog-workbook-legacy.ts";
 import { migrateState } from "../src/migration.ts";
 const org = seedOrganizations(),
   hash = (v: Buffer | string) => createHash("sha256").update(v).digest("hex");
@@ -103,7 +97,6 @@ async function fixture(t: TestContext) {
     file = path.join(dir, "runtime", "state.json");
   await new JsonStore(file).initialize(seedState(true));
   const store = await new JsonStore(file).load();
-  await configureTestPolicies(store);
   let at = "2026-10-21T14:59:59Z";
   const app = await buildApp(store, { clock: () => at });
   t.after(async () => {
@@ -414,6 +407,28 @@ test("계획 작성 기한은 요청 시 KST +28일이며 수동값·빈 값·�
     (await f.call("admin-1", "/workspace")).serverDate,
     "2026-10-21",
   );
+  await f.store.transact(
+    "admin-1",
+    randomUUID(),
+    "needs-fixture",
+    () => {},
+    (s) => {
+      s.organizationQualificationRequirements = [
+        {
+          organizationId: "org-photo",
+          entityIds: ["demo-qualification"],
+          revision: 1,
+          updatedAt: "2026-10-21T00:00:00Z",
+          updatedBy: "admin-1",
+        },
+      ];
+      return {};
+    },
+  );
+  Object.assign(body, {
+    stateRevision: f.store.snapshot().revision,
+    organizationRevision: f.store.organizations.snapshot().revision,
+  });
   f.clock("2026-10-21T15:00:00Z");
   const key = randomUUID(),
     r = await f.call("admin-1", "/planning-requests", body, 200, "POST", key);
@@ -425,6 +440,8 @@ test("계획 작성 기한은 요청 시 KST +28일이며 수동값·빈 값·�
   );
   await f.call("admin-1", "/planning-requests", {
     ...body,
+    stateRevision: f.store.snapshot().revision,
+    organizationRevision: f.store.organizations.snapshot().revision,
     dueOn: "2026-12-31",
   });
   assert.equal(f.store.snapshot().planningRequests.at(-1)!.dueOn, "2026-12-31");
@@ -453,32 +470,6 @@ test("기존 본문과 URL은 별도 자료로 변환하고 링크 종류를 추
   );
   assert.equal(c.materials[0].content, "한글 본문");
 });
-test("자료 4유형·순서·추가 선택지 50개는 Excel v3 왕복에서 보존된다", async () => {
-  const s = seedState(true),
-    c = s.courses[0]!;
-  c.materials = ["text", "edm", "confluence", "url"].map((type, i) => ({
-    id: "m" + i,
-    type: type as any,
-    title: "자료" + i,
-    content: type === "text" ? "한글\n본문" : "",
-    url: type === "text" ? "" : `https://example.com/${i}`,
-    description: "설명",
-  }));
-  c.practicalQuestions[0]!.choices = Array.from(
-    { length: 50 },
-    (_, i) => "대응" + i,
-  );
-  c.practicalQuestions[0]!.correct = 49;
-  const w = exportCatalog(s, "org-photo", ["demo-qualification"]),
-    p = await readCatalogWorkbook(await writeCatalogWorkbook(w));
-  assert.deepEqual(p.issues, []);
-  assert.equal(p.workbook.sheets[0]!.tables.practical[0]!.choice50, "대응49");
-  assert.ok(
-    prepareCatalog(s, p.workbook, "org-photo").changes.every(
-      (c) => c.kind === "unchanged",
-    ),
-  );
-});
 test("자료 필수값과 HTTP(S)만 허용하며 정답 없는 문항은 사용 등록을 막는다", () => {
   const c = seedState(true).courses[0]!;
   c.materials = [
@@ -498,39 +489,3 @@ test("자료 필수값과 HTTP(S)만 허용하며 정답 없는 문항은 사용
   c.practicalQuestions[0]!.correct = null;
   assert.ok(courseErrors(c).some((e) => e.includes("정답")));
 });
-for (const version of [1, 2] as const)
-  test(`구형 Excel v${version}은 주관식·관찰식 실기를 오류 위치와 함께 보존 검토하고 저장 차단`, async () => {
-    const s = seedState(true),
-      w: any = exportCatalog(s, "org-photo", ["demo-qualification"]);
-    w.format = "eks-catalog-v1";
-    for (const q of w.sheets) {
-      q.tables.subjective = [];
-      delete q.tables.materials;
-      for (const c of q.tables.courses) {
-        c.subjectivePassScore = null;
-        c.material = "본문";
-        c.materialUrl = "https://example.com";
-        c.instruction = "관찰";
-        delete c.practicalPassScore;
-      }
-      q.tables.objective.forEach((r: any) => (r.category = "written"));
-      q.tables.practical = [
-        {
-          courseCode: q.tables.courses[0].code,
-          code: "P",
-          order: 1,
-          title: "관찰 항목",
-          criterion: "근거",
-          mandatory: true,
-        },
-      ];
-    }
-    const p = await readCatalogWorkbook(await writeLegacy(w, [], version));
-    assert.ok(p.issues.some((i) => i.cell && i.message.includes("관찰식")));
-    assert.ok(p.workbook.sheets[0]!.legacyUnsupported);
-    assert.ok(
-      prepareCatalog(s, p.workbook, "org-photo").issues.some(
-        (i) => i.severity === "structure",
-      ),
-    );
-  });

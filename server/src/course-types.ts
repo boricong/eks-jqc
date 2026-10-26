@@ -16,12 +16,14 @@ export function courseTypeEditing(s: State, course: Course) {
       a.qualificationPolicySnapshot?.courseIds.some((id) => ids.has(id)),
     ) ||
     s.enrollments.some((e) => ids.has(e.courseId)) ||
+    s.subjectiveResponses.some((r) => ids.has(r.courseId)) ||
     s.attempts.some((a) => ids.has(a.courseId)) ||
     s.completions.some((c) => ids.has(c.courseId)) ||
     s.comparisons.some((c) => ids.has(c.courseId));
   const versioned =
     lineage.length !== 1 || course.version !== 1 || !!course.parentId;
-  const canChangeType = !course.deletedAt && !linked && !versioned;
+  const canChangeType =
+    course.category !== "common" && !course.deletedAt && !linked && !versioned;
   return {
     canChangeType,
     typeChangeReason: course.deletedAt

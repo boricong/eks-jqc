@@ -47,8 +47,8 @@ async function inspectImport() {
   busy.value = true;
   importError.value = '';
   try {
-    if (file.size > 25 * 1024 * 1024)
-      throw new Error('25MB 이하의 설정·기준 JSON 파일을 선택해 주세요.');
+    if (file.size > 64 * 1024 * 1024)
+      throw new Error('64MB 이하의 설정·기준 JSON 파일을 선택해 주세요.');
     const content = await file.text();
     try {
       JSON.parse(content);
@@ -134,7 +134,7 @@ async function apply() {
       진행·공지·변경 이력을 모두 삭제합니다.
     </p>
     <div class="master-preservation-note">
-      역할·소속·세부 관리자 지정·Hold, 팀 후보·필수 자격, 모든 기준 버전과 학습자료·정답은
+      역할·소속·세부 관리자 지정·Hold, 팀 자격·조직 정보, 모든 기준 버전과 학습자료·정답은
       유지됩니다. 기존 학습·평가 초기화보다 넓은 범위입니다.
     </div>
     <button class="button secondary" :disabled="busy" @click="inspectReset">
@@ -196,7 +196,7 @@ async function apply() {
         <h3>2. 이 서버로 불러오기</h3>
         <p>이 서버의 사용자·조직·기준을 파일 내용으로 전체 교체하고 진행은 비웁니다.</p>
         <label class="field"
-          ><span>설정·기준 JSON 파일 (최대 25MB)</span
+          ><span>설정·기준 JSON 파일 (최대 64MB)</span
           ><input type="file" accept=".json,application/json" :disabled="busy" @change="selectFile"
         /></label>
         <p v-if="fileName" class="muted master-file-name">{{ fileName }}</p>

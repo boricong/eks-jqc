@@ -148,15 +148,6 @@ const stats = computed(() =>
               to: summary.link('/admin/dashboard', { tab: 'members' }),
             },
             {
-              label: '필수 자격 충족률',
-              value:
-                summary.data.value.summary.requiredCoverage.rate === null
-                  ? '해당 없음'
-                  : `${Math.round(summary.data.value.summary.requiredCoverage.rate)}%`,
-              icon: 'award',
-              to: summary.link('/admin/dashboard', { metric: 'requiredCoverage' }),
-            },
-            {
               label: '계획 기한 경과',
               value: summary.data.value.summary.overdueRequests,
               icon: 'clipboard',
@@ -254,12 +245,12 @@ const stats = computed(() =>
           /></RouterLink>
           <RouterLink
             v-if="homeRole === 'admin'"
-            :to="summary.link('/admin/catalog')"
+            :to="summary.link('/admin/qualifications')"
             class="text-link"
-            >{{ managementTitle('catalog') }}<AppIcon name="chevron" :size="16"
+            >{{ managementTitle('qualifications') }}<AppIcon name="chevron" :size="16"
           /></RouterLink>
-          <RouterLink v-else :to="summary.link('/admin/policies')" class="text-link"
-            >{{ managementTitle('policies') }}<AppIcon name="chevron" :size="16"
+          <RouterLink v-else :to="summary.link('/admin/organization-settings')" class="text-link"
+            >{{ managementTitle('organization-settings') }}<AppIcon name="chevron" :size="16"
           /></RouterLink>
         </template>
       </nav>
@@ -289,7 +280,9 @@ const stats = computed(() =>
                   homeRole === 'system_operator'
                     ? '/system/overview'
                     : summary.link(
-                        homeRole === 'admin' ? '/admin/qualifications' : '/admin/policies',
+                        homeRole === 'admin'
+                          ? '/admin/qualifications'
+                          : '/admin/organization-settings',
                       )
                 "
                 class="text-link"
@@ -343,8 +336,8 @@ const stats = computed(() =>
               <RouterLink :to="summary.link('/admin/dashboard')" class="simple-row"
                 >인증 현황<AppIcon name="chevron"
               /></RouterLink>
-              <RouterLink :to="summary.link('/admin/policies')" class="simple-row"
-                >조직 필수 자격 설정<AppIcon name="chevron"
+              <RouterLink :to="summary.link('/admin/organization-settings')" class="simple-row"
+                >조직 정보·필요자격<AppIcon name="chevron"
               /></RouterLink>
               <RouterLink :to="summary.link('/admin/targets')" class="simple-row"
                 >취득 대상자 상태<AppIcon name="chevron"

@@ -1,3 +1,4 @@
+import { configureNeeds } from './workflow-helpers';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { test, expect, actor } from './fixtures';
@@ -143,6 +144,7 @@ test('운영자 조직·사용자 편집, 공동 관리자 UI, 초기화 후 메
   const admin = backend.store.snapshot().users.find((u) => u.name === 'Photo 공동 관리자')!;
   await actor(page, admin.id);
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
+  await configureNeeds(page);
   await page.getByRole('link', { name: '계획 요청·진행', exact: true }).click();
   await expect(page.getByRole('button', { name: '계획 수립 요청', exact: true })).toBeEnabled();
   await expect(page.getByRole('link', { name: '테스트 관리', exact: true })).toHaveCount(0);

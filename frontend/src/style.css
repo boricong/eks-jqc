@@ -2855,9 +2855,6 @@ input[type='radio'] {
 .management-layout > .management-content {
   grid-column: 2;
 }
-.management-layout .catalog-page {
-  min-width: 0;
-}
 .management-layout .admin-section.individual-editor {
   width: 100%;
   max-width: none;
@@ -3118,267 +3115,7 @@ input[type='radio'] {
   display: grid;
   gap: 18px;
 }
-.bulk-toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin: 16px 0;
-  padding: 12px 0;
-}
-.bulk-toolbar .muted {
-  margin-left: auto;
-  font-size: var(--text-caption);
-}
-.upload-button {
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-}
-.upload-button input {
-  position: absolute;
-  opacity: 0;
-  inset: 0;
-  width: 100%;
-  cursor: pointer;
-}
-.export-selection {
-  padding: 16px;
-  margin-bottom: 18px;
-}
-.export-selection label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--text-caption);
-  max-width: 100%;
-  margin: 12px 18px 0 0;
-}
-.bulk-empty {
-  padding: 30px;
-  max-width: 900px;
-  margin: 22px auto;
-}
-.bulk-empty p {
-  margin: 14px 0;
-  color: var(--ink-secondary);
-  line-height: 1.7;
-}
-.bulk-empty ol {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 26px;
-  font-size: var(--text-caption);
-  color: var(--link);
-  padding-left: 18px;
-}
-.bulk-layout {
-  display: grid;
-  grid-template-columns: 230px minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-.bulk-sheets {
-  padding: 14px;
-  max-height: 72vh;
-  overflow: auto;
-  position: sticky;
-  top: 16px;
-}
-.bulk-sheets h2 {
-  font-size: var(--text-table);
-  margin: 0 0 12px;
-}
-.bulk-sheets > label {
-  display: flex;
-  align-items: start;
-  gap: 8px;
-  padding: 10px 8px;
-  border-radius: 6px;
-  border-bottom: 1px solid var(--line);
-}
-.bulk-sheets > label.selected {
-  background: var(--tint);
-  border-color: var(--control-border);
-}
-.bulk-sheets input {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-}
-.bulk-sheets button {
-  font-size: var(--text-caption);
-  text-align: left;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.bulk-sheets small {
-  display: block;
-  font-size: var(--text-caption);
-  color: var(--ink-secondary);
-  margin-top: 4px;
-}
-.bulk-editor {
-  padding: 18px;
-  min-width: 0;
-}
-.bulk-editor .section-heading {
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.bulk-editor h2 {
-  font-size: var(--text-section);
-}
-.bulk-metadata {
-  border-radius: 6px;
-  margin-bottom: 14px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  padding: 12px 0;
-}
-.bulk-metadata summary {
-  font-size: var(--text-caption);
-  font-weight: var(--weight-title);
-}
-.bulk-metadata .form-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-.bulk-metadata .field {
-  gap: 5px;
-  font-size: var(--text-caption);
-}
-.bulk-metadata input,
-.bulk-metadata select {
-  min-height: 34px;
-  padding: 6px 8px;
-  font-size: var(--text-body);
-}
-.bulk-metadata textarea {
-  font-size: var(--text-body);
-  padding: 8px;
-  min-height: 34px;
-}
-.bulk-tabs {
-  display: flex;
-  gap: 3px;
-  border-bottom: 1px solid var(--line);
-  overflow: auto;
-  margin-bottom: 12px;
-}
-.bulk-tabs button {
-  white-space: nowrap;
-  padding: 10px 16px;
-  font-size: var(--text-table);
-  border-bottom: 2px solid transparent;
-}
-.bulk-tabs button.active {
-  color: var(--link);
-  border-color: var(--link);
-  background: var(--tint);
-  font-weight: var(--weight-title);
-}
-.bulk-tabs small {
-  margin-left: 6px;
-  color: var(--ink-secondary);
-}
-.compact-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--text-caption);
-  margin-bottom: 10px;
-}
-.compact-filter select {
-  min-height: 32px;
-  padding: 5px 10px;
-  max-width: 75%;
-  font-size: var(--text-caption);
-}
-.catalog-grid-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-  align-items: center;
-}
-.catalog-grid-tools .muted {
-  font-size: var(--text-caption);
-  margin-left: auto;
-}
-.catalog-grid.tabulator {
-  font-size: var(--text-table);
-  font-variant-numeric: tabular-nums;
-  background: var(--surface);
-  max-width: 100%;
-  margin-bottom: 14px;
-  font-family: var(--font-ui);
-  border-radius: 0;
-  border: 1px solid var(--line);
-}
-.catalog-grid .tabulator-header,
-.catalog-grid .tabulator-header .tabulator-col {
-  background: var(--table-header);
-  color: var(--ink-secondary);
-  border-color: var(--line);
-}
-.catalog-grid .tabulator-row {
-  background: var(--surface);
-  color: var(--ink);
-}
-.catalog-grid .tabulator-row.tabulator-row-even {
-  background: var(--surface-tint);
-}
-.catalog-grid .tabulator-cell {
-  border-right: 1px solid var(--line);
-  padding: 8px 10px;
-}
-.catalog-grid .tabulator-cell.tabulator-editing input {
-  min-height: 24px;
-  padding: 0 4px;
-}
-.catalog-error-cell {
-  box-shadow: inset 0 0 0 2px var(--warning) !important;
-  background: var(--warning-bg) !important;
-}
-.bulk-issues {
-  max-height: 220px;
-  overflow: auto;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-.bulk-issues h3 {
-  font-size: var(--text-caption);
-  margin-bottom: 10px;
-}
-.bulk-issues button {
-  display: flex;
-  gap: 8px;
-  text-align: left;
-  font-size: var(--text-caption);
-  padding: 8px 0;
-  width: 100%;
-  border-bottom: 1px solid var(--line);
-}
-.batch-list {
-  padding: 20px;
-  margin-top: 20px;
-}
-.batch-list h2 {
-  font-size: var(--text-title);
-}
-.diff-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--text-caption);
-}
-.diff-row p {
-  margin-top: 8px;
-  font-size: var(--text-caption);
-  color: var(--ink-secondary);
-}
+
 .dialog-body > textarea {
   width: 100%;
 }
@@ -3392,12 +3129,6 @@ input[type='radio'] {
   }
   .account select {
     max-width: 175px;
-  }
-  .bulk-metadata .form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .bulk-layout {
-    grid-template-columns: 190px minmax(0, 1fr);
   }
   .home-columns {
     grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
@@ -3438,30 +3169,6 @@ input[type='radio'] {
   .system-shell .table-wrap {
     max-height: 65vh;
   }
-  .bulk-layout {
-    grid-template-columns: 1fr;
-  }
-  .bulk-sheets {
-    position: static;
-    max-height: 180px;
-  }
-  .bulk-sheets > label {
-    display: inline-flex;
-    width: 220px;
-  }
-  .bulk-sheets {
-    white-space: normal;
-  }
-  .bulk-toolbar .muted {
-    margin-left: 0;
-  }
-  .bulk-editor {
-    padding: 12px;
-  }
-  .catalog-grid-tools .muted {
-    width: 100%;
-    margin: 4px 0;
-  }
   .primary-nav.expanded {
     background: var(--surface);
     border-color: var(--line);
@@ -3499,77 +3206,9 @@ input[type='radio'] {
   .pagination {
     margin-left: auto;
   }
-  .bulk-metadata .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .bulk-tabs button {
-    padding: 9px 12px;
-  }
-  .bulk-editor .section-heading {
-    align-items: start;
-    flex-direction: column;
-  }
-  .bulk-toolbar .button {
-    flex: 1;
-    font-size: var(--text-caption);
-    padding: 8px;
-  }
   .account select {
     max-width: 150px;
   }
-  .bulk-issues button {
-    display: block;
-    line-height: 1.7;
-  }
-}
-.app .catalog-grid.tabulator {
-  background: var(--surface);
-  color: var(--ink);
-  border-color: var(--control-border);
-}
-.app .catalog-grid .tabulator-header,
-.app .catalog-grid .tabulator-header .tabulator-col {
-  background: var(--table-header);
-  color: var(--ink);
-  border-color: var(--line);
-}
-.app .catalog-grid .tabulator-row {
-  background: var(--surface);
-  color: var(--ink);
-}
-.app .catalog-grid .tabulator-row.tabulator-row-even {
-  background: var(--surface-tint);
-}
-.app .catalog-grid .tabulator-row:hover {
-  background: var(--tint);
-}
-.app .catalog-grid .tabulator-cell {
-  border-color: var(--line);
-}
-.app .catalog-grid .tabulator-cell.tabulator-editing {
-  border-color: var(--selection-border);
-  background: var(--surface);
-}
-.app .catalog-grid .tabulator-cell.tabulator-editing input,
-.app .catalog-grid .tabulator-cell.tabulator-editing textarea {
-  background: var(--surface);
-  color: var(--ink);
-}
-.app .catalog-grid .tabulator-range {
-  border-color: var(--selection-border);
-}
-.app .catalog-grid .tabulator-range-selected {
-  background-color: var(--selection);
-}
-body .tabulator-edit-list {
-  background: var(--surface);
-  color: var(--ink);
-  border-color: var(--control-border);
-}
-body .tabulator-edit-list .tabulator-edit-list-item.active,
-body .tabulator-edit-list .tabulator-edit-list-item:hover {
-  background: var(--tint);
-  color: var(--ink);
 }
 
 .plan-schedule-panel > .field {
@@ -3763,8 +3402,7 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
 .button.primary:active:not(:disabled) {
   background: var(--primary-hover);
 }
-.field-error,
-.catalog-field-error {
+.field-error {
   font-size: var(--text-caption);
 }
 .individual-editor .page-heading {
@@ -3800,7 +3438,6 @@ body .tabulator-edit-list .tabulator-edit-list-item:hover {
   .table-wrap .text-link,
   .icon-button,
   .text-link,
-  .bulk-tabs button,
   .list-controls select,
   .pagination .icon-button {
     min-height: 44px;

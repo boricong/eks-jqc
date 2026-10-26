@@ -1,3 +1,11 @@
+import { registerOrganizationRequirementRoutes } from "./organization-requirement-routes.ts";
+import {
+  subjectiveOwner,
+  subjectiveView,
+  readSubjective,
+} from "./subjective.ts";
+import { registerCommonCourseRoutes } from "./common-course-routes.ts";
+import { commonCourseView } from "./common-courses.ts";
 import type { OrganizationDocument } from "@eks/contracts";
 import { createNetworkPolicy } from "./network.ts";
 import { registerAuditorRoutes } from "./auditor-program-routes.ts";
@@ -47,11 +55,10 @@ import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
 import { registerDashboardRoutes } from "./dashboard-routes.ts";
 import { registerDocumentRoutes } from "./documents.ts";
 import {
-  policiesView,
-  changePolicy,
-  requiredQualifications,
+  organizationSettingsView,
+  changeOrganizationSettings,
   validatePolicies,
-} from "./organization-policies.ts";
+} from "./organization-settings.ts";
 import {
   authorize,
   execute,
@@ -122,6 +129,8 @@ export async function buildApp(
   const requestGenerations = new WeakMap<FastifyRequest, string>();
   registerAuditorRoutes(app, store, actor, clock);
   registerTeamUserRoutes(app, store, actor);
+  registerCommonCourseRoutes(app, store, actor);
+  registerOrganizationRequirementRoutes(app, store, actor, clock);
   app.addHook("onRequest", async (request, reply) => {
     requestGenerations.set(request, store.generation);
     demand(
@@ -317,6 +326,27 @@ export async function buildApp(
       return result;
     });
   }
+  app.get("/api/enrollments/:id/subjective-response", async (request) => {
+    const s = store.snapshot(),
+      u = actor(request),
+      id = (request.params as any).id;
+    subjectiveOwner(s, u, id);
+    return (
+      subjectiveView(s, u, id) || {
+        response: null,
+        canWrite: false,
+        status: "unstarted",
+        reason: "주관식 평가가 설정되지 않았습니다.",
+      }
+    );
+  });
+  app.get("/api/subjective-responses/:id", async (request) =>
+    readSubjective(
+      store.snapshot(),
+      actor(request),
+      (request.params as any).id,
+    ),
+  );
   app.get("/api/attempts/:id", async (request) => {
     const u = actor(request),
       s = store.snapshot(),
@@ -335,6 +365,12 @@ export async function buildApp(
       .qualificationTemplates.filter((t) => t.scope !== "team")
       .map((t) => ({
         ...t,
+        commonCourses: t.defaultCommonCourseIds.map((id) =>
+          commonCourseView(
+            store.snapshot(),
+            store.snapshot().commonCourses.find((c) => c.id === id)!,
+          ),
+        ),
         imported: store
           .snapshot()
           .qualifications.some(
@@ -412,6 +448,10 @@ export async function buildApp(
     app.route({
       method,
       url,
+      bodyLimit:
+        action === "subjective.save" || action.startsWith("catalog.")
+          ? 64 * 1024 * 1024
+          : undefined,
       handler: async (request) => {
         const u = actor(request),
           body = request.body || {},
@@ -447,10 +487,7 @@ export async function buildApp(
           action,
           lv1OrganizationId: undefined as string | undefined,
         };
-        const transact =
-          action === "qualification.delete"
-            ? store.transactPair.bind(store)
-            : store.transact.bind(store);
+        const transact = store.transact.bind(store);
         return transact(
           u.id,
           key,
@@ -509,100 +546,112 @@ export async function buildApp(
         );
       },
     });
-  app.get("/api/me/required-qualifications", async (request) => {
-    const u = actor(request);
-    demand(
-      canContinueType(store.snapshot(), u, "auditee") ||
-        canContinueType(store.snapshot(), u, "auditor"),
-      403,
-      "개인 인증 조회 권한이 필요합니다.",
-    );
-    return requiredQualifications(
-      store.snapshot(),
-      store.organizations.snapshot(),
-      u,
-      clock(),
-    );
+  app.route({
+    method: "GET",
+    url: "/api/me/required-qualifications",
+    onRequest: async (request, reply) => {
+      const u = actor(request);
+      demand(
+        canContinueType(store.snapshot(), u, "auditee") ||
+          canContinueType(store.snapshot(), u, "auditor"),
+        403,
+        "개인 인증 조회 권한이 필요합니다.",
+      );
+      return reply.code(410).send({
+        code: "FEATURE_REMOVED",
+        message: "조직별 필수자격 기능이 종료되었습니다.",
+      });
+    },
+    handler: async () => {},
   });
-  app.get("/api/organization-policies", async (request) => {
+
+  for (const url of [
+    "/api/organization-policies",
+    "/api/organization-policies/*",
+  ])
+    app.route({
+      method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+      url,
+      onRequest: async (request, reply) => {
+        const u = actor(request);
+        const path = request.url.split("?")[0]!.split("/");
+        policyScope(
+          u,
+          store.organizations.snapshot(),
+          (request.query as any).lv1OrganizationId,
+          path[3],
+        );
+        return reply.code(410).send({
+          code: "FEATURE_REMOVED",
+          message:
+            "조직별 필수자격 기능이 종료되었습니다. 조직 정보·관리자 화면을 이용해 주세요.",
+          replacementPath: "/admin/organization-settings",
+        });
+      },
+      handler: async () => {},
+    });
+  app.get("/api/organization-settings", async (request) => {
     const scope = policyScope(
       actor(request),
       store.organizations.snapshot(),
       (request.query as any).lv1OrganizationId,
     );
-    return policiesView(
+    return organizationSettingsView(
       store.snapshot(),
       store.organizations.snapshot(),
       scope,
       actor(request),
     );
   });
-  for (const pool of [false, true])
-    app.put(
-      `/api/organization-policies/:id${pool ? "/qualification-pool" : ""}`,
-      async (request) => {
-        const u = actor(request),
-          body = request.body,
-          target = (request.params as any).id;
-        const scope = policyScope(
-          u,
-          store.organizations.snapshot(),
-          (request.query as any).lv1OrganizationId,
-        );
-        const key = z
-          .string()
-          .min(1)
-          .max(160)
-          .parse(request.headers["idempotency-key"]);
-        const fingerprint = createHash("sha256")
-          .update(JSON.stringify({ pool, target, scope, body }))
-          .digest("hex");
-        if (pool) {
-          policyScope(
-            actor(request),
-            store.organizations.snapshot(),
-            scope,
-            target,
-            true,
-          );
-          throw new DomainError(
-            410,
-            "팀 적용 기능이 종료되었습니다. 기준을 저장하면 최신 버전을 사용합니다.",
-            "TEAM_APPLICATION_REMOVED",
-            { replacementPath: "/admin/qualifications" },
-          );
-        }
-        return store.organizations.transact(
-          u.id,
-          key,
-          fingerprint,
-          (doc) => {
-            policyScope(actor(request), doc, scope, target, pool);
-            demand(
-              organization(doc, target).lv1OrganizationId === scope,
-              403,
-              "다른 Lv1의 조직 설정입니다.",
-            );
-          },
-          (doc) =>
-            changePolicy(
-              store.snapshot(),
-              doc,
-              actor(request),
-              scope,
-              target,
-              body,
-              pool,
-            ),
-          {
-            action: pool ? "organization.pool" : "organization.policy",
-            lv1OrganizationId: scope,
-            preserveBackup: true,
-          },
-        );
+  app.put("/api/organization-settings/:id", async (request) => {
+    const u = actor(request),
+      body = request.body,
+      target = (request.params as any).id;
+    const scope = policyScope(
+      u,
+      store.organizations.snapshot(),
+      (request.query as any).lv1OrganizationId,
+      target,
+    );
+    const key = z
+      .string()
+      .min(1)
+      .max(160)
+      .parse(request.headers["idempotency-key"]);
+    const fingerprint = createHash("sha256")
+      .update(
+        JSON.stringify({
+          action: "organization.settings",
+          target,
+          scope,
+          body,
+        }),
+      )
+      .digest("hex");
+    return store.organizations.transact(
+      u.id,
+      key,
+      fingerprint,
+      (doc) => {
+        policyScope(actor(request), doc, scope, target);
+      },
+      (doc) =>
+        changeOrganizationSettings(
+          store.snapshot(),
+          doc,
+          actor(request),
+          scope,
+          target,
+          body,
+        ),
+      {
+        action: "organization.settings",
+        lv1OrganizationId: scope,
+        preserveBackup: true,
       },
     );
-  app.get("/api/organization-policies/:id/administrators", async (request) =>
+  });
+  app.get("/api/organization-settings/:id/administrators", async (request) =>
     administratorsView(
       store.snapshot(),
       store.organizations.snapshot(),
@@ -611,7 +660,7 @@ export async function buildApp(
       (request.query as any).lv1OrganizationId,
     ),
   );
-  app.put("/api/organization-policies/:id/administrators", async (request) => {
+  app.put("/api/organization-settings/:id/administrators", async (request) => {
     const u = actor(request),
       doc = store.organizations.snapshot(),
       target = (request.params as any).id;
@@ -664,6 +713,7 @@ export async function buildApp(
     systemOperator(actor(request));
     const s = store.snapshot();
     return {
+      commonCourses: s.commonCourses.map((c) => commonCourseView(s, c)),
       items: s.qualificationTemplates
         .filter((t) => t.scope !== "team")
         .map((t) => ({
@@ -811,21 +861,25 @@ export async function buildApp(
       });
   }
   for (const section of ["courses", "qualifications"] as const) {
-    app.post(`/api/${section}/:id/save-preview`, async (request) => {
-      const scope = managementScope(
-        actor(request),
-        store.organizations.snapshot(),
-        (request.query as any).lv1OrganizationId,
-      );
-      return prepareCatalogSave(
-        store.snapshot(),
-        store.organizations.snapshot(),
-        section,
-        (request.params as any).id,
-        request.body,
-        scope,
-      );
-    });
+    app.post(
+      `/api/${section}/:id/save-preview`,
+      { bodyLimit: 64 * 1024 * 1024 },
+      async (request) => {
+        const scope = managementScope(
+          actor(request),
+          store.organizations.snapshot(),
+          (request.query as any).lv1OrganizationId,
+        );
+        return prepareCatalogSave(
+          store.snapshot(),
+          store.organizations.snapshot(),
+          section,
+          (request.params as any).id,
+          request.body,
+          scope,
+        );
+      },
+    );
     mutation("POST", `/api/${section}`, "catalog.create", () => section);
     mutation("PUT", `/api/${section}/:id`, "catalog.save", () => section);
     mutation(
@@ -876,6 +930,13 @@ export async function buildApp(
   mutation("POST", "/api/assignments/:id/ft", "assignment.ft");
   mutation("POST", "/api/assignments/:id/exclusion", "assignment.exclude");
   mutation("PUT", "/api/enrollments/:id/checklist", "checklist.update");
+  mutation(
+    "POST",
+    "/api/enrollments/:id/subjective-response",
+    "subjective.start",
+  );
+  mutation("PUT", "/api/subjective-responses/:id/draft", "subjective.save");
+  mutation("POST", "/api/subjective-responses/:id/submit", "subjective.submit");
   mutation("POST", "/api/enrollments/:id/attempts", "attempt.start");
   mutation("PUT", "/api/attempts/:id/draft", "attempt.save");
   mutation("POST", "/api/attempts/:id/submit", "attempt.submit");
@@ -893,6 +954,7 @@ export async function buildApp(
   );
   mutation("POST", "/api/planning-requests", "planning.request", () => "");
   mutation("PUT", "/api/planning-requests/:id/selection", "planning.select");
+  mutation("POST", "/api/planning-requests/:id/close", "planning.close");
   mutation("POST", "/api/planning-requests/:id/complete", "planning.complete");
   app.get("/api/planning-requests/:id/candidates", async (request) => {
     const u = actor(request),

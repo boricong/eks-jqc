@@ -1,3 +1,4 @@
+import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import { executeWorkflow } from "../src/workflow.ts";
 import { userView } from "../src/organizations.ts";
 import test, { type TestContext } from "node:test";
@@ -13,16 +14,7 @@ import { buildApp } from "../src/app.ts";
 import { courseTypeEditing } from "../src/course-types.ts";
 import { migrateCourseTypes } from "../src/course-type-migration.ts";
 import { validateState } from "../src/integrity.ts";
-import {
-  exportCatalog,
-  prepareCatalog,
-  saveCatalogBatch,
-} from "../src/catalog.ts";
 import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
-import {
-  readCatalogWorkbook,
-  writeCatalogWorkbook,
-} from "../src/catalog-workbook.ts";
 import { addQualification } from "./dashboard-fixtures.ts";
 async function fixture(
   t: TestContext,
@@ -95,7 +87,7 @@ async function setupAuditor(t: TestContext) {
     .snapshot()
     .qualifications.find((q) => q.entityId === "auditor-check")!;
   assert(q);
-  const r = await legacyCommand(f, "admin-1", "planning.request", "", {
+  const r = await legacyRequestFixture(f.store, "admin-1", {
     qualificationType: "auditor",
     learnerIds: ["learner-2"],
     message: "이전 계획 보존 시험",
@@ -496,8 +488,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 19);
-  assert.equal(preview.state.revision, raw.revision + 4);
+  assert.equal(preview.state.schemaVersion, 23);
+  assert.equal(preview.state.revision, raw.revision + 8);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {
@@ -538,29 +530,21 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     fresh.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 9);
+  assert.equal(master.formatVersion, 13);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const legacy: any = structuredClone(master);
+  delete legacy.payload.commonCourses;
+  delete legacy.counts.commonCourses;
   legacy.formatVersion = 5;
+  delete legacy.counts.organizationQualificationRequirements;
+  delete legacy.counts.subjectiveQuestions;
   legacy.organizationSchemaVersion = 2;
   legacy.payload.organizations.qualificationPools = [];
   legacy.counts.poolEntries = 0;
   legacy.stateSchemaVersion = 15;
   legacy.sha256 = contentHash(legacy.payload);
   assert.deepEqual(readMaster(legacy).payload, master.payload);
-  const g = await setupAuditor(t),
-    workbook = exportCatalog(g.store.snapshot(), "org-photo", [g.q.id]);
-  assert.equal(workbook.format, "eks-catalog-v12");
-  assert.deepEqual(
-    (await readCatalogWorkbook(await writeCatalogWorkbook(workbook))).workbook,
-    workbook,
-  );
-  workbook.sheets[0]!.tables.courses[0]!.passScore = 99;
-  assert(
-    prepareCatalog(g.store.snapshot(), workbook, "org-photo").issues.some((i) =>
-      i.message.includes("평가 설정"),
-    ),
-  );
+  const g = await setupAuditor(t);
   const course = g.store
     .snapshot()
     .courses.find((c) => c.id === g.q.courseIds[0])!;

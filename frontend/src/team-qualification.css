@@ -348,3 +348,24 @@
   outline: 2px solid var(--primary-press);
   outline-offset: -2px;
 }
+
+.qualification-course-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 768px) {
+  .qualification-course-meta {
+    grid-column: 1/-1;
+  }
+  .qualification-course-actions {
+    grid-column: 1/-1;
+  }
+  .qualification-course-actions a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}

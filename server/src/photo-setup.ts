@@ -19,7 +19,7 @@ import {
 } from "./photo-certification-fixture.ts";
 
 const progressAction =
-  /^(assignment|attempt|plan|planning|learning|comparison|progress|notification)\./;
+  /^(assignment|attempt|subjective|plan|planning|learning|comparison|progress|notification)\./;
 const testCourseEntities = new Set([
   "demo-course-1",
   "demo-course-2",
@@ -225,6 +225,7 @@ export function preparePhotoSetup(
     ...state.assignments.map((x) => x.id),
     ...state.enrollments.map((x) => x.id),
     ...state.attempts.map((x) => x.id),
+    ...state.subjectiveResponses.map((x) => x.id),
     ...state.completions.map((x) => x.id),
     ...state.certifications.map((x) => x.id),
     ...state.plans.map((x) => x.id),
@@ -243,6 +244,7 @@ export function preparePhotoSetup(
   state.assignments = [];
   state.enrollments = [];
   state.attempts = [];
+  state.subjectiveResponses = [];
   state.completions = [];
   state.learningChecklists = [];
   state.certifications = [];

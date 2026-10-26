@@ -1,48 +1,38 @@
 <script setup lang="ts">
+import OrganizationRequirements from './OrganizationRequirements.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
-import type { OrganizationPoliciesView } from '@eks/contracts';
-import CompactTabs from './CompactTabs.vue';
+import type { OrganizationSettingsView } from '@eks/contracts';
 import AppDialog from './AppDialog.vue';
 import PolicyOrganizationTree from './PolicyOrganizationTree.vue';
 import OrganizationAdministrators from './OrganizationAdministrators.vue';
 import CollapsibleSection from './CollapsibleSection.vue';
 import { managementTitle } from '../management-navigation';
 const store = useDemo(),
-  doc = ref<OrganizationPoliciesView>(),
+  doc = ref<OrganizationSettingsView>(),
   busy = ref(false),
   error = ref(''),
   orgId = ref('');
+const requirementsDirty = ref(false),
+  requirementsBusy = ref(false);
 const administratorsDirty = ref(false),
   administratorsBusy = ref(false),
-  informationOpen = ref(false),
+  informationOpen = ref(true),
   administratorsOpen = ref(false);
 const baselineMeta = ref('');
 const metadata = ref({
   description: '',
   duties: '',
-  requiredQualifications: [] as string[],
 });
-const selectedType = ref('auditee');
-const review = ref(false),
-  qualificationSearch = ref('');
-const filteredQualifications = computed(
-  () =>
-    doc.value?.qualifications.filter(
-      (p) =>
-        store.data.qualifications.find((q) => q.id === p.qualificationId)?.qualificationType ===
-          selectedType.value &&
-        p.title.toLocaleLowerCase().includes(qualificationSearch.value.trim().toLocaleLowerCase()),
-    ) || [],
-);
+const review = ref(false);
 let generation = 0;
 const selected = computed(() => doc.value?.entries.find((e) => e.id === orgId.value));
 const canSave = computed(
   () =>
-    store.data.management.canManagePolicies &&
+    store.data.management.canManageOrganizationSettings &&
     store.data.management.editableOrganizationIds.includes(orgId.value),
 );
 const metaDirty = computed(() => JSON.stringify(metadata.value) !== baselineMeta.value);
@@ -57,15 +47,14 @@ function readMeta() {
   metadata.value = {
     description: e?.description || '',
     duties: e?.duties || '',
-    requiredQualifications: [...(e?.requiredQualifications || [])],
   };
   baselineMeta.value = JSON.stringify(metadata.value);
-  qualificationSearch.value = '';
 }
 async function select(id: string) {
-  if (id === orgId.value || busy.value || administratorsBusy.value) return;
+  if (id === orgId.value || busy.value || administratorsBusy.value || requirementsBusy.value)
+    return;
   if (
-    (metaDirty.value || administratorsDirty.value) &&
+    (metaDirty.value || administratorsDirty.value || requirementsDirty.value) &&
     !(await confirmAction(
       '조직 입력을 저장하지 않았습니다. 변경을 취소하고 이동할까요?',
       '변경 버리고 이동',
@@ -73,7 +62,7 @@ async function select(id: string) {
   )
     return;
   orgId.value = id;
-  informationOpen.value = false;
+  informationOpen.value = true;
   administratorsOpen.value = false;
   readMeta();
 }
@@ -82,8 +71,8 @@ async function load() {
     key = `${store.actorId}:${store.managementLv1}`;
   error.value = '';
   try {
-    const result = await api<OrganizationPoliciesView>(
-      store.managementPath('/organization-policies'),
+    const result = await api<OrganizationSettingsView>(
+      store.managementPath('/organization-settings'),
     );
     if (seq !== generation || key !== `${store.actorId}:${store.managementLv1}`) return;
     doc.value = result;
@@ -95,29 +84,35 @@ async function load() {
   }
 }
 async function save() {
-  if (!doc.value || busy.value || administratorsBusy.value || !canSave.value) return;
+  if (
+    !doc.value ||
+    busy.value ||
+    administratorsBusy.value ||
+    requirementsBusy.value ||
+    !canSave.value
+  )
+    return;
   busy.value = true;
   error.value = '';
   const key = `${store.actorId}:${store.managementLv1}`;
   try {
     await store.command(
-      store.managementPath(`/organization-policies/${orgId.value}`),
+      store.managementPath(`/organization-settings/${orgId.value}`),
       {
         revision: doc.value.revision,
         description: metadata.value.description,
         duties: metadata.value.duties,
-        requiredQualifications: metadata.value.requiredQualifications,
       },
       'PUT',
     );
-    const updated = await api<OrganizationPoliciesView>(
-      store.managementPath('/organization-policies'),
+    const updated = await api<OrganizationSettingsView>(
+      store.managementPath('/organization-settings'),
     );
     if (key !== `${store.actorId}:${store.managementLv1}`) return;
     doc.value = updated;
     readMeta();
     review.value = false;
-    store.notify(`${managementTitle('policies')}을 저장했습니다.`);
+    store.notify(`${managementTitle('organization-settings')}을 저장했습니다.`);
   } catch (e) {
     error.value = (e as Error).message;
     if (informationDirty.value) informationOpen.value = true;
@@ -129,7 +124,8 @@ async function leave() {
   return (
     !busy.value &&
     !administratorsBusy.value &&
-    (!(metaDirty.value || administratorsDirty.value) ||
+    !requirementsBusy.value &&
+    (!(metaDirty.value || administratorsDirty.value || requirementsDirty.value) ||
       (await confirmAction(
         '저장하지 않은 조직 설정이 있습니다. 변경을 취소하고 이동할까요?',
         '변경 버리고 이동',
@@ -141,7 +137,7 @@ onBeforeRouteUpdate(leave);
 watch(
   () => `${store.actorId}:${store.managementLv1}`,
   () => {
-    informationOpen.value = false;
+    informationOpen.value = true;
     administratorsOpen.value = false;
     if (store.managementReady) void load();
   },
@@ -164,7 +160,7 @@ watch(
           doc.entries.filter((e) => store.data.management.editableOrganizationIds.includes(e.id))
         "
         :selected="orgId"
-        :disabled="busy || administratorsBusy"
+        :disabled="busy || administratorsBusy || requirementsBusy"
         @select="select"
       />
       <div class="policy-detail-stack">
@@ -178,45 +174,6 @@ watch(
             {{ selected.effectiveActive ? '사용 중' : '사용 중지' }} ·
             {{ metaDirty ? '미저장 변경' : '저장된 설정' }}
           </p>
-          <fieldset :disabled="busy || !canSave">
-            <legend>필수 자격 · 선택 사항</legend>
-            <CompactTabs
-              class="certification-type-tabs"
-              v-model="selectedType"
-              :items="[
-                { id: 'auditee', label: 'Auditee · 학습자' },
-                { id: 'auditor', label: 'Auditor · 평가자' },
-              ]"
-              panel-id="policy-type-panel"
-              label="필수 인증 유형"
-            />
-            <div id="policy-type-panel">
-              <label v-if="doc.qualifications.length" class="field policy-qualification-search"
-                ><span>자격 검색</span
-                ><input v-model="qualificationSearch" type="search" placeholder="자격명 검색"
-              /></label>
-              <div class="policy-qualification-list">
-                <label v-for="p in filteredQualifications" :key="p.entityId" class="choice"
-                  ><input
-                    type="checkbox"
-                    v-model="metadata.requiredQualifications"
-                    :value="p.entityId"
-                  /><span
-                    >{{ p.title }} · v{{ p.version
-                    }}<small v-if="p.errors.length" class="field-error"
-                      >신규 계획 불가 · {{ p.errors.join(' · ') }}</small
-                    ></span
-                  ></label
-                >
-                <p v-if="doc.qualifications.length && !filteredQualifications.length" class="muted">
-                  검색 결과가 없습니다.
-                </p>
-                <p v-if="!doc.qualifications.length">
-                  팀 관리자가 자격을 등록하고 기준을 저장하면 선택할 수 있습니다.
-                </p>
-              </div>
-            </div>
-          </fieldset>
           <CollapsibleSection
             v-model:open="informationOpen"
             title="조직 정보"
@@ -251,6 +208,12 @@ watch(
           >
             조직 설정 변경 확인
           </button>
+          <OrganizationRequirements
+            :organization-id="orgId"
+            :disabled="!canSave"
+            @dirty="requirementsDirty = $event"
+            @busy="requirementsBusy = $event"
+          />
           <CollapsibleSection
             v-if="canSave"
             v-model:open="administratorsOpen"
@@ -269,26 +232,21 @@ watch(
             />
           </CollapsibleSection>
         </section>
-        <p v-if="doc?.canManageQualifications">
-          <RouterLink :to="store.managementLink('/admin/qualifications')"
-            >{{ managementTitle('qualifications') }} · 등록·현재 팀 기준</RouterLink
-          >
-        </p>
       </div>
     </div>
-    <AppDialog v-model:open="review" :title="`${managementTitle('policies')} 변경 확인`"
-      ><p>{{ store.managementOrganization?.name }} · 조직 필수 자격</p>
+    <AppDialog
+      v-model:open="review"
+      :title="`${managementTitle('organization-settings')} 변경 확인`"
+      ><p>{{ store.managementOrganization?.name }} · 조직 정보·필요자격</p>
       <p>
         영향 조직 {{ affected.length }}개 · 직속 구성원
-        {{ affected.reduce((n, e) => n + e.userCount, 0) }}명 · 작성 중 계획
-        {{ affected.reduce((n, e) => n + e.draftCount, 0) }}건
+        {{ affected.reduce((n, e) => n + e.userCount, 0) }}명
       </p>
       <ul>
         <li v-for="e in affected" :key="e.id">{{ e.path.map((p) => p.name).join(' › ') }}</li>
       </ul>
       <p>
-        기존 요청은 요청 당시 필수 기준을 유지합니다. 변경한 필수 자격은 다음 요청부터 반영하며,
-        현재 소속의 필수 충족 현황은 즉시 갱신합니다.
+        선택한 조직의 설명과 담당 업무를 저장합니다. 개인 계획·학습·인증 기준은 변경하지 않습니다.
       </p>
       <p v-if="error" class="error-message">{{ error }}</p>
       <template #footer

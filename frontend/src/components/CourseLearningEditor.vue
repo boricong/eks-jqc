@@ -4,9 +4,9 @@ import { confirmAction } from '../composables/useConfirmation';
 import { computed, nextTick, ref, useId, watch } from 'vue';
 import CompactTabs from './CompactTabs.vue';
 import type { CourseIssue } from '../course-editor';
-import { learningTypeLabels, type Course } from '@eks/contracts';
+import { learningTypeLabels, type CourseContent } from '@eks/contracts';
 
-const props = defineProps<{ course: Course; disabled: boolean; issues?: CourseIssue[] }>();
+const props = defineProps<{ course: CourseContent; disabled: boolean; issues?: CourseIssue[] }>();
 const activeId = ref('');
 const item = computed(() =>
   props.course.learningItems.find((value) => value.id === activeId.value),
@@ -27,7 +27,7 @@ const options = computed(() =>
 const newId = () => randomUUID();
 
 watch(
-  () => [props.course.id, ...props.course.learningItems.map((value) => value.id)],
+  () => [props.course, ...props.course.learningItems.map((value) => value.id)],
   () => {
     if (!props.course.learningItems.some((value) => value.id === activeId.value))
       activeId.value = props.course.learningItems[0]?.id || '';

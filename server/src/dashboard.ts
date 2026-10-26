@@ -23,7 +23,6 @@ import {
   type DashboardQualificationOption,
   type DashboardMemberRow,
   type DashboardSummary,
-  type DashboardCoverage,
   type DashboardPage,
   type DashboardOptions,
   type DashboardResponse,
@@ -56,11 +55,6 @@ const group = <T>(rows: T[], key: (row: T) => string) => {
   }
   return result;
 };
-const coverage = (fulfilled: number, total: number): DashboardCoverage => ({
-  fulfilled,
-  total,
-  rate: total ? (fulfilled / total) * 100 : null,
-});
 const activeProgress = (c: DashboardQualificationCell) =>
   !["none", "unplanned"].includes(c.progress);
 const days = (start: string, end: string) =>
@@ -213,12 +207,17 @@ export function dashboardReader(
       )
       .map((e) => [e.targetId, e]),
   );
-  const plans = s.plans.filter(
+  const allPlans = s.plans.filter(
     (p) =>
       !p.deletedAt &&
       qualifications.get(p.qualificationId)?.qualificationType === type &&
       p.lv1OrganizationId === scope.lv1OrganizationId &&
       personById.has(p.learnerId),
+  );
+  const plans = allPlans.filter(
+    (p) =>
+      p.status !== "draft" ||
+      !s.planningRequests.find((r) => r.id === p.requestId)?.closed,
   );
   const plansByPair = group(plans, (p) =>
     pairKey(p.learnerId, entityOf(p.qualificationId)),
@@ -235,11 +234,9 @@ export function dashboardReader(
   const requestsByUser = group(requests, (r) => r.learnerId);
   const selectedPairs = new Set(
     requests
-      .filter((r) => !r.completion)
+      .filter((r) => !r.completion && !r.closed)
       .flatMap((r) =>
-        [...(r.targets || []), ...r.selections].map((t) =>
-          pairKey(r.learnerId, t.entityId),
-        ),
+        r.selections.map((t) => pairKey(r.learnerId, t.entityId)),
       ),
   );
   const enrollments = s.enrollments.filter((e) =>
@@ -468,9 +465,6 @@ export function dashboardReader(
     const plan =
       (assignment?.planId && planById.get(assignment.planId)) ||
       currentPlans[0];
-    const required = (
-      orgs.get(person.organizationId)?.requiredQualifications || []
-    ).includes(option.entityId);
     const evidenceAssignmentId = assignment?.id || cert?.assignmentId;
     const ens = evidenceAssignmentId
       ? enrollmentsByAssignment.get(evidenceAssignmentId) || []
@@ -498,7 +492,7 @@ export function dashboardReader(
             : "assessment_wait"
       : plan?.status === "draft"
         ? "draft"
-        : (required || selectedPairs.has(key)) &&
+        : selectedPairs.has(key) &&
             !["Active", "Hold"].includes(
               cert ? effectiveCredentialStatus(cert, at) : "",
             )
@@ -510,7 +504,7 @@ export function dashboardReader(
     const acquisitionBlockCodes: string[] = [];
     const acquisitionNeeded =
       (!cert || effectiveCredentialStatus(cert, at) !== "Active") &&
-      (required || selectedPairs.has(key) || !!assignment || !!plan);
+      (selectedPairs.has(key) || !!assignment || !!plan);
     if (acquisitionNeeded) {
       if (person.held) acquisitionBlockCodes.push("TARGET_HOLD");
       if (!assignment) {
@@ -534,8 +528,8 @@ export function dashboardReader(
           acquisitionBlockCodes.push("DRAFT_VERSION_CHANGED");
         const requestAvailable = (requestsByUser.get(person.userId) || []).some(
           (r) => {
-            if (r.completion || !r.targets) return false;
-            const target = [...r.targets, ...r.selections].find(
+            if (r.completion || r.closed) return false;
+            const target = r.selections.find(
               (t) => t.entityId === option.entityId,
             );
             return (
@@ -554,11 +548,9 @@ export function dashboardReader(
       ...(option.currentVersion
         ? { currentVersion: option.currentVersion }
         : {}),
-      required,
       efficacy: cert ? effectiveCredentialStatus(cert, at) : "none",
       progress,
-      selected:
-        required || selectedPairs.has(key) || !!assignment || !!plan || !!cert,
+      selected: selectedPairs.has(key) || !!assignment || !!plan || !!cert,
       ...(assignment
         ? { assignmentId: assignment.id }
         : cert
@@ -605,16 +597,12 @@ export function dashboardReader(
     (!search ||
       matchesPersonText(p) ||
       c.title.toLocaleLowerCase().includes(search)) &&
-    (!query.required ||
-      query.required === "all" ||
-      c.required === (query.required === "required")) &&
     (!query.efficacy || query.efficacy === c.efficacy) &&
     (!query.progress || query.progress === c.progress) &&
     (!query.expiryBucket || query.expiryBucket === c.expiryBucket) &&
     (!query.renewalState || query.renewalState === c.renewalState);
   const hasCellFilter = !!(
     query.entityId ||
-    (query.required && query.required !== "all") ||
     query.efficacy ||
     query.progress ||
     query.expiryBucket ||
@@ -627,21 +615,13 @@ export function dashboardReader(
     const cells = selectedOptions
       .map((o) => cell(p, o))
       .filter((c) => matchesCell(c, p));
-    // A person's full mandatory coverage must never become 100% just because a status/qualification filter hides a gap.
-    const required = (
-        orgs.get(p.organizationId)?.requiredQualifications || []
-      ).flatMap((id) => {
-        const option = optionById.get(id);
-        return option ? [cell(p, option)] : [];
-      }),
-      reqs = (requestsByUser.get(p.userId) || []).filter(
-        (r) =>
-          !r.completion &&
-          (!query.entityId ||
-            [...(r.targets || []), ...r.selections].some(
-              (t) => t.entityId === query.entityId,
-            )),
-      );
+    const reqs = (requestsByUser.get(p.userId) || []).filter(
+      (r) =>
+        !r.completion &&
+        !r.closed &&
+        (!query.entityId ||
+          r.selections.some((t) => t.entityId === query.entityId)),
+    );
     const upcoming: NonNullable<DashboardMemberRow["nextSchedule"]>[] =
       reqs.map((r) => ({
         kind: "request",
@@ -678,10 +658,6 @@ export function dashboardReader(
     upcoming.sort((a, b) => a.date.localeCompare(b.date));
     const row: DashboardMemberRow = {
       ...p,
-      requiredCoverage: coverage(
-        required.filter((c) => c.efficacy === "Active").length,
-        required.length,
-      ),
       activeQualifications: cells.filter((c) => c.efficacy === "Active").length,
       inProgress: cells.filter(activeProgress).length,
       incompleteRequests: reqs.length,
@@ -710,10 +686,9 @@ export function dashboardReader(
     (r) =>
       metricIds.has(r.learnerId) &&
       !r.completion &&
+      !r.closed &&
       (!query.entityId ||
-        [...(r.targets || []), ...r.selections].some(
-          (t) => t.entityId === query.entityId,
-        )),
+        r.selections.some((t) => t.entityId === query.entityId)),
   );
   const latestCertIds = new Set(
     allMembers.flatMap((p) => p.cells.flatMap((c) => c.certificationId || [])),
@@ -787,7 +762,6 @@ export function dashboardReader(
   function summarize(rows: DashboardMemberRow[]): DashboardSummary {
     const ids = new Set(rows.map((p) => p.userId)),
       cells = rows.flatMap((p) => p.cells);
-    const required = cells.filter((c) => c.required);
     const efficacy = { Active: 0, Hold: 0, Revoke: 0, none: 0 };
     const progress = {
       unplanned: 0,
@@ -805,21 +779,7 @@ export function dashboardReader(
     }
     return {
       eligiblePeople: rows.length,
-      requiredMissing: required.filter((c) => c.efficacy !== "Active").length,
       blockedProgress: cells.filter((c) => c.acquisitionBlockCodes.length > 0)
-        .length,
-      requiredCoverage: coverage(
-        required.filter((c) => c.efficacy === "Active").length,
-        required.length,
-      ),
-      fullyRequiredPeople: rows.filter(
-        (p) =>
-          p.requiredCoverage.total > 0 &&
-          p.requiredCoverage.fulfilled === p.requiredCoverage.total,
-      ).length,
-      peopleWithRequirements: rows.filter((p) => p.requiredCoverage.total > 0)
-        .length,
-      peopleWithoutRequirements: rows.filter((p) => !p.requiredCoverage.total)
         .length,
       uniqueActiveHolders: rows.filter((p) => p.activeQualifications > 0)
         .length,
@@ -880,13 +840,11 @@ export function dashboardReader(
   const personSort = (p: DashboardMemberRow) =>
     !query.sort || query.sort === "organization"
       ? p.organizationPath.map((o) => o.name).join("/")
-      : query.sort === "coverage"
-        ? (p.requiredCoverage.rate ?? -1)
-        : query.sort === "targetOn"
-          ? p.cells.flatMap((c) => c.targetOn || []).sort()[0] || "9999"
-          : query.sort === "expiresOn"
-            ? p.cells.flatMap((c) => c.expiresOn || []).sort()[0] || "9999"
-            : p.name;
+      : query.sort === "targetOn"
+        ? p.cells.flatMap((c) => c.targetOn || []).sort()[0] || "9999"
+        : query.sort === "expiresOn"
+          ? p.cells.flatMap((c) => c.expiresOn || []).sort()[0] || "9999"
+          : p.name;
   const personTie = (p: DashboardMemberRow) =>
     !query.sort || query.sort === "organization"
       ? [p.name, p.userId]
@@ -953,8 +911,6 @@ export function dashboardReader(
           people: sum.eligiblePeople,
           excludedPeople: allMembers.filter((p) => !p.eligible && belongs(p))
             .length,
-          requiredCoverage: sum.requiredCoverage,
-          fullyRequiredPeople: sum.fullyRequiredPeople,
           activeHolders: sum.uniqueActiveHolders,
           inProgress: sum.inProgress,
           expires0to30: sum.expires0to30,
@@ -965,8 +921,7 @@ export function dashboardReader(
       });
       fullOrganizations = sortRows(
         rows,
-        (r) =>
-          query.sort === "coverage" ? (r.requiredCoverage.rate ?? -1) : r.name,
+        (r) => r.name,
         (r) => r.organizationId,
       );
       response.organizations = page(fullOrganizations);
@@ -984,15 +939,9 @@ export function dashboardReader(
             o.title.toLocaleLowerCase().includes(search),
         )
         .map((o): DashboardQualificationRow => {
-          const cells = byEntity.get(o.entityId) || [],
-            required = cells.filter((c) => c.required);
+          const cells = byEntity.get(o.entityId) || [];
           return {
             ...o,
-            requiredPeople: required.length,
-            requiredCoverage: coverage(
-              required.filter((c) => c.efficacy === "Active").length,
-              required.length,
-            ),
             activePeople: cells.filter((c) => c.efficacy === "Active").length,
             heldPeople: cells.filter((c) => c.efficacy === "Hold").length,
             revokedPeople: cells.filter((c) => c.efficacy === "Revoke").length,
@@ -1003,8 +952,7 @@ export function dashboardReader(
         });
       fullQualifications = sortRows(
         rows,
-        (r) =>
-          query.sort === "coverage" ? (r.requiredCoverage.rate ?? -1) : r.title,
+        (r) => r.title,
         (r) => r.entityId,
       );
       response.qualifications = page(fullQualifications);
@@ -1105,8 +1053,6 @@ export function dashboardReader(
       ...base(p, pairKey(p.userId, c.entityId)),
       entityId: c.entityId,
       title: c.title,
-      required: c.required,
-      fulfilled: c.efficacy === "Active",
       efficacy: c.efficacy,
       progress: c.progress,
       assignmentId: c.assignmentId,
@@ -1119,37 +1065,18 @@ export function dashboardReader(
       rows = metricMembers.map((p) => base(p, p.userId));
     else if (metric === "excludedPeople")
       rows = people.filter((p) => !p.eligible).map((p) => base(p, p.userId));
-    else if (metric === "fullyRequiredPeople")
-      rows = metricMembers
-        .filter(
-          (p) =>
-            p.requiredCoverage.total > 0 &&
-            p.requiredCoverage.total === p.requiredCoverage.fulfilled,
-        )
-        .map((p) => base(p, p.userId));
     else if (metric === "uniqueActiveHolders")
       rows = metricMembers
         .filter((p) => p.activeQualifications > 0)
         .map((p) => base(p, p.userId));
-    else if (
-      [
-        "requiredCoverage",
-        "inProgress",
-        "requiredMissing",
-        "blockedProgress",
-      ].includes(metric)
-    ) {
+    else if (["inProgress", "blockedProgress"].includes(metric)) {
       unit = "person_qualification";
       rows = metricMembers.flatMap((p) =>
         p.cells
           .filter((c) =>
-            metric === "requiredCoverage"
-              ? c.required
-              : metric === "requiredMissing"
-                ? c.required && c.efficacy !== "Active"
-                : metric === "blockedProgress"
-                  ? c.acquisitionBlockCodes.length > 0
-                  : activeProgress(c),
+            metric === "blockedProgress"
+              ? c.acquisitionBlockCodes.length > 0
+              : activeProgress(c),
           )
           .map((c) => cellRow(p, c)),
       );
@@ -1205,12 +1132,6 @@ export function dashboardReader(
       snapshot,
       metric,
       unit,
-      ...(metric === "requiredCoverage"
-        ? {
-            numerator: summary.requiredCoverage.fulfilled,
-            denominator: summary.requiredCoverage.total,
-          }
-        : {}),
       rows: page(
         sortRows(
           rows,
@@ -1243,7 +1164,7 @@ export function dashboardReader(
     stale();
     const qualificationRows = selectedOptions
       .map((o) => cell(p, o))
-      .filter((c) => c.required || c.selected || c.efficacy !== "none");
+      .filter((c) => c.selected || c.efficacy !== "none");
     const detailHref = (id: string) =>
       scope.fullManager
         ? `/admin/results/${encodeURIComponent(id)}?lv1OrganizationId=${encodeURIComponent(scope.lv1OrganizationId)}`
@@ -1283,19 +1204,21 @@ export function dashboardReader(
               r.lv1OrganizationId === scope.lv1OrganizationId &&
               r.organizationId !== p.organizationId &&
               (!query.entityId ||
-                [...(r.targets || []), ...r.selections].some(
-                  (t) => t.entityId === query.entityId,
-                )),
+                r.selections.some((t) => t.entityId === query.entityId)),
           )
           .map((r) => ({
             kind: "request" as const,
             id: r.id,
             title:
-              [...(r.targets || []), ...r.selections]
-                .map((t) => t.title)
-                .join(" · ") || "계획 수립 요청",
+              r.selections.map((t) => t.title).join(" · ") || "계획 수립 요청",
             createdOn: kstDate(r.createdAt),
             dueOn: r.dueOn,
+            ...(r.closed
+              ? {
+                  closedOn: kstDate(r.closed.date),
+                  closeReason: r.closed.reason,
+                }
+              : {}),
             ...(r.completion
               ? { completedOn: kstDate(r.completion.date) }
               : {}),
@@ -1304,7 +1227,7 @@ export function dashboardReader(
               orgs.get(r.organizationId || "")?.path ||
               [],
           })),
-        ...plans
+        ...allPlans
           .filter(
             (plan) =>
               plan.learnerId === id &&
@@ -1397,8 +1320,10 @@ export function dashboardReader(
         id: r.id,
         createdOn: kstDate(r.createdAt),
         dueOn: r.dueOn,
+        ...(r.closed
+          ? { closedOn: kstDate(r.closed.date), closeReason: r.closed.reason }
+          : {}),
         ...(r.completion ? { completedOn: kstDate(r.completion.date) } : {}),
-        requiredTitles: (r.targets || []).map((t) => t.title),
         selectedTitles: r.selections.map((t) => t.title),
       })),
       history,
