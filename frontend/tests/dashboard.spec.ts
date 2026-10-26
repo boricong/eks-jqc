@@ -331,6 +331,48 @@ test('운영자 팀 전환은 대시보드를 유지하고 일반 학습자는 �
   await expect(page.getByRole('link', { name: '인증 업무 관리', exact: true })).toHaveCount(0);
 });
 
+test('조직 전환 중 늦게 도착한 응답이 새 범위의 수치를 덮어쓰지 않는다', async ({
+  page,
+  backend,
+}) => {
+  backend.setClock(DASHBOARD_NOW);
+  await configureDashboardFixture(backend.store);
+  await dashboard(page);
+  let release!: () => void;
+  let received!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise<void>((resolve) => {
+    received = resolve;
+  });
+  let delay = true;
+  await page.route('**/api/dashboard?*', async (route) => {
+    const url = new URL(route.request().url());
+    if (delay && url.searchParams.get('organizationId') === 'org-photo') {
+      delay = false;
+      const response = await route.fetch();
+      received();
+      await gate;
+      await route.fulfill({ response }).catch(() => {});
+    } else await route.continue();
+  });
+  await page.getByRole('button', { name: '새로고침', exact: true }).click();
+  await started;
+  try {
+    await page.getByLabel('조회 조직', { exact: true }).selectOption('dashboard-a');
+    await expect(
+      page.getByRole('button', { name: '대상 인원 4명 명세 보기', exact: true }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
+  await expect(page.getByLabel('조회 조직', { exact: true })).toHaveValue('dashboard-a');
+  await expect(
+    page.getByRole('button', { name: '대상 인원 5명 명세 보기', exact: true }),
+  ).toHaveCount(0);
+});
+
 test('많은 인원·긴 이름·11개 이상 자격에서 명세와 매트릭스의 양방향 페이지 유지', async ({
   page,
   backend,
@@ -372,21 +414,6 @@ test('많은 인원·긴 이름·11개 이상 자격에서 명세와 매트릭�
       return {};
     },
   );
-  await backend.store.organizations.transact(
-    'operator-1',
-    crypto.randomUUID(),
-    'dashboard-many-pool',
-    () => {},
-    (doc) => {
-      for (let i = 0; i < 12; i++)
-        doc.qualificationPools.push({
-          lv1OrganizationId: 'org-photo',
-          entityId: `many-q-${i}`,
-          qualificationId: `many-q-${i}`,
-        });
-      return {};
-    },
-  );
   await dashboard(page);
   await page.getByRole('button', { name: '대상 인원 60명 명세 보기', exact: true }).click();
   await expect(page.getByRole('dialog').locator('tbody tr')).toHaveCount(25);
@@ -413,46 +440,4 @@ test('많은 인원·긴 이름·11개 이상 자격에서 명세와 매트릭�
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
   ).toBeTruthy();
   await page.screenshot({ path: info.outputPath('dashboard-many-mobile.png'), fullPage: true });
-});
-
-test('조직 전환 중 늦게 도착한 응답이 새 범위의 수치를 덮어쓰지 않는다', async ({
-  page,
-  backend,
-}) => {
-  backend.setClock(DASHBOARD_NOW);
-  await configureDashboardFixture(backend.store);
-  await dashboard(page);
-  let release!: () => void;
-  let received!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const started = new Promise<void>((resolve) => {
-    received = resolve;
-  });
-  let delay = true;
-  await page.route('**/api/dashboard?*', async (route) => {
-    const url = new URL(route.request().url());
-    if (delay && url.searchParams.get('organizationId') === 'org-photo') {
-      delay = false;
-      const response = await route.fetch();
-      received();
-      await gate;
-      await route.fulfill({ response }).catch(() => {});
-    } else await route.continue();
-  });
-  await page.getByRole('button', { name: '새로고침', exact: true }).click();
-  await started;
-  try {
-    await page.getByLabel('조회 조직', { exact: true }).selectOption('dashboard-a');
-    await expect(
-      page.getByRole('button', { name: '대상 인원 4명 명세 보기', exact: true }),
-    ).toBeVisible();
-  } finally {
-    release();
-  }
-  await expect(page.getByLabel('조회 조직', { exact: true })).toHaveValue('dashboard-a');
-  await expect(
-    page.getByRole('button', { name: '대상 인원 5명 명세 보기', exact: true }),
-  ).toHaveCount(0);
 });

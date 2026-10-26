@@ -1,6 +1,6 @@
 import { migrateCourseTypes } from "./course-type-migration.ts";
 import { randomUUID } from "node:crypto";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 
 // Only explicit maintenance calls this function. Normal startup never upgrades files.
 export function migrateQualificationTypes(
@@ -9,11 +9,11 @@ export function migrateQualificationTypes(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![13, 14, 15, 16].includes(raw?.schemaVersion))
+  if (![13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion))
     throw new Error("인증 유형 이관에는 업무13·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput);
   const next = structuredClone(raw);
-  const alreadyApplied = raw.schemaVersion === 16;
+  const alreadyApplied = raw.schemaVersion === 18;
   const counts = {
     templates: next.qualificationTemplates.length,
     qualifications: next.qualifications.length,

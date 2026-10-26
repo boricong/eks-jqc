@@ -31,7 +31,7 @@ import {
   type UserView,
   type OrganizationDocument,
 } from "@eks/contracts";
-import { demand } from "./errors.ts";
+import { demand, DomainError } from "./errors.ts";
 import { userView, organization } from "./organizations.ts";
 import {
   requireEligible,
@@ -65,6 +65,13 @@ export function authorizeWorkflow(
   body: any,
   scope?: string,
 ) {
+  if (action === "planning.request" && body.qualificationType === "auditor")
+    throw new DomainError(
+      410,
+      "Auditor 계획 요청은 종료되었습니다. /admin/auditor에서 운영 기준을 관리해 주세요.",
+      "AUDITOR_PLANNING_REMOVED",
+      { replacementPath: "/admin/auditor" },
+    );
   if (action === "template.import" || action === "planning.request") {
     demand(scope, 403, "관리할 Lv1 조직을 선택해 주세요.");
     if (action === "planning.request")
@@ -125,6 +132,16 @@ export function authorizeWorkflow(
     403,
     "본인의 계획·학습만 처리할 수 있습니다.",
   );
+  if (
+    (action.startsWith("plan.") || action.startsWith("planning.")) &&
+    request?.qualificationType === "auditor"
+  )
+    throw new DomainError(
+      410,
+      "Auditor 계획 작성은 종료되었습니다. /auditor에서 학습을 시작해 주세요.",
+      "AUDITOR_PLANNING_REMOVED",
+      { replacementPath: "/auditor" },
+    );
   if (
     action.startsWith("plan.") &&
     action !== "plan.create" &&
@@ -195,6 +212,11 @@ export function executeWorkflow(
       existing: string[] = [];
     for (const templateId of ids) {
       const template = find(s.qualificationTemplates, templateId);
+      demand(
+        template.scope !== "team",
+        409,
+        "팀 소유 Auditor 자격은 Auditor 운영에서 관리해 주세요.",
+      );
       demand(
         !expectedType || template.qualificationType === expectedType,
         409,

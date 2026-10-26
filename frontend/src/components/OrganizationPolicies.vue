@@ -31,7 +31,7 @@ const review = ref(false),
   qualificationSearch = ref('');
 const filteredQualifications = computed(
   () =>
-    doc.value?.pool.filter(
+    doc.value?.qualifications.filter(
       (p) =>
         store.data.qualifications.find((q) => q.id === p.qualificationId)?.qualificationType ===
           selectedType.value &&
@@ -191,7 +191,7 @@ watch(
               label="필수 인증 유형"
             />
             <div id="policy-type-panel">
-              <label v-if="doc.pool.length" class="field policy-qualification-search"
+              <label v-if="doc.qualifications.length" class="field policy-qualification-search"
                 ><span>자격 검색</span
                 ><input v-model="qualificationSearch" type="search" placeholder="자격명 검색"
               /></label>
@@ -208,11 +208,11 @@ watch(
                     ></span
                   ></label
                 >
-                <p v-if="doc.pool.length && !filteredQualifications.length" class="muted">
+                <p v-if="doc.qualifications.length && !filteredQualifications.length" class="muted">
                   검색 결과가 없습니다.
                 </p>
-                <p v-if="!doc.pool.length">
-                  팀 관리자가 자격 설정을 완료하고 팀 적용을 확정해야 합니다.
+                <p v-if="!doc.qualifications.length">
+                  팀 관리자가 자격을 등록하고 기준을 저장하면 선택할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -269,9 +269,9 @@ watch(
             />
           </CollapsibleSection>
         </section>
-        <p v-if="doc?.canManagePool">
+        <p v-if="doc?.canManageQualifications">
           <RouterLink :to="store.managementLink('/admin/qualifications')"
-            >{{ managementTitle('qualifications') }} · 등록·팀 적용</RouterLink
+            >{{ managementTitle('qualifications') }} · 등록·현재 팀 기준</RouterLink
           >
         </p>
       </div>

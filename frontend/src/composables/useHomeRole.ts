@@ -6,7 +6,7 @@ import { DATASET_EVENT } from '../data-generation';
 const prefix = 'eks-home-role-';
 const choices: { id: Role; label: string }[] = [
   { id: 'learner', label: '학습자 인증 · Auditee' },
-  { id: 'evaluator', label: '평가자 인증 · Auditor' },
+  { id: 'evaluator', label: 'Auditor 인증' },
   { id: 'admin', label: '팀 관리' },
   { id: 'organization_admin', label: '조직 관리' },
   { id: 'system_operator', label: '시스템 운영' },
@@ -49,7 +49,7 @@ export function useHomeRole() {
       )
       .map((item) =>
         item.id === 'evaluator' && !store.hasRole('evaluator')
-          ? { ...item, label: '평가자 인증 · 기존 요청 진행' }
+          ? { ...item, label: 'Auditor 인증 · 기존 학습 진행' }
           : item,
       ),
   );

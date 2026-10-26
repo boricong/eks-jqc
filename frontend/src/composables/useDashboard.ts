@@ -111,8 +111,8 @@ export function useDashboard() {
     }
     if (tab.value === 'qualifications')
       result.qualificationScope = choice(
-        one(q.qualificationScope),
-        ['all', 'applied', 'records'],
+        one(q.qualificationScope) === 'applied' ? 'registered' : one(q.qualificationScope),
+        ['all', 'registered', 'records'],
         'all',
       );
     if (tab.value === 'members' || tab.value === 'renewals') {

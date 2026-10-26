@@ -93,7 +93,7 @@ async function createVersion() {
     });
     createOpen.value = false;
     emit('versionCreated', result.id);
-    store.notify('새 Active 버전을 만들었습니다. 팀 적용 버전은 유지됩니다.');
+    store.notify('새 Active 버전을 만들었습니다. 최신 저장 버전을 신규 업무에 사용합니다.');
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -115,7 +115,7 @@ async function createVersion() {
           유지됩니다.
         </p>
         <p v-if="qualification.lifecycleStatus === 'Revoke'" class="muted">
-          폐기한 버전은 재개할 수 없습니다. 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.
+          폐기한 버전은 재개할 수 없습니다. 새 기준 버전을 작성해 주세요.
         </p>
       </div>
       <div class="qualification-lifecycle-actions">
@@ -145,8 +145,7 @@ async function createVersion() {
   <AppDialog v-model:open="createOpen" title="폐기 기준의 새 버전 작성">
     <p>
       기존 Revoke 버전과 취득 근거는 그대로 보존하고 동일한 내용의 새 Active 버전을 만듭니다. 기준을
-      보완한 뒤 팀 자격 설정의 팀 적용에서 적용 버전을 선택하세요. 팀 적용 버전은 자동 변경하지
-      않습니다.
+      저장 즉시 최신 버전을 사용합니다. 필수 기준을 보완하기 전에는 신규 시작이 제한됩니다.
     </p>
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>
     <template #footer

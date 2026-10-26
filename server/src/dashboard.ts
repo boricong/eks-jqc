@@ -1,3 +1,4 @@
+import { currentTeamQualifications } from "@eks/contracts";
 import {
   organizationEntries,
   effectiveCredentialStatus,
@@ -170,7 +171,7 @@ export function dashboardReader(
   const templates = new Map(s.qualificationTemplates.map((t) => [t.id, t]));
   const courses = new Map(s.courses.map((c) => [c.id, c]));
   const pool = new Map(
-    doc.qualificationPools
+    currentTeamQualifications(s)
       .filter(
         (p) =>
           p.lv1OrganizationId === scope.lv1OrganizationId &&
@@ -290,12 +291,12 @@ export function dashboardReader(
     .map(([entityId, q]) => ({
       entityId,
       title: title(q),
-      applied: pool.has(entityId),
+      registered: pool.has(entityId),
       hasRecords: recordEntities.has(entityId),
       ...(pool.has(entityId)
         ? {
-            appliedQualificationId: pool.get(entityId)!.qualificationId,
-            appliedVersion: qualifications.get(
+            currentQualificationId: pool.get(entityId)!.qualificationId,
+            currentVersion: qualifications.get(
               pool.get(entityId)!.qualificationId,
             )?.version,
             criterionStatus:
@@ -319,7 +320,7 @@ export function dashboardReader(
   const selectedOptions = allOptions.filter(
     (o) =>
       (!query.entityId || o.entityId === query.entityId) &&
-      (query.qualificationScope !== "applied" || o.applied) &&
+      (query.qualificationScope !== "registered" || o.registered) &&
       (query.qualificationScope !== "records" || o.hasRecords),
   );
   const unusable = new Set<string>();
@@ -409,7 +410,7 @@ export function dashboardReader(
       !pool.has(entityId) ||
       qualifications.get(pool.get(entityId)!.qualificationId)?.deletedAt
     )
-      codes.push("NOT_APPLIED");
+      codes.push("NOT_REGISTERED");
     else if (unusable.has(entityId)) codes.push("CRITERIA_UNAVAILABLE");
     const phase = renewalPhase(c, at),
       opensOn = p && renewalOpensOn(p);
@@ -516,15 +517,18 @@ export function dashboardReader(
           acquisitionBlockCodes.push("ORGANIZATION_INACTIVE");
         if (cert && effectiveCredentialStatus(cert, at) === "Hold")
           acquisitionBlockCodes.push("CREDENTIAL_HOLD");
-        const applied = pool.get(option.entityId);
-        if (!applied || qualifications.get(applied.qualificationId)?.deletedAt)
-          acquisitionBlockCodes.push("NOT_APPLIED");
+        const registered = pool.get(option.entityId);
+        if (
+          !registered ||
+          qualifications.get(registered.qualificationId)?.deletedAt
+        )
+          acquisitionBlockCodes.push("NOT_REGISTERED");
         else if (unusable.has(option.entityId))
           acquisitionBlockCodes.push("CRITERIA_UNAVAILABLE");
         if (
           plan?.status === "draft" &&
-          applied &&
-          plan.qualificationId !== applied.qualificationId
+          registered &&
+          plan.qualificationId !== registered.qualificationId
         )
           acquisitionBlockCodes.push("DRAFT_VERSION_CHANGED");
         const requestAvailable = (requestsByUser.get(person.userId) || []).some(
@@ -545,9 +549,9 @@ export function dashboardReader(
     const item: DashboardQualificationCell = {
       entityId: option.entityId,
       title: option.title,
-      applied: option.applied,
-      ...(option.appliedVersion
-        ? { appliedVersion: option.appliedVersion }
+      registered: option.registered,
+      ...(option.currentVersion
+        ? { currentVersion: option.currentVersion }
         : {}),
       required,
       efficacy: cert ? effectiveCredentialStatus(cert, at) : "none",

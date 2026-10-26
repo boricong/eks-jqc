@@ -114,6 +114,11 @@ async function view(notification: Notification) {
         >
           {{ n.body }}
         </p>
+        <ul v-if="n.auditorNotice?.links.length">
+          <li v-for="link in n.auditorNotice.links" :key="link.url">
+            <a :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a>
+          </li>
+        </ul>
         <div v-if="errors[n.id]" class="notification-error" role="alert">
           <p>읽음 처리에 실패했습니다. {{ errors[n.id] }}</p>
           <button

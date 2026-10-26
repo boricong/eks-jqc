@@ -117,6 +117,7 @@ test("기준 파일은 설정·모든 버전·자료·정답만 왕복하며 내
     masterPayload(f.store.snapshot(), f.store.organizations.snapshot()),
   );
   assert.deepEqual(Object.keys(file.payload).sort(), [
+    "auditorPrograms",
     "courses",
     "organizations",
     "qualificationTemplates",

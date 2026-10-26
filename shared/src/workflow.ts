@@ -212,6 +212,21 @@ export const LearningRecordSchema = z.object({
 });
 export type LearningRecord = z.infer<typeof LearningRecordSchema>;
 export const NotificationSchema = z.object({
+  auditorNotice: z
+    .object({
+      revision: z.number().int().nonnegative(),
+      title: z.string(),
+      body: z.string(),
+      links: z.array(
+        z.object({
+          title: z.string(),
+          url: z
+            .url()
+            .refine((v) => ["http:", "https:"].includes(new URL(v).protocol)),
+        }),
+      ),
+    })
+    .optional(),
   qualificationType: QualificationTypeSchema.optional(),
   id,
   key: z.string().max(500),
@@ -219,6 +234,7 @@ export const NotificationSchema = z.object({
   recipientId: id,
   type: z.enum([
     "planning",
+    "auditor_designation",
     "assessment",
     "result",
     "completion",

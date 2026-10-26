@@ -177,7 +177,7 @@ watch(
             </td>
             <td>{{ t.englishName || '—' }}</td>
             <td>{{ qualificationTypeLabels[t.qualificationType] }}</td>
-            <td>{{ t.description ? '설명 등록됨' : '설명 보완 필요' }}</td>
+            <td>{{ t.description ? '설명 등록됨' : '—' }}</td>
             <td>{{ t.revision }}</td>
             <td><button class="button ghost" @click="edit(t)">수정</button></td>
           </tr>
@@ -220,7 +220,7 @@ watch(
           >영문명<input v-model="draft.englishName" :disabled="busy" maxlength="300"
         /></label>
         <label class="field"
-          >공통 설명<textarea
+          >공통 설명 (선택)<textarea
             v-model="draft.description"
             :disabled="busy"
             rows="4"
@@ -228,7 +228,7 @@ watch(
           />
         </label>
         <p v-if="!draft.description.trim()" class="muted">
-          설명은 나중에 보완할 수 있습니다. 팀 적용 전에는 설명이 필요합니다.
+          설명은 선택 항목이며 비워 두어도 자격을 사용할 수 있습니다.
         </p>
         <details v-if="draft.id">
           <summary>변경 이력</summary>

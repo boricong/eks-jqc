@@ -338,7 +338,7 @@ test("v5 왕복과 v3/v4 누락 정책은 새 버전 없이 유지하며 기존 
   const s = f.store.snapshot(),
     data = exportCatalog(s, "org-photo", ["demo-qualification"]);
   const parsed = await readCatalogWorkbook(await writeCatalogWorkbook(data));
-  assert.equal(parsed.workbook.format, "eks-catalog-v10");
+  assert.equal(parsed.workbook.format, "eks-catalog-v11");
   assert.equal(parsed.workbook.sheets[0]!.renewalNoticeDaysBefore, 14);
   assert.equal(
     prepareCatalog(s, parsed.workbook, "org-photo").changes[0]!.kind,
@@ -355,7 +355,7 @@ test("v5 왕복과 v3/v4 누락 정책은 새 버전 없이 유지하며 기존 
   }
   const b = new ExcelJS.Workbook();
   await b.xlsx.load((await writeCatalogWorkbook(data)) as any);
-  assert.equal(b.subject, "eks-catalog-v10");
+  assert.equal(b.subject, "eks-catalog-v11");
   assert.ok(
     b.worksheets[2]!.getSheetValues()
       .flat()
@@ -374,8 +374,8 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 16);
-  assert.equal(next.state.revision, raw.revision + 7);
+  assert.equal(next.state.schemaVersion, 18);
+  assert.equal(next.state.revision, raw.revision + 9);
   for (const key of [
     "attempts",
     "completions",

@@ -2,18 +2,18 @@ import { migrateAuditorWorkflow } from "./auditor-migration.ts";
 import { randomUUID } from "node:crypto";
 import { classifyCourseTypes } from "./course-types.ts";
 import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 export function migrateCourseTypes(
   input: unknown,
   organizationInput: unknown,
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![14, 15, 16].includes(raw?.schemaVersion))
+  if (![14, 15, 16, 17, 18].includes(raw?.schemaVersion))
     throw new Error("인증Set 유형 이관에는 업무14·조직2가 필요합니다.");
   const next = structuredClone(raw),
     organizations = validateOrganizations(organizationInput);
-  const alreadyApplied = raw.schemaVersion === 16;
+  const alreadyApplied = raw.schemaVersion === 18;
   const classifications =
     raw.schemaVersion >= 15 ? [] : classifyCourseTypes(next);
   if (raw.schemaVersion === 14) {

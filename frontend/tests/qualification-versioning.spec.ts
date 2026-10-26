@@ -144,7 +144,7 @@ test('변경 없음은 쓰기 없음·인증Set 변경은 강제·취소 후 선
   await page.getByLabel('재인증 시작 · 만료 전 개월', { exact: true }).fill('4');
   await save(page).click();
   await dialog.getByRole('radio', { name: /^새 버전 생성/ }).check();
-  await expect(dialog).toContainText('새 버전을 사용하려면 팀 적용을 별도로 변경');
+  await expect(dialog).toContainText('새 버전은 신규 계획·학습·갱신에 즉시 사용');
   await dialog.getByRole('button', { name: '새 버전 생성', exact: true }).click();
   await expect(dialog).toBeHidden();
   const after = backend.store.snapshot();

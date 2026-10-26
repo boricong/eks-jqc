@@ -41,18 +41,9 @@ export const RequestRecordSchema = z.object({
   action: z.string().optional(),
 });
 export const OrganizationDocumentSchema = z.object({
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(3),
   revision: z.number().int().nonnegative(),
   roots: z.array(OrganizationNodeSchema).min(1),
-  qualificationPools: z
-    .array(
-      z.object({
-        lv1OrganizationId: organizationId,
-        entityId: organizationId,
-        qualificationId: organizationId,
-      }),
-    )
-    .default([]),
   audits: z.array(
     z.object({
       id: organizationId,
@@ -174,10 +165,10 @@ export interface OrganizationPoliciesView {
   revision: number;
   stateRevision: number;
   lv1OrganizationId: string;
-  canManagePool: boolean;
+  canManageQualifications: boolean;
   canAssignAdministrators: boolean;
   entries: (OrganizationEntry & { userCount: number; draftCount: number })[];
-  pool: {
+  qualifications: {
     entityId: string;
     qualificationId: string;
     title: string;

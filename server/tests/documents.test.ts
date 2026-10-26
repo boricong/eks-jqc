@@ -163,19 +163,46 @@ test("문서 누락·디렉터리·외부 심볼릭 링크·인코딩/크기 오
   await mkdir(file);
   assert.equal((await f.call("/one", "operator-1")).statusCode, 503);
   await rm(file, { recursive: true });
-  await symlink(f.file, file);
+  // Windows directory junctions exercise the same realpath boundary without
+  // requiring the machine-wide file-symlink privilege.
+  if (process.platform === "win32") {
+    await writeFile(
+      path.join(path.dirname(f.file), "outside.md"),
+      "users: private runtime",
+    );
+    await symlink(
+      path.dirname(f.file),
+      path.join(f.root, "external"),
+      "junction",
+    );
+    await writeFile(
+      path.join(f.root, "document-catalog.json"),
+      JSON.stringify([entry("one", "external/outside.md")]),
+    );
+  } else await symlink(f.file, file);
   const outside = await f.call("/one", "operator-1");
   assert.equal(outside.statusCode, 503);
   assert(!outside.body.includes("users"));
-  await rm(file);
+  if (process.platform === "win32")
+    await writeFile(
+      path.join(f.root, "document-catalog.json"),
+      JSON.stringify([entry()]),
+    );
+  else await rm(file);
   await writeFile(file, Buffer.from([0xff, 0xfe]));
   assert.equal((await f.call("/one", "operator-1")).statusCode, 503);
   await writeFile(file, "x".repeat(2 * 1024 * 1024 + 1));
   assert.equal((await f.call("/one", "operator-1")).statusCode, 503);
   await rm(path.join(f.root, "document-catalog.json"));
-  await symlink(f.file, path.join(f.root, "document-catalog.json"));
+  await symlink(
+    process.platform === "win32" ? path.dirname(f.file) : f.file,
+    path.join(f.root, "document-catalog.json"),
+    process.platform === "win32" ? "junction" : "file",
+  );
   assert.equal((await f.call("", "operator-1")).statusCode, 503);
-  await rm(path.join(f.root, "document-catalog.json"));
+  await rm(path.join(f.root, "document-catalog.json"), {
+    recursive: process.platform === "win32",
+  });
   assert.equal((await f.call("", "operator-1")).statusCode, 503);
 });
 

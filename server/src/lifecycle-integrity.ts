@@ -97,6 +97,14 @@ export function validateLifecycle(s: State) {
     }
   }
   for (const r of s.renewals) {
+    if (r.method === "auditor_self_confirmation" && r.status === "completed")
+      check(
+        r.confirmation?.confirmedBy === r.learnerId &&
+          r.confirmation.confirmedAt === r.completedAt &&
+          r.confirmation.qualificationId === r.qualificationId &&
+          r.confirmation.qualificationRevision === r.qualificationRevision,
+        "Auditor 본인 기준 확인 갱신 근거",
+      );
     const c = s.certifications.find((c) => c.id === r.certificationId),
       a = s.assignments.find((a) => a.id === c?.assignmentId);
     check(

@@ -155,7 +155,7 @@ test('프로세스 검토의 정보 위계·단계 배치·키보드·화면 및
     for (const h of await guide.locator('h4').all()) await expect(h).toHaveCSS('font-size', '16px');
     await expect(guide.locator('.process-current p')).toHaveCSS('font-size', '14px');
     await expect(guide.locator('.process-guide-meta')).toHaveCSS('font-size', '12px');
-    await expect(guide.locator('.process-guide-meta')).toContainText('v14 · 2026-10-26');
+    await expect(guide.locator('.process-guide-meta')).toContainText('v15 · 2026-10-26');
     const cols = await guide
       .locator('.process-steps')
       .evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(' ').length);

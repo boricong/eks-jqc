@@ -1,6 +1,7 @@
+import { migrateAuditorProgram } from "./auditor-program-migration.ts";
 import { randomUUID } from "node:crypto";
 import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 
 export function migrateAuditorWorkflow(
   input: unknown,
@@ -8,12 +9,12 @@ export function migrateAuditorWorkflow(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![15, 16].includes(raw?.schemaVersion))
+  if (![15, 16, 17, 18].includes(raw?.schemaVersion))
     throw new Error("Auditor 학습 확인 이관에는 업무15·조직2가 필요합니다.");
   const next = structuredClone(raw),
     organizations = validateOrganizations(organizationInput);
-  const alreadyApplied = raw.schemaVersion === 16;
-  if (!alreadyApplied) {
+  const alreadyApplied = raw.schemaVersion === 18;
+  if (raw.schemaVersion === 15) {
     if ((next.learningChecklists || []).length)
       throw new Error("구형 데이터의 학습 확인 기록을 먼저 검토해 주세요.");
     next.learningChecklists = [];
@@ -49,13 +50,13 @@ export function migrateAuditorWorkflow(
       },
     });
   }
-  const state = validateState(next, organizations);
+  const state = migrateAuditorProgram(next, organizations, at).state;
   return {
     state,
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 16,
+      schemaVersion: state.schemaVersion,
       revision: state.revision,
       organizationRevision: organizations.revision,
       requests: state.planningRequests.length,

@@ -8,7 +8,7 @@ export async function writeCatalogWorkbook(
   issues: CatalogIssue[] = [],
   version: 1 | 2 | 3 = 3,
 ) {
-  demand(version === 3, 422, "새 기준은 사용자 양식 v10로 내보내 주세요.");
+  demand(version === 3, 422, "새 기준은 사용자 양식 v11로 내보내 주세요.");
   return writeCatalogV3(data, issues);
 }
 export async function readCatalogWorkbook(buffer: Buffer) {
@@ -49,6 +49,7 @@ export async function readCatalogWorkbook(buffer: Buffer) {
       "eks-catalog-v8",
       "eks-catalog-v9",
       "eks-catalog-v10",
+      "eks-catalog-v11",
     ].includes(book.subject)
   )
     return readCatalogV3(book, buffer);
@@ -58,7 +59,7 @@ export async function readCatalogWorkbook(buffer: Buffer) {
     table: i.table === "subjective" ? "practical" : i.table,
   }));
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v10",
+    format: "eks-catalog-v11",
     lv1OrganizationId: legacy.workbook.lv1OrganizationId,
     sheets: [],
   };

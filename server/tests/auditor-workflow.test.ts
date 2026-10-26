@@ -1,3 +1,5 @@
+import { executeWorkflow } from "../src/workflow.ts";
+import { userView } from "../src/organizations.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -93,20 +95,10 @@ async function setupAuditor(t: TestContext) {
     .snapshot()
     .qualifications.find((q) => q.entityId === "auditor-check")!;
   assert(q);
-  await f.call(
-    "admin-1",
-    "/organization-policies/org-photo/qualification-pool",
-    {
-      revision: f.store.organizations.snapshot().revision,
-      qualificationIds: [q.id],
-    },
-    200,
-    "PUT",
-  );
-  const r = await f.call("admin-1", "/planning-requests", {
+  const r = await legacyCommand(f, "admin-1", "planning.request", "", {
     qualificationType: "auditor",
     learnerIds: ["learner-2"],
-    message: "학습 확인",
+    message: "이전 계획 보존 시험",
   });
   const requestId = r.ids[0],
     request = f.store
@@ -114,40 +106,61 @@ async function setupAuditor(t: TestContext) {
       .planningRequests.find((r) => r.id === requestId)!;
   return { ...f, q, requestId, request };
 }
+// Historical fixture construction bypasses retired authorization, not the live API.
+async function legacyCommand(
+  f: any,
+  actor: string,
+  action: string,
+  target: string,
+  body: any,
+): Promise<any> {
+  return f.store.transact(
+    actor,
+    randomUUID(),
+    randomUUID(),
+    () => {},
+    (s: any) =>
+      executeWorkflow(
+        s,
+        userView(
+          s.users.find((u: any) => u.id === actor),
+          f.store.organizations.snapshot(),
+        ),
+        action,
+        target,
+        body,
+        f.store.organizations.snapshot(),
+      ),
+  );
+}
 async function startPlan(f: Awaited<ReturnType<typeof setupAuditor>>) {
-  const { id } = await f.call("learner-2", "/plans", {
+  const { id } = await legacyCommand(f, "learner-2", "plan.create", "", {
     requestId: f.requestId,
     requestRevision: f.request.revision,
     qualificationId: f.q.id,
   });
   let p = f.store.snapshot().plans.find((p) => p.id === id)!;
-  assert(p.schedules.every((s) => s.assessmentOn === ""));
-  await f.call(
-    "learner-2",
-    `/plans/${id}`,
-    {
-      revision: p.revision,
-      targetOn: "2028-12-01",
-      schedules: p.schedules.map((s) => ({
-        ...s,
-        learningStart: "2027-01-01",
-        learningEnd: "2027-01-02",
-        assessmentOn: "",
-        goal: "",
-      })),
-    },
-    200,
-    "PUT",
-  );
+  await legacyCommand(f, "learner-2", "plan.save", id, {
+    revision: p.revision,
+    targetOn: "2028-12-01",
+    schedules: p.schedules.map((s) => ({
+      ...s,
+      learningStart: "2027-01-01",
+      learningEnd: "2027-01-02",
+      assessmentOn: "",
+      goal: "",
+    })),
+  });
   p = f.store.snapshot().plans.find((p) => p.id === id)!;
-  const a = await f.call("learner-2", `/plans/${id}/complete`, {
+  const a = await legacyCommand(f, "learner-2", "plan.complete", id, {
     revision: p.revision,
   });
   return f.store
     .snapshot()
     .enrollments.filter((e) => e.assignmentId === a.assignmentId);
 }
-test("평가자 전용 계정의 Auditor 계획·항목 확인·자동 수료 발급과 잠금", async (t) => {
+
+test("이전 Auditor 계획 보존·항목 확인·자동 수료 발급과 잠금", async (t) => {
   const f = await setupAuditor(t),
     es = await startPlan(f);
   for (const e of es) {
@@ -241,7 +254,15 @@ test("평가자 전용 계정의 Auditor 계획·항목 확인·자동 수료 �
     { certificationRevision: cert.revision },
     409,
   );
-  assert.equal(renewal.code, "QUALIFICATION_PROCESS_UNAVAILABLE");
+  assert.equal(renewal.code, "RENEWAL_UNAVAILABLE");
+  const legacyHistory = await f.call(
+    "learner-2",
+    `/certifications/${cert.id}/history`,
+    undefined,
+    200,
+    "GET",
+  );
+  assert.equal(legacyHistory.canRenew, false);
   await f.call(
     "learner-2",
     `/enrollments/${es[0]!.id}/attempts`,
@@ -251,7 +272,7 @@ test("평가자 전용 계정의 Auditor 계획·항목 확인·자동 수료 �
   assert.equal(f.store.snapshot().renewals.length, 0);
   validateState(s, f.store.organizations.snapshot());
 });
-test("평가자 역할 해제 후 기존 요청은 계속되고 신규 Auditor 요청·교차 유형은 차단", async (t) => {
+test("역할 해제 후 기존 Auditor 배정은 계속되고 새 계획 쓰기는 종료", async (t) => {
   const f = await setupAuditor(t);
   const user = f.store.snapshot().users.find((u) => u.id === "learner-2")!;
   await f.call(
@@ -270,7 +291,7 @@ test("평가자 역할 해제 후 기존 요청은 계속되고 신규 Auditor �
     "admin-1",
     "/planning-requests",
     { qualificationType: "auditor", learnerIds: [user.id], message: "" },
-    422,
+    410,
   );
   await f.call(
     user.id,
@@ -280,7 +301,7 @@ test("평가자 역할 해제 후 기존 요청은 계속되고 신규 Auditor �
       requestRevision: f.request.revision,
       qualificationId: "demo-qualification",
     },
-    409,
+    410,
   );
   const es = await startPlan(f);
   const e = es[0]!,
@@ -475,8 +496,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 16);
-  assert.equal(preview.state.revision, raw.revision + 1);
+  assert.equal(preview.state.schemaVersion, 18);
+  assert.equal(preview.state.revision, raw.revision + 3);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {
@@ -502,7 +523,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
   );
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 1, stateHash: hash(after) },
+    { ...expected, revision: raw.revision + 3, stateHash: hash(after) },
     migrateAuditorWorkflow,
     "auditor-workflow",
   );
@@ -513,15 +534,19 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     fresh.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 6);
+  assert.equal(master.formatVersion, 8);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const legacy: any = structuredClone(master);
   legacy.formatVersion = 5;
+  legacy.organizationSchemaVersion = 2;
+  legacy.payload.organizations.qualificationPools = [];
+  legacy.counts.poolEntries = 0;
   legacy.stateSchemaVersion = 15;
+  legacy.sha256 = contentHash(legacy.payload);
   assert.deepEqual(readMaster(legacy).payload, master.payload);
   const g = await setupAuditor(t),
     workbook = exportCatalog(g.store.snapshot(), "org-photo", [g.q.id]);
-  assert.equal(workbook.format, "eks-catalog-v10");
+  assert.equal(workbook.format, "eks-catalog-v11");
   assert.deepEqual(
     (await readCatalogWorkbook(await writeCatalogWorkbook(workbook))).workbook,
     workbook,

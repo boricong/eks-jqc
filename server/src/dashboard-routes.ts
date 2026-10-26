@@ -52,7 +52,10 @@ const querySchema = z
         "none",
       ])
       .optional(),
-    qualificationScope: z.enum(["all", "applied", "records"]).optional(),
+    qualificationScope: z.preprocess(
+      (v) => (v === "applied" ? "registered" : v),
+      z.enum(["all", "registered", "records"]).optional(),
+    ),
     expiryBucket: z
       .enum([
         "0_30",

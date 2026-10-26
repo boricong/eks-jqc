@@ -219,7 +219,7 @@ test("Photo 15자격·75과정·450항목 XLSX 왕복은 값·순서·정답·�
   assert.deepEqual(s, before);
   assert.ok(performance.now() - start < 5000);
 });
-test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고 자격별 수정은 독립적", () => {
+test("미참조 자격의 과정·문항 개정은 현재 버전에 저장하고 다른 자격과 사용 중인 인증Set은 보존한다", () => {
   const s = photo(),
     before = structuredClone(s),
     data = workbook(s);
@@ -233,11 +233,7 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
   q.tables.objective.splice(0, 1);
   q.renewalLeadMonths = 4;
   const policy = structuredClone(org);
-  policy.qualificationPools = data.sheets.map((sheet) => ({
-    lv1OrganizationId: "org-photo",
-    entityId: s.qualifications.find((q) => q.id === sheet.sourceId)!.entityId,
-    qualificationId: sheet.sourceId!,
-  }));
+
   const result = saveCatalogBatch(
     s,
     data,
@@ -251,14 +247,15 @@ test("완전 개정안의 과정·문항 제외는 새 버전에만 적용하고
   const revised = s.qualifications.find(
     (v) => v.id === result.qualificationIds[0],
   )!;
-  assert.equal(revised.version, 2);
+  assert.equal(revised.version, 1);
   assert.equal(revised.courseIds.length, 4);
   assert.equal("status" in revised, false);
   assert.deepEqual(
-    s.qualifications.filter((v) =>
-      before.qualifications.some((q) => q.id === v.id),
+    s.qualifications.filter(
+      (v) =>
+        before.qualifications.some((q) => q.id === v.id) && v.id !== revised.id,
     ),
-    before.qualifications,
+    before.qualifications.filter((q) => q.id !== revised.id),
   );
   assert.deepEqual(
     s.courses.filter((v) => before.courses.some((c) => c.id === v.id)),

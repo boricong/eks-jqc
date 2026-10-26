@@ -76,8 +76,11 @@ test('유형별 목록·생성 취소·유형 변경 저장과 주소/검색/상
   await page.getByLabel('인증Set 설정 검색').fill('심사');
   await page.getByRole('link', { name: '팀 자격 설정', exact: true }).click();
   await expect(page).toHaveURL(/qualifications.*type=auditor/);
-  await expect(page.getByRole('button', { name: '팀 적용', exact: true })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '팀 적용', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '팀 적용', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: '일반·메인 자격과 지정 안내 관리', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: '팀 적용', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
   await expect(page).toHaveURL(/courses.*type=auditor/);
   await expect(page.getByLabel('인증Set 설정 검색')).toHaveValue('심사');
@@ -169,22 +172,29 @@ test('팀 기준의 동일 유형 인증Set만 선택·조회하고 Auditor 작�
     JSON.stringify(measurements, null, 2),
   );
 });
-test('등록 모달은 선택 유형만 보여주고 빈 유형은 기본자격 생성 경로·계정 전환을 처리한다', async ({
+test('Auditor는 전용 운영에서 팀 자격을 만들고 Auditee 등록 모달·계정 전환은 유지한다', async ({
   page,
   backend,
 }) => {
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/admin/qualifications?lv1OrganizationId=org-photo&type=auditor');
-  await page.getByRole('button', { name: 'Auditor 자격 등록', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Auditor 자격 등록', exact: true });
-  await expect(modal.getByRole('checkbox')).toHaveCount(0);
-  await expect(modal.getByRole('combobox')).toHaveCount(0);
-  await expect(modal.getByRole('link', { name: '기본자격 관리', exact: true })).toHaveAttribute(
-    'href',
-    '/system/qualification-templates',
-  );
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Auditor 자격 등록', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: '일반·메인 자격과 지정 안내 관리', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('link', { name: 'Auditor 운영', exact: true }).click();
+  await page.getByLabel('일반 Auditor 자격명', { exact: true }).fill('팀 직접 생성 일반 Auditor');
+  await page.getByRole('button', { name: '일반 Auditor 자격 생성', exact: true }).click();
+  await expect(page.getByText('현재 기준 버전 · v1', { exact: true })).toBeVisible();
+  expect(
+    backend.store
+      .snapshot()
+      .qualificationTemplates.some(
+        (t) => t.scope === 'team' && t.title === '팀 직접 생성 일반 Auditor',
+      ),
+  ).toBe(true);
+  await page.goto('/admin/qualifications?lv1OrganizationId=org-photo&type=auditor');
   await page.getByRole('tab', { name: 'Auditee(피심사자)', exact: true }).click();
   await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('checkbox').first()).toBeVisible();

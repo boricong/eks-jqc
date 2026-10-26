@@ -26,6 +26,7 @@ import { demand, DomainError } from "./errors.ts";
 export { demand, DomainError } from "./errors.ts";
 import { validateState } from "./integrity.ts";
 import { reconcileNotifications } from "./notifications.ts";
+import { reconcilePendingAuditor } from "./domain.ts";
 
 export class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
@@ -399,6 +400,131 @@ export class JsonStore extends FileStore<State> {
   get replacementMarker() {
     return `${this.file}.replacement.json`;
   }
+  get transactionMarker() {
+    return `${this.file}.transaction.json`;
+  }
+  /** A durable undo record protects the pair until both files have been committed. */
+  async transactPair<R>(
+    actorId: string,
+    key: string,
+    fingerprint: string,
+    authorize: (state: State) => void,
+    update: (state: State, organizations: OrganizationDocument) => R,
+    options: { action?: string; lv1OrganizationId?: string } = {},
+  ): Promise<R> {
+    return this.enqueue(async () => {
+      demand(!this.closed, 503, "저장소가 닫혔습니다.");
+      authorize(this.state);
+      const previous = this.state.requests.find(
+        (r) => r.actorId === actorId && r.key === key,
+      );
+      if (previous) {
+        demand(
+          previous.fingerprint === fingerprint,
+          409,
+          "같은 요청 식별자로 다른 내용을 보냈습니다.",
+          "IDEMPOTENCY_CONFLICT",
+        );
+        return structuredClone(previous.response) as R;
+      }
+      const before = {
+        schemaVersion: 1,
+        state: this.snapshot(),
+        organizations: this.organizations.snapshot(),
+      };
+      const next = structuredClone(before);
+      const response = update(next.state, next.organizations);
+      next.state.revision++;
+      next.organizations.revision++;
+      next.state.requests.push({
+        actorId,
+        key,
+        fingerprint,
+        response: JSON.parse(JSON.stringify(response)),
+        date: new Date().toISOString(),
+        ...options,
+      });
+      validateState(next.state, validateOrganizations(next.organizations));
+      // Detect external changes before replacing either file.
+      demand(
+        contentHash(JSON.parse(await readFile(this.file, "utf8"))) ===
+          contentHash(before.state) &&
+          contentHash(
+            JSON.parse(await readFile(this.organizations.file, "utf8")),
+          ) === contentHash(before.organizations),
+        409,
+        "파일이 변경되었습니다. 다시 확인해 주세요.",
+        "REVISION_CONFLICT",
+      );
+      await mkdir(this.backupDir, { recursive: true });
+      await mkdir(this.organizations.backupDir, { recursive: true });
+      const suffix = randomUUID();
+      await this.writeAtomic(
+        path.join(this.backupDir, `before-qualification-delete-${suffix}.json`),
+        before.state,
+      );
+      await this.writeAtomic(
+        path.join(
+          this.organizations.backupDir,
+          `before-qualification-delete-${suffix}.json`,
+        ),
+        before.organizations,
+      );
+      try {
+        await this.writeAtomic(this.transactionMarker, before);
+        await this.organizations.beforeReplace?.();
+        await this.writeAtomic(this.organizations.file, next.organizations);
+        await this.beforeReplace?.();
+        await this.writeAtomic(this.file, next.state);
+        await rm(this.transactionMarker);
+      } catch (error) {
+        try {
+          await this.writeAtomic(this.organizations.file, before.organizations);
+          await this.writeAtomic(this.file, before.state);
+          await rm(this.transactionMarker, { force: true });
+        } catch {
+          this.block();
+          this.organizations.block();
+          throw new DomainError(
+            503,
+            "삭제 저장이 중단되었습니다. 서버 재시작 시 원본 쌍을 복구합니다.",
+            "TRANSACTION_RECOVERY_REQUIRED",
+          );
+        }
+        throw error;
+      }
+      this.state = next.state;
+      this.organizations.publishSnapshot(next.organizations);
+      return structuredClone(response);
+    });
+  }
+  private async recoverTransaction() {
+    try {
+      await readFile(this.transactionMarker);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw e;
+    }
+    await this.withMaintenanceLock(() =>
+      this.organizations.withMaintenanceLock(async () => {
+        const before = JSON.parse(
+          await readFile(this.transactionMarker, "utf8"),
+        );
+        demand(
+          before.schemaVersion === 1,
+          422,
+          "삭제 복구 표식 형식이 잘못되었습니다.",
+        );
+        validateState(
+          before.state,
+          validateOrganizations(before.organizations),
+        );
+        await this.writeAtomic(this.organizations.file, before.organizations);
+        await this.writeAtomic(this.file, before.state);
+        await rm(this.transactionMarker);
+      }),
+    );
+  }
   consistent<R>(
     read: (state: State, organizations: OrganizationDocument) => R,
   ): Promise<R> {
@@ -682,7 +808,12 @@ export class JsonStore extends FileStore<State> {
     return this.enqueue(async () => {
       demand(!this.closed, 503, "저장소가 닫혔습니다.");
       const next = structuredClone(this.state);
-      if (!reconcileNotifications(next, at)) return;
+      const awarded = reconcilePendingAuditor(
+        next,
+        this.organizations.snapshot(),
+        at,
+      );
+      if (!reconcileNotifications(next, at) && !awarded) return;
       next.revision++;
       const checked = this.validate(next);
       await mkdir(this.backupDir, { recursive: true });
@@ -727,6 +858,7 @@ export class JsonStore extends FileStore<State> {
     );
   }
   override async load() {
+    await this.recoverTransaction();
     try {
       await readFile(this.replacementMarker);
       throw new Error(
@@ -820,7 +952,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       demand(
-        raw.schemaVersion === 16,
+        raw.schemaVersion === 18,
         422,
         "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
       );

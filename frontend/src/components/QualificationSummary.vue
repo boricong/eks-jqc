@@ -66,7 +66,7 @@ const validity = computed(() => {
             <strong>{{ passed }}</strong> / {{ assessments }}
           </dd>
         </div>
-        <div>
+        <div v-if="qualification.qualificationType !== 'auditor'">
           <dt>목표 인증일</dt>
           <dd>
             <time v-if="targetOn" :datetime="targetOn">{{ targetOn }}</time
@@ -74,7 +74,10 @@ const validity = computed(() => {
           </dd>
         </div>
       </PropertyList>
-      <RouterLink v-if="assignment.planId" :to="`/plans/${assignment.planId}`" class="text-link"
+      <RouterLink
+        v-if="assignment.planId && qualification.qualificationType !== 'auditor'"
+        :to="`/plans/${assignment.planId}`"
+        class="text-link"
         >인증 계획 보기</RouterLink
       >
     </div>

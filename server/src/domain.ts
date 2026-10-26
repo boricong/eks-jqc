@@ -1,4 +1,6 @@
+import { currentTeamQualifications } from "@eks/contracts";
 import { canContinueType, canReadPersonal } from "./personal-access.ts";
+import { activeAuditorCertification } from "./auditor-program.ts";
 import { courseTypeEditing } from "./course-types.ts";
 import { planningView } from "./planning.ts";
 import {
@@ -204,10 +206,10 @@ export function authorize(
       a.learnerId === u.id &&
         a.lv1OrganizationId === u.lv1OrganizationId &&
         c.qualificationType === "auditor" &&
-        r?.qualificationType === "auditor" &&
-        r.learnerId === u.id,
+        (!!a.auditor ||
+          (r?.qualificationType === "auditor" && r.learnerId === u.id)),
       403,
-      "본인의 Auditor 계획으로 배정된 학습항목만 확인할 수 있습니다.",
+      "본인에게 배정된 Auditor 학습항목만 확인할 수 있습니다.",
     );
     return;
   }
@@ -285,6 +287,35 @@ export function authorize(
     );
   }
 }
+export function reconcilePendingAuditor(
+  s: State,
+  organizations: OrganizationDocument,
+  at: string,
+) {
+  const before = s.certifications.length;
+  for (const a of s.assignments.filter(
+    (a) =>
+      a.auditor &&
+      !a.excludedReason &&
+      !a.acquisitionClosedAt &&
+      !s.certifications.some((c) => c.assignmentId === a.id),
+  )) {
+    const u = s.users.find((u) => u.id === a.learnerId);
+    if (
+      !u ||
+      u.certificationEligibility === "hold" ||
+      !userView(u, organizations).organizationActive
+    )
+      continue;
+    const es = s.enrollments.filter((e) => e.assignmentId === a.id);
+    if (
+      es.length &&
+      es.every((e) => s.completions.some((c) => c.enrollmentId === e.id))
+    )
+      reconcile(s, es[0]!.id, organizations, at);
+  }
+  return before !== s.certifications.length;
+}
 function reconcile(
   s: State,
   enrollmentId: string,
@@ -347,11 +378,35 @@ function reconcile(
     }));
   if (
     all.length &&
+    (!a.auditor ||
+      (learner.certificationEligibility !== "hold" &&
+        (a.auditor.level !== "main" ||
+          a.auditor.kind === "reacquisition" ||
+          !!activeAuditorCertification(s, a.learnerId, "general", at)))) &&
     completed.every((ev) => ev.completionId) &&
     !s.certifications.some((cert) => cert.assignmentId === a.id)
   ) {
     const id = uid();
+    if (a.auditor) delete a.auditor.pendingGeneralCertification;
     s.certifications.push({
+      ...(a.auditor
+        ? {
+            auditor: {
+              level: a.auditor.level,
+              kind: a.auditor.kind,
+              ...(a.auditor.level === "main" && a.auditor.kind === "initial"
+                ? {
+                    prerequisiteCertificationId: activeAuditorCertification(
+                      s,
+                      a.learnerId,
+                      "general",
+                      at,
+                    )!.id,
+                  }
+                : {}),
+            },
+          }
+        : {}),
       id,
       assignmentId: a.id,
       learnerId: a.learnerId,
@@ -381,7 +436,13 @@ function reconcile(
       },
       at,
     );
-  } else if (newCompletion)
+  } else if (newCompletion) {
+    if (
+      a.auditor?.level === "main" &&
+      a.auditor.kind === "initial" &&
+      completed.every((ev) => ev.completionId)
+    )
+      a.auditor.pendingGeneralCertification = true;
     notify(
       s,
       {
@@ -396,6 +457,7 @@ function reconcile(
       },
       at,
     );
+  }
   return !!newCompletion;
 }
 function validateDraft(t: AssessmentAttempt, s: State, body: unknown) {
@@ -505,6 +567,7 @@ export function execute(
       });
     checklist.revision++;
     reconcile(s, e.id, organizations, at);
+    reconcilePendingAuditor(s, organizations, at);
     audit(s, u, action, e.id, "본인 학습 완료 확인", a.id, {
       before,
       after: checklist,
@@ -1072,7 +1135,7 @@ export function workspace(
     for (const q of s.qualifications)
       if (
         requiredView?.items.some((i) => i.qualificationId === q.id) ||
-        organizations.qualificationPools.some(
+        currentTeamQualifications(s).some(
           (p) =>
             p.lv1OrganizationId === u.lv1OrganizationId &&
             p.qualificationId === q.id,
@@ -1103,7 +1166,7 @@ export function workspace(
           (admin || x.id === u.id),
       ).length,
     },
-    qualificationPool: organizations.qualificationPools.filter(
+    currentQualifications: currentTeamQualifications(s).filter(
       (p) => p.lv1OrganizationId === lv1,
     ),
     requiredQualifications: requiredView,

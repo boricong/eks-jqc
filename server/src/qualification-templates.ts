@@ -97,7 +97,7 @@ export function saveTemplate(
       qualificationType: QualificationTypeSchema.optional(),
       title: z.string().trim().min(1).max(300),
       englishName: z.string().trim().max(300),
-      description: z.string().trim().max(20000),
+      description: z.string().trim().max(20000).default(""),
     })
     .strict()
     .parse(body);
@@ -105,6 +105,12 @@ export function saveTemplate(
     ? s.qualificationTemplates.find((t) => t.id === target)
     : undefined;
   demand(!target || old, 404, "기본자격을 찾을 수 없습니다.");
+  demand(
+    old?.scope !== "team",
+    409,
+    "팀 소유 자격은 Auditor 운영에서 수정해 주세요.",
+    "TEAM_TEMPLATE_MANAGED",
+  );
   demand(
     !old || old.revision === input.revision,
     409,

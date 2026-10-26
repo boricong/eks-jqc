@@ -24,7 +24,6 @@ import CollapsibleSection from '../components/CollapsibleSection.vue';
 import CoursePreviewDialog from '../components/CoursePreviewDialog.vue';
 import '../team-qualification.css';
 import { courseIssues, type CourseIssue } from '../course-editor';
-import TeamQualificationPool from '../components/TeamQualificationPool.vue';
 import TemplateImport from '../components/TemplateImport.vue';
 import ListControls from '../components/ListControls.vue';
 import { useListView } from '../composables/useListView';
@@ -820,10 +819,10 @@ onBeforeRouteUpdate(canLeave);
                 <dt>공통 정보 수정 번호</dt>
                 <dd>{{ qualificationDraft.templateRevision }}</dd>
               </div>
-              <div class="team-qualification-description">
+              <div v-if="qualificationDraft.description" class="team-qualification-description">
                 <dt>공통 설명</dt>
                 <dd>
-                  {{ qualificationDraft.description || '시스템 관리자의 설명 보완이 필요합니다.' }}
+                  {{ qualificationDraft.description }}
                 </dd>
               </div>
             </dl>
@@ -920,7 +919,7 @@ onBeforeRouteUpdate(canLeave);
           <span class="muted">{{
             section === 'qualifications'
               ? '변경 내용을 확인하고 저장 방식을 선택합니다.'
-              : '전체 기준을 저장합니다. 팀 적용 버전은 유지됩니다.'
+              : '전체 기준을 저장합니다. 최신 저장 버전을 신규 업무에 사용합니다.'
           }}</span
           ><button
             ref="saveTrigger"
@@ -996,7 +995,7 @@ onBeforeRouteUpdate(canLeave);
                   {{
                     savePreview.versionPolicy.effectiveMode === 'current'
                       ? '해당 버전의 팀 설정을 수정합니다. 이미 완료된 계획과 기존 발급 기간은 유지되며, 이후 이 버전으로 완료하는 계획에는 수정한 설정이 적용됩니다.'
-                      : '기존 버전과 팀 적용 선택은 유지됩니다. 새 버전을 사용하려면 팀 적용을 별도로 변경해 주세요. 완료된 계획의 인증Set과 취득 기준은 유지됩니다.'
+                      : '새 버전은 신규 계획·학습·갱신에 즉시 사용됩니다. 완료된 계획의 인증Set과 취득 기준은 유지됩니다.'
                   }}
                 </p>
               </template>
@@ -1012,7 +1011,9 @@ onBeforeRouteUpdate(canLeave);
                     : '현재 버전을 수정합니다.'
               }}
             </p>
-            <p v-if="!savePreview.versionPolicy">기존 진행과 팀 적용 버전은 변경하지 않습니다.</p>
+            <p v-if="!savePreview.versionPolicy">
+              기존 진행은 보존하며 최신 저장 버전을 신규 업무에 사용합니다.
+            </p>
             <details v-if="savePreview.changes?.length" class="criterion-changes">
               <summary>변경 전후 확인 · {{ savePreview.changes.length }}개 항목</summary>
               <section v-for="change in savePreview.changes" :key="change.label">
@@ -1079,9 +1080,6 @@ onBeforeRouteUpdate(canLeave);
         <PageHeading class="page-heading">
           <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
           <TemplateImport
-            v-if="section === 'qualifications'"
-            :qualification-type="selectedType"
-          /><TeamQualificationPool
             v-if="section === 'qualifications'"
             :qualification-type="selectedType"
           />
@@ -1329,7 +1327,7 @@ onBeforeRouteUpdate(canLeave);
               <tr>
                 <th>자격명</th>
                 <th>버전</th>
-                <th>팀 적용</th>
+                <th>현재 팀 기준</th>
                 <th>상태</th>
                 <th><span class="sr-only">상세</span></th>
               </tr>
@@ -1371,9 +1369,9 @@ onBeforeRouteUpdate(canLeave);
                 <td>v{{ q.version }}</td>
                 <td>
                   {{
-                    store.data.qualificationPool.some((p) => p.qualificationId === q.id)
-                      ? '적용 중'
-                      : '미적용'
+                    store.data.currentQualifications.some((p) => p.qualificationId === q.id)
+                      ? '현재 기준'
+                      : '과거 버전'
                   }}
                 </td>
                 <td>

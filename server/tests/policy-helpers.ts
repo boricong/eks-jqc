@@ -33,14 +33,6 @@ export async function configureTestPolicies(
     "test-policy",
     () => {},
     (doc) => {
-      doc.qualificationPools = [
-        ...doc.qualificationPools.filter((p) => p.lv1OrganizationId !== root),
-        ...versions.map((q) => ({
-          lv1OrganizationId: root,
-          entityId: q.entityId,
-          qualificationId: q.id,
-        })),
-      ];
       for (const e of organizationEntries(doc).filter(
         (e) =>
           e.lv1OrganizationId === root &&

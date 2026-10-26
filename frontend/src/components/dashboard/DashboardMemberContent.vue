@@ -55,7 +55,9 @@ const history = computed(
           <span class="dashboard-status" :class="q.efficacy.toLowerCase()">{{
             efficacyLabels[q.efficacy]
           }}</span>
-          <span>{{ q.applied ? `팀 적용 v${q.appliedVersion}` : '현재 미적용 · 기록 보존' }}</span>
+          <span>{{
+            q.registered ? `현재 팀 기준 v${q.currentVersion}` : '과거 기록 · 기록 보존'
+          }}</span>
           <span v-if="q.progress !== 'none'">{{ progressLabels[q.progress] }}</span>
           <span v-if="q.renewalState !== 'not_applicable'">{{
             renewalLabels[q.renewalState]

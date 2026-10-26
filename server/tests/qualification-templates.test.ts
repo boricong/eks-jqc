@@ -160,7 +160,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
       revision: store.organizations.snapshot().revision,
       qualificationIds: [q.id],
     },
-    422,
+    410,
     "PUT",
   );
   const configured = await call(
@@ -182,7 +182,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
       revision: store.organizations.snapshot().revision,
       qualificationIds: [q.id],
     },
-    200,
+    410,
     "PUT",
   );
   await call(
@@ -280,7 +280,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     "admin-1",
     "/organization-policies/org-photo/qualification-pool",
     { revision: store.organizations.snapshot().revision, qualificationIds: [] },
-    409,
+    410,
     "PUT",
   );
 });
@@ -295,7 +295,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 16);
+  assert.equal(next.state.schemaVersion, 18);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -558,12 +558,15 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
   assert.equal(await readFile(result.stateBackup, "utf8"), original);
   const migrated = await readFile(file, "utf8");
   await store.migratePolicies(
-    { ...expected, revision: raw.revision + 5, stateHash: hash(migrated) },
+    { ...expected, revision: raw.revision + 7, stateHash: hash(migrated) },
     migrateTemplates,
   );
   assert.equal(await readFile(file, "utf8"), migrated);
   const legacy: any = exportMaster(initial, org, new Date().toISOString());
   legacy.formatVersion = 2;
+  legacy.organizationSchemaVersion = 2;
+  legacy.payload.organizations.qualificationPools = [];
+  legacy.counts.poolEntries = 0;
   legacy.stateSchemaVersion = 11;
   delete legacy.payload.qualificationTemplates;
   delete legacy.counts.qualificationTemplates;

@@ -15,12 +15,19 @@ export function canContinueType(
   return (
     hasQualificationRole(u.roles, type) ||
     (type === "auditor" &&
-      s.planningRequests.some(
-        (r) =>
-          r.learnerId === u.id &&
-          r.lv1OrganizationId === u.lv1OrganizationId &&
-          r.qualificationType === "auditor",
-      ))
+      (s.assignments.some(
+        (a) =>
+          a.learnerId === u.id &&
+          a.lv1OrganizationId === u.lv1OrganizationId &&
+          s.qualifications.find((q) => q.id === a.qualificationId)
+            ?.qualificationType === "auditor",
+      ) ||
+        s.planningRequests.some(
+          (r) =>
+            r.learnerId === u.id &&
+            r.lv1OrganizationId === u.lv1OrganizationId &&
+            r.qualificationType === "auditor",
+        )))
   );
 }
 export function canReadPersonal(s: State, u: UserView) {

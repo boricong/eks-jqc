@@ -53,7 +53,7 @@ export const useDemo = defineStore('workspace', () => {
     users: [],
     courses: [],
     qualifications: [],
-    qualificationPool: [],
+    currentQualifications: [],
     assignments: [],
     notices: [],
     homeNotices: [],
@@ -344,7 +344,7 @@ export const useDemo = defineStore('workspace', () => {
     const result = await command(`/${section}/${item.id}`, { ...item, ...review }, 'PUT');
     notify(
       result.newVersion
-        ? `기존 기록을 보존하고 v${result.version} 버전을 저장했습니다. 팀 적용 버전은 유지됩니다.`
+        ? `기존 기록을 보존하고 v${result.version} 버전을 저장했습니다. 최신 저장 버전을 신규 업무에 사용합니다.`
         : '기준을 저장했습니다.',
     );
     return result;

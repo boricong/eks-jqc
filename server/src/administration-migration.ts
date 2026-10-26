@@ -1,4 +1,4 @@
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 import { migrateLifecycle } from "./lifecycle-migration.ts";
 
 export function migrateAdministration(
@@ -7,7 +7,9 @@ export function migrateAdministration(
 ) {
   const raw = input as any,
     organizations = validateOrganizations(organizationInput);
-  if (![7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(raw?.schemaVersion))
+  if (
+    ![7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion)
+  )
     throw new Error(
       "업무 스키마 7과 조직 스키마 2가 필요합니다. 이전 버전은 먼저 조직 정책 이관을 실행하세요.",
     );
@@ -34,7 +36,7 @@ export function migrateAdministration(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 16,
+      alreadyApplied: raw.schemaVersion === 18,
       revision: state.revision,
       organizationRevision: organizations.revision,
       notices: state.notices.length,

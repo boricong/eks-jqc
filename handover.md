@@ -1,6 +1,8 @@
 # EKS 직무자격인증 개발 인수인계
 
-최종 갱신: 2026-10-25 · 날짜 기준: Asia/Seoul
+최종 갱신: 2026-10-26 · 날짜 기준: Asia/Seoul
+
+2026-10-26 Windows 로컬 실행: `main`을 `8b97fa2`까지 pull하고 의존성을 잠금 파일 기준으로 설치했다. 이 PC의 업무11 revision222·조직2 revision5를 세 파일 사전 백업과 원본 필드 보존 검증 후 업무16 revision227·조직2 revision5로 명시 이관했다. 기존 자격18개 버전·인증Set78·사용자7·기존 진행과 조직 파일을 보존했다. 연결 없는 빈 자격2개는 각각 임시 미완성 기본자격으로 보존했으며 업무 명칭 확정은 후속 작업이다. 08:11 KST 개발 런처37180/API7664를 숨김 실행하고 앱5186 HTTP200·API5187 health ok/revision227을 확인했다. 아래 다른 PC의 revision79 등 과거 실행 상태와 구분한다. 상세 백업·연결 파일·로그·검증은 docs/HANDOVER.md의 최신 Windows 실행 기록을 따른다.
 
 2026-10-25 누적 변경65파일을28619af로 커밋해 origin/main에 푸시했다. TypeScript/Vite 재빌드·diff와 직전 전체 서버192/192·Playwright218/218을 확인했다. 종료된 프로세스의 저장소 잠금만 정식 해제하고 기존 두 JSON 경로로 Node24 개발 서버를 백그라운드 실행했다. 화면5186은200·API5187은ok/revision67이며 업무/조직/maintenance JSON 해시는 실행 전후 동일하다. 서버 세션의 계정 재선택이 필요할 수 있다. 상세 실행 로그·PID·보존 근거는 docs/HANDOVER.md를 따른다.
 
@@ -1211,6 +1213,15 @@ EKS_DATA_FILE="$PWD/data/runtime/local-20261022/state.json" EKS_ORGANIZATIONS_FI
 - 반영/보존: 실행 Vite5186의 이미지 파일이 프로젝트 자산과 같은 SHA256이고 분리 CSS의 이미지·마스크 반영을 확인했다. API health200 revision67. 시작/최종 업무·조직·maintenance JSON 해시 동일, API 재기동·실제 업무 명령·이관·초기화·커밋/푸시 없음.
 - 병행 작업 경계: 완료 정리 중 별도 공통 헤더/푸터 그라데이션 작업(DESIGN.md·design-tokens.css·style.css)이 시작된 것을 확인했다. 해당 변경과 착수 기록을 보존한다. 위 검증은 이번 반도체 카드의 최종 소스 기준이며 별도 헤더/푸터 작업의 완료 검증을 대신하지 않는다.
 - 근거: `/private/tmp/eks-wafer-targeted-final.log`, `/private/tmp/eks-wafer-full.log`, `/private/tmp/eks-wafer-build-complete.log`, 캡처 `/private/tmp/eks-wafer-targeted-final/`와 `/private/tmp/eks-wafer-full/`, 착수 `/private/tmp/eks-wafer-baseline/`, 보존 `/private/tmp/eks-wafer-preservation.json`, 소스 `/private/tmp/eks-wafer-source-final.json`, 실행 확인 `/private/tmp/eks-wafer-live-style.js`·`eks-wafer-health.json`. UX와 인수인계 진입점을 갱신했다.
+
+### 2026-10-26 Windows 로컬 데이터 보존 이관과 서버 실행
+
+- 배경 및 결정: 사용자 요청으로 `git pull` 후 최신 서버를 실행했다. 기존 Windows 데이터가 업무11이므로 공식 보존 이관으로 최신 업무16과 호환시켰다. 빈 자격2개에는 각각 별도 임시 미완성 기본자격을 연결했고 기존 기준과 합치지 않았다.
+- 변경 내용: `6a216f9..8b97fa2` fast-forward20커밋, 기존 개발 서버 종료·공식 잠금 해제, `npm ci`356패키지 설치, 세 파일 사전 백업→원본 필드 보존 미리보기→revision/해시 확인을 통한 공식 이관→숨김 개발 서버 실행을 완료했다. 업무222→227·조직revision5 유지. 초기화와 새 업무 진행은 실행하지 않았다.
+- 영향 파일: 실행 JSON·maintenance, 무시된 의존성/백업/로그/검증 자료와 두 인수인계 문서. 제품 소스·잠금 파일은 변경하지 않았다.
+- 검증: 기존 모든 업무 필드·감사 원문 보존, 조직 바이트 동일, maintenance 영수증 보존을 적용 후 검사했다. 앱5186 HTTP200·API5187 ok/revision227, `npm run build` 문서 검사·서버/프런트 TypeScript·Vite 통과. 기존 Zod 주석 및500kB 번들 권고 경고는 남는다. 전체 서버/Playwright 회귀는 제품 코드 변경이 없어 재실행하지 않았다.
+- 남은 작업: 임시 미완성 기본자격2개의 업무 명칭과 내용은 관리자가 확정한다. 서버 재시작 후 계정을 다시 선택한다. 사전 백업 `data/backups/server-start-20261026-0753/`와 공식 백업·복구/로그 상세는 docs/HANDOVER.md를 따른다.
+- 관련 커밋: 현재 HEAD `8b97fa2`. 이번 실행·기록 작업에서 커밋·푸시하지 않았다.
 
 ## 4 코드 위치와 실행
 

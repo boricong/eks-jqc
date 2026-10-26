@@ -1,3 +1,4 @@
+import { currentTeamQualifications } from "@eks/contracts";
 import { registerFixtureQualification } from "./template-helpers.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -120,51 +121,59 @@ test("직접 저장은 미완성을 허용하고 참조된 기준만 새 버전�
   await f.call(`/courses/${next.id}/publish`, next, "POST", 410);
   await f.call(`/courses/${next.id}`, { ...next, status: "draft" }, "PUT", 409);
 });
-test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후 선택 버전만 보존 삭제한다", async (t) => {
+test("최신 버전 삭제는 이전 기준으로 돌아가고 마지막 삭제는 필수 지정과 함께 보존 처리한다", async (t) => {
   const f = await fixture(t),
     before = f.store.snapshot();
-  await f.call(
-    "/organization-policies/org-photo/qualification-pool",
-    {
-      revision: f.store.organizations.snapshot().revision,
-      qualificationIds: ["demo-qualification"],
+  const q = before.qualifications.find((q) => q.id === "demo-qualification")!;
+  const nextId = randomUUID();
+  await f.store.transact(
+    "operator-1",
+    randomUUID(),
+    "new-version",
+    () => {},
+    (s) => {
+      s.qualifications.push({
+        ...structuredClone(q),
+        id: nextId,
+        version: q.version + 1,
+        parentId: q.id,
+      });
+      return {};
     },
-    "PUT",
   );
-  const q = f.store
-    .snapshot()
-    .qualifications.find((q) => q.id === "demo-qualification")!;
-  const blocked = await f.call(`/qualifications/${q.id}/deletion-impact`);
-  assert.equal(blocked.canDelete, false);
+  await f.store.organizations.transact(
+    "operator-1",
+    randomUUID(),
+    "required",
+    () => {},
+    (doc) => {
+      doc.roots.find((o) => o.id === "org-photo")!.requiredQualifications = [
+        q.entityId,
+      ];
+      return {};
+    },
+  );
+  let impact = await f.call("/qualifications/" + nextId + "/deletion-impact");
+  assert.equal(impact.canDelete, true);
+  assert.equal(impact.replacement.id, q.id);
   await f.call(
-    `/qualifications/${q.id}`,
-    { ...blocked, reason: "제거" },
+    "/qualifications/" + nextId,
+    { ...impact, reason: "최신 기준 삭제" },
     "DELETE",
-    409,
-  );
-  const saved = await f.call(
-    `/qualifications/${q.id}`,
-    { ...q, renewalLeadMonths: 4 },
-    "PUT",
   );
   assert.equal(
-    f.store.organizations.snapshot().qualificationPools[0]!.qualificationId,
+    currentTeamQualifications(f.store.snapshot()).find(
+      (r) => r.entityId === q.entityId,
+    )!.qualificationId,
     q.id,
   );
-  await f.call(
-    "/organization-policies/org-photo/qualification-pool",
-    {
-      revision: f.store.organizations.snapshot().revision,
-      qualificationIds: [saved.id],
-    },
-    "PUT",
-  );
-  const impact = await f.call(`/qualifications/${q.id}/deletion-impact`);
-  assert.equal(impact.mode, "archive");
+  impact = await f.call("/qualifications/" + q.id + "/deletion-impact");
+  assert.equal(impact.replacement, null);
+  assert.equal(impact.affectedOrganizations.length, 1);
   const key = randomUUID(),
-    body = { ...impact, reason: "이전 기준 정리" };
+    body = { ...impact, reason: "마지막 기준 삭제" };
   const result = await f.call(
-    `/qualifications/${q.id}`,
+    "/qualifications/" + q.id,
     body,
     "DELETE",
     200,
@@ -173,7 +182,7 @@ test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후
   );
   assert.deepEqual(
     await f.call(
-      `/qualifications/${q.id}`,
+      "/qualifications/" + q.id,
       body,
       "DELETE",
       200,
@@ -182,23 +191,15 @@ test("팀 적용 자격 삭제 차단과 현재 버전 유지, 후보 교체 후
     ),
     result,
   );
-  const removed = f.store.snapshot().qualifications.find((x) => x.id === q.id)!;
-  assert.ok(removed.deletedAt);
-  assert.ok(
-    qualificationUseErrors(removed, before.courses).some((e) =>
-      e.includes("삭제"),
-    ),
+  assert.deepEqual(
+    f.store.organizations.snapshot().roots.find((o) => o.id === "org-photo")!
+      .requiredQualifications,
+    [],
   );
-  assert.deepEqual(f.store.snapshot().courses, before.courses);
   assert.deepEqual(f.store.snapshot().assignments, before.assignments);
-  assert.equal(
-    f.store.organizations.snapshot().qualificationPools[0]!.qualificationId,
-    saved.id,
-  );
+  assert.deepEqual(f.store.snapshot().courses, before.courses);
   assert.ok(
-    (await readdir(f.store.backupDir)).some((n) =>
-      n.startsWith("before-qualification-delete-"),
-    ),
+    f.store.snapshot().qualifications.find((x) => x.id === q.id)!.deletedAt,
   );
 });
 test("미참조 팀 등록도 계보 보존 삭제·권한·최신 참조·백업 실패와 응답 유실 재시도를 보호한다", async (t) => {
@@ -245,13 +246,6 @@ test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저�
   const s = seedState(true),
     org = seedOrganizations();
   const q = s.qualifications.find((q) => q.id === "demo-qualification")!;
-  org.qualificationPools = [
-    {
-      lv1OrganizationId: "org-photo",
-      entityId: q.entityId,
-      qualificationId: q.id,
-    },
-  ];
   const before = structuredClone(s),
     book = exportCatalog(s, "org-photo", [q.id]);
   book.sheets[0]!.validityType = "unknown";
@@ -275,7 +269,11 @@ test("조직 기준을 참조하는 일괄 수정은 새 버전, 미완성 저�
       .unchanged,
     true,
   );
-  assert.equal(org.qualificationPools[0]!.qualificationId, q.id);
+  assert.equal(
+    currentTeamQualifications(s).find((r) => r.entityId === q.entityId)!
+      .qualificationId,
+    saved.qualificationIds[0],
+  );
 });
 test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 표시를 보존하고 반복 이관은 무변경이다", () => {
   const source: any = seedState(true),
@@ -286,7 +284,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 16);
+  assert.equal(next.state.schemaVersion, 18);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -300,6 +298,9 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
   assert.equal(copied.state.qualifications[0]!.deletedAt, q.deletedAt);
   const legacy: any = exportMaster(next.state, org, "2026-10-22T00:00:00.000Z");
   legacy.formatVersion = 1;
+  legacy.organizationSchemaVersion = 2;
+  legacy.payload.organizations.qualificationPools = [];
+  legacy.counts.poolEntries = 0;
   legacy.stateSchemaVersion = 10;
   for (const x of [
     ...legacy.payload.courses,

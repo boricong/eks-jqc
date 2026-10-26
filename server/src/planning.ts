@@ -1,3 +1,4 @@
+import { currentTeamQualifications } from "@eks/contracts";
 import {
   effectiveCredentialStatus,
   qualificationUseErrors,
@@ -23,7 +24,7 @@ export function candidate(
     ...(request?.targets || []),
     ...(request?.selections || []),
   ].find((t) => t.entityId === entityId);
-  const pool = doc.qualificationPools.find(
+  const pool = currentTeamQualifications(s).find(
     (p) =>
       p.lv1OrganizationId === u.lv1OrganizationId && p.entityId === entityId,
   );
@@ -98,7 +99,10 @@ export function candidate(
       assignmentId: open.id,
     });
   else if (!pool || !q)
-    Object.assign(row, { status: "blocked", reason: "팀 적용이 필요합니다." });
+    Object.assign(row, {
+      status: "blocked",
+      reason: "현재 사용할 팀 자격이 없습니다.",
+    });
   else if (qualificationUseErrors(q, s.courses).length)
     Object.assign(row, {
       status: "blocked",
@@ -115,7 +119,7 @@ export function candidate(
       reason:
         plan.qualificationId === q.id
           ? "작성 중인 계획을 이어 쓰세요."
-          : "팀 적용 버전 변경 · 기존 초안을 보존하고 현재 버전으로 다시 작성해 주세요.",
+          : "현재 기준 버전 변경 · 기존 초안을 보존하고 현재 버전으로 다시 작성해 주세요.",
     });
   row.canStart =
     !!request &&
@@ -195,7 +199,7 @@ export function planningView(
     ),
   );
   if (request.mode === "learner_choice")
-    doc.qualificationPools
+    currentTeamQualifications(s)
       .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
       .forEach((p) => ids.add(p.entityId));
   const candidates = [...ids]
@@ -226,7 +230,7 @@ export function planningView(
   if (!request.targets)
     errors.push("이전 요청의 범위를 확인할 수 없습니다. 새 요청이 필요합니다.");
   if (!candidates.length)
-    errors.push("팀 적용 자격이 없어 자격 준비를 기다리고 있습니다.");
+    errors.push("현재 팀 자격이 없어 자격 준비를 기다리고 있습니다.");
   if (!selected.length && !noAdditional && candidates.length)
     errors.push(
       candidates.some((c) => ["available", "draft"].includes(c.status))
@@ -287,7 +291,7 @@ export function planRequestErrors(
   if (!c.selected && !(starting && r.mode === "learner_choice"))
     return ["이 요청에 포함된 자격이 아닙니다. 요청 범위를 확인해 주세요."];
   if (
-    !doc.qualificationPools.some(
+    !currentTeamQualifications(s).some(
       (v) =>
         v.lv1OrganizationId === u.lv1OrganizationId &&
         v.entityId === q.entityId &&
@@ -295,7 +299,7 @@ export function planRequestErrors(
     )
   )
     return [
-      "팀 적용 버전이 변경되었습니다. 현재 버전으로 계획을 다시 작성해 주세요.",
+      "현재 기준 버전이 변경되었습니다. 현재 버전으로 계획을 다시 작성해 주세요.",
     ];
   if (c.status === "blocked") return [c.reason];
   return qualificationUseErrors(currentQualification(s, q), s.courses);

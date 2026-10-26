@@ -28,6 +28,12 @@ export const router = createRouter({
   },
   routes: [
     { path: '/', name: 'home', component: HomeView },
+    {
+      path: '/auditor',
+      name: 'auditor',
+      component: () => import('./views/AuditorView.vue'),
+      meta: { role: 'learner' },
+    },
     { path: '/plans/:id?', name: 'plans', component: PlansView, meta: { role: 'learner' } },
     { path: '/notifications', name: 'notifications', component: NotificationsView },
     { path: '/completions/:id', name: 'completion', component: CompletionView },
@@ -74,6 +80,12 @@ export const router = createRouter({
       component: AdminLayout,
       meta: { management: true },
       children: [
+        {
+          path: 'auditor',
+          name: 'auditor-admin',
+          component: () => import('./views/AuditorAdminView.vue'),
+          meta: { management: true, managementSection: 'auditor', title: 'Auditor 운영' },
+        },
         {
           path: 'dashboard',
           name: 'dashboard',
@@ -193,6 +205,29 @@ router.beforeResolve(async (to) => {
   if (store.signedIn)
     try {
       await store.refresh();
+      if (to.name === 'plans') {
+        const plan = store.data.plans.find(
+          (p) => p.id === to.params.id && p.learnerId === store.actorId,
+        );
+        const request = store.data.planningRequests.find((r) => r.id === plan?.requestId);
+        if (
+          (plan && request?.qualificationType === 'auditor') ||
+          (!to.params.id &&
+            (to.query.type === 'auditor' ||
+              (!store.hasRole('learner') && store.personalTypes.includes('auditor'))))
+        ) {
+          const a =
+            plan &&
+            store.data.assignments.find(
+              (a) => a.planId === plan.id && a.learnerId === store.actorId,
+            );
+          return {
+            path: a ? `/qualifications/${a.id}` : '/auditor',
+            query: { type: 'auditor' },
+            replace: true,
+          };
+        }
+      }
       if (
         (to.meta.management &&
           !store.canManageSection(String(to.meta.managementSection || to.params.section))) ||

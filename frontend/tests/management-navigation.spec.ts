@@ -5,6 +5,7 @@ import { configureDashboardFixture, DASHBOARD_NOW } from '../../server/tests/das
 const menuNames = [
   '인증 현황',
   '취득 대상자 상태',
+  'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
@@ -16,7 +17,7 @@ const menuNames = [
 ];
 const groupNames = ['현황 조회', '인증 운영', '자격 기준 설정', '팀 소통'];
 
-test('네 그룹·10개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
+test('네 그룹·11개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin');
@@ -197,7 +198,21 @@ test('계획 요청·취득 진행 구역의 독립 필터와 목록 설정 유�
   await expect(requests.getByLabel('요청 현황 필터')).toHaveValue('all');
 });
 
-test('필수·팀 적용 자격이 없어도 기존 요청 대화상자에서 발송', async ({ page }) => {
+test('필수·등록 자격이 없어도 기존 요청 대화상자에서 발송', async ({ page, backend }) => {
+  await backend.store.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    'no-qualifications-fixture',
+    () => {},
+    (state) => {
+      for (const qualification of state.qualifications) {
+        qualification.deletedAt = new Date().toISOString();
+        qualification.deletedBy = 'operator-1';
+        qualification.deletionReason = '현재 등록 자격이 없는 시험';
+      }
+      return {};
+    },
+  );
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/assignments');

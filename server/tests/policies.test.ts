@@ -81,7 +81,7 @@ async function fixture(t: TestContext) {
       actor,
       `/organization-policies/${root}/qualification-pool`,
       { revision: revision(), qualificationIds: ids },
-      status,
+      status === 403 ? 403 : 410,
       "PUT",
     );
   const required = (org: string, ids: string[] | null, status = 200) =>
@@ -361,7 +361,10 @@ test("팀 목록은 게시·같은 Lv1만, 참조 중 제거 차단·revision·�
     f.store.snapshot().users.find((u) => u.id === "operator-1")!.organizationId,
     root,
   );
-  assert.equal(doc.qualificationPools.length, 1);
+  assert.equal(
+    doc.roots.find((o) => o.id === root)!.requiredQualifications?.length,
+    1,
+  );
 });
 
 test("운영자는 소속을 유지하고 선택 Lv1 정책을 관리하며 재시도 대상 변경은 차단한다", async (t) => {
@@ -648,12 +651,14 @@ test("운영 종료는 새 계획을 막고 설정과 확정 진행·복구 참�
       roles: ["learner"],
     })
     .then((u) => f.invite(u.id));
-  assert.equal(f.store.organizations.snapshot().qualificationPools.length, 1);
+  assert.ok(f.store.snapshot().qualifications.some((q) => q.id === q1));
   const wrong = f.store.snapshot();
   wrong.qualifications = wrong.qualifications.filter((q) => q.id !== q1);
   assert.throws(() => validateState(wrong, f.store.organizations.snapshot()));
   const candidate = f.store.organizations.snapshot();
-  candidate.qualificationPools[0]!.qualificationId = "missing";
+  candidate.roots.find((o) => o.id === root)!.requiredQualifications = [
+    "missing",
+  ];
   assert.throws(() => validateState(f.store.snapshot(), candidate));
 });
 
@@ -737,8 +742,8 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 16);
-  assert.equal(master.schemaVersion, 2);
+  assert.equal(migrated.schemaVersion, 18);
+  assert.equal(master.schemaVersion, 3);
   for (const key of [
     "users",
     "courses",
@@ -772,7 +777,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
     );
   assert.equal(migrated.plans[0]!.workflowVersion, "personal-certification-v2");
   assert.equal(migrated.planningRequests[0]!.source, "migration");
-  assert.equal(master.qualificationPools.length, 0);
+  assert.equal("qualificationPools" in master, false);
   assert.ok(
     organizationEntries(master).every((e) => e.requiredQualifications === null),
   );

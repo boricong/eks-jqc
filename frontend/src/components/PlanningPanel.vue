@@ -17,10 +17,7 @@ const store = useDemo(),
   detailsOpen = ref(false),
   detailId = ref('');
 const selectedType = ref<'auditee' | 'auditor'>('auditee');
-const typeItems = [
-  { id: 'auditee', label: 'Auditee · 학습자' },
-  { id: 'auditor', label: 'Auditor · 평가자' },
-];
+const typeItems = [{ id: 'auditee', label: 'Auditee · 학습자' }];
 const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
 const context = computed(() => `${store.actorId}:${store.managementLv1}:${store.fullManagement}`);
 let disposed = false;
@@ -211,14 +208,6 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 </script>
 <template>
-  <CompactTabs
-    class="certification-type-tabs"
-    :items="typeItems"
-    :model-value="selectedType"
-    panel-id="planning-type-panel"
-    label="요청 인증 유형"
-    @update:model-value="selectedType = $event === 'auditor' ? 'auditor' : 'auditee'"
-  />
   <section
     id="planning-type-panel"
     class="panel planning-panel"
@@ -476,8 +465,8 @@ onBeforeRouteUpdate(leave);
           >안내문<textarea v-model="form.message" rows="5" maxlength="2000" :disabled="busy" />
         </label>
         <p class="planning-meta">
-          학습자가 팀 적용 자격을 선택합니다. 필수 기준은 발송 시점에 고정되며, 필수 자격이 없어도
-          요청할 수 있습니다.
+          학습자가 현재 팀 기준 자격을 선택합니다. 필수 기준은 발송 시점에 고정되며, 필수 자격이
+          없어도 요청할 수 있습니다.
         </p>
       </div>
     </div>

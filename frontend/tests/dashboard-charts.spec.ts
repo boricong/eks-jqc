@@ -178,63 +178,6 @@ test('구성원 필터·기존 목록 페이지 유지와 확대 명세의 실�
   await expect(page.getByLabel('구성원 검색', { exact: true })).toHaveValue('가 직원');
 });
 
-test('많은 자격의 차트8개 미리보기·20개 확대 페이지·URL 복원', async ({ page, backend }) => {
-  backend.setClock(DASHBOARD_NOW);
-  await start(page, backend.store);
-  await backend.store.transact(
-    'operator-1',
-    crypto.randomUUID(),
-    'many-chart-qualifications',
-    () => {},
-    (s) => {
-      const q = s.qualifications.find((q) => q.id === Q)!;
-      for (let i = 0; i < 25; i++) {
-        const id = 'chart-q-' + i,
-          templateId = 'chart-template-' + i;
-        s.qualificationTemplates.push({
-          id: templateId,
-          qualificationType: 'auditee',
-          revision: 1,
-          title: '차트 검증 자격 ' + i + ' 긴 이름과 줄바꿈',
-          englishName: '',
-          description: '',
-          updatedBy: 'operator-1',
-          updatedAt: DASHBOARD_NOW,
-        });
-        s.qualifications.push({ ...structuredClone(q), id, entityId: id, templateId });
-      }
-      return {};
-    },
-  );
-  await backend.store.organizations.transact(
-    'operator-1',
-    crypto.randomUUID(),
-    'many-chart-pool',
-    () => {},
-    (doc) => {
-      for (let i = 0; i < 25; i++)
-        doc.qualificationPools.push({
-          lv1OrganizationId: 'org-photo',
-          entityId: 'chart-q-' + i,
-          qualificationId: 'chart-q-' + i,
-        });
-      return {};
-    },
-  );
-  await page.getByRole('tab', { name: '자격별', exact: true }).click();
-  const card = page.locator('[data-chart="qualification-coverage"]');
-  await expect(card).toContainText('전체 26개 중 8개');
-  await expect(card.locator('.chart-comparison > li')).toHaveCount(8);
-  await card.getByRole('button', { name: '자격별 필수 충족률 크게 보기', exact: true }).click();
-  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(20);
-  await page.getByRole('button', { name: '차트 다음 항목', exact: true }).click();
-  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(6);
-  await expect(page).toHaveURL(/chartPage=2/);
-  await page.reload();
-  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(6);
-  await page.keyboard.press('Escape');
-});
-
 test('세부 관리자 차트에는 조직비교가 없으며 직접 소속 밖의 명세를 노출하지 않는다', async ({
   page,
   backend,
@@ -309,4 +252,46 @@ test('명세 전환 중 이전 응답을 폐기하고 세부 관리자 권한 �
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.locator('.dashboard-view')).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('많은 자격의 차트8개 미리보기·20개 확대 페이지·URL 복원', async ({ page, backend }) => {
+  backend.setClock(DASHBOARD_NOW);
+  await start(page, backend.store);
+  await backend.store.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    'many-chart-qualifications',
+    () => {},
+    (s) => {
+      const q = s.qualifications.find((q) => q.id === Q)!;
+      for (let i = 0; i < 25; i++) {
+        const id = 'chart-q-' + i,
+          templateId = 'chart-template-' + i;
+        s.qualificationTemplates.push({
+          id: templateId,
+          qualificationType: 'auditee',
+          revision: 1,
+          title: '차트 검증 자격 ' + i + ' 긴 이름과 줄바꿈',
+          englishName: '',
+          description: '',
+          updatedBy: 'operator-1',
+          updatedAt: DASHBOARD_NOW,
+        });
+        s.qualifications.push({ ...structuredClone(q), id, entityId: id, templateId });
+      }
+      return {};
+    },
+  );
+  await page.getByRole('tab', { name: '자격별', exact: true }).click();
+  const card = page.locator('[data-chart="qualification-coverage"]');
+  await expect(card).toContainText('전체 26개 중 8개');
+  await expect(card.locator('.chart-comparison > li')).toHaveCount(8);
+  await card.getByRole('button', { name: '자격별 필수 충족률 크게 보기', exact: true }).click();
+  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(20);
+  await page.getByRole('button', { name: '차트 다음 항목', exact: true }).click();
+  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(6);
+  await expect(page).toHaveURL(/chartPage=2/);
+  await page.reload();
+  await expect(page.getByRole('dialog').locator('.chart-comparison > li')).toHaveCount(6);
+  await page.keyboard.press('Escape');
 });

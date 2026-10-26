@@ -1,3 +1,7 @@
+export {
+  currentTeamQualifications,
+  latestQualification,
+} from "./current-qualifications.ts";
 import {
   QualificationTemplateSchema,
   QualificationMetadataSchema,
@@ -5,6 +9,13 @@ import {
 export * from "./qualification-templates.ts";
 export * from "./documents.ts";
 import { z } from "zod";
+import {
+  AuditorProgramSchema,
+  AuditorDesignationSchema,
+  AuditorAssignmentSchema,
+  AuditorCertificationSchema,
+} from "./auditor.ts";
+export * from "./auditor.ts";
 import {
   QualificationTypeSchema,
   qualificationProcessErrors,
@@ -64,7 +75,7 @@ export const RoleSchema = z.enum([
 export type Role = z.infer<typeof RoleSchema>;
 export const roleLabels: Record<Role, string> = {
   learner: "학습자",
-  evaluator: "평가자",
+  evaluator: "Auditor",
   admin: "팀 조직 관리자",
   organization_admin: "세부 조직 관리자",
   system_operator: "시스템 운영자",
@@ -95,6 +106,7 @@ const url = z.union([
     ),
 ]);
 export const UserSchema = z.object({
+  auditorDesignation: AuditorDesignationSchema.optional(),
   id,
   certificationEligibility: z.enum(["eligible", "hold"]).optional(),
   name: z.string().min(1).max(100),
@@ -147,7 +159,7 @@ export const MaterialSchema = z.object({
   title: z.string().max(300),
   content: text,
   url,
-  description: text,
+  description: text.default(""),
 });
 export type LearningMaterial = z.infer<typeof MaterialSchema>;
 const revision = {
@@ -265,6 +277,7 @@ export const EnrollmentSchema = z.object({
   courseId: id,
 });
 export const AssignmentSchema = z.object({
+  auditor: AuditorAssignmentSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
   qualificationPolicySnapshot: QualificationPolicySnapshotSchema.optional(),
   id,
@@ -313,6 +326,7 @@ export const CompletionSchema = z.object({
 });
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
+  auditor: AuditorCertificationSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
   id,
   lifecycleStatus: LifecycleStatusSchema.optional(),
@@ -393,7 +407,8 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(16),
+  schemaVersion: z.literal(18),
+  auditorPrograms: z.array(AuditorProgramSchema).default([]),
   qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
   users: z.array(UserSchema),
@@ -474,7 +489,11 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
-  qualificationPool: import("./organizations.ts").OrganizationDocument["qualificationPools"];
+  currentQualifications: {
+    lv1OrganizationId: string;
+    entityId: string;
+    qualificationId: string;
+  }[];
   requiredQualifications:
     import("./organizations.ts").RequiredQualificationsView | null;
   requestProgress: import("./organizations.ts").RequestProgress[];
@@ -642,7 +661,6 @@ export function qualificationReadinessErrors(
 ): string[] {
   return [
     ...qualificationErrors(q, courses),
-    ...(!q.description.trim() ? ["자격 설명을 입력해 주세요."] : []),
     ...validityErrors(q.validity),
     ...courses
       .filter((c) => q.courseIds.includes(c.id))

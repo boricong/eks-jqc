@@ -45,15 +45,7 @@ export async function requestPlan(page: Page, learnerName: string) {
         .map((q: any) => [q.entityId, q] as [string, any]),
     ).values(),
   ];
-  let saved = await page.request.put(
-    `/api/organization-policies/${scope}/qualification-pool?lv1OrganizationId=${scope}`,
-    { headers, data: { revision: doc.revision, qualificationIds: versions.map((q) => q.id) } },
-  );
-  expect(saved.ok(), await saved.text()).toBeTruthy();
-  doc = await (
-    await page.request.get(`/api/organization-policies?lv1OrganizationId=${scope}`, { headers })
-  ).json();
-  saved = await page.request.put(
+  const saved = await page.request.put(
     `/api/organization-policies/${user.organizationId}?lv1OrganizationId=${scope}`,
     {
       headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },

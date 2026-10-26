@@ -280,7 +280,9 @@ const list = computed(() =>
               >재인증 시작 {{ renewalOpensOn(latestPeriod(a.certification)!) }} · 상태와 이력
               보기</span
             ></span
-          ><span v-if="a.planId && !assessments" class="qualification-target"
+          ><span
+            v-if="a.planId && !assessments && selectedType !== 'auditor'"
+            class="qualification-target"
             ><span class="small-label">목표일</span
             ><time>{{
               store.data.plans.find((p) => p.id === a.planId)?.targetOn || '미설정'
@@ -327,13 +329,13 @@ const list = computed(() =>
           "
           class="muted"
         >
-          현재 보유한 Auditor 인증이 없습니다. 관리자에게 계획 수립 요청을 확인해 주세요.
+          현재 보유한 Auditor 인증이 없습니다. Auditor 학습에서 지정된 필수학습을 시작해 주세요.
         </p>
         <RouterLink
           v-if="filter === 'active' && !search"
-          :to="selectedType === 'auditor' ? '/plans?type=auditor' : '/plans'"
+          :to="selectedType === 'auditor' ? '/auditor' : '/plans'"
           class="button primary"
-          >내 계획 확인</RouterLink
+          >{{ selectedType === 'auditor' ? 'Auditor 학습' : '내 계획 확인' }}</RouterLink
         >
       </div>
     </div>

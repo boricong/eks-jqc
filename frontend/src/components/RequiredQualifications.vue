@@ -42,7 +42,7 @@ const labels = {
         ><span class="small-label">v{{ item.version }} · {{ labels[item.status] }}</span>
         <p>{{ item.reason }}</p>
         <p v-if="item.requestedVersion && item.requestedVersion !== item.version" class="muted">
-          요청 당시 v{{ item.requestedVersion }} → 현재 팀 적용 v{{ item.version }}
+          요청 당시 v{{ item.requestedVersion }} → 현재 현재 팀 기준 v{{ item.version }}
         </p>
       </div>
       <RouterLink

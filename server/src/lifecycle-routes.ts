@@ -1,3 +1,4 @@
+import { reconcilePendingAuditor } from "./domain.ts";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -116,8 +117,8 @@ export function registerLifecycleRoutes(
               requested,
             );
           },
-          (s) =>
-            executeLifecycle(
+          (s) => {
+            const result = executeLifecycle(
               s,
               store.organizations.snapshot(),
               actor(r, s),
@@ -126,7 +127,10 @@ export function registerLifecycleRoutes(
               r.body,
               options.lv1OrganizationId!,
               clock(),
-            ),
+            );
+            reconcilePendingAuditor(s, store.organizations.snapshot(), clock());
+            return result;
+          },
           options,
         );
       },

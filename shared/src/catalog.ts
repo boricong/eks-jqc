@@ -25,6 +25,8 @@ const CatalogRowsSchema = z
   )
   .max(10000);
 export const CatalogSheetSchema = z.object({
+  ownerLv1OrganizationId: z.string().optional(),
+  auditorLevel: z.enum(["general", "main"]).optional(),
   qualificationType: QualificationTypeSchema.optional(),
   templateId: z.string().max(160).optional(),
   templateRevision: z.number().int().positive().optional(),
@@ -36,7 +38,7 @@ export const CatalogSheetSchema = z.object({
   sourceRevision: z.number().int().positive().optional(),
   title: z.string().max(300),
   englishName: z.string().max(300),
-  description: z.string().max(20000),
+  description: z.string().max(20000).default(""),
   validityType: z.enum(["unknown", "months", "unlimited"]),
   months: z.number().int().min(1).max(1200).nullable(),
   renewalLeadMonths: z.number().int().min(1).max(1200).optional(),
@@ -64,6 +66,7 @@ export const CatalogWorkbookSchema = z.object({
     "eks-catalog-v8",
     "eks-catalog-v9",
     "eks-catalog-v10",
+    "eks-catalog-v11",
   ]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),

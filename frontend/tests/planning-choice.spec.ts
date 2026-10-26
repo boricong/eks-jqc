@@ -1,23 +1,5 @@
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { completePlan } from './workflow-helpers';
-async function applyPool(backend: any) {
-  await backend.store.organizations.transact(
-    'admin-1',
-    crypto.randomUUID(),
-    crypto.randomUUID(),
-    () => {},
-    (doc: any) => {
-      doc.qualificationPools = [
-        {
-          lv1OrganizationId: 'org-photo',
-          entityId: 'demo-qualification',
-          qualificationId: 'demo-qualification',
-        },
-      ];
-      return {};
-    },
-  );
-}
 async function send(page: any) {
   await page.goto('/admin/assignments');
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
@@ -40,9 +22,11 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
   await actor(page, 'learner-2');
   await page.goto('/plans');
   const region = page.getByRole('region', { name: '이번 요청의 계획 현황' });
-  await expect(region).toContainText('자격 준비 대기');
+  await expect(region).toContainText('이번 요청 · 미착수');
+  await expect(
+    page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
+  ).toHaveCount(1);
   await expect(region.getByRole('button', { name: '계획 수립 완료', exact: true })).toBeDisabled();
-  await applyPool(backend);
   await page.reload();
   await backend.store.transact(
     'operator-1',
@@ -122,7 +106,6 @@ test('세부 관리자 선택 사항·검색·빈 저장·다른 조직 노출 �
   page,
   backend,
 }) => {
-  await applyPool(backend);
   await backend.store.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -173,7 +156,6 @@ test('계획 시작 저장 실패·revision 충돌은 선택 유지, 재시도·
   page,
   backend,
 }) => {
-  await applyPool(backend);
   await page.goto('/');
   await actor(page, 'admin-1');
   await send(page);
@@ -218,7 +200,6 @@ test('저장 응답 유실 후 조회가 바뀌어도 최초 revision·키로 �
   page,
   backend,
 }) => {
-  await applyPool(backend);
   await page.goto('/');
   await actor(page, 'admin-1');
   await send(page);
@@ -254,7 +235,6 @@ test('선택만 남은 항목은 계획 미작성으로 제외할 수 있고 비
   page,
   backend,
 }) => {
-  await applyPool(backend);
   await page.goto('/');
   await actor(page, 'admin-1');
   await send(page);
@@ -295,7 +275,6 @@ test('시작 중 요청·계정 전환을 막고 저장 후 재조회 실패를 
   page,
   backend,
 }) => {
-  await applyPool(backend);
   await page.goto('/');
   await actor(page, 'admin-1');
   await send(page);
@@ -345,7 +324,6 @@ test('상단 영역 없이 드롭다운의 요청 당시 필수를 유지하며 
   page,
   backend,
 }, info) => {
-  await applyPool(backend);
   const required = async (ids: string[]) =>
     backend.store.organizations.transact(
       'admin-1',

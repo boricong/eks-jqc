@@ -1,3 +1,5 @@
+import { latestQualification, organizationEntries } from "@eks/contracts";
+import { nodeFor } from "./organizations.ts";
 import {
   auditorAssessmentChanged,
   requireCourseTypeChange,
@@ -42,9 +44,6 @@ export function catalogReferences(
       successors: s.courses.filter((c) => c.parentId === id).length,
     };
   return {
-    pools:
-      org?.qualificationPools.filter((p) => p.qualificationId === id).length ||
-      0,
     requests: s.planningRequests.filter((r) =>
       [...(r.targets || []), ...(r.selections || [])].some(
         (t) => t.qualificationId === id,
@@ -513,7 +512,20 @@ export function qualificationDeletionImpact(
     "선택한 팀의 자격만 삭제할 수 있습니다.",
   );
   const references = catalogReferences(s, "qualifications", id, org);
-  const pools = org.qualificationPools.filter((p) => p.qualificationId === id);
+  const remaining = latestQualification(
+    { qualifications: s.qualifications.filter((q) => q.id !== id) },
+    scope,
+    q.entityId,
+  );
+  const affectedOrganizations = remaining
+    ? []
+    : organizationEntries(org)
+        .filter(
+          (o) =>
+            o.lv1OrganizationId === scope &&
+            o.requiredQualifications?.includes(q.entityId),
+        )
+        .map((o) => ({ id: o.id, name: o.name }));
   return {
     id,
     title: q.title,
@@ -522,14 +534,12 @@ export function qualificationDeletionImpact(
     stateRevision: s.revision,
     organizationRevision: org.revision,
     references,
-    canDelete: !q.deletedAt && !pools.length,
-    blockers: pools.length
-      ? [
-          "팀 적용 버전입니다. 팀 자격 관리에서 적용 버전을 교체하거나 팀 적용을 먼저 해제해 주세요.",
-        ]
-      : q.deletedAt
-        ? ["이미 삭제된 자격입니다."]
-        : [],
+    canDelete: !q.deletedAt,
+    blockers: q.deletedAt ? ["이미 삭제된 자격입니다."] : [],
+    replacement: remaining
+      ? { id: remaining.id, version: remaining.version, title: remaining.title }
+      : null,
+    affectedOrganizations,
     mode:
       !!q.templateId || Object.values(references).some((n) => n > 0)
         ? ("archive" as const)
@@ -563,6 +573,7 @@ export function deleteQualification(
     "REVISION_CONFLICT",
   );
   demand(impact.canDelete, 409, impact.blockers.join("\n"));
+  const entityId = s.qualifications.find((q) => q.id === id)!.entityId;
   if (impact.mode === "remove")
     s.qualifications = s.qualifications.filter((q) => q.id !== id);
   else {
@@ -571,6 +582,22 @@ export function deleteQualification(
     q.deletedBy = actorId;
     q.deletionReason = body.reason;
     q.revision++;
+  }
+  for (const affected of impact.affectedOrganizations) {
+    const node = nodeFor(org.roots, affected.id)!;
+    const before = [...(node.requiredQualifications || [])];
+    node.requiredQualifications = before.filter(
+      (requiredEntityId) => requiredEntityId !== entityId,
+    );
+    org.audits.push({
+      id: randomUUID(),
+      actorId,
+      date: new Date().toISOString(),
+      targetId: node.id,
+      action: "qualification.delete.required-detach",
+      before,
+      after: node.requiredQualifications,
+    });
   }
   return { id, mode: impact.mode, reason: body.reason, impact };
 }

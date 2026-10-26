@@ -70,10 +70,11 @@ export const renewalBlockLabels: Record<string, string> = {
   ORGANIZATION_INACTIVE: '소속 조직이 사용 중지 상태입니다.',
   CREDENTIAL_NOT_ACTIVE: '개인 자격이 Active 상태가 아닙니다.',
   VALIDITY_UNKNOWN: '인증 유효기간 확인이 필요합니다.',
-  NOT_APPLIED: '현재 팀 적용 자격이 없습니다.',
+  NOT_REGISTERED: '현재 현재 팀 기준 자격이 없습니다.',
   CRITERIA_UNAVAILABLE: '팀 자격 기준의 운영 상태 또는 설정을 확인해 주세요.',
   CREDENTIAL_HOLD: '개인 자격 Hold의 확인이 필요합니다.',
-  DRAFT_VERSION_CHANGED: '팀 적용 버전이 변경되었습니다. 현재 버전으로 계획을 다시 작성해 주세요.',
+  DRAFT_VERSION_CHANGED:
+    '현재 팀 기준 버전이 변경되었습니다. 현재 버전으로 계획을 다시 작성해 주세요.',
   REQUEST_REQUIRED: '현재 소속의 계획 수립 요청이 필요합니다.',
 };
 export function displayDate(value?: string) {

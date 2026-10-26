@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { managementTitle } from '../management-navigation';
+import AuditorLearning from '../components/AuditorLearning.vue';
 import PageHeading from '../components/PageHeading.vue';
 import HomeNotices from '../components/HomeNotices.vue';
 import HomeQualificationCarousel from '../components/HomeQualificationCarousel.vue';
@@ -264,8 +265,9 @@ const stats = computed(() =>
       </nav>
       <div class="home-columns" :class="{ 'home-columns--learning': personalHome }">
         <div class="home-primary">
+          <AuditorLearning v-if="personalHome && personalType === 'auditor'" />
           <HomeQualificationCarousel
-            v-if="personalHome"
+            v-else-if="personalHome"
             :key="`${store.actorId}:${personalType}`"
             :qualification-type="personalType"
             :assignments="active"

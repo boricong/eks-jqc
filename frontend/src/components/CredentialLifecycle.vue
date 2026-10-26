@@ -8,6 +8,7 @@ import AppDialog from './AppDialog.vue';
 import CollapsibleSection from './CollapsibleSection.vue';
 import {
   lifecycleLabels,
+  auditorLevelLabels,
   kstDate,
   renewalNoticeOn,
   type Certification,
@@ -36,6 +37,7 @@ type History = {
     nextExpiresOn?: string;
     renewal?: Renewal;
     appliedQualification?: { title: string; version: number; validity: ValidityPolicy } | null;
+    auditorCriteria?: Omit<NonNullable<Renewal['confirmation']>, 'confirmedBy' | 'confirmedAt'>;
   };
 };
 const data = ref<History>(),
@@ -62,6 +64,7 @@ function stateText(value: any) {
   );
 }
 const dates = (v: string) => new Date(v).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+const renewalProof = (id?: string) => data.value?.renewals.find((r) => r.id === id)?.confirmation;
 let sequence = 0;
 const path = (suffix: string) =>
   `/certifications/${props.certification.id}/${suffix}${route.query.lv1OrganizationId ? `?lv1OrganizationId=${encodeURIComponent(String(route.query.lv1OrganizationId))}` : ''}`;
@@ -151,9 +154,13 @@ async function save() {
       await store.command(`/renewals/${r.id}/complete`, {
         certificationRevision: data.value.certification.revision,
         revision: r.revision,
-        confirmation: '종합평가 완료',
+        confirmation: props.certification.auditor ? '교육·인증기준 확인' : '종합평가 완료',
       });
-      store.notify('MVP 종합평가 완료로 자격을 갱신했습니다. 최초 취득 근거는 유지됩니다.');
+      store.notify(
+        props.certification.auditor
+          ? '교육·인증기준 확인으로 자격을 갱신했습니다.'
+          : 'MVP 종합평가 완료로 자격을 갱신했습니다. 최초 취득 근거는 유지됩니다.',
+      );
     } else if (mode.value === 'status')
       await store.command(path('status'), {
         revision: data.value.certification.revision,
@@ -197,6 +204,21 @@ const eventLabels: Record<string, string> = {
       <section class="certificate-current" aria-labelledby="certificate-current-title">
         <div class="section-heading"><h2 id="certificate-current-title">현재 효력</h2></div>
         <PropertyList class="certificate-current-facts">
+          <div
+            v-if="
+              certification.auditor ||
+              data.certification.qualificationMetadata?.qualificationType === 'auditor'
+            "
+          >
+            <dt>취득 등급</dt>
+            <dd>
+              {{
+                certification.auditor
+                  ? auditorLevelLabels[certification.auditor.level]
+                  : '이전 Auditor 인증 · 등급 미지정'
+              }}
+            </dd>
+          </div>
           <div>
             <dt>현재 상태</dt>
             <dd>
@@ -228,8 +250,19 @@ const eventLabels: Record<string, string> = {
           자격 효력이 정지되어 있습니다. 정지 중에도 기존 만료일은 유지됩니다.
         </p>
         <p v-if="data.effectiveStatus === 'Revoke'" class="error-message">
-          폐기된 자격입니다. 현재 팀 적용 자격과 관리자의 새 요청을 확인하여 인증Set 평가부터 다시
-          취득해 주세요.
+          <template v-if="certification.auditor"
+            >효력이 종료된 자격입니다. 홈에서 현재 기준의 재취득 학습을 시작해 주세요. 이전 취득
+            근거는 보존됩니다.</template
+          >
+          <template
+            v-else-if="data.certification.qualificationMetadata?.qualificationType === 'auditor'"
+            >이전 Auditor 인증의 효력이 종료되었습니다. 취득 이력은 보존되며 팀의 일반·메인 운영
+            기준을 확인해 주세요.</template
+          >
+          <template v-else
+            >폐기된 자격입니다. 현재 현재 팀 기준 자격과 관리자의 새 요청을 확인하여 인증Set
+            평가부터 다시 취득해 주세요.</template
+          >
         </p>
       </section>
       <slot name="evidence" />
@@ -278,15 +311,61 @@ const eventLabels: Record<string, string> = {
         <ol>
           <li v-for="p in data.periods" :key="p.id">
             <strong
-              >{{ p.sequence }}회차 · {{ p.kind === 'initial' ? '최초 취득' : '종합평가 재인증' }} ·
-              적용 v{{ p.qualificationVersion }}</strong
+              >{{ p.sequence }}회차 ·
+              {{
+                p.kind === 'initial'
+                  ? '최초 취득'
+                  : certification.auditor
+                    ? '본인 기준 확인 갱신'
+                    : '종합평가 재인증'
+              }}
+              · 적용 v{{ p.qualificationVersion }}</strong
             >
             <p>
               {{ p.startsOn }} ~
               {{ p.expiresOn || (p.validity.type === 'unlimited' ? '무기한' : '확인 필요') }} · 실제
               완료 {{ dates(p.completedAt) }}
             </p>
-            <p v-if="p.kind === 'renewal'">MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음</p>
+            <p v-if="p.kind === 'renewal'">
+              {{
+                certification.auditor
+                  ? '본인의 교육·인증기준 확인에 의한 갱신'
+                  : 'MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음'
+              }}
+            </p>
+            <details v-if="renewalProof(p.renewalId)">
+              <summary>확인한 교육·인증기준 원문</summary>
+              <p>
+                {{ renewalProof(p.renewalId)!.title }} ·
+                {{ renewalProof(p.renewalId)!.description }}
+              </p>
+              <p>
+                {{ store.username(renewalProof(p.renewalId)!.confirmedBy) }} ·
+                {{ dates(renewalProof(p.renewalId)!.confirmedAt) }} 본인 확인
+              </p>
+              <article v-for="course in renewalProof(p.renewalId)!.courses" :key="course.id">
+                <h4>{{ course.title }} · v{{ course.version }}</h4>
+                <ul>
+                  <li v-for="item in course.learningItems.filter((i) => i.required)" :key="item.id">
+                    {{ item.title }}
+                  </li>
+                </ul>
+                <details v-for="material in course.materials" :key="material.id">
+                  <summary>{{ material.title }}</summary>
+                  <p>{{ material.description }}</p>
+                  <p v-if="material.type === 'text'" class="renewal-material">
+                    {{ material.content }}
+                  </p>
+                  <a
+                    v-else-if="/^https?:\/\//i.test(material.url)"
+                    :href="material.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >자료 열기</a
+                  >
+                </details>
+              </article>
+            </details>
           </li>
         </ol>
       </CollapsibleSection>
@@ -323,7 +402,11 @@ const eventLabels: Record<string, string> = {
         "
         class="certificate-renewal muted"
       >
-        Auditor 재인증은 준비 중입니다. 최초 취득과 만료 상태 조회만 제공합니다.
+        {{
+          certification.auditor
+            ? '현재 Auditor 지정 여부와 갱신 가능 상태를 확인해 주세요.'
+            : '이전 Auditor 인증·등급 미지정 기록입니다.'
+        }}
       </p>
       <section
         v-if="data.canRenew"
@@ -336,13 +419,7 @@ const eventLabels: Record<string, string> = {
             <dt>재인증 시작일</dt>
             <dd>{{ data.renewal.opensOn || '정기 재인증 대상 아님' }}</dd>
           </div>
-          <div
-            v-if="
-              data.certification.qualificationMetadata?.qualificationType !== 'auditor' &&
-              data.periods.at(-1) &&
-              renewalNoticeOn(data.periods.at(-1)!)
-            "
-          >
+          <div v-if="data.periods.at(-1) && renewalNoticeOn(data.periods.at(-1)!)">
             <dt>재인증 사전 알림 · 1회</dt>
             <dd>{{ renewalNoticeOn(data.periods.at(-1)!) }}</dd>
           </div>
@@ -357,10 +434,19 @@ const eventLabels: Record<string, string> = {
           :disabled="busy || loading || !!loadError"
           @click="start"
         >
-          {{ data.renewal.renewal ? '재인증 이어서 진행' : '재인증 시작' }}
+          {{
+            certification.auditor
+              ? '갱신 기준 확인'
+              : data.renewal.renewal
+                ? '재인증 이어서 진행'
+                : '재인증 시작'
+          }}
         </button>
-        <RouterLink v-if="data.effectiveStatus === 'Revoke'" class="button secondary" to="/plans"
-          >재취득 계획·요청 확인</RouterLink
+        <RouterLink
+          v-if="data.effectiveStatus === 'Revoke'"
+          class="button secondary"
+          :to="certification.auditor ? '/auditor' : '/plans'"
+          >{{ certification.auditor ? '재취득 학습 시작' : '재취득 계획·요청 확인' }}</RouterLink
         >
       </section>
     </template>
@@ -374,7 +460,9 @@ const eventLabels: Record<string, string> = {
     v-model:open="dialog"
     :title="
       mode === 'renew'
-        ? '자격 재인증 · 종합평가'
+        ? certification.auditor
+          ? '교육·인증기준 확인'
+          : '자격 재인증 · 종합평가'
         : mode === 'correct'
           ? '유효기간 근거 확인·정정'
           : '개인 보유 자격 상태 변경'
@@ -397,7 +485,37 @@ const eventLabels: Record<string, string> = {
             <dd>{{ data.renewal.nextExpiresOn || '무기한' }}</dd>
           </div>
         </PropertyList>
-        <p>
+        <p v-if="certification.auditor">
+          현재 교육·인증기준을 확인했습니다. 본인 확인으로 갱신하며 새 학습 수료나 평가 점수를
+          생성하지 않습니다.
+        </p>
+        <section
+          v-if="certification.auditor && data.renewal.auditorCriteria"
+          aria-label="현재 교육·인증기준"
+        >
+          <p>{{ data.renewal.auditorCriteria.description }}</p>
+          <article v-for="course in data.renewal.auditorCriteria.courses" :key="course.id">
+            <h4>{{ course.title }} · v{{ course.version }}</h4>
+            <ul>
+              <li v-for="item in course.learningItems.filter((i) => i.required)" :key="item.id">
+                {{ item.title }}
+              </li>
+            </ul>
+            <details v-for="material in course.materials" :key="material.id">
+              <summary>{{ material.title }}</summary>
+              <p>{{ material.description }}</p>
+              <p v-if="material.type === 'text'" class="renewal-material">{{ material.content }}</p>
+              <a
+                v-else-if="/^https?:\/\//i.test(material.url)"
+                :href="material.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                >자료 열기 · {{ material.title }}</a
+              >
+            </details>
+          </article>
+        </section>
+        <p v-if="!certification.auditor">
           이번 MVP는 종합평가 문항 없이 완료 버튼으로 재인증 절차를 검증합니다. 실제 능력 평가를
           완료했다는 의미가 아니며 처리 방식이 이력에 남습니다.
         </p>
@@ -467,7 +585,9 @@ const eventLabels: Record<string, string> = {
       >
         {{
           mode === 'renew'
-            ? '종합평가 완료'
+            ? certification.auditor
+              ? '교육·인증기준 확인 완료'
+              : '종합평가 완료'
             : mode === 'correct'
               ? '근거 확인·정정 저장'
               : '개인 자격 상태 저장'
@@ -476,3 +596,9 @@ const eventLabels: Record<string, string> = {
     >
   </AppDialog>
 </template>
+<style scoped>
+.renewal-material {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+</style>

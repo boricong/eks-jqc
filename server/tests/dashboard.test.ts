@@ -159,11 +159,7 @@ test("세션 이후 역할 해제와 구성원 소속 변경도 조회 시 다�
 test("필수 사람×자격·완전 충족 사람·요청 단위를 분리하고 이전 버전 Active를 인정한다", async (t) => {
   const seed = dashboardSeed(),
     q2 = addQualification(seed, "second");
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: q2.entityId,
-    qualificationId: q2.id,
-  });
+
   seed.orgs.roots[0]!.children.find(
     (o) => o.id === ORG_A,
   )!.requiredQualifications = [Q, q2.entityId];
@@ -178,7 +174,7 @@ test("필수 사람×자격·완전 충족 사람·요청 단위를 분리하고
     version: 2,
     parentId: Q,
   });
-  seed.orgs.qualificationPools[0]!.qualificationId = latest.id;
+
   addRequest(seed, "request-one", "alice", [q2.entityId]);
   addRequest(seed, "request-two", "alice", [q2.entityId]);
   addDraft(seed, "shared-draft", "request-one", q2.id);
@@ -309,12 +305,6 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     lifecycleStatus: "Hold",
   });
   const certificateQ = addQualification(seed, "credential-state");
-  for (const q of [draftQ, optionalQ, certificateQ])
-    seed.orgs.qualificationPools.push({
-      lv1OrganizationId: TEAM,
-      entityId: q.entityId,
-      qualificationId: q.id,
-    });
   seed.orgs.roots[0]!.children.find(
     (o) => o.id === ORG_A,
   )!.requiredQualifications = [Q, draftQ.entityId, certificateQ.entityId];
@@ -334,9 +324,7 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     version: 2,
     lifecycleStatus: "Active",
   });
-  seed.orgs.qualificationPools.find(
-    (p) => p.entityId === draftQ.entityId,
-  )!.qualificationId = next.id;
+
   addCertification(seed, "still-valid", "alice", {
     qualificationId: certificateQ.id,
   });
@@ -458,11 +446,7 @@ test("인증만 남은 셀도 연결된 인증Set 수료 건수와 상세 근거
 test("자격·효력 필터가 미충족 자격을 숨겨도 사람의 전체 필수 충족률과 완전 충족 인원을 부풀리지 않는다", async (t) => {
   const seed = dashboardSeed();
   const missing = addQualification(seed, "missing-mandatory");
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: missing.entityId,
-    qualificationId: missing.id,
-  });
+
   seed.orgs.roots[0]!.children.find(
     (o) => o.id === ORG_A,
   )!.requiredQualifications = [Q, missing.entityId];
@@ -662,11 +646,7 @@ test("구성원·매트릭스와 일반 명세의 기본 정렬은 조직·자�
     (q) => q.id === seed.state.qualifications[0]!.templateId,
   )!.title = "후기 자격";
   const first = addQualification(seed, "first-in-sort", { title: "기초 자격" });
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: first.entityId,
-    qualificationId: first.id,
-  });
+
   for (const org of seed.orgs.roots[0]!.children.filter((o) =>
     [ORG_A, ORG_B].includes(o.id),
   ))
@@ -863,7 +843,7 @@ test("만료 예정 명세는 이름 대신 만료일이 가까운 순서로 표
   );
 });
 
-test("카탈로그는 적용 자격과 실제 기록의 합집합이며 미사용 초안·다른 소속의 초안을 포함하지 않는다", async (t) => {
+test("카탈로그는 미완성 등록 자격도 포함하며 다른 소속의 초안은 진행으로 집계하지 않는다", async (t) => {
   const seed = dashboardSeed();
   const recorded = addQualification(seed, "recorded"),
     unused = addQualification(seed, "unused", { courseIds: [] });
@@ -874,10 +854,12 @@ test("카탈로그는 적용 자격과 실제 기록의 합집합이며 미사�
   const options = await f.call("admin-1", "/dashboard/options");
   assert.deepEqual(
     new Set(options.qualifications.map((q: any) => q.entityId)),
-    new Set([Q, recorded.entityId]),
+    new Set([Q, recorded.entityId, unused.entityId]),
   );
   assert.ok(
-    !options.qualifications.some((q: any) => q.entityId === unused.entityId),
+    options.qualifications.some(
+      (q: any) => q.entityId === unused.entityId && q.registered,
+    ),
   );
   const v: DashboardResponse = await f.call(
     "admin-1",
@@ -1147,11 +1129,7 @@ test("같은 팀에서 소속을 옮겨도 확정 배정 진행과 당시 근거
 test("자격 검색은 일치하는 행만, 조직 요약은 직접 인원과 하위 묶음을 중복 없이 표시한다", async (t) => {
   const seed = dashboardSeed(),
     unique = addQualification(seed, "backup", { title: "설비 Backup 검증" });
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: unique.entityId,
-    qualificationId: unique.id,
-  });
+
   seed.state.users.push({
     id: "nested",
     name: "하위 조직 직원",
@@ -1200,11 +1178,7 @@ test("요청 완료 근거는 후속 필수 변경·인증 만료로 다시 미�
     ],
   };
   const newRequirement = addQualification(seed, "later-required");
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: newRequirement.entityId,
-    qualificationId: newRequirement.id,
-  });
+
   seed.orgs.roots[0]!.children.find(
     (o) => o.id === ORG_A,
   )!.requiredQualifications = [newRequirement.entityId];
@@ -1233,13 +1207,7 @@ test("요청 완료 근거는 후속 필수 변경·인증 만료로 다시 미�
 });
 
 test("재인증 가능성은 팀 적용·기준 상태·인증Set 종료와 개인 효력을 별도로 확인한다", async (t) => {
-  for (const condition of [
-    "hold",
-    "revoke",
-    "deleted",
-    "retired",
-    "unapplied",
-  ] as const) {
+  for (const condition of ["hold", "revoke", "deleted", "retired"] as const) {
     await t.test(condition, async (sub) => {
       const seed = dashboardSeed();
       addCertification(seed, "renewal-blocked", "alice", {
@@ -1260,8 +1228,7 @@ test("재인증 가능성은 팀 적용·기준 상태·인증Set 종료와 개�
         c.retiredBy = "operator-1";
         c.retirementReason = DASHBOARD_SECRET;
       }
-      if (condition === "unapplied" || condition === "deleted") {
-        seed.orgs.qualificationPools = [];
+      if (condition === "deleted") {
         for (const org of seed.orgs.roots[0]!.children)
           org.requiredQualifications = [];
       }
@@ -1416,11 +1383,6 @@ test("1,000명×100자격 조회 p95 1초 이내이며 매트릭스 응답은 25
     });
   for (let n = 1; n < 100; n++) {
     const q = addQualification(seed, `qualification-${n}`);
-    seed.orgs.qualificationPools.push({
-      lv1OrganizationId: TEAM,
-      entityId: q.entityId,
-      qualificationId: q.id,
-    });
   }
   for (let n = 0; n < 1000; n++) {
     const qualificationId = n % 100 ? `qualification-${n % 100}` : Q;

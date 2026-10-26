@@ -33,40 +33,24 @@ async function mixedTypes(backend: any) {
   await backend.store.refreshNotifications(DASHBOARD_NOW);
 }
 
-test('Auditor 생성·팀 등록·기준 편집과 유형 잠금·운영 적용 제한', async ({
+test('Auditor 전용 생성·기준 편집·미완성 준비 차단과 팀 소유 정보 분리', async ({
   page,
   backend,
 }, testInfo) => {
   await page.goto('/');
-  await actor(page, 'operator-1');
-  await page.goto('/system/qualification-templates');
-  await page.getByRole('button', { name: '새 기본자격 만들기' }).click();
-  const dialog = page.getByRole('dialog', { name: '기본자격 편집' });
-  await expect(dialog.getByLabel('인증 유형', { exact: true })).toHaveValue('auditee');
-  await dialog.getByLabel('인증 유형', { exact: true }).selectOption('auditor');
-  await dialog.getByLabel('기본자격명', { exact: true }).fill('협력업체 Auditor 기준');
-  await dialog.getByLabel('영문명', { exact: true }).fill('Supplier Auditor');
-  await dialog.getByLabel('공통 설명', { exact: true }).fill('현장 심사 기준을 준비합니다.');
-  await dialog.getByRole('button', { name: '기본자격 저장' }).click();
-  await expect(dialog).not.toBeVisible();
-  await page.getByLabel('인증 유형 필터', { exact: true }).selectOption('auditor');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: '협력업체 Auditor 기준', exact: true }).click();
-  await expect(dialog.getByLabel('인증 유형', { exact: true })).toBeEnabled();
-  await page.keyboard.press('Escape');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications');
-  await page.getByRole('tab', { name: 'Auditor(심사자)', exact: true }).click();
-  await page.getByRole('button', { name: 'Auditor 자격 등록', exact: true }).click();
-  const register = page.getByRole('dialog', { name: 'Auditor 자격 등록' });
-  await register.getByRole('checkbox', { name: /협력업체 Auditor 기준/ }).check();
-  await register.getByRole('button', { name: '팀 자격 등록' }).click();
-  await expect(register).not.toBeVisible();
-  await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
+  await page.goto('/admin/auditor');
+  await page.getByLabel('일반 Auditor 자격명', { exact: true }).fill('협력업체 Auditor 기준');
+  await page.getByRole('button', { name: '일반 Auditor 자격 생성', exact: true }).click();
+  await expect(page.getByText('현재 기준 버전 · v1', { exact: true })).toBeVisible();
+  const representative = backend.store.snapshot().auditorPrograms[0]!.general!;
+  expect(
+    backend.store.snapshot().qualificationTemplates.find((t) => t.id === representative.templateId)!
+      .scope,
+  ).toBe('team');
+  await page.goto('/admin/courses?type=auditor');
   await createCourse(page, 'Auditor', '심사 준비 자료');
-  await page.locator('.back-link').click();
-  await page.getByRole('link', { name: '팀 자격 설정', exact: true }).click();
-  await page.getByRole('link', { name: '협력업체 Auditor 기준', exact: true }).click();
+  await page.goto(`/admin/qualifications/${representative.entityId}`);
   await expect(
     page.getByText('Auditor는 필수 학습항목을 본인이 모두 확인하면 수료됩니다.', { exact: true }),
   ).toBeVisible();
@@ -85,18 +69,22 @@ test('Auditor 생성·팀 등록·기준 편집과 유형 잠금·운영 적용 
     });
   }
   await page.setViewportSize({ width: 1920, height: 900 });
-  await page.goto('/admin/qualifications');
-  await page.getByRole('button', { name: '팀 적용', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '팀 적용', exact: true })).toBeVisible();
-  await expect(page.getByLabel('협력업체 Auditor 기준 적용 버전')).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.goto('/admin/auditor');
+  const latest = backend.store
+    .snapshot()
+    .qualifications.filter((q) => q.templateId === representative.templateId)
+    .sort((a, b) => b.version - a.version)[0]!;
+  await expect(
+    page.getByText(`현재 기준 버전 · v${latest.version}`, { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('신규 지정 준비 · 확인 필요', { exact: true })).toBeVisible();
+  await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/qualification-templates');
   await page.getByLabel('인증 유형 필터', { exact: true }).selectOption('auditor');
-  await page.getByRole('button', { name: '협력업체 Auditor 기준', exact: true }).click();
-  await expect(dialog.getByLabel('인증 유형', { exact: true })).toBeDisabled();
-  await expect(dialog).toContainText('팀 등록 이력이 있어 유형을 변경할 수 없습니다.');
+  await expect(
+    page.getByRole('button', { name: '협력업체 Auditor 기준', exact: true }),
+  ).toHaveCount(0);
   expect(backend.store.snapshot().certifications).toHaveLength(0);
 });
 
@@ -166,6 +154,11 @@ test('보유 인증 유형 분리·건수·검색 유지·URL/키보드·인증�
     page.getByRole('heading', { name: 'Auditor 자격 인증서', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '수료 근거 펼치기', exact: true }).click();
+  await expect(
+    page.getByText('이전 Auditor 인증·등급 미지정 기록입니다.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: '재인증 시작', exact: true })).toHaveCount(0);
+  await expect(page.getByText('재취득 계획·요청 확인', { exact: true })).toHaveCount(0);
   await page.locator('.evidence-course summary').first().click();
   await page.getByRole('link', { name: '인증Set 수료증 보기 →', exact: true }).first().click();
   await page.locator('.back-link').click();

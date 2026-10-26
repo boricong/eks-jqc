@@ -5,12 +5,12 @@ import {
   organizationEntries,
 } from "@eks/contracts";
 import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 
 export function migratePolicies(raw: any, organizationRaw: any) {
   if (
-    [7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(raw.schemaVersion) &&
-    organizationRaw.schemaVersion === 2
+    [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(raw.schemaVersion) &&
+    [2, 3].includes(organizationRaw.schemaVersion)
   ) {
     const organizations = validateOrganizations(organizationRaw),
       state = migrateAdministration(raw, organizations).state;
@@ -18,7 +18,7 @@ export function migratePolicies(raw: any, organizationRaw: any) {
       state,
       organizations,
       report: {
-        alreadyApplied: raw.schemaVersion === 16,
+        alreadyApplied: raw.schemaVersion === 18,
         revision: state.revision,
         organizationRevision: organizations.revision,
       },

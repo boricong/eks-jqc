@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { designateAuditor } from "./auditor-program.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -251,6 +252,14 @@ export function changeUser(
     roles: input.roles,
     revision: (user?.revision ?? 0) + 1,
   };
+  if (input.roles.includes("evaluator") && !before?.roles.includes("evaluator"))
+    designateAuditor(
+      s,
+      updated,
+      actor,
+      entry.lv1OrganizationId,
+      new Date().toISOString(),
+    );
   if (user) {
     if (
       user.organizationId !== input.organizationId &&

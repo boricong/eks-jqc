@@ -2,7 +2,63 @@
 
 최종 갱신: 2026-10-26 · Asia/Seoul
 
+## 진행 중 — 누적 Auditor·최신 자격 기준 변경 커밋·푸시
+
+- 2026-10-26 사용자 요청으로 현재 main의 누적 구현과 검증·이관 문서를 커밋하고 origin/main에 푸시한다. Auditor 자율 학습·일반/메인 인증·알림/갱신, 설명 선택화·팀 적용 제거·최신 기준 자동 사용·명시 이관, 시스템 Auditor 기본자격 가져오기가 범위다. 기존 두 인수인계 문서의 미커밋 기록도 함께 보존한다.
+- 시작 HEAD와 fetch 후 origin/main은 모두 `21da246`이며 분기 차이는0/0이다. 실행 JSON·maintenance·백업·로그·환경·의존성·빌드 결과는 포함하지 않는다. Excel 안내의 현재 업무 스키마 표기를18로 정정했다.
+- 기존 전체 서버233/233, 브라우저 전체 회귀의 실패 항목 보정 및 재검증, 최종 기본자격 가져오기 서버20/20·브라우저12/12·문서/TypeScript/Vite 빌드 통과 로그와 실제 화면의 데이터 해시 보존 결과를 다시 확인했다. 미해결 충돌 없음·`git diff --check` 통과. 이번 작업은 Git 반영이며 실제 데이터 변경과 서버 재시작은 포함하지 않는다.
+
+## 완료 — Auditor 시스템 기본자격 가져오기
+
+- 사용자 요청에 따라 팀 자격설정의 Auditor 탭에도 Auditee와 동일한 `TemplateImport` 등록 창을 제공한다. 현재 서버의 시스템 공통 기본자격 조회·유형 검사·중복 등록 방지·팀 권한 계약을 그대로 사용한다. 팀 소유 기본자격은 가져오기 목록에 노출하지 않는다.
+- 입력은 선택한 시스템 기본자격 ID와 Auditor 유형, 출력은 팀에 등록된 자격이다. 유형 변경·다른 팀 권한·팀 소유 기본자격 요청은 기존 서버 규칙으로 보류한다. 일반/메인 대표 계보는 이 가져오기로 임의 변경하지 않으며 별도 Auditor 운영 기능을 유지한다. 설명 선택·최신 기준 자동 사용·팀 적용 제거도 유지한다.
+- 기존 변경 및 문서 사본과 실제 데이터 해시는 `data/backups/auditor-template-import-start-20261026/`에 보존했다. 스키마나 데이터 이관은 필요하지 않으며 실제 자격·사용자는 시험 목적으로 생성하지 않는다.
+- 구현: `AdminView.vue`의 Auditee 전용 조건3곳(등록 버튼·자격 표·상태 필터)을 공통 자격 조건으로 변경했다. **팀 자격 설정 → Auditor(심사자) → Auditor 자격 등록 → 공통 기본자격 선택 → 팀 자격 등록**으로 등록하고 목록에서 상세 기준을 편집한다. 기존 등록 항목은 선택 불가, 기본자격이 없으면 준비 안내를 표시한다. 시스템 공통 기본자격의 이름·설명 관리 권한은 기존과 같고 팀 소유 일반/메인 운영과 안내문 관리도 유지한다.
+- 검증: 관련 서버20/20(`auditor-template-import-server.log`), 브라우저12/12(`auditor-template-import-ui-final.log`), 문서 검사·서버/프런트 TypeScript·Vite 빌드(`auditor-template-import-build-final.log`) 통과. 시스템 운영자의 Auditor 기본자격 생성→팀 관리자 가져오기→등록된 항목 중복 방지→기간 기준 편집/재조회, Auditee 목록 유형 분리, 빈 목록, 키보드 열기/닫기와1920/1440/768/390px 가로 넘침을 확인했다. 초기 브라우저 실패로 등록 표의 Auditee 전용 조건도 발견해 함께 수정했다. 기존500kB 번들 경고는 유지된다.
+- 실행 확인: 기존127.0.0.1:5186 개발 서버의 화면 갱신으로 반영했고 API 변경·서버 재시작·데이터 이관은 필요하지 않았다. 실제 팀 관리자 계정으로 Auditor 등록 창을 조회하여 시스템 Auditor 기본자격1건과 팀 자격 표 표시, 페이지 오류0, 조회 전후 업무/조직/maintenance 세 파일 해시 동일을 확인했다(`auditor-template-import-live.log`, `auditor-template-import-live.png`). 실제 항목을 가져오기 저장하지 않았으며 커밋·푸시도 하지 않았다.
+
+## 완료 — 설명 선택화·팀 적용 제거·최신 기준 자동 사용
+
+- 승인된 계획대로 자격 설명의 준비 차단을 없애고 팀·계보별 삭제되지 않은 최고 버전을 신규 계획·학습·갱신에 사용한다. 최신 버전의 미완성/Hold는 우회하지 않는다. 기존 확정 근거는 보존한다.
+- 삭제 입력은 업무/조직/자격 revision과 사유다. 영향 조회는 대체 버전·영향 조직을 반환하며 마지막 버전 삭제와 현재 필수 지정 해제를 원자적으로 처리한다. 권한·revision 충돌은 보류하고 재시도 키로 중복을 막는다.
+- 업무18·조직3·기본정보8 명시 이관, 구형 팀 적용 API 종료, Auditor 계보 자동 선택과 전용 운영 메뉴 유지가 범위다. 기존 미커밋 구현·문서와 실제 데이터는 `data/backups/automatic-criteria-start-20261026/`에 보존했다. 검증 후 세 파일 백업/해시 확인·이관·같은 로컬 설정 재시작을 수행하며 커밋·푸시는 하지 않는다.
+- 구현 계약: `currentTeamQualifications`/`latestQualification`가 삭제되지 않은 최고 버전을 선택한다. 설명 생략은 빈 문자열로 정규화하며 준비 조건에서 제외한다. `/api/organization-policies/:id/qualification-pool` 변경은 권한 검사 후410 `TEAM_APPLICATION_REMOVED`, Auditor의 구형 버전 선택 입력도410으로 종료한다. 조직·현황 응답은 현재 등록/기준 버전을 제공하고 과거 `applied` URL 필터는 `registered`로 변환한다. Auditor 운영은 계보만 저장하고 마지막 버전 삭제 후 같은 계보의 다음 번호로 작성한다.
+- 삭제 저장: 업무/조직 revision·자격 revision을 검사한 뒤 공통 대기열의 `transactPair`로 보관 삭제와 현재 필수 지정 해제를 처리한다. 원본 쌍과 영수증을 보존하는 `.transaction.json` 복구 표식으로 중간 저장 실패/재시작을 복구한다. 최신 삭제의 대체 버전, 마지막 삭제의 영향 조직, 기존 근거 보존을 확인 화면에 표시한다.
+- 검증 중간 결과: 전체 서버233/233(`automatic-criteria-tests-final.log`), 삭제·구형 Auditor 계보/JSON7 호환 추가 검증14/14(`automatic-criteria-final-edge.log`), 문서 검사·TypeScript·Vite 최종 빌드 통과(`automatic-criteria-build-final.log`). 브라우저 전체 회귀는 진행 중이며 이전 팀 적용용 준비 코드만 제거하고 대용량 대시보드 회귀도 유지한다. Excel은 v11을 유지한다.
+- 실제 데이터 재확인: 업무17 revision235·조직2 revision6, 사용자7·Auditor 지정0·배정0·인증0·알림1이다. 착수 이후 저장된 Auditor 운영 설정과 자격을 포함해 최신 데이터의 명시 이관 미리보기가 업무18 revision236·조직3 revision7로 성공했다(`automatic-criteria-migration-preview.log`). 배포 전 다시 읽고 원본 revision/해시를 잠근다. 복구 코드는 HEAD21da246 기본 압축본에 착수 시 미커밋 구현 사본을 덮어써 업무17과 호환되게 보관한다.
+- 배포 전 검증 완료: 최종 전체 서버233/233(`automatic-criteria-tests-complete.log`), 설명 없는 Auditor 시작·취득·갱신·재취득8/8(`automatic-criteria-empty-auditor.log`), 빌드/문서/diff 검사 통과. 브라우저 전체266개 중264개 통과 후 이전 팀 적용 전제의2개 시험을 새 등록 기준으로 보정했다. 후속34개 중32개 통과, 새 삭제 시험의 저장 완료 대기와 무자격 시험의 과거 참조를 보정한 최종7/7도 통과했다(`automatic-criteria-ui-full.log`, `automatic-criteria-ui-postchecks.log`, `automatic-criteria-ui-delete-final.log`). 기존 회귀268개와 새 삭제1개를 모두 검증했으며 실패 흔적과 재검증 결과를 각각 보존한다. 1920/1440/768/390px·키보드·대비·가로 넘침 검증 포함. 기존500kB 번들 경고는 남는다.
+- 실제 반영(2026-10-26 10:20 KST): 신원을 확인한 기존 런처22268/API45104/Vite7748과 하위 프로세스를 중지했다. 종료 PID와 작업 폴더 안 잠금 경로를 확인한 뒤 공식 `data:unlock`을 사용했다. `data/backups/automatic-criteria-deploy-20261026/manifest.json`에 세 원본의 SHA256·revision·실행 설정·복구 절차를 기록하고 원본/사본 해시 일치 후 `data:migrate-automatic-criteria --apply`를 실행했다. 백업 중 PowerShell이 Git 줄바꿈 경고를 오류 처리한 건은 경고 설정을 조정하고 기존 사본 해시를 검사하여 이어서 완료했다. 데이터 이관 전 발생했으며 원본 변경은 없었다.
+- 이관 결과: **업무17 revision235→18 revision236, 조직2 revision6→3 revision7**. 기존 업무 필드·계획 요청1·알림1·사용자7·배정/인증0과 조직 트리/요청을 보존했다. Auditor 운영1건은 일반 자격 버전 ID를 같은 자격의 계보 ID로 변환했고 이전 팀 적용2건은 조직 이관 감사 원문으로 보존했다. 업무·조직 이관 감사 각1건만 추가했으며 maintenance는 generation만 바꾸고 기존 영수증을 유지했다. 재시작 전후 `verification.json`의 보존 검사가 모두 통과했다.
+- 최종 해시: 업무 `d71255cbfbffb1340de159e5d600a9f41b6194c6c52899aed5f87f1333261383` → `d58c5b8095834981de23bc43e5c6548ab4f8e831257de45c6e2000241b63eba7`; 조직 `f267c50905334a9e214a57eaa04eb462df9a5a23b94c4aca020d052cc5e7502a` → `0dc5cdb7d2ea01e25dbd8b7a8f3ac4507d4983d3a5c704acfbfd2e11849e1795`. 공식 백업은 `before-automatic-criteria-235-78afddc4-ae8e-4539-959a-c9294f3627b2.json` 및 같은 접미사의 조직/maintenance 파일이다. 복구 시 서버를 중지하고 manifest의 세 파일을 함께 복원하며, `base-code-main-21da246.zip` 위에 **`compatible-schema17-overlay/`를 반드시 덮어써** 업무17 호환 코드를 복원한다. 기본 압축본만으로 업무17을 실행하지 않는다.
+- 재시작/실화면: 런처14608/API19240/Vite44256, 동일 절대 데이터 경로·127.0.0.1:5186/5187 유지. 기존 운영자로 팀 자격설정과 Auditor 운영을 조회해 팀 적용/탭 안내 관리 링크/버전 선택 제거·선택 설명·페이지 오류0을 확인했다. API health `ok:true, revision:236`, 조회 전후 세 파일 해시 동일(`automatic-criteria-live-smoke.log`, `automatic-criteria-live-team.png`, `automatic-criteria-live-admin.png`). 실제 일반 Auditor 기준은 설명이 빈 상태이며 준비 부족 사유는 필수 인증Set과 유효기간뿐이다. 실제 교육 내용·지정·학습·인증은 시험 목적으로 생성하지 않았다. 서버 로그/PID는 `dev-automatic-criteria-20261026.*`에 보존한다.
+- 기존 루트 `handover.md`는 이번 착수 사본과 바이트까지 동일하며 미커밋 변경을 보존했다. 커밋·푸시는 수행하지 않았다.
+
+## 완료 — Auditor 자율 학습·일반/메인 인증 체계
+
+- 사용자 승인 상세 구현안에 따라 계획 요청·예정 일정 없이 본인 학습 시작, 팀 소유 일반/메인 대표 자격, 지정 회차별 원자적 앱 알림, 본인 기준 확인 갱신과 만료 후 재취득을 구현했다. 내부 역할 `evaluator`는 유지한다.
+- 입력은 팀 기준 revision·사용자 역할 변화·학습 확인·인증 효력이다. 서버가 준비 상태·현재 등급·가능 행동과 보류 사유를 판정한다. 최초 메인 발급에는 유효 일반 인증이 필요하며, 취득한 메인의 효력은 일반과 독립적이다.
+- 업무16→17·기본정보6→7·Excel v10→v11 명시적 이관과 호환을 추가했다. 실행 데이터는 검증 후 서버 중지·세 파일 백업/해시 확인·명시 이관·같은 설정 재시작 순서로 반영했다. 실제 사용자 지정·학습·취득을 검증 목적으로 생성하지 않았다.
+- 착수 HEAD는 `21da246`이다. 기존 두 인수인계 문서 변경을 보존하며 `data/backups/auditor-v17-start-20261026/`에 사본을 저장했다. 커밋·푸시는 하지 않는다. 아래 완료 이력과 별도로 이 작업의 시험·이관 결과를 기록한다.
+- 구현 계약: 관리자 `GET/PUT /api/auditor-program`, `POST /qualifications`, `GET /members`, `POST /notices/send`; 개인 `GET /api/me/auditor`, `POST /starts`. 관리자 하위 경로는 `/api/auditor-program`에 붙는다. 모든 변경은 공통 쓰기 대기열·idempotency 영수증을 사용하고 설정은 revision을 검사한다. 사용자 역할 추가와 지정 안내 저장은 같은 사용자 변경 트랜잭션이다.
+- 판정: `auditorMe`는 현재 지정, 인증 효력, 학습 회차, 적용 기준으로 등급·갱신·다음 행동과 보류 사유를 계산한다. 대상자 Hold는 새 취득·갱신을 제한하며 이미 보유한 인증 자체 효력은 바꾸지 않는다. 최초 메인 수료 후 일반이 유효하지 않으면 `pendingGeneralCertification`으로 근거를 보존하고 일반 발급·갱신·효력 변경 및 서버 시작/주기 점검에서 보충 발급한다. 일반/메인 취득 이후 서로의 효력은 독립적이다.
+- 호환: Auditor 계획 변경 API는410 `AUDITOR_PLANNING_REMOVED`와 새 진입 경로를 안내한다. 기존 배정은 지정 해제 후에도 본인 확인을 계속할 수 있다. 이전 등급 미지정 인증은 이름으로 추정하지 않는다. 신규 학습은 `planId`가 없고 본인이 생성자이며 설정 관리자를 별도 기록한다. 적용 운영 기준도 삭제 참조에 포함한다.
+- 검증 중간 기록: 전체 서버230/230 통과(`data/runtime/auditor17-tests-final.log`). 기준 개정 전 수강 보존·대상자 Hold 효력·메인 재취득·기준 확인 갱신·이관 실패의 세 파일 복구와 재실행을 포함한다. Windows 파일 심볼릭 링크 권한 제약은 문서 외부 경계 시험에서 디렉터리 junction으로 동일한 realpath 검사를 검증했다. Playwright 전용 Chromium이 없어 설치된 Chrome headless 경로를 사용하며 전체 브라우저 회귀를 진행 중이다. 실제 업무는 아직16 revision230이고 사용자7·Auditor 지정0·Auditor 자격0·계획/배정/인증0을 읽기 전용 확인했다.
+- 갱신 보존: 현재 교육·인증기준의 필수항목·자료 원문을 확인 화면에 표시하고 확인 시점의 자격/기본자격 revision·인증Set 버전·원문·확인자·시각을 저장한다. 갱신 시작 당시 기준 지문과 완료 시점 기준을 비교하므로 자격명·설명이나 학습자료가 다른 창에서 바뀌면 다시 확인해야 한다. 갱신 기록은 새 수료·평가 점수를 만들지 않는다. 등급 미지정 이전 Auditor 인증에는 새 갱신/계획 동선을 제공하지 않는다.
+- 추가 확인: 신규 지정 미준비 시 사용자 전체 변경 거부와 입력 보존, 준비 후 안내 미리보기·지정·이름 수정 시 미발송, 운영 기준 충돌 시 최신 내용 비교와 입력 유지, 일반→메인 취득·대상자 집계·본인 기준 확인 갱신·만료 후 학습 연결을 격리 브라우저 데이터에서 확인했다. 새 홈·운영 화면은 1920/1440/768/390px 가로 넘침 없이 확인했고 실제 색상 대비 시험에서 발견한 홈 설명 대비·자료 버튼 간격을 보완했다.
+- 배포 전 점검: 실제 최신 조직 파일은 schema2 revision6이다. 이관 미리보기는 업무17 revision231, 기존 지정자0·발송0을 보고했다. 실제 배포는 전체 검증 뒤 기존 런처/API/Vite의 신원을 확인해 중지하고 `data/backups/auditor-v17-deploy-20261026/`에 세 데이터 파일·해시·호환 코드·미커밋 구현 사본을 보관한 후 진행한다. 기존 API/프런트의127.0.0.1 바인딩과5187/5186 포트, 두 데이터 절대 경로를 명시해 재시작한다. 이전 형식 JSON4~6의 기존 Auditor는 파일 해시 기반 이관 지정 회차로 보존하고 알림은 발송하지 않는다.
+- 배포 승인 근거: 전체 서버230/230, 전체 브라우저268개 중267개 통과 후 폐지한 공통 Auditor 등록 버튼을 찾던 기존 시험을 새 전용 운영 화면 흐름으로 갱신했다. 해당 시험과 Auditor·갱신·기본정보 이전·인증서의 최종 변경을 새 프로세스에서17/17 재검증했다(`auditor17-browser-final.log`, `auditor17-browser-postchecks.log`). 문서 검사·서버/프런트 TypeScript·Vite 빌드도 통과했다(`auditor17-build-postchecks.log`); 기존500kB 번들 권고 경고는 남는다. 전체 브라우저 결과물은 `frontend/test-results/`, 추가 검증은 `data/runtime/auditor17-postchecks/`에 따로 보존했다.
+- 실제 반영(2026-10-26 09:29 KST): 기존 런처37180/API7664/Vite39224를 확인해 종료하고, 종료된 PID 잠금 경로가 작업 폴더 안임을 검증한 후 공식 `data:unlock`으로 해제했다. 위 백업 폴더의 `manifest.json`에 세 원본 SHA256·revision·설정을 기록하고 공식 `data:migrate-auditor-program --apply`를 원본 revision/두 해시 조건으로 실행했다. **업무16 revision230→17 revision231, 조직2 revision6 유지**. 기존 업무 필드·사용자7·배정/인증/알림0·감사 원문을 보존했고 이관 감사1건과 스키마 필드만 추가됐다. 조직 파일은 바이트까지 동일하며 maintenance는 generation만 변경하고 영수증을 유지했다. `verification.json`에 보존 검사를 기록했다.
+- 이관 전/후 업무 SHA256: `e25c97cccf0cd6f94c66639e14eb13da415adb036f83330d6d79bfb6666322ce` → `ffe39e2ca1f884f51cbadaec5d3248f58c6650fafdde0436cdf517056ce1d4c0`. 조직 SHA256은 `f267c50905334a9e214a57eaa04eb462df9a5a23b94c4aca020d052cc5e7502a`로 동일하다. 공식 추가 백업은 `data/backups/state/before-auditor-workflow-230-4e3deeb7-418b-4a51-8cf2-0dbda155ceb6.json`, `data/backups/organizations/before-auditor-workflow-6-4e3deeb7-418b-4a51-8cf2-0dbda155ceb6.json`, 같은 접미사의 maintenance 파일이다. 복구 시 서버를 중지하고 manifest의 세 원본을 함께 복원하며 `compatible-code-main-21da246.zip`의 호환 코드를 사용한다. 미커밋 구현 사본과 패치도 같은 배포 백업에 보존했다.
+- 재시작: 런처22268/API45104/Vite7748, 기존 두 절대 데이터 경로와127.0.0.1:5186/5187을 유지했다. `http://127.0.0.1:5186`에서 기존 운영자로 팀의 Auditor 운영 화면을 조회하고 날짜 입력0·화면 오류0·조회 전후 세 파일 해시 동일, API health `ok:true, revision:231`을 확인했다. 로그는 `data/runtime/dev-auditor17-20261026.stdout.log`·`stderr.log`, PID 파일은 `dev-auditor17-20261026.pid`, 실제 화면 검증은 `auditor17-live-smoke.log`와 `auditor17-live-admin.png`다. 재시작 후 보존 검사도 다시 통과했다.
+- 운영 시작: 팀 조직 관리자가 **Auditor 운영 → 자격·학습 기준**에서 일반 자격과 필수학습을 구성하고 지정 안내문을 저장한 뒤, 시스템 운영자가 사용자관리에서 Auditor를 지정한다. 메인 기준은 이후 준비할 수 있다. 실제 팀 기준·교육 내용·사용자 지정은 임의 생성하지 않았다. 커밋·푸시 없이 변경을 남겼으며 기존 루트 `handover.md`는 착수 사본과 바이트까지 동일하다.
+
 전체 구현 범위, 사용자 결정, 실행 환경, 변경 이력과 기록 형식은 [루트 인수인계](../handover.md)를 따른다. 과거 이력은 원본에 보존하고, 이 문서는 현재 작업의 요약과 진입점을 제공한다.
+
+## 완료 — 로컬 인수인계 기록을 보존하며 원격 main 반영
+
+- 2026-10-26 사용자 승인 계획에 따라 두 인수인계 문서의 미커밋 변경을 `codex-preserve-handover-before-pull-20261026` stash에 보관하고 `git pull --ff-only origin main`을 실행했다. `8b97fa2..21da246`의2개 커밋을 fast-forward로 반영했다.
+- 복원 중 이 문서의 상단 추가 기록이 충돌하여 원격 LAN 변경·검증 이력과 로컬 Windows 서버 실행 기록을 모두 보존해 합쳤다. 루트 `handover.md`는 보관한 내용 그대로 복원했다. 이번 작업은 Git 동기화와 문서 복원이며 커밋·푸시·명시적인 서버 재시작은 수행하지 않았다. 원격 문서의 다른 PC 실행 결과를 이 Windows 서버의 새 검증 결과로 간주하지 않는다.
+- 검증: 원격 문서의 모든 비어 있지 않은 줄과 기존 로컬 이력이 복원본에 존재하고 루트 문서는 stash 내용과 일치함을 확인했다. `HEAD`와 `origin/main`은 `21da2463b530c39bf18d2ef251b9166ad1c05212`로 같고, 미해결 충돌 없음·`git diff --check` 통과를 확인했다. 두 문서는 미스테이징 변경으로 유지하고 이번 stash `3be4da6`만 삭제했다.
 
 ## 완료 — LAN 변경 커밋·푸시
 
@@ -19,6 +75,17 @@
 - 실제 반영: Node24·기존 업무/조직 두 경로(`data/runtime/local-20261022/state.json`, 같은 폴더 `organizations.json`)로 개발 서버를 재시작했다. 첫 기동에서 조직 경로 누락으로 안전하게 시작이 거부되어 기록된 EKS_ORGANIZATIONS_FILE을 복원한 뒤 정상 기동했다. 현재 세션9853·API PID15964/Vite15965, `http://192.168.50.119:5186` 화면200·API health200/revision82·잘못된Host403이다. API는127.0.0.1:5187, Vite는*:5186 수신을 확인했다. 실행 JSON3개의 전후 SHA256은 모두 동일하며 계정 세션은 재선택해야 한다.
 - 운영 안내: [NETWORK.md](NETWORK.md)에 LAN 환경변수·요청 검증 범위·로컬 전용 복귀·Windows의 WSL 포트 전달/방화벽/확인/갱신/제거 절차를 기록했다. WSL/Windows 장비에서 실제 방화벽 통과는 미검증이며 해당 OS 설정은 변경하지 않았다. 실행 업무 데이터·API 계약·JSON 형식은 변경하지 않았고 커밋/푸시는 하지 않았다.
 - 검증 근거: `/private/tmp/eks-lan-verification/`의 server.log, browser.log, editing-browser-rerun.log, build-final.log, production-result.json, production-server.log, runtime-before.json/runtime-after.json, live-server.log. 실행 중 IP가 바뀌면 사용자는 새 주소로 접속하며 WSL NAT의 목적지 IP는 포워딩 규칙에서 별도 갱신한다.
+
+## 완료 — Windows 로컬 서버 최신 코드 실행
+
+- 2026-10-26 사용자 요청으로 `main`을 `6a216f9`에서 `8b97fa2`로 fast-forward한 뒤 최신 개발 서버를 실행한다. 원격 문서의 다른 PC 실행 기록과 이 Windows PC의 실제 데이터를 구분한다.
+- 착수 데이터는 업무11 revision222·조직2 revision5였다. 실행 중이던 개발 런처43700/API800/Vite23100의 신원을 확인해 종료하고 공식 `data:unlock`으로 종료된 프로세스의 잠금을 해제했다. 중단된 의존성 설치를 `npm ci --no-audit --no-fund`로 재실행해356개 패키지 설치 성공을 확인했다.
+- 원본 업무·조직·maintenance 세 파일을 `data/backups/server-start-20261026-0753/`에 복사하고 SHA256 일치를 확인했다. 미리보기에서 기존 모든 업무 필드·감사와 조직 객체 보존을 검증한 뒤 공식 `migrate-templates --apply`를 원본 revision/두 SHA256과 명시적 연결 파일로 실행했다. 연쇄 보존 이관 결과는 **업무16 revision227·조직2 revision5**다. 조직 파일은 바이트까지 같으며 maintenance는 generation만 변경되고 기존 영수증을 유지했다.
+- 이름·기본자격 연결이 없는 빈 자격2개는 각각 `미완성 자격 (eab069bb)`, `미완성 자격 (9e7be957)` 기본자격에 연결했다. 이는 데이터 보존을 위한 임시 표시명이며 사용자 확정 업무 명칭이 아니다. 기존 자격의 빈 원문·ID·구성과15종 연결을 유지했다. 기본자격17개를 마련했으며, 기존 자격18개 버전·인증Set78·사용자7과 계획/배정/응시/수료/인증0건은 이관 전후 동일하다. 기존 기록에 Auditee 유형을 적용하는 공식 이관 정책을 따르며 이름만으로 Auditor로 전환하지 않았다.
+- **08:11 KST** Node24.14.0 개발 런처37180/API7664를 숨김 백그라운드로 실행했다. 앱 `http://127.0.0.1:5186` HTTP200, API `http://127.0.0.1:5187/api/health`의 `ok:true, revision:227`을 확인했다. 서버 재시작·데이터 세대 변경으로 계정을 다시 선택해야 한다. 로그는 `data/runtime/dev-20261026.stdout.log`·`dev-20261026.stderr.log`, 런처 PID는 `dev-20261026.pid`다.
+- 사전 백업 폴더의 `manifest.json`·`template-mapping.json`·`preview.json`·`verification.json`에 원본 해시·연결 결정·미리보기·적용 후 보존 결과를 기록했다. 공식 영구 백업은 `data/backups/state/before-qualification-templates-222-1d0b2d4f-813f-41db-ba68-18a20a8ccc6b.json`, `data/backups/organizations/before-qualification-templates-5-1d0b2d4f-813f-41db-ba68-18a20a8ccc6b.json`, 같은 접미사의 maintenance 백업이다. 복구 시 서버를 중지하고 세 원본 및 업무11 호환 코드를 함께 사용하거나 다시 명시 이관한다. 초기화·커밋·푸시는 하지 않았다.
+
+- 최종 빌드: `npm run build`의 문서 등록 검사·서버/프런트 TypeScript·Vite가 통과했다. 기존 Zod 주석과500kB 번들 권고 경고만 남는다. 제품 코드 변경이 없어 전체 서버/Playwright 회귀는 재실행하지 않았다.
 
 ## 완료 — 누적 변경 전체 커밋·푸시
 

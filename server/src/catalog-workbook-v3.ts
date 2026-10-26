@@ -29,6 +29,8 @@ const meta: [string, string][] = [
   ["templateId", "기본자격 ID"],
   ["templateRevision", "공통 정보 수정 번호"],
   ["qualificationType", "인증 유형 · 읽기 전용"],
+  ["ownerLv1OrganizationId", "소유팀 · 읽기 전용"],
+  ["auditorLevel", "Auditor 등급 · 읽기 전용"],
 ];
 const systemKeys = [
   "code",
@@ -86,10 +88,10 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v10";
+  book.subject = "eks-catalog-v11";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 등록된 팀 자격 양식 v10"],
+    ["EKS 자격 기준 · 등록된 팀 자격 양식 v11"],
     [
       "Auditor는 필수 학습항목 본인 확인으로 수료합니다. 기존 평가 칸은 비활성 보존용이며 변경할 수 없습니다.",
     ],
@@ -170,7 +172,7 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v10",
+      format: "eks-catalog-v11",
       lv1OrganizationId: data.lv1OrganizationId,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
@@ -239,6 +241,8 @@ export async function writeCatalogV3(
           "templateId",
           "templateRevision",
           "qualificationType",
+          "ownerLv1OrganizationId",
+          "auditorLevel",
         ].includes(k)
       ) {
         cell.fill = {
@@ -248,7 +252,7 @@ export async function writeCatalogV3(
         };
         cell.font = { color: { argb: "61718A" } };
         cell.note =
-          "참고용 공통 정보입니다. 기본자격 관리에서만 변경할 수 있으며 파일에서 변경하면 저장이 차단됩니다.";
+          "읽기 전용입니다. 팀 소유 Auditor 자격은 Auditor 운영, 공통 기본자격은 기본자격 관리에서 변경합니다. 소유팀·등급·연결 식별자는 변경할 수 없습니다.";
       }
       if (k === "lifecycleStatus")
         cell.note =
@@ -420,7 +424,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v10",
+    format: "eks-catalog-v11",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -504,6 +508,7 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
         "eks-catalog-v8",
         "eks-catalog-v9",
         "eks-catalog-v10",
+        "eks-catalog-v11",
       ].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
@@ -520,6 +525,10 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
       ...(m.qualificationType !== undefined && m.qualificationType !== ""
         ? { qualificationType: m.qualificationType }
         : {}),
+      ...(m.ownerLv1OrganizationId
+        ? { ownerLv1OrganizationId: String(m.ownerLv1OrganizationId) }
+        : {}),
+      ...(m.auditorLevel ? { auditorLevel: m.auditorLevel } : {}),
       sheetName: ws.name,
       mode,
       code: String(m.code || `Q-${seed}-${workbook.sheets.length + 1}`),

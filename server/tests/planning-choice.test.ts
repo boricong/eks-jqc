@@ -69,7 +69,7 @@ async function fixture(t: TestContext) {
         revision: store.organizations.snapshot().revision,
         qualificationIds: ids,
       },
-      200,
+      410,
       "PUT",
     );
   const required = (ids: string[] | null) =>
@@ -163,12 +163,12 @@ async function fixture(t: TestContext) {
     },
   };
 }
-test("필수 null/빈 배열·팀 적용 0건에도 발송하며 준비 대기는 완료하지 않는다", async (t) => {
+test("필수 null/빈 배열에도 등록 자격으로 시작하며 미착수 요청은 완료하지 않는다", async (t) => {
   const f = await fixture(t);
   for (const required of [null, []]) {
     await f.required(required);
     const id = await f.req();
-    assert.equal((await f.view(id)).stage, "자격 준비 대기");
+    assert.equal((await f.view(id)).stage, "미착수");
     await f.finish(id, 409);
     assert.deepEqual(f.row(id).targets, []);
   }
@@ -234,6 +234,9 @@ test("요청 당시 필수 고정·추가 자격 선택·필수 해제 후 확�
 });
 test("모두 확정 계획으로 진행 중이면 0개 완료 확인과 기존 근거 재사용", async (t) => {
   const f = await fixture(t);
+  await f.mutate((s) => {
+    s.qualifications = s.qualifications.filter((q) => q.id === qid);
+  });
   await f.pool();
   const first = await f.req();
   await f.select(first, [qid]);
@@ -373,7 +376,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 16);
+  assert.equal(next.state.schemaVersion, 18);
   assert.deepEqual(next.state.plans, raw.plans);
   assert.deepEqual(
     next.state.planningRequests[0]!.targets,
@@ -474,6 +477,9 @@ test("저장 실패는 선택·감사·요청 기록을 원복하고 동시 완�
 });
 test("과거 직접 배정은 중복 계획 없이 근거로 연결하고 외부 자격·완료 후 선택을 차단한다", async (t) => {
   const f = await fixture(t);
+  await f.mutate((s) => {
+    s.qualifications = s.qualifications.filter((q) => q.id === qid);
+  });
   await f.pool();
   const id = (
     await f.call("admin-1", "/planning-requests", {

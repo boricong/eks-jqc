@@ -32,6 +32,8 @@ type Impact = {
   canDelete: boolean;
   blockers: string[];
   mode: 'archive' | 'remove';
+  replacement: { id: string; version: number; title: string } | null;
+  affectedOrganizations: { id: string; name: string }[];
 };
 const impact = ref<Impact>();
 watch(
@@ -53,7 +55,7 @@ onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
 const labels: Record<string, string> = {
   lifecycleEvents: '상태 변경 근거',
-  pools: '팀 적용 목록',
+  pools: '현재 팀 기준 목록',
   requests: '계획 요청',
   plans: '개인 계획',
   assignments: '배정',
@@ -129,6 +131,14 @@ async function remove() {
     <h3>{{ qualification.title || '이름 없는 자격' }} · v{{ qualification.version }}</h3>
     <p>{{ store.managementOrganization?.name }}</p>
     <template v-if="impact">
+      <p v-if="impact.replacement">
+        삭제 후 현재 기준: {{ impact.replacement.title }} · v{{ impact.replacement.version }}
+      </p>
+      <p v-else>남은 기준이 없어 신규 계획·학습·갱신 시작을 제한합니다.</p>
+      <p v-if="impact.affectedOrganizations.length">
+        필수 지정 함께 해제: {{ impact.affectedOrganizations.map((o) => o.name).join(', ') }}. 과거
+        요청과 확정 근거는 보존합니다.
+      </p>
       <dl class="deletion-counts">
         <div v-for="(count, key) in impact.references" :key="key">
           <dt>{{ labels[key] || key }}</dt>

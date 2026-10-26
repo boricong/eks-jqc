@@ -30,7 +30,8 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
-    schemaVersion: 16,
+    schemaVersion: 18,
+    auditorPrograms: [],
     qualificationTemplates: initialTemplates(),
     renewals: [],
     lifecycleEvents: [],

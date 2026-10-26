@@ -63,7 +63,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v10",
+    format: "eks-catalog-v11",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const original = s.qualifications.find((q) => q.id === id);
@@ -158,6 +158,15 @@ export function exportCatalog(
         title: q.title,
         englishName: q.englishName,
         description: q.description,
+        ...(s.qualificationTemplates.find((t) => t.id === q.templateId)
+          ?.scope === "team"
+          ? {
+              ownerLv1OrganizationId: q.lv1OrganizationId,
+              auditorLevel: s.qualificationTemplates.find(
+                (t) => t.id === q.templateId,
+              )!.auditorLevel,
+            }
+          : {}),
         validityType: q.validity.type,
         months: q.validity.months,
         reminderDays: [],
@@ -171,7 +180,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v10",
+    format: "eks-catalog-v11",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -264,6 +273,7 @@ export function prepareCatalog(
         "eks-catalog-v8",
         "eks-catalog-v9",
         "eks-catalog-v10",
+        "eks-catalog-v11",
       ].includes(raw?.format) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
@@ -408,6 +418,21 @@ export function prepareCatalog(
         return;
       } else {
         const common = currentQualification(s, original);
+        const owner = s.qualificationTemplates.find(
+          (t) => t.id === original!.templateId,
+        );
+        if (
+          (sheet.ownerLv1OrganizationId !== undefined &&
+            sheet.ownerLv1OrganizationId !== owner?.ownerLv1OrganizationId) ||
+          (sheet.auditorLevel !== undefined &&
+            sheet.auditorLevel !== owner?.auditorLevel)
+        )
+          issue(
+            "metadata",
+            0,
+            "auditorLevel",
+            "소유팀·등급 연결은 읽기 전용입니다. 원본 파일을 다시 내보내 주세요.",
+          );
         if (
           sheet.qualificationType !== undefined &&
           sheet.qualificationType !== common.qualificationType

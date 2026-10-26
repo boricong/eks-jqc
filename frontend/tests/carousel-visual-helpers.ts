@@ -38,8 +38,8 @@ export async function checkCarouselVisuals(page: Page, navigation = true) {
 }
 
 // Measure the actual photo + opacity + mask composition, including button surfaces.
-export async function carouselContrast(page: Page) {
-  const frame = page.locator('.home-qualification-frame');
+export async function carouselContrast(page: Page, selector = '.home-qualification-frame') {
+  const frame = page.locator(selector);
   await frame.scrollIntoViewIfNeeded();
   await page.evaluate(() => document.fonts.ready);
   await frame.evaluate(async (el) => {
@@ -91,8 +91,7 @@ export async function carouselContrast(page: Page) {
     return points;
   });
   const hide = await page.addStyleTag({
-    content:
-      '.home-qualification-frame * { -webkit-text-fill-color: transparent !important; text-shadow: none !important; outline-color: transparent !important; } .home-qualification-frame svg { visibility: hidden !important; }',
+    content: `${selector} * { -webkit-text-fill-color: transparent !important; text-shadow: none !important; outline-color: transparent !important; } ${selector} svg { visibility: hidden !important; }`,
   });
   let png: Buffer;
   try {

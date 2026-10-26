@@ -98,8 +98,8 @@ const filters = computed(() =>
     props.query.progress ? progressLabels[props.query.progress] : '',
     props.query.expiryBucket ? '만료 구간 필터 적용' : '',
     props.query.renewalState ? '재인증 필터 적용' : '',
-    props.query.qualificationScope === 'applied'
-      ? '팀 적용 자격'
+    props.query.qualificationScope === 'registered'
+      ? '현재 팀 기준 자격'
       : props.query.qualificationScope === 'records'
         ? '기록 보유 자격'
         : '',

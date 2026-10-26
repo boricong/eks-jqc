@@ -281,7 +281,7 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
       revision: f.store.organizations.snapshot().revision,
       qualificationIds: [q.id],
     },
-    422,
+    410,
     "PUT",
   );
   await f.call(
@@ -293,11 +293,11 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
       duties: "",
       requiredQualifications: [q.entityId],
     },
-    422,
+    200,
     "PUT",
   );
   const workbook = exportCatalog(f.store.snapshot(), "org-photo", [q.id]);
-  assert.equal(workbook.format, "eks-catalog-v10");
+  assert.equal(workbook.format, "eks-catalog-v11");
   const xlsx = await readCatalogWorkbook(await writeCatalogWorkbook(workbook));
   assert.deepEqual(xlsx.workbook, workbook);
   const altered = structuredClone(workbook);
@@ -336,8 +336,8 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 6);
-  assert.equal(master.stateSchemaVersion, 16);
+  assert.equal(master.formatVersion, 8);
+  assert.equal(master.stateSchemaVersion, 18);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -463,12 +463,13 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 16);
-  assert.equal(preview.state.revision, raw.revision + 3);
+  assert.equal(preview.state.schemaVersion, 18);
+  assert.equal(preview.state.revision, raw.revision + 5);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 3;
-  normalized.audits.splice(-3);
+  normalized.revision -= 5;
+  normalized.audits.splice(-5);
+  normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,
     ...normalized.qualifications,
@@ -521,7 +522,7 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
   assert.deepEqual(await readFile(applied.stateBackup), before);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 3, stateHash: hash(after) },
+    { ...expected, revision: raw.revision + 5, stateHash: hash(after) },
     migrateQualificationTypes,
   );
   assert.deepEqual(await readFile(f.file), after);
@@ -540,6 +541,9 @@ test("구형 기본정보는 Auditee로 변환하며 인증서 유형은 URL 대
     org = seedOrganizations();
   const file: any = exportMaster(s, org, new Date().toISOString());
   file.formatVersion = 3;
+  file.organizationSchemaVersion = 2;
+  file.payload.organizations.qualificationPools = [];
+  file.counts.poolEntries = 0;
   file.stateSchemaVersion = 13;
   for (const q of [
     ...file.payload.qualifications,
@@ -612,7 +616,7 @@ test("Auditor 인증 조회는 가능하지만 재인증 시작/완료 직접 �
       { certificationRevision: 1 },
       409,
     );
-    assert.equal(response.code, "QUALIFICATION_PROCESS_UNAVAILABLE");
+    assert.equal(response.code, "RENEWAL_UNAVAILABLE");
   }
   assert.equal(
     f.store.snapshot().certifications.find((c) => c.id === "auditor-cert")!

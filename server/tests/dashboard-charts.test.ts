@@ -101,11 +101,7 @@ test("구성원/매트릭스의 현재25행·10열 밖 진행도 차트에 포�
   }
   for (let i = 0; i < 12; i++) {
     const q = addQualification(seed, "q" + i);
-    seed.orgs.qualificationPools.push({
-      lv1OrganizationId: TEAM,
-      entityId: q.entityId,
-      qualificationId: q.id,
-    });
+
     addRequest(seed, "r" + i, "extra-39", [q.entityId]);
     addDraft(seed, "p" + i, "r" + i, q.id);
   }
@@ -137,11 +133,7 @@ test("구성원/매트릭스의 현재25행·10열 밖 진행도 차트에 포�
 test("구성원·만료 차트는 검색/대상/상태 필터를 유지하고 필수 전체 판정은 축소하지 않는다", async (t) => {
   const seed = dashboardSeed();
   const q = addQualification(seed, "required-second");
-  seed.orgs.qualificationPools.push({
-    lv1OrganizationId: TEAM,
-    entityId: q.entityId,
-    qualificationId: q.id,
-  });
+
   seed.orgs.roots[0]!.children[0]!.requiredQualifications = [Q, q.entityId];
   addCertification(seed, "active", "alice", { qualificationId: Q });
   seed.state.users.find((u) => u.id === "bob")!.certificationEligibility =

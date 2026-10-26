@@ -48,8 +48,10 @@ const validity = computed({
       <dd>{{ sheet.title }}</dd>
       <dt>영문명</dt>
       <dd>{{ sheet.englishName || '—' }}</dd>
-      <dt>공통 설명</dt>
-      <dd style="white-space: pre-wrap">{{ sheet.description || '시스템 관리자 보완 필요' }}</dd>
+      <template v-if="sheet.description">
+        <dt>공통 설명</dt>
+        <dd style="white-space: pre-wrap">{{ sheet.description }}</dd>
+      </template>
     </dl>
     <div class="form-grid">
       <label class="field"

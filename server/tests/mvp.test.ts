@@ -915,7 +915,7 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     undefined,
   );
   await planAssignment(f, "admin-1", {
-    qualificationId: "demo-qualification",
+    qualificationId: q.id,
     learnerId: await createUser(f, "재개 후 대상자", ["learner"]),
     ftId: "ft-1",
   });

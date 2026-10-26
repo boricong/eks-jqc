@@ -397,6 +397,7 @@ async function recover(record: CatalogRecovery) {
       'eks-catalog-v8',
       'eks-catalog-v9',
       'eks-catalog-v10',
+      'eks-catalog-v11',
     ].includes(record.workbook.format)
   ) {
     error.value =
@@ -710,7 +711,7 @@ async function commit(path: string, body: unknown, token: number) {
     store.notify(
       result.unchanged
         ? '변경된 기준이 없습니다.'
-        : '선택한 기준을 저장했습니다. 팀 적용 버전은 유지됩니다.',
+        : '선택한 기준을 저장했습니다. 최신 저장 버전을 신규 업무에 사용합니다.',
     );
   } catch (e) {
     if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
@@ -825,6 +826,7 @@ async function backToList() {
                 'eks-catalog-v8',
                 'eks-catalog-v9',
                 'eks-catalog-v10',
+                'eks-catalog-v11',
               ].includes(v.workbook.format),
           )"
           :key="r.id + '-download'"
@@ -1271,11 +1273,11 @@ async function backToList() {
       </div>
       <p v-if="!selected.length" class="muted">변경한 자격 또는 저장한 기준을 선택해 주세요.</p>
       <p>
-        팀 적용 버전은 변경되지 않습니다. 저장한 버전은
+        저장한 최신 버전을 신규 업무에 사용합니다. 저장한 기준은
         <RouterLink :to="store.managementLink('/admin/qualifications')">{{
           managementTitle('qualifications')
         }}</RouterLink
-        >의 팀 적용에서 선택할 수 있습니다.
+        >에서 확인할 수 있습니다.
       </p>
       <template #footer
         ><button class="button primary" :disabled="busy || !canSave" @click="save">

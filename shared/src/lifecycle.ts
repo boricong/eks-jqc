@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { ValiditySchema, kstDate, type ValidityPolicy } from "./workflow.ts";
+import {
+  ValiditySchema,
+  LearningItemSchema,
+  kstDate,
+  type ValidityPolicy,
+} from "./workflow.ts";
 
 export const LifecycleStatusSchema = z.enum(["Active", "Hold", "Revoke"]);
 export type LifecycleStatus = z.infer<typeof LifecycleStatusSchema>;
@@ -50,7 +55,43 @@ export const RenewalSchema = z.object({
   completedAt: z.iso.datetime().optional(),
   closedAt: z.iso.datetime().optional(),
   closeReason: z.string().optional(),
-  method: z.literal("mvp_completion"),
+  method: z.enum(["mvp_completion", "auditor_self_confirmation"]),
+  criteriaFingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  confirmation: z
+    .object({
+      confirmedBy: z.string(),
+      confirmedAt: z.iso.datetime(),
+      qualificationId: z.string(),
+      qualificationRevision: z.number().int().positive(),
+      qualificationVersion: z.number().int().positive(),
+      templateId: z.string(),
+      templateRevision: z.number().int().positive(),
+      title: z.string(),
+      description: z.string(),
+      courses: z.array(
+        z.object({
+          id: z.string(),
+          version: z.number().int().positive(),
+          revision: z.number().int().positive(),
+          title: z.string(),
+          learningItems: z.array(LearningItemSchema),
+          materials: z.array(
+            z.object({
+              id: z.string(),
+              type: z.enum(["text", "edm", "confluence", "url"]),
+              title: z.string(),
+              content: z.string(),
+              url: z.string(),
+              description: z.string(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type Renewal = z.infer<typeof RenewalSchema>;
 export const LifecycleEventSchema = z.object({

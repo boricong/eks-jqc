@@ -765,7 +765,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   assert.equal(repeated.existing.length, 15);
   assert.ok(
     (await f.call("learner-2", "/workspace")).qualifications.every(
-      (q: any) => !q.templateId,
+      (q: any) => !!q.templateId,
     ),
   );
   const q = f.store
@@ -801,7 +801,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   );
   const { q: custom } = await catalog(f);
   assert.ok(
-    !(await f.call("learner-2", "/workspace")).qualifications.some(
+    (await f.call("learner-2", "/workspace")).qualifications.some(
       (q: any) => q.id === custom,
     ),
   );

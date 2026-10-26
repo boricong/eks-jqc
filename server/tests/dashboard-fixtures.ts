@@ -85,13 +85,10 @@ export function dashboardSeed() {
   state.qualifications[0]!.lifecycleStatus = "Active";
   state.qualifications[0]!.renewalLeadMonths = 3;
   const orgs: OrganizationDocument = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     revision: 0,
     audits: [],
     requests: [],
-    qualificationPools: [
-      { lv1OrganizationId: TEAM, entityId: Q, qualificationId: Q },
-    ],
     roots: [
       {
         id: TEAM,
@@ -479,25 +476,18 @@ export async function configureDashboardFixture(store: JsonStore) {
   });
   addRequest(seed, "draft-request", "learner-2");
   addDraft(seed, "draft-plan", "draft-request");
-  await store.organizations.transact(
+
+  await store.transactPair(
     "operator-1",
     randomUUID(),
     randomUUID(),
     () => {},
-    (doc) => {
-      doc.roots = seed.orgs.roots;
-      doc.qualificationPools = seed.orgs.qualificationPools;
-      return {};
-    },
-  );
-  await store.transact(
-    "operator-1",
-    randomUUID(),
-    randomUUID(),
-    () => {},
-    (state) => {
+    (state, organizations) => {
       const revision = state.revision;
       Object.assign(state, seed.state, { revision });
+      Object.assign(organizations, seed.orgs, {
+        revision: organizations.revision,
+      });
       return {};
     },
   );

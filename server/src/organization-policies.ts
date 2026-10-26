@@ -1,3 +1,4 @@
+import { currentTeamQualifications } from "@eks/contracts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
   currentQualification,
@@ -30,7 +31,7 @@ import { fullManager, policyScope } from "./organization-administrators.ts";
 export function validatePolicies(s: State, doc: OrganizationDocument) {
   const entries = organizationEntries(doc);
   const seen = new Set<string>();
-  for (const p of doc.qualificationPools) {
+  for (const p of currentTeamQualifications(s)) {
     const q = s.qualifications.find((q) => q.id === p.qualificationId);
     demand(
       entries.some((e) => e.id === p.lv1OrganizationId && e.level === 1) &&
@@ -39,7 +40,7 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
         q.lv1OrganizationId === p.lv1OrganizationId &&
         q.entityId === p.entityId,
       422,
-      "팀 자격 목록의 조직·게시 버전 참조를 확인해 주세요.",
+      "팀 자격의 조직 참조·현재 버전을 확인해 주세요.",
     );
     requireQualificationProcess(q!);
     const key = `${p.lv1OrganizationId}:${p.entityId}`;
@@ -118,7 +119,7 @@ export function requiredQualifications(
       );
     })
     .map((entityId) => {
-      const pool = doc.qualificationPools.find(
+      const pool = currentTeamQualifications(s).find(
         (p) =>
           p.lv1OrganizationId === org.lv1OrganizationId &&
           p.entityId === entityId,
@@ -271,7 +272,7 @@ export function planningReadiness(
   type: QualificationType = "auditee",
 ) {
   const org = organization(doc, u.organizationId);
-  const rows = doc.qualificationPools
+  const rows = currentTeamQualifications(s)
     .filter(
       (p) =>
         p.lv1OrganizationId === u.lv1OrganizationId &&
@@ -353,7 +354,7 @@ export function policiesView(
   return {
     revision: doc.revision,
     stateRevision: s.revision,
-    canManagePool: !u || fullManager(u),
+    canManageQualifications: !u || fullManager(u),
     canAssignAdministrators: !u || fullManager(u),
     lv1OrganizationId: scope,
     entries: organizationEntries(doc)
@@ -372,7 +373,7 @@ export function policiesView(
             s.users.find((u) => u.id === p.learnerId)?.organizationId === e.id,
         ).length,
       })),
-    pool: doc.qualificationPools
+    qualifications: currentTeamQualifications(s)
       .filter((p) => p.lv1OrganizationId === scope)
       .map((p) => {
         const q = currentQualification(
@@ -416,52 +417,12 @@ export function changePolicy(
   );
   let before: unknown, after: unknown;
   if (pool) {
-    demand(target === scope, 422, "Lv1의 팀 자격 목록을 선택해 주세요.");
-    const input = z
-      .object({
-        revision: z.number(),
-        qualificationIds: z.array(z.string()).max(1000),
-      })
-      .strict()
-      .parse(body);
-    before = doc.qualificationPools.filter(
-      (p) => p.lv1OrganizationId === scope,
-    );
-    const next = input.qualificationIds.map((id) => {
-      const q = s.qualifications.find((q) => q.id === id);
-      if (q) requireQualificationProcess(q);
-      demand(
-        q &&
-          !q.deletedAt &&
-          q.lv1OrganizationId === scope &&
-          !qualificationReadinessErrors(currentQualification(s, q), s.courses)
-            .length,
-        422,
-        "같은 팀의 설정이 완료된 자격 버전을 선택해 주세요.",
-      );
-      return {
-        lv1OrganizationId: scope,
-        entityId: q.entityId,
-        qualificationId: q.id,
-      };
-    });
-    const blocked = organizationEntries(doc).filter(
-      (e) =>
-        e.lv1OrganizationId === scope &&
-        e.requiredQualifications?.some(
-          (id) => !next.some((p) => p.entityId === id),
-        ),
-    );
     demand(
-      !blocked.length,
-      409,
-      `필수 지정부터 해제해 주세요: ${blocked.map((e) => e.path.map((p) => p.name).join(" › ")).join(", ")}`,
+      false,
+      410,
+      "팀 적용 기능이 종료되었습니다. 팀 자격설정에서 기준을 저장해 주세요.",
+      "TEAM_APPLICATION_REMOVED",
     );
-    doc.qualificationPools = [
-      ...doc.qualificationPools.filter((p) => p.lv1OrganizationId !== scope),
-      ...next,
-    ];
-    after = next;
   } else {
     const input = z
       .object({

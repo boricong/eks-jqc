@@ -11,7 +11,6 @@ export const masterCountLabels = {
   scenarioQuestions: "상황 대응 문항",
   learningItems: "학습 항목",
   materials: "학습자료",
-  poolEntries: "팀 후보 자격",
   administrators: "세부 관리자 지정",
 };
 export type MasterCounts = Record<keyof typeof masterCountLabels, number>;
@@ -38,17 +37,18 @@ export const clearedDataLabels = {
 };
 export type ClearedCounts = Record<keyof typeof clearedDataLabels, number>;
 export interface MasterPayload {
+  auditorPrograms?: State["auditorPrograms"];
   qualificationTemplates: State["qualificationTemplates"];
   users: State["users"];
   qualifications: State["qualifications"];
   courses: State["courses"];
-  organizations: Pick<OrganizationDocument, "roots" | "qualificationPools">;
+  organizations: Pick<OrganizationDocument, "roots">;
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 6;
-  stateSchemaVersion: 16;
-  organizationSchemaVersion: 2;
+  formatVersion: 8;
+  stateSchemaVersion: 18;
+  organizationSchemaVersion: 3;
   createdAt: string;
   counts: MasterCounts;
   sha256: string;

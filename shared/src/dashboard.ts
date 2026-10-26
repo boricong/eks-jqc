@@ -59,7 +59,7 @@ export interface DashboardQuery {
   required?: "all" | "required" | "optional";
   efficacy?: DashboardEfficacy;
   progress?: DashboardProgress;
-  qualificationScope?: "all" | "applied" | "records";
+  qualificationScope?: "all" | "registered" | "records";
   expiryBucket?: DashboardExpiryBucket;
   renewalState?: DashboardRenewalState;
   sort?:
@@ -143,9 +143,9 @@ export interface DashboardSummary {
 export interface DashboardQualificationOption {
   entityId: string;
   title: string;
-  applied: boolean;
-  appliedQualificationId?: string;
-  appliedVersion?: number;
+  registered: boolean;
+  currentQualificationId?: string;
+  currentVersion?: number;
   criterionStatus?: "Active" | "Hold" | "Revoke";
   hasRecords: boolean;
 }
@@ -175,8 +175,8 @@ export interface DashboardQualificationCell {
   entityId: string;
   title: string;
   required: boolean;
-  applied: boolean;
-  appliedVersion?: number;
+  registered: boolean;
+  currentVersion?: number;
   efficacy: DashboardEfficacy;
   progress: DashboardProgress;
   selected: boolean;

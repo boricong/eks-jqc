@@ -26,6 +26,34 @@ const selected = ref<UserView | null>(null),
   busy = ref(false),
   error = ref('');
 const form = ref({ name: '', organizationId: '', roles: ['learner'] as Role[] });
+const addingAuditor = computed(
+  () => form.value.roles.includes('evaluator') && !selected.value?.roles.includes('evaluator'),
+);
+const auditorPreview = ref<{
+  readiness: { ready: boolean; reasons: string[] };
+  program: {
+    notice: { title: string; body: string; links: { title: string; url: string }[] };
+  } | null;
+}>();
+const auditorError = ref('');
+let auditorSequence = 0;
+watch([addingAuditor, () => form.value.organizationId], async () => {
+  const seq = ++auditorSequence;
+  auditorPreview.value = undefined;
+  auditorError.value = '';
+  const team = doc.value?.entries.find(
+    (e) => e.id === form.value.organizationId,
+  )?.lv1OrganizationId;
+  if (!addingAuditor.value || !team) return;
+  try {
+    const result = await api<typeof auditorPreview.value>(
+      `/auditor-program?lv1OrganizationId=${encodeURIComponent(team)}`,
+    );
+    if (seq === auditorSequence) auditorPreview.value = result;
+  } catch (e) {
+    if (seq === auditorSequence) auditorError.value = (e as Error).message;
+  }
+});
 const listed = computed(() =>
   users.value.filter(
     (u) =>
@@ -117,7 +145,7 @@ onMounted(async () => {
       ><button class="button primary" :disabled="busy" @click="edit()">사용자 추가</button>
     </div>
   </div>
-  <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+  <p v-if="error && !editing" class="error-message" role="alert">{{ error }}</p>
   <AppDialog
     :open="editing && !!doc"
     :title="selected ? `${selected.name} 정보 수정` : '사용자 추가'"
@@ -125,6 +153,7 @@ onMounted(async () => {
     @update:open="editing = false"
   >
     <section v-if="editing && doc" class="user-editor">
+      <p v-if="error" class="error-message" role="alert">{{ error }}</p>
       <p v-if="selected" class="muted">
         {{ selected.organizationPath.map((p) => p.name).join(' › ') }}
       </p>
@@ -147,10 +176,29 @@ onMounted(async () => {
           >
         </fieldset>
         <p class="muted">
-          학습자는 Auditee, 평가자는 Auditor 계획 요청 대상입니다. 평가자 역할은 다른 사람의
-          평가·승인 권한을 부여하지 않습니다. 역할을 해제해도 기존 Auditor 요청은 계속 진행할 수
-          있습니다.
+          Auditor는 지정된 필수학습을 홈에서 시작합니다. 일반·메인 등급은 취득 인증으로 결정합니다.
+          지정 해제 후에도 이미 시작한 학습과 기존 인증은 유지됩니다.
         </p>
+        <section v-if="addingAuditor" aria-label="Auditor 지정 안내 미리보기">
+          <p v-if="auditorError" role="alert">{{ auditorError }}</p>
+          <p v-if="!auditorError && !auditorPreview" role="status">
+            팀의 지정 준비 상태를 확인하고 있습니다.
+          </p>
+          <template v-if="auditorPreview"
+            ><p>신규 지정 준비 · {{ auditorPreview.readiness.ready ? '완료' : '확인 필요' }}</p>
+            <ul>
+              <li v-for="reason in auditorPreview.readiness.reasons" :key="reason">{{ reason }}</li>
+            </ul>
+            <h3>{{ auditorPreview.program?.notice.title }}</h3>
+            <p style="white-space: pre-wrap">{{ auditorPreview.program?.notice.body }}</p>
+            <p v-for="link in auditorPreview.program?.notice.links" :key="link.url">
+              <a :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a>
+            </p>
+            <p class="muted">
+              저장과 함께 앱 내 안내 및 Auditor 학습 진입 링크를 한 번 보냅니다.
+            </p></template
+          >
+        </section>
         <p v-if="selected?.organizationAdministration" class="notice-body">
           세부 조직 관리자 지정은 조직 필수 자격 설정에서 관리합니다. 소속 조직을 변경하면 현재
           지정이 해제되며 새 소속에서 다시 지정해야 합니다.

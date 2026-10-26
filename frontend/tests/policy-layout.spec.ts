@@ -70,7 +70,7 @@ test('조직 이름만 표시하는 좌우 설정·깊은 조직 탐색·모바�
   await tree.locator(`[data-id="${own}"]`).click();
   await expect(page.locator('.policy-detail-stack > section > h2')).toHaveText(longName);
   await expect(
-    page.getByRole('link', { name: '팀 자격 설정 · 등록·팀 적용', exact: true }),
+    page.getByRole('link', { name: '팀 자격 설정 · 등록·현재 팀 기준', exact: true }),
   ).toBeVisible();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });

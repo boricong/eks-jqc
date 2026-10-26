@@ -30,7 +30,11 @@ export function learnerNavigationItems(
   type: QualificationType = 'auditee',
 ) {
   return [
-    { path: type === 'auditor' ? '/plans?type=auditor' : '/plans', label: '내 계획', key: 'plans' },
+    {
+      path: type === 'auditor' ? '/auditor' : '/plans',
+      label: type === 'auditor' ? 'Auditor 학습' : '내 계획',
+      key: type === 'auditor' ? 'auditor' : 'plans',
+    },
     {
       path: qualificationLocation(
         'learning',
@@ -124,7 +128,10 @@ export function primaryNavigationSection(
     if (record?.learnerId === actor.id && learner) return 'learning';
     return operator ? 'system' : admin ? 'management' : '';
   }
-  return learner && (route.path.startsWith('/qualifications') || route.path.startsWith('/plans'))
+  return learner &&
+    (route.path.startsWith('/qualifications') ||
+      route.path.startsWith('/plans') ||
+      route.path === '/auditor')
     ? 'learning'
     : '';
 }

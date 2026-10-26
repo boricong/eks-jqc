@@ -23,7 +23,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 16) {
+  if (!legacy && (input as any)?.schemaVersion === 18) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -47,6 +47,102 @@ export function validateState(
     legacy ? LegacyStateSchema.parse(input) : StateSchema.parse(input)
   ) as State;
   if (!legacy) {
+    check(
+      new Set(s.auditorPrograms.map((p) => p.lv1OrganizationId)).size ===
+        s.auditorPrograms.length,
+      "Auditor 팀 운영 중복",
+    );
+    for (const t of s.qualificationTemplates) {
+      if (t.scope === "team")
+        check(
+          t.ownerLv1OrganizationId &&
+            t.auditorLevel &&
+            t.qualificationType === "auditor",
+          "팀 소유 자격 범위",
+        );
+      else
+        check(
+          !t.ownerLv1OrganizationId && !t.auditorLevel,
+          "시스템 자격 소유 정보",
+        );
+      if (t.scope === "team")
+        check(
+          s.qualifications
+            .filter((q) => q.templateId === t.id)
+            .every((q) => q.lv1OrganizationId === t.ownerLv1OrganizationId),
+          "팀 소유 자격 교차 연결",
+        );
+    }
+    check(
+      new Set(
+        s.qualificationTemplates
+          .filter((t) => t.scope === "team")
+          .map((t) => `${t.ownerLv1OrganizationId}:${t.auditorLevel}`),
+      ).size ===
+        s.qualificationTemplates.filter((t) => t.scope === "team").length,
+      "팀 등급 계보 중복",
+    );
+    for (const p of s.auditorPrograms) {
+      if (organizations)
+        check(
+          organizationEntries(organizations).some(
+            (o) => o.id === p.lv1OrganizationId && o.level === 1,
+          ),
+          "Auditor 운영 팀 참조",
+        );
+      check(
+        s.users.some((u) => u.id === p.updatedBy),
+        "Auditor 기준 관리자 참조",
+      );
+      for (const level of ["general", "main"] as const) {
+        const ref = p[level];
+        if (!ref) continue;
+        const t = s.qualificationTemplates.find((t) => t.id === ref.templateId),
+          q = s.qualifications.find(
+            (q) =>
+              q.entityId === ref.entityId &&
+              q.lv1OrganizationId === p.lv1OrganizationId,
+          );
+        check(
+          t?.scope === "team" &&
+            t.ownerLv1OrganizationId === p.lv1OrganizationId &&
+            t.auditorLevel === level &&
+            q?.templateId === t.id,
+          "Auditor 적용 계보·등급·팀 연결",
+        );
+      }
+    }
+    for (const a of s.assignments.filter((a) => a.auditor)) {
+      const q = s.qualifications.find((q) => q.id === a.qualificationId),
+        t = s.qualificationTemplates.find((t) => t.id === q?.templateId);
+      check(
+        !a.planId &&
+          a.createdBy === a.learnerId &&
+          t?.auditorLevel === a.auditor!.level &&
+          t.ownerLv1OrganizationId === a.lv1OrganizationId &&
+          a.qualificationPolicySnapshot &&
+          a.qualificationMetadata,
+        "Auditor 자율 학습 근거",
+      );
+    }
+    for (const c of s.certifications.filter((c) => c.auditor)) {
+      const a = s.assignments.find((a) => a.id === c.assignmentId);
+      check(
+        a?.auditor?.level === c.auditor!.level &&
+          a.auditor.kind === c.auditor!.kind,
+        "Auditor 인증 등급 근거",
+      );
+      if (c.auditor!.level === "main" && c.auditor!.kind === "initial")
+        check(
+          s.certifications.some(
+            (g) =>
+              g.id === c.auditor!.prerequisiteCertificationId &&
+              g.learnerId === c.learnerId &&
+              g.auditor?.level === "general",
+          ),
+          "최초 메인 선행 인증 근거",
+        );
+    }
     const templates = new Set(s.qualificationTemplates.map((t) => t.id));
     check(
       templates.size === s.qualificationTemplates.length,
@@ -503,7 +599,13 @@ export function validateState(
       es.length &&
       es.every((e) => s.completions.some((c) => c.enrollmentId === e.id))
     )
-      check(certs.length === 1, "인증 누락");
+      check(
+        certs.length === 1 ||
+          (a.auditor?.level === "main" &&
+            a.auditor.kind === "initial" &&
+            a.auditor.pendingGeneralCertification),
+        "인증 누락",
+      );
   }
   for (const cert of s.certifications) {
     const a = s.assignments.find((a) => a.id === cert.assignmentId),

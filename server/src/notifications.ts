@@ -33,7 +33,7 @@ export function notify(
     ...(type
       ? {
           qualificationType: type,
-          title: `[${type === "auditor" ? "Auditor" : "Auditee"}] ${input.title}`,
+          title: `[${type === "auditor" ? "Auditor" : "Auditee"}] ${a?.auditor ? (a.auditor.level === "main" ? "메인 · " : "일반 · ") : ""}${input.title}`,
         }
       : {}),
     id: randomUUID(),
@@ -67,7 +67,8 @@ export function reconcileNotifications(
   for (const original of s.certifications) {
     if (
       s.qualifications.find((q) => q.id === original.qualificationId)
-        ?.qualificationType === "auditor"
+        ?.qualificationType === "auditor" &&
+      !original.auditor
     )
       continue;
     const c = { ...original, ...credentialCurrent(original) },

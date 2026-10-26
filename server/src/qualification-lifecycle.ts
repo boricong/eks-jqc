@@ -1,8 +1,9 @@
+import { latestQualification, currentTeamQualifications } from "@eks/contracts";
 import {
   currentQualification,
   requireQualificationProcess,
 } from "./qualification-templates.ts";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
 import {
   LifecycleStatusSchema,
@@ -335,7 +336,7 @@ export function qualificationImpact(
     revision: s.revision,
     organizationRevision: doc.revision,
     counts: {
-      organizations: doc.qualificationPools.some(
+      organizations: currentTeamQualifications(s).some(
         (p) => p.qualificationId === id,
       )
         ? organizationEntries(doc).filter(
@@ -361,27 +362,77 @@ export function qualificationImpact(
     ),
   };
 }
+function auditorRenewalCriteria(s: State, original: Qualification) {
+  const q = currentQualification(s, original);
+  return {
+    qualificationId: q.id,
+    qualificationRevision: q.revision,
+    qualificationVersion: q.version,
+    templateId: q.templateId,
+    templateRevision: q.templateRevision,
+    title: q.title,
+    description: q.description,
+    courses: q.courseIds.map((id) => {
+      const course = find(s.courses, id);
+      return {
+        id: course.id,
+        version: course.version,
+        revision: course.revision,
+        title: course.title,
+        learningItems: structuredClone(course.learningItems),
+        materials: course.materials.map(
+          ({ id, type, title, content, url, description }) => ({
+            id,
+            type,
+            title,
+            content,
+            url,
+            description,
+          }),
+        ),
+      };
+    }),
+  };
+}
+const auditorCriteriaFingerprint = (s: State, q: Qualification) =>
+  createHash("sha256")
+    .update(JSON.stringify(auditorRenewalCriteria(s, q)))
+    .digest("hex");
 export function renewalAvailability(
   s: State,
   doc: OrganizationDocument,
   c: Certification,
   at: string,
+  includeCriteria = false,
 ) {
   const learner = userView(find(s.users, c.learnerId), doc),
     original = find(s.qualifications, c.qualificationId);
-  const pool = doc.qualificationPools.find(
+  const pool = currentTeamQualifications(s).find(
     (p) =>
       p.lv1OrganizationId === learner.lv1OrganizationId &&
       p.entityId === original.entityId,
   );
-  const q = s.qualifications.find((q) => q.id === pool?.qualificationId),
+  const program = s.auditorPrograms.find(
+    (p) => p.lv1OrganizationId === learner.lv1OrganizationId,
+  );
+  const q = s.qualifications.find(
+      (q) =>
+        q.id ===
+        (c.auditor
+          ? latestQualification(
+              s,
+              learner.lv1OrganizationId,
+              program?.[c.auditor.level]?.entityId || "",
+            )?.id
+          : pool?.qualificationId),
+    ),
     p = latestPeriod(c);
   const opensOn = p && renewalOpensOn(p);
-  if (original.qualificationType === "auditor")
+  if (original.qualificationType === "auditor" && !c.auditor)
     return {
       canStart: false,
       reasons: [
-        "Auditor 재인증은 준비 중입니다. 최초 취득과 만료 상태 조회만 제공합니다.",
+        "이전 Auditor 인증·등급 미지정 기록입니다. 팀의 신규 운영 기준을 확인해 주세요.",
       ],
       opensOn: undefined,
       periodId: p?.id,
@@ -391,8 +442,15 @@ export function renewalAvailability(
     };
   const errors: string[] = qualificationProcessErrors(original);
 
-  if (!learner.roles.includes("learner") || !learner.organizationActive)
-    errors.push("사용 중인 조직의 학습자 권한이 필요합니다.");
+  if (
+    !learner.roles.includes(c.auditor ? "evaluator" : "learner") ||
+    !learner.organizationActive
+  )
+    errors.push(
+      c.auditor
+        ? "사용 중인 조직의 현재 Auditor 지정이 필요합니다."
+        : "사용 중인 조직의 학습자 권한이 필요합니다.",
+    );
   if (learner.certificationEligibility === "hold")
     errors.push("취득 대상자 Hold 상태입니다.");
   if (effectiveCredentialStatus(c, at) !== "Active")
@@ -404,7 +462,7 @@ export function renewalAvailability(
   if (opensOn && kstDate(at) < opensOn)
     errors.push(`${opensOn}부터 재인증할 수 있습니다.`);
   if (!q || q.deletedAt)
-    errors.push("팀 적용 기준이 없습니다. 관리자 확인이 필요합니다.");
+    errors.push("현재 팀 기준이 없습니다. 관리자 확인이 필요합니다.");
   else
     errors.push(
       ...qualificationUseErrors(currentQualification(s, q), s.courses),
@@ -425,6 +483,9 @@ export function renewalAvailability(
           renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
         }
       : null,
+    ...(includeCriteria && c.auditor && q
+      ? { auditorCriteria: auditorRenewalCriteria(s, q) }
+      : {}),
     nextExpiresOn:
       p?.expiresOn && q ? periodExpiry(p.expiresOn, q.validity) : undefined,
     renewal: s.renewals.find(
@@ -453,13 +514,18 @@ export function certificationHistory(
       (e) => e.subject === "certification" && e.targetId === id,
     ),
     renewals: s.renewals.filter((r) => r.certificationId === id),
-    renewal: renewalAvailability(s, doc, c, at),
+    renewal: renewalAvailability(s, doc, c, at, true),
     canManage:
       fullManager(u) &&
       (u.roles.includes("system_operator")
         ? requested === a.lv1OrganizationId
         : u.lv1OrganizationId === a.lv1OrganizationId),
-    canRenew: u.roles.includes("learner") && u.id === c.learnerId,
+    canRenew:
+      (!!c.auditor ||
+        find(s.qualifications, c.qualificationId).qualificationType ===
+          "auditee") &&
+      u.roles.includes(c.auditor ? "evaluator" : "learner") &&
+      u.id === c.learnerId,
   };
 }
 // Only access checks precede idempotency replay. All mutable-state checks run inside update.
@@ -554,7 +620,7 @@ export function executeLifecycle(
     demand(
       q.lifecycleStatus !== "Revoke",
       409,
-      "폐기한 기준은 새 버전을 작성하고 팀 적용 버전을 선택해 주세요.",
+      "폐기한 기준은 새 기준 버전을 작성해 주세요.",
     );
     const before = q.lifecycleStatus || "Active";
     demand(before !== input.status, 409, "이미 같은 상태입니다.");
@@ -716,12 +782,6 @@ export function executeLifecycle(
   const r = action === "renewal.complete" ? find(s.renewals, id) : undefined;
   const c = find(s.certifications, r?.certificationId || id),
     a = find(s.assignments, c.assignmentId);
-  demand(
-    find(s.qualifications, c.qualificationId).qualificationType !== "auditor",
-    409,
-    "Auditor 재인증은 준비 중입니다.",
-    "QUALIFICATION_PROCESS_UNAVAILABLE",
-  );
   requireQualificationProcess(find(s.qualifications, c.qualificationId));
   requireEligible(find(s.users, c.learnerId));
   checkRevision(c.revision || 1, body.certificationRevision);
@@ -740,7 +800,9 @@ export function executeLifecycle(
     if (
       existing &&
       existing.qualificationId === q.id &&
-      existing.qualificationRevision === q.revision
+      existing.qualificationRevision === q.revision &&
+      (!c.auditor ||
+        existing.criteriaFingerprint === auditorCriteriaFingerprint(s, q))
     )
       return {
         id: existing.id,
@@ -761,13 +823,18 @@ export function executeLifecycle(
       lv1OrganizationId: scope,
       qualificationId: q.id,
       qualificationRevision: q.revision,
+      ...(c.auditor
+        ? { criteriaFingerprint: auditorCriteriaFingerprint(s, q) }
+        : {}),
       validity: structuredClone(q.validity),
       renewalLeadMonths: q.renewalLeadMonths ?? 3,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
       revision: 1,
       status: "draft" as const,
       startedAt: at,
-      method: "mvp_completion" as const,
+      method: c.auditor
+        ? ("auditor_self_confirmation" as const)
+        : ("mvp_completion" as const),
     };
     s.renewals.push(renewal);
     c.revision = (c.revision || 1) + 1;
@@ -775,7 +842,7 @@ export function executeLifecycle(
       "certification",
       c.id,
       "renewal.started",
-      "MVP 종합평가 시작",
+      c.auditor ? "교육·인증기준 확인 시작" : "MVP 종합평가 시작",
       null,
       renewal,
       a.id,
@@ -790,7 +857,9 @@ export function executeLifecycle(
     .object({
       certificationRevision: z.number().int(),
       revision: z.number().int(),
-      confirmation: z.literal("종합평가 완료"),
+      confirmation: c.auditor
+        ? z.literal("교육·인증기준 확인")
+        : z.literal("종합평가 완료"),
     })
     .strict()
     .parse(body);
@@ -799,7 +868,9 @@ export function executeLifecycle(
     r!.status === "draft" &&
       r!.periodId === p.id &&
       r!.qualificationId === q.id &&
-      r!.qualificationRevision === q.revision,
+      r!.qualificationRevision === q.revision &&
+      (!c.auditor ||
+        r!.criteriaFingerprint === auditorCriteriaFingerprint(s, q)),
     409,
     "재인증 기준 또는 회차가 변경되었습니다. 최신 적용 기준을 확인하고 다시 시작해 주세요.",
     "RENEWAL_CRITERIA_CHANGED",
@@ -837,6 +908,12 @@ export function executeLifecycle(
   c.revision = (c.revision || 1) + 1;
   r!.status = "completed";
   r!.completedAt = at;
+  if (c.auditor)
+    r!.confirmation = {
+      confirmedBy: u.id,
+      confirmedAt: at,
+      ...auditorRenewalCriteria(s, q),
+    };
   r!.revision++;
   for (const n of s.notifications.filter(
     (n) => n.certificationId === c.id && ["renewal", "expiry"].includes(n.type),
@@ -846,7 +923,9 @@ export function executeLifecycle(
     "certification",
     c.id,
     "renewal.completed",
-    "MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음",
+    c.auditor
+      ? "본인의 교육·인증기준 확인에 의한 갱신"
+      : "MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음",
     p,
     next,
     a.id,
@@ -856,7 +935,7 @@ export function executeLifecycle(
     c,
     at,
     "renewal.completed",
-    `MVP 완료 버튼으로 처리 · 새 만료일 ${next.expiresOn || "무기한"}`,
+    `${c.auditor ? "본인의 교육·인증기준 확인에 의한 갱신" : "MVP 완료 버튼으로 처리"} · 새 만료일 ${next.expiresOn || "무기한"}`,
     `renewal:completed:${r!.id}`,
   );
   return {

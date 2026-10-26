@@ -6,7 +6,7 @@ import {
 } from "@eks/contracts";
 import { initialTemplates, metadata } from "./qualification-templates.ts";
 import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
+import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 export interface TemplateMapping {
   templates?: QualificationTemplate[];
   entities?: Record<string, string>;
@@ -62,7 +62,7 @@ export function migrateTemplates(
   mapping: TemplateMapping = {},
 ) {
   const raw = input as any;
-  if (![11, 12, 13, 14, 15, 16].includes(raw?.schemaVersion))
+  if (![11, 12, 13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion))
     throw new Error("기본자격 이관에는 업무11·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput);
   const alreadyApplied = raw.schemaVersion >= 12;
@@ -97,7 +97,7 @@ export function migrateTemplates(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 16,
+      alreadyApplied: raw.schemaVersion === 18,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       templates: state.qualificationTemplates.length,

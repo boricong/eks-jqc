@@ -1,4 +1,6 @@
+import type { OrganizationDocument } from "@eks/contracts";
 import { createNetworkPolicy } from "./network.ts";
+import { registerAuditorRoutes } from "./auditor-program-routes.ts";
 import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
 import {
@@ -117,6 +119,7 @@ export async function buildApp(
     return userView(u, store.organizations.snapshot());
   };
   const requestGenerations = new WeakMap<FastifyRequest, string>();
+  registerAuditorRoutes(app, store, actor, clock);
   app.addHook("onRequest", async (request, reply) => {
     requestGenerations.set(request, store.generation);
     demand(
@@ -325,17 +328,20 @@ export async function buildApp(
       store.organizations.snapshot(),
       (request.query as any).lv1OrganizationId,
     );
-    return store.snapshot().qualificationTemplates.map((t) => ({
-      ...t,
-      imported: store
-        .snapshot()
-        .qualifications.some(
-          (q) =>
-            q.lv1OrganizationId === scope &&
-            q.templateId === t.id &&
-            !q.deletedAt,
-        ),
-    }));
+    return store
+      .snapshot()
+      .qualificationTemplates.filter((t) => t.scope !== "team")
+      .map((t) => ({
+        ...t,
+        imported: store
+          .snapshot()
+          .qualifications.some(
+            (q) =>
+              q.lv1OrganizationId === scope &&
+              q.templateId === t.id &&
+              !q.deletedAt,
+          ),
+      }));
   });
   app.get("/api/completions/:id", async (request) => {
     const view = workspace(
@@ -439,7 +445,11 @@ export async function buildApp(
           action,
           lv1OrganizationId: undefined as string | undefined,
         };
-        return store.transact(
+        const transact =
+          action === "qualification.delete"
+            ? store.transactPair.bind(store)
+            : store.transact.bind(store);
+        return transact(
           u.id,
           key,
           fingerprint,
@@ -482,14 +492,14 @@ export async function buildApp(
             }
             authorize(s, current, action, targetId, payload, scope);
           },
-          (s) =>
+          (s: State, org?: OrganizationDocument) =>
             execute(
               s,
               actor(request, s),
               action,
               targetId,
               payload,
-              store.organizations.snapshot(),
+              org || store.organizations.snapshot(),
               scope,
               clock(),
             ),
@@ -545,6 +555,21 @@ export async function buildApp(
         const fingerprint = createHash("sha256")
           .update(JSON.stringify({ pool, target, scope, body }))
           .digest("hex");
+        if (pool) {
+          policyScope(
+            actor(request),
+            store.organizations.snapshot(),
+            scope,
+            target,
+            true,
+          );
+          throw new DomainError(
+            410,
+            "팀 적용 기능이 종료되었습니다. 기준을 저장하면 최신 버전을 사용합니다.",
+            "TEAM_APPLICATION_REMOVED",
+            { replacementPath: "/admin/qualifications" },
+          );
+        }
         return store.organizations.transact(
           u.id,
           key,
@@ -637,10 +662,12 @@ export async function buildApp(
     systemOperator(actor(request));
     const s = store.snapshot();
     return {
-      items: s.qualificationTemplates.map((t) => ({
-        ...t,
-        ...templateTypeEditing(s, t.id),
-      })),
+      items: s.qualificationTemplates
+        .filter((t) => t.scope !== "team")
+        .map((t) => ({
+          ...t,
+          ...templateTypeEditing(s, t.id),
+        })),
       audits: s.audits.filter((a) =>
         a.action.startsWith("qualification-template."),
       ),

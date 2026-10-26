@@ -105,7 +105,7 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
     view.entries.map((e: any) => e.id),
     [own],
   );
-  assert.equal(view.canManagePool, false);
+  assert.equal(view.canManageQualifications, false);
   await call(
     "learner-2",
     `/organization-policies/${own}`,
@@ -468,8 +468,8 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "administration",
   );
   const after = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(after.schemaVersion, 16);
-  assert.equal(after.revision, raw.revision + 9);
+  assert.equal(after.schemaVersion, 18);
+  assert.equal(after.revision, raw.revision + 11);
   for (const key of [
     "users",
     "plans",

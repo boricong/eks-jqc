@@ -3,7 +3,7 @@ import { saveTemplate } from '../../server/src/qualification-templates';
 import { saveCriterion } from './catalog-helpers';
 import { randomUUID } from 'node:crypto';
 
-test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부조직 필수 선택', async ({
+test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용과 세부조직 필수 선택', async ({
   page,
   backend,
 }, testInfo) => {
@@ -13,7 +13,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await page.getByRole('button', { name: '새 기본자격 만들기' }).click();
   await page.getByLabel('기본자격명', { exact: true }).fill('공통 설비 운전');
   await page.getByLabel('영문명', { exact: true }).fill('Shared Equipment');
-  await page.getByLabel('공통 설명', { exact: true }).fill('작업 기준에 따라 독립 수행합니다.');
+  await page.getByLabel('공통 설명 (선택)', { exact: true }).fill('');
   await page.getByRole('button', { name: '기본자격 저장' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await actor(page, 'admin-1');
@@ -32,9 +32,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/admin/qualifications');
   await page.reload();
-  await page.getByRole('button', { name: '팀 적용', exact: true }).click();
-  await page.getByLabel('공통 설비 운전 적용 버전').selectOption({ label: 'v2 · 적용 가능' });
-  await expect(page.getByLabel('평가 흐름 체험 적용 버전')).toHaveValue('');
+  await expect(page.getByRole('button', { name: '팀 적용', exact: true })).toHaveCount(0);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -43,11 +41,10 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 팀 적용과 세부
     await page.screenshot({ path: testInfo.outputPath(`team-apply-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1920, height: 900 });
-  await page.getByRole('button', { name: '팀 적용 확정' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(
     page.getByRole('row').filter({ hasText: '공통 설비 운전' }).filter({ hasText: 'v2' }),
-  ).toContainText('적용 중');
+  ).toContainText('현재 기준');
   await page.goto('/admin/policies');
   await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
   await page.getByRole('button', { name: '조직 설정 변경 확인' }).click();

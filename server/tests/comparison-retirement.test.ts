@@ -11,7 +11,7 @@ import { validateState } from "../src/integrity.ts";
 
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-retired-comparison-"));
-  const file = path.join(dir, "state.json");
+  const file = path.join(dir, "runtime", "state.json");
   const state = seedState(true),
     enrollment = state.enrollments[0]!;
   const assignment = state.assignments.find(
@@ -96,7 +96,7 @@ test("과거 비교 자료는 schema13·파일 재시작·무결성 검사에서
   const reopened = await new JsonStore(file).load();
   try {
     const restored = reopened.snapshot();
-    assert.equal(restored.schemaVersion, 16);
+    assert.equal(restored.schemaVersion, 18);
     assert.deepEqual(restored.comparisons, before.comparisons);
     for (const field of [
       "attempts",

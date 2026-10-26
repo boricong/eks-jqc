@@ -156,7 +156,7 @@ function chooseCourse(id: string) {
       :completed="store.completedCount(assignment)"
       :passed="store.passedCount(assignment)"
       :assessments="store.assessmentCount(assignment)"
-      :target-on="plan?.targetOn"
+      :target-on="auditor ? undefined : plan?.targetOn"
     />
     <p v-if="assignment.excludedReason" class="error-message qualification-context-note">
       검증 제외 · {{ assignment.excludedReason }}
@@ -206,7 +206,11 @@ function chooseCourse(id: string) {
           <p v-if="course.operationalStatus === 'retired'" class="notice-body">
             <StatusBadge status="retired" /> 확정된 배정은 계속 진행할 수 있습니다.
           </p>
-          <section v-if="!showAssessments" aria-label="내 학습 일정" class="learning-course-plan">
+          <section
+            v-if="!showAssessments && !auditor"
+            aria-label="내 학습 일정"
+            class="learning-course-plan"
+          >
             <dl class="learning-dates">
               <div>
                 <dt>학습 기간</dt>
