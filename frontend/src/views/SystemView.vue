@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { systemSections as sections } from '../system-navigation';
+import { useDemo } from '../stores/demo';
 import QualificationTemplates from '../components/QualificationTemplates.vue';
 import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
@@ -11,6 +12,7 @@ import MasterDataPanel from '../components/MasterDataPanel.vue';
 import TestProgressPanel from '../components/TestProgressPanel.vue';
 const SystemDocuments = defineAsyncComponent(() => import('../components/SystemDocuments.vue'));
 const route = useRoute();
+const store = useDemo();
 const section = computed(() => String(route.params.section));
 const menuOpen = ref(false);
 watch(
@@ -46,11 +48,13 @@ watch(
     <div class="admin-content management-content">
       <QualificationTemplates v-if="section === 'qualification-templates'" /><OrganizationPanel
         v-else-if="section === 'organizations'"
-      /><UserManagementPanel v-else-if="section === 'users'" /><SystemOverview
-        v-else-if="section === 'overview'"
-      /><SystemNotices v-else-if="section === 'notices'" /><SystemDocuments
-        v-else-if="section === 'documents'"
-      /><template v-else
+      /><UserManagementPanel
+        v-else-if="section === 'users'"
+        :key="store.actorId"
+        mode="system"
+      /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
+        v-else-if="section === 'notices'"
+      /><SystemDocuments v-else-if="section === 'documents'" /><template v-else
         ><h1>테스트 관리</h1>
         <TestProgressPanel />
         <MasterDataPanel

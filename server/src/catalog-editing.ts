@@ -1,4 +1,8 @@
-import { latestQualification, organizationEntries } from "@eks/contracts";
+import {
+  latestQualification,
+  organizationEntries,
+  configureInitialQualification,
+} from "@eks/contracts";
 import { nodeFor } from "./organizations.ts";
 import {
   auditorAssessmentChanged,
@@ -311,9 +315,17 @@ export function prepareCatalogSave(
   );
   const references = catalogReferences(s, section, id, org);
   const requiresNewVersion = section === "qualifications" && !sameCourses;
+  const initialConfiguration =
+    section === "qualifications" &&
+    configureInitialQualification(
+      source as Qualification,
+      candidate as Qualification,
+      !unchanged,
+    );
   const automatic = Object.values(references).some((n) => n > 0);
   const newVersion =
     !unchanged &&
+    !(section === "qualifications" && source.version === null) &&
     (requiresNewVersion ||
       (section === "qualifications" && versionMode
         ? versionMode === "new"
@@ -322,7 +334,7 @@ export function prepareCatalogSave(
     Math.max(
       ...list
         .filter((i) => i.entityId === source.entityId)
-        .map((i) => i.version),
+        .map((i) => i.version ?? 0),
     ) + 1;
   if (!unchanged) {
     if (newVersion) {
@@ -356,6 +368,7 @@ export function prepareCatalogSave(
     changes,
     unchanged,
     newVersion,
+    initialConfiguration,
     ...(section === "qualifications"
       ? {
           versionPolicy: {
@@ -364,9 +377,9 @@ export function prepareCatalogSave(
               : requiresNewVersion
                 ? ("major" as const)
                 : ("minor" as const),
-            requiresNewVersion,
+            requiresNewVersion: requiresNewVersion && !initialConfiguration,
             effectiveMode: newVersion ? ("new" as const) : ("current" as const),
-            nextVersion,
+            nextVersion: initialConfiguration ? 1 : nextVersion,
           },
         }
       : {}),
@@ -407,7 +420,8 @@ export function saveCatalogItem(
     if (section === "qualifications") {
       const q = result.candidate as Qualification;
       const original = s.qualifications.find((item) => item.id === id)!;
-      if (!result.newVersion) freezeCompletedQualification(s, original);
+      if (!result.newVersion && original.version !== null)
+        freezeCompletedQualification(s, original);
       q.courseIds = q.courseIds.map((courseId) => {
         if (original.courseIds.includes(courseId)) return courseId;
         if (
@@ -442,6 +456,7 @@ export function saveCatalogItem(
     revision: result.candidate.revision,
     version: result.candidate.version,
     newVersion: result.newVersion,
+    initialConfiguration: result.initialConfiguration,
     unchanged: result.unchanged,
     readiness: result.readiness,
     linkedQualifications: result.linkedQualifications,

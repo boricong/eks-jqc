@@ -99,6 +99,12 @@ export const router = createRouter({
           meta: { management: true, managementSection: 'catalog' },
         },
         {
+          path: 'users',
+          name: 'team-users',
+          component: () => import('./views/TeamUsersView.vue'),
+          meta: { management: true, managementSection: 'users', title: '팀 사용자 관리' },
+        },
+        {
           path: ':section(policies|targets|credentials|qualifications|courses|assignments|results|notices)/:id?',
           name: 'admin',
           component: AdminView,

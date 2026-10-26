@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ status: string; label?: string }>();
 const names: Record<string, string> = {
+  Ready: 'Ready · 대기',
   active: '운영 중',
   ready: '미시작',
   retired: '운영 종료',

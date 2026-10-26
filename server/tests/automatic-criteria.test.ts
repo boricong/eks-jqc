@@ -294,7 +294,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 18);
+  assert.equal(migrated.snapshot().schemaVersion, 19);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 3);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(migrated.snapshot().assignments, raw.assignments);
@@ -307,7 +307,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     migrated.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 8);
+  assert.equal(master.formatVersion, 9);
   assert(!("qualificationPools" in master.payload.organizations));
   master.formatVersion = 7;
   master.stateSchemaVersion = 17;
@@ -316,7 +316,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
   master.counts.poolEntries = org.qualificationPools.length;
   master.payload.auditorPrograms[0].general = raw.auditorPrograms[0].general;
   master.sha256 = contentHash(master.payload);
-  assert.equal(readMaster(master).formatVersion, 8);
+  assert.equal(readMaster(master).formatVersion, 9);
   assert.deepEqual(
     readMaster(master).payload.auditorPrograms![0]!.general,
     lineage,

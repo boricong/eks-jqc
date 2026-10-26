@@ -201,6 +201,11 @@ export function planningView(
   if (request.mode === "learner_choice")
     currentTeamQualifications(s)
       .filter((p) => p.lv1OrganizationId === u.lv1OrganizationId)
+      .filter(
+        (p) =>
+          s.qualifications.find((q) => q.id === p.qualificationId)!.version !==
+          null,
+      )
       .forEach((p) => ids.add(p.entityId));
   const candidates = [...ids]
     .filter((id) =>

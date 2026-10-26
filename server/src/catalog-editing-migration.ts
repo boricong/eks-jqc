@@ -7,7 +7,7 @@ export function migrateCatalogEditing(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![10, 11, 12, 13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion))
+  if (![10, 11, 12, 13, 14, 15, 16, 17, 18, 19].includes(raw?.schemaVersion))
     throw new Error(
       "기준 편집 보존 이관에는 업무 스키마10·조직 스키마2가 필요합니다.",
     );
@@ -37,7 +37,7 @@ export function migrateCatalogEditing(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 18,
+      alreadyApplied: raw.schemaVersion === 19,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       qualifications: state.qualifications.length,

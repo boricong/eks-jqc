@@ -241,12 +241,12 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/admin/assignments': 'Auditee 개인 계획',
     '/admin/results': 'Auditor는 본인 확인 항목·일시',
     '/admin/notices': '각각 최신 3개',
-    '/admin/catalog': 'eks-catalog-v11',
+    '/admin/catalog': 'eks-catalog-v12',
     '/system/qualification-templates': '등록 이력이 있으면 유형 변경을 거부',
     '/system/organizations': '신규 변경 이력 생성은 중단',
     '/system/users': '타인 채점·승인 권한이 아닙니다',
     '/system/overview': '조회 전용',
-    '/system/testing': '기본정보 형식7',
+    '/system/testing': '기본정보 형식9',
     '/system/notices': '시스템 공지 관리',
     '/system/documents': '운영 문서 목록',
     '/system/documents/iatf16949-competence-review': '운영 문서 읽기',
@@ -263,7 +263,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
       await expect(guide).toContainText('이후 흐름');
       await expect(guide).toContainText('AI 검수 항목');
       await expect(guide).toContainText('정적 설명');
-      await expect(guide).toContainText('검토 기준 v15 · 2026-10-26');
+      await expect(guide).toContainText('검토 기준 v16 · 2026-10-26');
       if (expected[path]) await expect(guide).toContainText(expected[path]!);
       expect(
         await guide.evaluate(

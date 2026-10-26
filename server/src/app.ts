@@ -1,6 +1,7 @@
 import type { OrganizationDocument } from "@eks/contracts";
 import { createNetworkPolicy } from "./network.ts";
 import { registerAuditorRoutes } from "./auditor-program-routes.ts";
+import { registerTeamUserRoutes } from "./team-user-routes.ts";
 import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
 import {
@@ -120,6 +121,7 @@ export async function buildApp(
   };
   const requestGenerations = new WeakMap<FastifyRequest, string>();
   registerAuditorRoutes(app, store, actor, clock);
+  registerTeamUserRoutes(app, store, actor);
   app.addHook("onRequest", async (request, reply) => {
     requestGenerations.set(request, store.generation);
     demand(

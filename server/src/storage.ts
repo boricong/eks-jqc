@@ -952,7 +952,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       demand(
-        raw.schemaVersion === 18,
+        raw.schemaVersion === 19,
         422,
         "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
       );

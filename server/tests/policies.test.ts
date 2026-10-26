@@ -742,7 +742,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 18);
+  assert.equal(migrated.schemaVersion, 19);
   assert.equal(master.schemaVersion, 3);
   for (const key of [
     "users",

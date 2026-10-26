@@ -9,6 +9,7 @@ const panel = (page: Page, id: string) => main(page).locator(`[data-submenu-pane
 const managementNames = [
   '인증 현황',
   '취득 대상자 상태',
+  '팀 사용자 관리',
   'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',

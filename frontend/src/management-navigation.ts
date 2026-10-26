@@ -9,6 +9,7 @@ export const managementGroups = [
 export const managementSections = [
   { id: 'dashboard', group: 'overview', name: '인증 현황', icon: 'chart' },
   { id: 'targets', group: 'operations', name: '취득 대상자 상태', icon: 'users' },
+  { id: 'users', group: 'operations', name: '팀 사용자 관리', icon: 'users' },
   { id: 'auditor', group: 'operations', name: 'Auditor 운영', icon: 'award' },
   { id: 'assignments', group: 'operations', name: '계획 요청·진행', icon: 'list' },
   { id: 'results', group: 'operations', name: '평가·수료 결과', icon: 'clipboard' },

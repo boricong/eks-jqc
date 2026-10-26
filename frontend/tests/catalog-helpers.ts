@@ -25,7 +25,9 @@ export async function saveCriterion(page: Page, mode?: 'current' | 'new') {
     }
     await dialog
       .locator('.dialog-footer')
-      .getByRole('button', { name: /^(저장 확인|현재 버전에 저장|새 버전 생성|닫기)$/ })
+      .getByRole('button', {
+        name: /^(저장 확인|현재 버전에 저장|새 버전 생성|v1으로 최초 설정 저장|닫기)$/,
+      })
       .click();
   }
 }

@@ -32,6 +32,8 @@ export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
   }),
 );
 export const RequestRecordSchema = z.object({
+  preserveBackup: z.boolean().optional(),
+  backupPurpose: z.string().optional(),
   actorId: organizationId,
   key: organizationId,
   fingerprint: z.string(),

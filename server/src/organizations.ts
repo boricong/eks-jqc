@@ -14,6 +14,8 @@ import {
   type State,
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
+import { managementScope } from "./management.ts";
+import { teamEditableRoles } from "@eks/contracts";
 
 export const PHOTO_ID = "org-photo";
 export function validateOrganizations(input: unknown): OrganizationDocument {
@@ -180,6 +182,90 @@ export function changeOrganization(
   validateOrganizations(doc);
   return { id: node.id, revision: doc.revision + 1 };
 }
+export function authorizeTeamUser(
+  s: State,
+  doc: OrganizationDocument,
+  actor: UserView,
+  scope: string,
+  target?: string,
+) {
+  managementScope(actor, doc, scope);
+  if (!target) return;
+  const user = s.users.find((u) => u.id === target);
+  demand(user, 404, "사용자를 찾을 수 없습니다.");
+  demand(
+    organization(doc, user.organizationId).lv1OrganizationId === scope,
+    403,
+    "다른 팀의 사용자를 관리할 수 없습니다.",
+  );
+  demand(
+    !user.roles.includes("system_operator"),
+    403,
+    "시스템 운영자 계정은 시스템 운영에서 관리해 주세요.",
+    "TEAM_USER_READ_ONLY",
+  );
+}
+
+export function changeTeamUser(
+  s: State,
+  doc: OrganizationDocument,
+  actor: UserView,
+  scope: string,
+  target: string | undefined,
+  body: unknown,
+) {
+  authorizeTeamUser(s, doc, actor, scope, target);
+  const roles = (body as any)?.roles;
+  demand(
+    !Array.isArray(roles) ||
+      !roles.some((r) =>
+        ["admin", "system_operator", "organization_admin"].includes(r),
+      ),
+    403,
+    "팀 사용자관리에서는 학습자·Auditor 역할만 변경할 수 있습니다.",
+    "TEAM_USER_ROLE_FORBIDDEN",
+  );
+  const input = z
+    .object({
+      name: z.string().trim().min(1).max(100),
+      organizationId,
+      roles: z
+        .array(z.enum(teamEditableRoles))
+        .refine((r) => new Set(r).size === r.length),
+      organizationRevision: z.number().int().nonnegative(),
+      revision: z.number().int().positive().optional(),
+    })
+    .strict()
+    .parse(body);
+  demand(
+    input.organizationRevision === doc.revision,
+    409,
+    "조직이 변경되었습니다. 최신 정보와 비교해 주세요.",
+    "REVISION_CONFLICT",
+  );
+  demand(
+    organization(doc, input.organizationId).lv1OrganizationId === scope,
+    403,
+    "같은 팀의 소속 조직만 선택할 수 있습니다.",
+  );
+  const user = s.users.find((u) => u.id === target);
+  const { organizationRevision, ...value } = input;
+  return saveUser(
+    s,
+    doc,
+    actor,
+    target,
+    {
+      ...value,
+      roles: [
+        ...(user?.roles.includes("admin") ? ["admin"] : []),
+        ...input.roles,
+      ],
+    },
+    "team",
+  );
+}
+
 export function changeUser(
   s: State,
   doc: OrganizationDocument,
@@ -188,6 +274,17 @@ export function changeUser(
   body: unknown,
 ) {
   systemOperator(actor);
+  return saveUser(s, doc, actor, target, body, "system");
+}
+
+function saveUser(
+  s: State,
+  doc: OrganizationDocument,
+  actor: User,
+  target: string | undefined,
+  body: unknown,
+  source: "system" | "team",
+) {
   const input = z
     .object({
       name: z.string().trim().min(1).max(100),
@@ -285,8 +382,15 @@ export function changeUser(
     date: new Date().toISOString(),
     action: user ? "user.update" : "user.create",
     targetId: updated.id,
+    ...(source === "team"
+      ? { lv1OrganizationId: entry.lv1OrganizationId }
+      : {}),
     reason: "사용자 소속·역할 관리",
-    details: { before, after: updated },
+    details: {
+      before,
+      after: updated,
+      ...(source === "team" ? { source: "team-users" } : {}),
+    },
   });
   return { id: updated.id, revision: updated.revision };
 }

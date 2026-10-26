@@ -8,6 +8,8 @@ import {
 } from "./qualification-templates.ts";
 export * from "./qualification-templates.ts";
 export * from "./documents.ts";
+export * from "./team-users.ts";
+export * from "./qualification-version.ts";
 import { z } from "zod";
 import {
   AuditorProgramSchema,
@@ -194,7 +196,8 @@ export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
   qualificationType: QualificationTypeSchema.default("auditee"),
   ...revision,
-  lifecycleStatus: LifecycleStatusSchema.optional(),
+  version: z.number().int().positive().nullable(),
+  lifecycleStatus: z.enum(["Ready", "Active", "Hold", "Revoke"]).optional(),
   renewalLeadMonths: RenewalLeadSchema.optional(),
   renewalNoticeDaysBefore: RenewalNoticeDaysSchema.optional(),
   courseIds: z.array(id).max(100),
@@ -227,11 +230,12 @@ export interface CatalogItemSavePreview {
   changes: { label: string; before: string; after: string }[];
   unchanged: boolean;
   newVersion: boolean;
+  initialConfiguration?: boolean;
   references: Record<string, number>;
   stateRevision: number;
   organizationRevision: number;
   readiness: string[];
-  linkedQualifications: { id: string; title: string; version: number }[];
+  linkedQualifications: { id: string; title: string; version: number | null }[];
   versionPolicy?: {
     changeKind: "none" | "minor" | "major";
     requiresNewVersion: boolean;
@@ -407,7 +411,7 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(18),
+  schemaVersion: z.literal(19),
   auditorPrograms: z.array(AuditorProgramSchema).default([]),
   qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
@@ -676,6 +680,9 @@ export function qualificationUseErrors(
   courses: Course[],
 ): string[] {
   return [
+    ...(q.version === null || q.lifecycleStatus === "Ready"
+      ? ["Ready · 대기 상태입니다. 최초 기준을 저장해 주세요."]
+      : []),
     ...qualificationProcessErrors(q),
     ...(q.deletedAt
       ? ["삭제된 자격으로 신규 계획·재인증을 시작할 수 없습니다."]

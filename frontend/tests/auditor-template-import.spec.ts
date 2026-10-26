@@ -64,7 +64,7 @@ test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 
   const saved = backend.store
     .snapshot()
     .qualifications.filter((item) => item.entityId === q.entityId)
-    .sort((a, b) => b.version - a.version)[0]!;
+    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
   await page.goto(`/admin/qualifications/${saved.id}`);
   await expect(page.getByLabel('인증기간', { exact: true })).toHaveValue('unlimited');
   await page.goto('/admin/qualifications?type=auditee');

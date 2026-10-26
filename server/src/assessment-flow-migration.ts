@@ -10,7 +10,7 @@ export function migrateAssessmentFlow(
 ) {
   const raw = input as any,
     organizations = validateOrganizations(organizationInput);
-  if (![9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion))
+  if (![9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].includes(raw?.schemaVersion))
     throw new Error(
       "평가 순서·단일 알림 이관에는 업무 스키마9와 조직 스키마2가 필요합니다.",
     );
@@ -52,7 +52,7 @@ export function migrateAssessmentFlow(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 18,
+      alreadyApplied: raw.schemaVersion === 19,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       qualifications: state.qualifications.length,

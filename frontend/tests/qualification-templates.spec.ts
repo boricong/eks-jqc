@@ -23,14 +23,44 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
   await page.getByRole('button', { name: '팀 자격 등록', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  const readyRow = page.getByRole('row').filter({ hasText: '공통 설비 운전' });
+  await expect(readyRow).toContainText('Ready · 대기');
+  await expect(readyRow.getByRole('cell', { name: '—', exact: true })).toBeVisible();
+  await page.getByLabel('상태 필터', { exact: true }).selectOption('Ready');
+  await expect(readyRow).toBeVisible();
   await page.getByRole('link', { name: '공통 설비 운전', exact: true }).click();
+  await expect(
+    page.getByText('Ready · 대기 — 최초 기준을 저장하면 v1부터 시작합니다.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: '운영 상태 변경', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('변경 내용이 없습니다.');
+  await page
+    .getByRole('dialog')
+    .locator('.dialog-footer')
+    .getByRole('button', { name: '닫기', exact: true })
+    .click();
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: testInfo.outputPath(`ready-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1920, height: 900 });
   await expect(page.getByLabel('자격명', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '팀 설정', exact: true })).toBeVisible();
   await page.getByLabel('인증기간', { exact: true }).selectOption('unlimited');
   await page.getByRole('checkbox', { name: /자료 확인/ }).check();
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(0);
+  await expect(
+    page.getByRole('dialog').getByRole('button', { name: 'v1으로 최초 설정 저장', exact: true }),
+  ).toBeVisible();
   await saveCriterion(page);
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/admin/qualifications');
+  await page.getByLabel('상태 필터', { exact: true }).selectOption('all');
   await page.reload();
   await expect(page.getByRole('button', { name: '팀 적용', exact: true })).toHaveCount(0);
   for (const width of [1920, 1440, 768, 390]) {
@@ -43,7 +73,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await page.setViewportSize({ width: 1920, height: 900 });
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(
-    page.getByRole('row').filter({ hasText: '공통 설비 운전' }).filter({ hasText: 'v2' }),
+    page.getByRole('row').filter({ hasText: '공통 설비 운전' }).filter({ hasText: 'v1' }),
   ).toContainText('현재 기준');
   await page.goto('/admin/policies');
   await page.getByRole('checkbox', { name: /공통 설비 운전/ }).check();
@@ -63,7 +93,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await expect(
-    page.getByRole('option', { name: '[필수] 공통 설비 운전 · v2', exact: true }),
+    page.getByRole('option', { name: '[필수] 공통 설비 운전 · v1', exact: true }),
   ).toHaveCount(1);
 });
 

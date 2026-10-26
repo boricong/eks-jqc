@@ -100,6 +100,9 @@ onBeforeRouteUpdate(leave);
   >
     <p>{{ store.managementOrganization?.name }}</p>
     <p class="muted">필요한 자격을 선택한 뒤 기간·인증Set 기준을 준비해 주세요.</p>
+    <p v-if="qualificationType === 'auditee'" class="muted">
+      처음 등록하는 자격은 버전 없는 Ready · 대기 상태입니다. 최초 기준 저장 시 v1부터 시작합니다.
+    </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <div v-if="!listed.length" class="empty-state">
       <p>등록할 {{ qualificationTypeLabels[qualificationType] }} 기본자격이 없습니다.</p>

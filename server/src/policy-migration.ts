@@ -9,7 +9,9 @@ import { migrationOrganizations as validateOrganizations } from "./automatic-cri
 
 export function migratePolicies(raw: any, organizationRaw: any) {
   if (
-    [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].includes(raw.schemaVersion) &&
+    [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].includes(
+      raw.schemaVersion,
+    ) &&
     [2, 3].includes(organizationRaw.schemaVersion)
   ) {
     const organizations = validateOrganizations(organizationRaw),
@@ -18,7 +20,7 @@ export function migratePolicies(raw: any, organizationRaw: any) {
       state,
       organizations,
       report: {
-        alreadyApplied: raw.schemaVersion === 18,
+        alreadyApplied: raw.schemaVersion === 19,
         revision: state.revision,
         organizationRevision: organizations.revision,
       },

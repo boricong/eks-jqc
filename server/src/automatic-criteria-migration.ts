@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { migrateReadyQualifications } from "./ready-qualification-migration.ts";
 import { validateOrganizations } from "./organizations.ts";
-import { validateState } from "./integrity.ts";
 
 /** Only explicit migration/import paths call this converter. Normal loads reject v2. */
 export function migrationOrganizations(
@@ -33,14 +33,14 @@ export function migrateAutomaticCriteria(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (![17, 18].includes(state?.schemaVersion))
+  if (![17, 18, 19].includes(state?.schemaVersion))
     throw new Error("최신 기준 이관에는 업무17·조직2가 필요합니다.");
   const actorId = state.users.find((u: any) =>
     u.roles.includes("system_operator"),
   )?.id;
   if (!actorId) throw new Error("시스템 운영자가 필요합니다.");
   const organizations = migrationOrganizations(organizationInput, actorId, at);
-  const alreadyApplied = state.schemaVersion === 18;
+  const alreadyApplied = state.schemaVersion >= 18;
   if (!alreadyApplied) {
     for (const program of state.auditorPrograms)
       for (const level of ["general", "main"]) {
@@ -69,17 +69,5 @@ export function migrateAutomaticCriteria(
       details: { fromSchema: 17, progressReset: false },
     });
   }
-  const checked = validateState(state, organizations);
-  return {
-    state: checked,
-    organizations,
-    report: {
-      alreadyApplied,
-      schemaVersion: 18,
-      revision: checked.revision,
-      organizationSchemaVersion: 3,
-      organizationRevision: organizations.revision,
-      progressReset: false,
-    },
-  };
+  return migrateReadyQualifications(state, organizations, at);
 }

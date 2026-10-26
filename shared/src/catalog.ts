@@ -43,7 +43,7 @@ export const CatalogSheetSchema = z.object({
   months: z.number().int().min(1).max(1200).nullable(),
   renewalLeadMonths: z.number().int().min(1).max(1200).optional(),
   renewalNoticeDaysBefore: z.number().int().min(0).max(365).optional(),
-  lifecycleStatus: z.enum(["Active", "Hold", "Revoke"]).optional(),
+  lifecycleStatus: z.enum(["Ready", "Active", "Hold", "Revoke"]).optional(),
   reminderDays: z.array(z.number().int().min(1).max(36500)).max(20),
   tables: z
     .object({
@@ -67,6 +67,7 @@ export const CatalogWorkbookSchema = z.object({
     "eks-catalog-v9",
     "eks-catalog-v10",
     "eks-catalog-v11",
+    "eks-catalog-v12",
   ]),
   lv1OrganizationId: z.string().min(1).max(160),
   sheets: z.array(CatalogSheetSchema).min(1).max(100),
@@ -98,7 +99,8 @@ export interface CatalogDiff {
   code: string;
   title: string;
   kind: "new" | "changed" | "unchanged";
-  version: number;
+  version: number | null;
+  initialConfiguration?: boolean;
   details?: CatalogFieldChange[];
   courses: {
     added: number;

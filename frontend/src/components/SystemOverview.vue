@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { credentialCurrent } from '@eks/contracts';
+import { credentialCurrent, qualificationVersionLabel } from '@eks/contracts';
 import CourseMaterials from './CourseMaterials.vue';
 import ValidityBadge from './ValidityBadge.vue';
 import { kindLabels, kstDate } from '@eks/contracts';
@@ -179,11 +179,11 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ q.title || '이름 없는 기준' }} · v{{ q.version }}
+        {{ q.title || '이름 없는 기준' }} · {{ qualificationVersionLabel(q.version) }}
         <StatusBadge :status="q.lifecycleStatus || 'Active'" />
       </summary>
       <p class="muted">{{ rootName(q.lv1OrganizationId) }} · {{ q.englishName }}</p>
-      <p>{{ q.description || '설명 미정' }}</p>
+      <p v-if="q.description">{{ q.description }}</p>
       <p>
         인증기간:
         {{

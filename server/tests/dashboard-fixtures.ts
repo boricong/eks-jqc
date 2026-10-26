@@ -214,7 +214,7 @@ export function addRequest(
         entityId,
         qualificationId: q.id,
         title: q.title,
-        version: q.version,
+        version: q.version!,
       };
     }),
     source: "requested",
@@ -415,7 +415,7 @@ export function addCertification(
         sequence: 1,
         kind: "initial",
         qualificationId: qid,
-        qualificationVersion: q.version,
+        qualificationVersion: q.version!,
         validity,
         renewalLeadMonths: 3,
         startsOn,

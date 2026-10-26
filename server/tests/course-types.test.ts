@@ -318,9 +318,9 @@ test("Excel v9 유형 보존·읽기 전용 검토와 구형 새 행 상속·다
   const now = f.store.snapshot(),
     updated = now.qualifications
       .filter((x) => x.entityId === q.entityId)
-      .sort((a, b) => b.version - a.version)[0]!;
+      .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
   const exported = exportCatalog(now, "org-photo", [updated.id]);
-  assert.equal(exported.format, "eks-catalog-v11");
+  assert.equal(exported.format, "eks-catalog-v12");
   assert.deepEqual(
     (await readCatalogWorkbook(await writeCatalogWorkbook(exported))).workbook,
     exported,
@@ -375,7 +375,7 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   const before = structuredClone(raw),
     result = migrateCourseTypes(raw, org);
   assert.deepEqual(raw, before);
-  assert.equal(result.state.schemaVersion, 18);
+  assert.equal(result.state.schemaVersion, 19);
   for (const id of [c.id, "future-version"])
     assert.equal(
       result.state.courses.find((c) => c.id === id)!.qualificationType,
@@ -387,8 +387,8 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   );
   const stripped: any = structuredClone(result.state);
   stripped.schemaVersion = 14;
-  stripped.revision -= 4;
-  stripped.audits.splice(-4);
+  stripped.revision -= 5;
+  stripped.audits.splice(-5);
   stripped.qualificationTemplates.forEach((t: any) => delete t.scope);
   stripped.courses.forEach((c: any) => delete c.qualificationType);
   assert.deepEqual(stripped, raw);
@@ -439,7 +439,11 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
   assert.deepEqual(await readFile(result.stateBackup), before);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 4, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateCourseTypes,
     "course-types",
   );
@@ -450,8 +454,8 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
     restarted.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 8);
-  assert.equal(file.stateSchemaVersion, 18);
+  assert.equal(file.formatVersion, 9);
+  assert.equal(file.stateSchemaVersion, 19);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   old.formatVersion = 4;

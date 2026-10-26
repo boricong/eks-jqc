@@ -295,7 +295,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 18);
+  assert.equal(next.state.schemaVersion, 19);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -458,6 +458,16 @@ test("삭제된 팀 자격 재등록은 같은 계보의 다음 버전이며 Exc
     "/qualification-templates/import",
     { templateIds: [base.id] },
   );
+  const ready = store
+    .snapshot()
+    .qualifications.find((q) => q.id === registration.imported[0])!;
+  await call(
+    "admin-1",
+    `/qualifications/${ready.id}`,
+    { ...ready, renewalLeadMonths: 4 },
+    200,
+    "PUT",
+  );
   const old = store
     .snapshot()
     .qualifications.find((q) => q.id === registration.imported[0])!;
@@ -558,7 +568,11 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
   assert.equal(await readFile(result.stateBackup, "utf8"), original);
   const migrated = await readFile(file, "utf8");
   await store.migratePolicies(
-    { ...expected, revision: raw.revision + 7, stateHash: hash(migrated) },
+    {
+      ...expected,
+      revision: JSON.parse(migrated).revision,
+      stateHash: hash(migrated),
+    },
     migrateTemplates,
   );
   assert.equal(await readFile(file, "utf8"), migrated);

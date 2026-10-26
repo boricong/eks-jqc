@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AuditorProgress from '../components/AuditorProgress.vue';
+import { qualificationVersionLabel } from '@eks/contracts';
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type {
@@ -589,13 +590,18 @@ function detailPage(page: number) {
                           </button>
                         </td>
                         <td>
-                          {{ q.registered ? `현재 v${q.currentVersion}` : '과거 기록'
+                          {{
+                            q.registered
+                              ? `현재 ${qualificationVersionLabel(q.currentVersion)}`
+                              : '과거 기록'
                           }}<small v-if="q.criterionStatus" class="dashboard-meta">{{
-                            q.criterionStatus === 'Active'
-                              ? '운영 중'
-                              : q.criterionStatus === 'Hold'
-                                ? '운영 보류'
-                                : '운영 폐기'
+                            q.criterionStatus === 'Ready'
+                              ? 'Ready · 대기'
+                              : q.criterionStatus === 'Active'
+                                ? '운영 중'
+                                : q.criterionStatus === 'Hold'
+                                  ? '운영 보류'
+                                  : '운영 폐기'
                           }}</small>
                         </td>
                         <td class="dashboard-number">{{ q.requiredPeople }}명</td>
@@ -702,13 +708,18 @@ function detailPage(page: number) {
                         </button>
                       </td>
                       <td>
-                        {{ q.registered ? `현재 v${q.currentVersion}` : '과거 기록'
+                        {{
+                          q.registered
+                            ? `현재 ${qualificationVersionLabel(q.currentVersion)}`
+                            : '과거 기록'
                         }}<small v-if="q.criterionStatus" class="dashboard-meta">{{
-                          q.criterionStatus === 'Active'
-                            ? '운영 중'
-                            : q.criterionStatus === 'Hold'
-                              ? '운영 보류'
-                              : '운영 폐기'
+                          q.criterionStatus === 'Ready'
+                            ? 'Ready · 대기'
+                            : q.criterionStatus === 'Active'
+                              ? '운영 중'
+                              : q.criterionStatus === 'Hold'
+                                ? '운영 보류'
+                                : '운영 폐기'
                         }}</small>
                       </td>
                       <td>
@@ -774,7 +785,9 @@ function detailPage(page: number) {
                         <th v-for="q in data.matrix.columns.items" :key="q.entityId" scope="col">
                           {{ q.title
                           }}<small class="dashboard-meta">{{
-                            q.registered ? `현재 팀 기준 v${q.currentVersion}` : '과거 기록'
+                            q.registered
+                              ? `현재 팀 기준 ${qualificationVersionLabel(q.currentVersion)}`
+                              : '과거 기록'
                           }}</small>
                         </th>
                       </tr>

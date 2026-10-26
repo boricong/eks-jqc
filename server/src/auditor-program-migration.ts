@@ -9,11 +9,11 @@ export function migrateAuditorProgram(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![16, 17, 18].includes(raw?.schemaVersion))
+  if (![16, 17, 18, 19].includes(raw?.schemaVersion))
     throw new Error("Auditor 자율 학습 이관에는 업무16·조직2가 필요합니다.");
   const next = structuredClone(raw),
     organizations = validateOrganizations(organizationInput),
-    alreadyApplied = raw.schemaVersion === 18;
+    alreadyApplied = raw.schemaVersion === 19;
   if (raw.schemaVersion === 16) {
     if ((next.auditorPrograms || []).length)
       throw new Error("구형 데이터의 Auditor 운영 기준을 검토해 주세요.");

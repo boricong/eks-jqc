@@ -1,3 +1,4 @@
+import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { latestQualification, currentTeamQualifications } from "@eks/contracts";
 import {
   currentQualification,
@@ -102,7 +103,7 @@ export function initializeCertification(
       sequence: 1,
       kind: "initial",
       qualificationId: q.id,
-      qualificationVersion: q.version,
+      qualificationVersion: numberedQualificationVersion(q),
       validity,
       renewalLeadMonths: q.renewalLeadMonths ?? 3,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
@@ -367,7 +368,7 @@ function auditorRenewalCriteria(s: State, original: Qualification) {
   return {
     qualificationId: q.id,
     qualificationRevision: q.revision,
-    qualificationVersion: q.version,
+    qualificationVersion: numberedQualificationVersion(q),
     templateId: q.templateId,
     templateRevision: q.templateRevision,
     title: q.title,
@@ -476,7 +477,7 @@ export function renewalAvailability(
       ? {
           id: q.id,
           title: currentQualification(s, q).title,
-          version: q.version,
+          version: numberedQualificationVersion(q),
           revision: q.revision,
           validity: q.validity,
           renewalLeadMonths: q.renewalLeadMonths ?? 3,
@@ -608,6 +609,12 @@ export function executeLifecycle(
       .strict()
       .parse(body);
     const q = find(s.qualifications, id);
+    demand(
+      q.version !== null,
+      409,
+      "Ready 자격은 최초 기준 저장으로 v1을 시작해 주세요.",
+      "QUALIFICATION_READY",
+    );
     demand(
       !q.deletedAt,
       409,
@@ -890,7 +897,7 @@ export function executeLifecycle(
     sequence: p.sequence + 1,
     kind: "renewal" as const,
     qualificationId: q.id,
-    qualificationVersion: q.version,
+    qualificationVersion: numberedQualificationVersion(q),
     validity: structuredClone(r!.validity),
     renewalLeadMonths: r!.renewalLeadMonths,
     renewalNoticeDaysBefore: r!.renewalNoticeDaysBefore ?? 7,

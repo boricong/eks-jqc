@@ -339,7 +339,7 @@ export function createAuditorQualification(
                   q.entityId === previous.entityId &&
                   q.lv1OrganizationId === team,
               )
-              .map((q) => q.version),
+              .map((q) => q.version ?? 0),
           ) + 1
         : 1,
       revision: 1,

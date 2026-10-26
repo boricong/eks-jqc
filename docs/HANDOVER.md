@@ -2,6 +2,36 @@
 
 최종 갱신: 2026-10-26 · Asia/Seoul
 
+## 진행 중 — 팀 사용자관리·Auditee Ready 커밋·푸시
+
+- 2026-10-26 사용자 요청으로 팀 사용자관리와 Auditee 최초 Ready 등록·v1 시작 분리의 누적 구현·시험·이관 문서를 커밋하고 `origin/main`에 푸시한다. 업무19·조직3·JSON9·Excel12 계약과 기존 요청의 백업 표식 보존 보완을 포함한다.
+- 시작 HEAD와 fetch 후 `origin/main`은 모두 `03072dc`이며 분기 차이는0/0이다. 원격은 `https://github.com/boricong/eks-jqc.git`, Git Credential Manager 저장 계정은 `boricong`이다. 작성자는 기존 커밋과 같은 `boricong <boricong@users.noreply.github.com>`을 이번 명령에만 지정한다.
+- 최종 서버241/241·브라우저 전체275개 항목의 회귀/정정 재검증·문서/TypeScript/Vite 빌드와 실제 데이터 보존 기록을 다시 확인했다. 실행 데이터·maintenance·백업·로그·환경·의존성·빌드 산출물은 제외한다. 이번 요청은 Git 반영이며 실제 데이터 변경이나 서버 재시작은 포함하지 않는다.
+
+## 완료 — Auditee Ready 등록과 최초 v1 저장
+
+- 승인 계획: 신규 Auditee 최초 등록은 `version: null`, `Ready · 대기`로 두고 실제 기준의 최초 변경 저장에서 동일 ID를 v1·Active로 전환한다. 무변경/공통 이름·설명 변경은 Ready를 유지한다. v1부터 조직 필수·개인 계획 대상으로 사용하며 기존 자격 번호·이력·Auditor/인증Set 정책은 보존한다.
+- 업무18→19·기본정보8→9·Excel11→12 명시 호환, 최초 저장 미리보기, 등록/재등록/삭제와 상태 우회 차단을 구현한다. 저장·최초 전환은 기존 revision·요청 키·직렬화 규칙을 사용한다. 미완성 저장은 허용하고 신규 진행은 준비 검사로 제한한다.
+- 기존 미커밋 팀 사용자관리 구현·문서·실제 데이터는 `data/backups/ready-start-20261026/`에 보존했다. 검증 후 서버 중지·세 파일 백업/해시·명시 이관·동일 설정 재시작을 수행한다. 시험용 실제 업무 생성과 커밋·푸시는 포함하지 않는다.
+- 구현 계약: 자격만 `number | null`/Ready를 허용한다. 확정 계획·배정·인증·보존 스냅샷과 인증Set은 양의 버전을 유지한다. 개별·일괄 저장은 기간·인증Set·갱신 설정의 실제 변경을 비교해 같은 ID의 최초 v1을 판정한다. 화면 열기·무변경·공통 정보·관리 메타정보 수정은 Ready를 종료하지 않으며 클라이언트의 버전/상태/새 버전 입력으로 우회할 수 없다. Ready의 운영 상태 변경·복제는409 `QUALIFICATION_READY`, 조직 필수 지정은422로 보류하고 계획 후보에서 제외한다. 최초 미리보기의 `initialConfiguration`과 준비 부족 사유·변경 내용을 제공한다. v1 이후 기존 버전 규칙·완료 근거를 유지한다.
+- 파일/보존: 업무19·조직3·JSON9·Excel12이며 구형 명시 이관은 업무19까지 연결한다. 정상 로드는18을 자동 이관하지 않는다. JSON1~8·Excel 구형 읽기를 유지하고 Ready의 JSON9/Excel12 무변경 왕복·기준 초기화·재시작을 검증했다. 운영 상태 셀은 참고값이며 입력으로 효력을 바꾸지 않는다. Ready 삭제 이력은 보존하고 번호 없는 계보의 재등록은 Ready, 번호 있는 계보는 기존 최대 번호 다음이다. [MASTER_DATA.md](MASTER_DATA.md)·[CATALOG_WORKBOOK.md](CATALOG_WORKBOOK.md)에 공개 계약을 갱신했다.
+- 검증 완료: 최종 전체 서버241/241(18.5초, `ready-server-deployed-final.log`), 문서·서버/프런트 TypeScript·Vite 최종 빌드(`ready-build-deployed-final.log`) 통과. 전체 Playwright275건 중273건 통과 후 메뉴 추가로 바뀐 개수/Excel 형식명 기대값을 정정했고 관련12건 중11건 통과(`ready-playwright-final.log`), 검토 안내 버전 기대값까지 갱신한 마지막1건도 통과했다(`ready-playwright-guide.log`, 15초). 전체275개 항목을 회귀·정정 재검증으로 확인했다. Ready 등록→무변경→같은 ID v1→필수 지정/계획, 네 화면 폭·키보드·이후 v2·동시 요청·실패 복구·응답 유실·설명 선택·팀 사용자관리·Auditor 회귀를 포함한다. Rollup의 Zod 주석 제거 안내와 기존500kB 번들 권고 경고는 빌드를 막지 않는다.
+- 실제 반영(2026-10-26 12:10~12:13 KST): 기존 런처43496/API28144/Vite40644의 명령·포트·잠금 소유자를 확인해 종료하고 작업 폴더 안의 종료된 잠금만 공식 `data:unlock`으로 해제했다. 실행 중 사용자 변경까지 반영한 최신 원본은 업무18 revision260·조직3 revision13이었다. `data/backups/ready-deploy-20261026/manifest.json`에 세 원본의 SHA256·절대 경로·설정·복구 절차를 기록하고 사본 해시를 검증했다.
+- 이관 보존 보완: 첫 대조에서 기존 요청의 `preserveBackup`/`backupPurpose`가 공통 파서에서 누락되는 것을 발견했다. 첫 결과는 진단 사본으로 남기고 세 원본을 해시 확인 후 복구했다. 요청 스키마에 두 선택 필드를 추가하고 실제와 같은 영수증의 보존 회귀5/5를 확인한 뒤 공식 명령을 재실행했다. **업무18 revision260→19 revision261, 조직3 revision13 유지**. 기존 모든 업무 필드·요청/감사 원문·22개 자격과 번호를 완전히 대조했고 조직 바이트는 동일하며 maintenance는 generation만 변경했다. 근거는 `migration-verification.json`, 실행 로그는 `ready-migration-apply-final.log`·`ready-migration-verification-final.log`다. 기존 미설정 v1을 재번호화하지 않았다.
+- 재시작 완료: 런처22940/API15324/Vite31244, 기존 데이터 절대 경로와127.0.0.1:5186/5187을 유지했다. `dev-ready-20261026.*`에 PID·로그를 기록했다. health `ok:true, revision:261`, 화면200, 실제 팀 관리자의 Ready 등록 안내·팀 사용자관리 메뉴·페이지 오류0을 조회만 확인했다. 실제 등록/사용자/학습을 시험용으로 만들지 않았고 조회 전후 세 파일 SHA256 동일이다(`ready-live.log`·`ready-live.png`, 백업의 `live-verification.json`).
+- 복구 사본: `compatible-code-03072dc-with-team-users.zip`은 HEAD03072dc와 착수 시 미커밋 팀 사용자관리16파일 및 요청 백업 표식 보존 보완1파일을 합친 업무18 호환 코드다. ZIP 내 덮어쓴17파일의 SHA256과 업무18 계약을 검증했다. ZIP SHA256은 `90bb5be212f385172f6e81aeb58ac479ccf795af5ce96c5b8d65d86ca4546a7b`다. 복구는 서버 중지 후 manifest의 세 원본과 이 ZIP을 함께 사용한다. 최종 반영/조회 당시 업무 SHA256 `07ee09f10eba696216125a645c64ef9c733e46d46c0e66297515a2a00d6929c0`, 조직 `66cea00a8bfcdfa7f5eb25a76cdb210759fd9a42df87557c805dcb86c18bce7e`, maintenance `ce009caaa3f29660895d2c3db57b79dbeb7a469a911fe18be359ab177cef287c`다. 커밋·푸시는 수행하지 않았다.
+
+## 완료 — 인증 업무 관리의 팀 사용자관리
+
+- 승인된 계획에 따라 `/admin/users`에 팀 사용자관리를 추가한다. 팀 직속과 모든 하위조직의 구성원 추가·이름/소속/학습자·Auditor 역할 수정을 제공한다. 팀 관리자 역할은 보존하며 시스템 운영자는 조회 전용이다. 세부 관리자는 접근하지 못한다.
+- 새 `/api/team-users` GET/POST 및 `/:id` PATCH는 팀 범위·사용자/조직 revision·금지 역할·현재 권한을 공통 쓰기 대기열에서 검사한다. 기존 시스템 사용자관리와 Auditor 지정/알림 원자성을 유지한다. 스키마/파일 형식 변경은 없다.
+- 착수 Git 상태는 깨끗하며 HEAD는 `03072dc`다. 기존 소스·문서 사본과 실제 데이터 해시는 `data/backups/team-users-start-20261026/`에 보존했다. 실제 사용자 생성·수정 없이 검증하고 세 데이터 파일 백업 후 같은 설정으로 재시작한다. 커밋·푸시는 포함하지 않는다.
+- 구현 계약: 조회는 `{ users, organizations: { revision, entries }, editableRoles }`이며 사용자별 `canEdit`·제한 사유를 제공한다. 저장은 이름·소속·학습자/Auditor 배열·조직 revision(수정 시 사용자 revision 포함)을 받는다. 관리자/운영자/세부 관리자 역할 입력은403 `TEAM_USER_ROLE_FORBIDDEN`, 운영자 대상 수정은403 `TEAM_USER_READ_ONLY`, revision 충돌은409다. 팀 관리자가 이미 가진 관리자 역할은 서버가 합쳐 보존한다. 기존 시스템 API의 운영자 전용 검사는 유지한다.
+- 검증 완료: 전체 서버236/236(`team-users-server-full.log`), 관련 브라우저28/28(`team-users-ui.log`), 문서·서버/프런트 TypeScript·Vite 빌드(`team-users-build.log`) 통과. Lv5 추가·직속 이동·팀 경계·관리자 고정·운영자 조회 전용·세부 관리자 차단·Auditor 준비/원자적 알림·쓰기 실패 복구·중복/동시 요청·저장 충돌 비교·미저장 입력·권한 회수·기존 시스템 화면·1920/1440/768/390px 검증 포함. 기존500kB 번들 권고 경고만 남는다. 시험 데이터의 Lv5 명시 구성과 저장 오류 응답503 기대를 보정했으며 제품 회귀 실패는 없다.
+- 실제 반영(2026-10-26 11:39 KST): 기존 런처14608/API19240/Vite44256과 하위 프로세스를 신원 확인 후 종료했다. 종료된 잠금 소유자와 작업 폴더 내부 경계를 확인한 뒤 공식 `data:unlock`을 실행했다. `data/backups/team-users-deploy-20261026/`에 업무·조직·maintenance 세 원본을 복사하고 SHA256 일치를 검증했다. `manifest.json`에 schema/revision·경로·포트·복구 절차를, `compatible-code-03072dc.zip`에 이전 호환 코드를 보존했다. 이관은 실행하지 않았다.
+- 재시작: 런처43496/API28144/Vite40644, 기존 절대 데이터 경로와127.0.0.1:5186/5187 유지. 로그/PID는 `data/runtime/dev-team-users-20261026.*`다. 업무18 revision252·조직3 revision7 유지, API health `ok:true, revision:252`를 확인했다. 실제 팀 관리자로 `/admin/users`를 조회해 팀 구성원6명, 운영자 조회 전용, 학습자·Auditor만 선택, Lv1 고정을 확인했고 페이지 오류0·조회 전후 세 파일 SHA256 동일이다(`team-users-live.log`·`team-users-live.png`, 배포 백업의 `verification.json`). 실제 사용자나 인증 기록은 시험 목적으로 생성·수정하지 않았다.
+- 최종 데이터 해시: 업무 `648ed00630892e2cd1445ddc44436300e238ee3f5712a7c27f24ec4ee04ea4b0`, 조직 `0dc5cdb7d2ea01e25dbd8b7a8f3ac4507d4983d3a5c704acfbfd2e11849e1795`, maintenance `681f481d52f53f8be576fa952edff496fa7ca746ce2e7b07ee4703f4ca6fa68d`. 복구는 서버 중지 후 manifest의 세 원본과 호환 코드를 함께 사용한다. 커밋·푸시는 수행하지 않았다.
+
 ## 완료 — 누적 Auditor·최신 자격 기준 변경 커밋·푸시
 
 - 2026-10-26 사용자 요청으로 현재 main의 누적 구현과 검증·이관 문서를 커밋하고 origin/main에 푸시한다. Auditor 자율 학습·일반/메인 인증·알림/갱신, 설명 선택화·팀 적용 제거·최신 기준 자동 사용·명시 이관, 시스템 Auditor 기본자격 가져오기가 범위다. 기존 두 인수인계 문서의 미커밋 기록도 함께 보존한다.

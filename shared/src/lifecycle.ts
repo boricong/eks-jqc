@@ -14,6 +14,7 @@ export const lifecycleLabels = {
   Revoke: "Revoke · 폐기",
 };
 export const criterionLifecycleLabels = {
+  Ready: "Ready · 대기",
   Active: "Active · 운영 중",
   Hold: "Hold · 운영 보류",
   Revoke: "Revoke · 운영 폐기",

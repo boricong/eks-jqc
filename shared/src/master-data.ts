@@ -46,8 +46,8 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 8;
-  stateSchemaVersion: 18;
+  formatVersion: 9;
+  stateSchemaVersion: 19;
   organizationSchemaVersion: 3;
   createdAt: string;
   counts: MasterCounts;

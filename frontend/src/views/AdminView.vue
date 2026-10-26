@@ -32,6 +32,8 @@ import OrganizationPolicies from '../components/OrganizationPolicies.vue';
 import ValidityBadge from '../components/ValidityBadge.vue';
 import {
   kindLabels,
+  qualificationVersionLabel,
+  criterionLifecycleLabels,
   qualificationTypeLabels,
   qualificationReadinessErrors,
   type QualificationType,
@@ -177,7 +179,7 @@ const relatedVersions = computed(() =>
   editor.value
     ? (courseDraft.value ? organizationData.value.courses : organizationData.value.qualifications)
         .filter((v) => v.entityId === editor.value!.entityId)
-        .sort((a, b) => b.version - a.version)
+        .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
     : [],
 );
 const readOnly = computed(() => !!editor.value?.deletedAt);
@@ -692,7 +694,7 @@ onBeforeRouteUpdate(canLeave);
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
             <span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
-            <span class="small-label">v{{ editor.version }}</span>
+            <span class="small-label">{{ qualificationVersionLabel(editor.version) }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
             >
@@ -733,11 +735,15 @@ onBeforeRouteUpdate(canLeave);
         </p>
         <div :class="{ 'course-editor-meta': !!courseDraft }">
           <details class="criterion-versions">
-            <summary>버전 이력 · {{ relatedVersions.length }}개</summary>
+            <summary>
+              {{ editor.version === null ? '등록 이력' : '버전 이력' }} ·
+              {{ relatedVersions.length }}개
+            </summary>
             <ul>
               <li v-for="version in relatedVersions" :key="version.id">
                 <RouterLink :to="criteriaLink(`/admin/${section}/${version.id}`)"
-                  >v{{ version.version }} · {{ version.title || '이름 없는 기준'
+                  >{{ qualificationVersionLabel(version.version) }} ·
+                  {{ version.title || '이름 없는 기준'
                   }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
                 >
               </li>
@@ -771,7 +777,7 @@ onBeforeRouteUpdate(canLeave);
             {{ AUDITOR_PREPARATION_MESSAGE }}
           </p>
           <QualificationLifecycle
-            v-if="qualificationDraft && !readOnly"
+            v-if="qualificationDraft && qualificationDraft.version !== null && !readOnly"
             :qualification="store.qualification(qualificationDraft.id)"
             :disabled="
               busy ||
@@ -782,6 +788,12 @@ onBeforeRouteUpdate(canLeave);
             @changed="qualificationDraft = plain(store.qualification(qualificationDraft.id))"
             @version-created="(id) => router.push(criteriaLink(`/admin/qualifications/${id}`))"
           />
+          <p
+            v-if="qualificationDraft.version === null && !readOnly"
+            class="qualification-save-notice"
+          >
+            Ready · 대기 — 최초 기준을 저장하면 v1부터 시작합니다.
+          </p>
           <p
             v-if="qualificationDraft && store.retiredCourses(qualificationDraft).length"
             class="error-message"
@@ -941,12 +953,18 @@ onBeforeRouteUpdate(canLeave);
           "
         >
           <template v-if="savePreview"
-            ><h3>{{ editor.title || '이름 없는 기준' }} · v{{ editor.version }}</h3>
+            ><h3>
+              {{ editor.title || '이름 없는 기준' }} ·
+              {{ qualificationVersionLabel(editor.version) }}
+            </h3>
             <template v-if="savePreview.versionPolicy">
               <p v-if="savePreview.unchanged">변경 내용이 없습니다.</p>
               <template v-else>
+                <p v-if="savePreview.initialConfiguration" class="qualification-save-notice">
+                  v1으로 최초 설정 저장 · 저장한 기준을 신규 계획·학습·갱신에 사용합니다.
+                </p>
                 <p
-                  v-if="savePreview.versionPolicy.requiresNewVersion"
+                  v-else-if="savePreview.versionPolicy.requiresNewVersion"
                   class="qualification-save-notice"
                 >
                   인증Set 구성 변경으로 새 버전 생성이 필요합니다. v{{
@@ -991,7 +1009,10 @@ onBeforeRouteUpdate(canLeave);
                 <p v-if="previewPending" role="status" class="qualification-save-description">
                   저장 방식을 확인하고 있습니다.
                 </p>
-                <p v-else-if="!previewError" class="qualification-save-description">
+                <p
+                  v-else-if="!previewError && !savePreview.initialConfiguration"
+                  class="qualification-save-description"
+                >
                   {{
                     savePreview.versionPolicy.effectiveMode === 'current'
                       ? '해당 버전의 팀 설정을 수정합니다. 이미 완료된 계획과 기존 발급 기간은 유지되며, 이후 이 버전으로 완료하는 계획에는 수정한 설정이 적용됩니다.'
@@ -1065,11 +1086,13 @@ onBeforeRouteUpdate(canLeave);
                 @click="saveCatalog(true)"
               >
                 {{
-                  savePreview?.versionPolicy
-                    ? savePreview.newVersion
-                      ? '새 버전 생성'
-                      : '현재 버전에 저장'
-                    : '저장 확인'
+                  savePreview?.initialConfiguration
+                    ? 'v1으로 최초 설정 저장'
+                    : savePreview?.versionPolicy
+                      ? savePreview.newVersion
+                        ? '새 버전 생성'
+                        : '현재 버전에 저장'
+                      : '저장 확인'
                 }}
               </button></template
             ></template
@@ -1079,10 +1102,7 @@ onBeforeRouteUpdate(canLeave);
       <template v-else>
         <PageHeading class="page-heading">
           <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
-          <TemplateImport
-            v-if="section === 'qualifications'"
-            :qualification-type="selectedType"
-          />
+          <TemplateImport v-if="section === 'qualifications'" :qualification-type="selectedType" />
           <button
             v-if="section === 'courses'"
             class="button primary"
@@ -1291,7 +1311,8 @@ onBeforeRouteUpdate(canLeave);
               <option v-if="section === 'courses'" value="retired">운영 종료</option>
               <option value="all">전체 상태</option>
               <template v-if="section === 'qualifications'"
-                ><option value="Active">Active</option>
+                ><option value="Ready">Ready · 대기</option>
+                <option value="Active">Active</option>
                 <option value="Hold">Hold</option>
                 <option value="Revoke">Revoke</option>
                 <option value="deleted">삭제된 항목</option></template
@@ -1366,7 +1387,7 @@ onBeforeRouteUpdate(canLeave);
                   >
                 </td>
 
-                <td>v{{ q.version }}</td>
+                <td>{{ qualificationVersionLabel(q.version) }}</td>
                 <td>
                   {{
                     store.data.currentQualifications.some((p) => p.qualificationId === q.id)
@@ -1376,7 +1397,9 @@ onBeforeRouteUpdate(canLeave);
                 </td>
                 <td>
                   <span class="lifecycle-badge" :data-status="q.lifecycleStatus || 'Active'">{{
-                    q.lifecycleStatus || 'Active'
+                    q.lifecycleStatus === 'Ready'
+                      ? criterionLifecycleLabels.Ready
+                      : q.lifecycleStatus || 'Active'
                   }}</span>
                 </td>
                 <td>

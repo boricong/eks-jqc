@@ -1,3 +1,4 @@
+import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { canContinueType } from "./personal-access.ts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
@@ -227,7 +228,7 @@ export function executeWorkflow(
         .filter(
           (q) => q.lv1OrganizationId === scope && q.templateId === templateId,
         )
-        .sort((a, b) => b.version - a.version)[0];
+        .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
       if (
         previous &&
         s.qualifications.some(
@@ -237,23 +238,25 @@ export function executeWorkflow(
         existing.push(
           s.qualifications
             .filter((q) => q.entityId === previous.entityId && !q.deletedAt)
-            .sort((a, b) => b.version - a.version)[0]!.id,
+            .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!.id,
         );
         continue;
       }
       const id = randomUUID();
+      const maximumVersion = Math.max(
+        0,
+        ...s.qualifications
+          .filter((q) => q.entityId === previous?.entityId)
+          .map((q) => q.version ?? 0),
+      );
+      const ready =
+        template.qualificationType === "auditee" && maximumVersion === 0;
       s.qualifications.push(
         QualificationSchema.parse({
           id,
           entityId: previous?.entityId || id,
-          parentId: previous?.id,
-          version: previous
-            ? Math.max(
-                ...s.qualifications
-                  .filter((q) => q.entityId === previous.entityId)
-                  .map((q) => q.version),
-              ) + 1
-            : 1,
+          parentId: previous?.version != null ? previous.id : undefined,
+          version: ready ? null : maximumVersion + 1,
           revision: 1,
           lv1OrganizationId: scope,
           qualificationType: template.qualificationType,
@@ -262,7 +265,7 @@ export function executeWorkflow(
           templateId,
           templateRevision: template.revision,
           description: template.description,
-          lifecycleStatus: "Active",
+          lifecycleStatus: ready ? "Ready" : "Active",
           renewalLeadMonths: 3,
           courseIds: [],
         }),
@@ -527,7 +530,7 @@ export function executeWorkflow(
         entityId: q.entityId,
         qualificationId: q.id,
         title: row.title,
-        version: q.version,
+        version: numberedQualificationVersion(q),
         ...(previous ? { previousCertificationId: previous.id } : {}),
       });
       request.revision++;

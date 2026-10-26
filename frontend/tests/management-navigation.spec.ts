@@ -5,6 +5,7 @@ import { configureDashboardFixture, DASHBOARD_NOW } from '../../server/tests/das
 const menuNames = [
   '인증 현황',
   '취득 대상자 상태',
+  '팀 사용자 관리',
   'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
@@ -17,7 +18,7 @@ const menuNames = [
 ];
 const groupNames = ['현황 조회', '인증 운영', '자격 기준 설정', '팀 소통'];
 
-test('네 그룹·11개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
+test('네 그룹·12개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin');

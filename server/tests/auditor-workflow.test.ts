@@ -496,8 +496,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 18);
-  assert.equal(preview.state.revision, raw.revision + 3);
+  assert.equal(preview.state.schemaVersion, 19);
+  assert.equal(preview.state.revision, raw.revision + 4);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {
@@ -523,7 +523,11 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
   );
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 3, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateAuditorWorkflow,
     "auditor-workflow",
   );
@@ -534,7 +538,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     fresh.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 8);
+  assert.equal(master.formatVersion, 9);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const legacy: any = structuredClone(master);
   legacy.formatVersion = 5;
@@ -546,7 +550,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
   assert.deepEqual(readMaster(legacy).payload, master.payload);
   const g = await setupAuditor(t),
     workbook = exportCatalog(g.store.snapshot(), "org-photo", [g.q.id]);
-  assert.equal(workbook.format, "eks-catalog-v11");
+  assert.equal(workbook.format, "eks-catalog-v12");
   assert.deepEqual(
     (await readCatalogWorkbook(await writeCatalogWorkbook(workbook))).workbook,
     workbook,

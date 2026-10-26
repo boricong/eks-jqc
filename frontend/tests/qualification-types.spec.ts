@@ -73,7 +73,7 @@ test('Auditor 전용 생성·기준 편집·미완성 준비 차단과 팀 소�
   const latest = backend.store
     .snapshot()
     .qualifications.filter((q) => q.templateId === representative.templateId)
-    .sort((a, b) => b.version - a.version)[0]!;
+    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
   await expect(
     page.getByText(`현재 기준 버전 · v${latest.version}`, { exact: true }),
   ).toBeVisible();

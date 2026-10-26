@@ -10,6 +10,15 @@ import {
   type QualificationMetadata,
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
+export function numberedQualificationVersion(q: Qualification): number {
+  demand(
+    q.version !== null && q.lifecycleStatus !== "Ready",
+    409,
+    "Ready 자격은 최초 기준 저장 후 사용할 수 있습니다.",
+    "QUALIFICATION_READY",
+  );
+  return q.version;
+}
 export const qualificationTemplates: {
   id: string;
   title: string;

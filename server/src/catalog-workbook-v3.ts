@@ -61,6 +61,7 @@ const translations: Record<string, Record<string, string>> = {
 
   mode: { new: "새 자격", revise: "기존 자격 수정" },
   validityType: { unknown: "미정", months: "기간제", unlimited: "무기한" },
+  lifecycleStatus: { Ready: "Ready · 대기" },
 };
 const shown = (k: string, v: unknown) =>
   translations[k]?.[String(v)] ?? v ?? "";
@@ -88,10 +89,13 @@ export async function writeCatalogV3(
 ) {
   const book = new ExcelJS.Workbook();
   book.creator = "EKS";
-  book.subject = "eks-catalog-v11";
+  book.subject = "eks-catalog-v12";
   const guide = book.addWorksheet("작성 안내");
   guide.addRows([
-    ["EKS 자격 기준 · 등록된 팀 자격 양식 v11"],
+    ["EKS 자격 기준 · 등록된 팀 자격 양식 v12"],
+    [
+      "Auditee 최초 등록은 버전 없는 Ready · 대기입니다. 기준 변경 없이 저장하면 유지하며 최초 기준 변경 저장 시 v1·Active가 됩니다.",
+    ],
     [
       "Auditor는 필수 학습항목 본인 확인으로 수료합니다. 기존 평가 칸은 비활성 보존용이며 변경할 수 없습니다.",
     ],
@@ -172,7 +176,7 @@ export async function writeCatalogV3(
     ws.getRow(1).height = 32;
     const values: Record<string, unknown> = {
       ...q,
-      format: "eks-catalog-v11",
+      format: "eks-catalog-v12",
       lv1OrganizationId: data.lv1OrganizationId,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     };
@@ -424,7 +428,7 @@ export async function writeCatalogV3(
 
 export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
   const workbook: CatalogWorkbook = {
-    format: "eks-catalog-v11",
+    format: "eks-catalog-v12",
     lv1OrganizationId: "",
     sheets: [],
   };
@@ -509,6 +513,7 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
         "eks-catalog-v9",
         "eks-catalog-v10",
         "eks-catalog-v11",
+        "eks-catalog-v12",
       ].includes(m.format),
       422,
       `${ws.name}: 양식 버전을 확인해 주세요.`,
@@ -547,7 +552,14 @@ export function readCatalogV3(book: ExcelJS.Workbook, buffer: Buffer) {
       m.renewalNoticeDaysBefore !== ""
         ? { renewalNoticeDaysBefore: Number(m.renewalNoticeDaysBefore) }
         : {}),
-      ...(m.lifecycleStatus ? { lifecycleStatus: m.lifecycleStatus } : {}),
+      ...(m.lifecycleStatus
+        ? {
+            lifecycleStatus: internal(
+              "lifecycleStatus",
+              m.lifecycleStatus,
+            ) as CatalogSheet["lifecycleStatus"],
+          }
+        : {}),
       reminderDays: String(m.reminderDays || "")
         .split(",")
         .map((s) => s.trim())

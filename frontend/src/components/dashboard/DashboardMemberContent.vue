@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { DashboardMemberDetail } from '@eks/contracts';
+import { qualificationVersionLabel } from '@eks/contracts';
 import {
   efficacyLabels,
   progressLabels,
@@ -56,7 +57,9 @@ const history = computed(
             efficacyLabels[q.efficacy]
           }}</span>
           <span>{{
-            q.registered ? `현재 팀 기준 v${q.currentVersion}` : '과거 기록 · 기록 보존'
+            q.registered
+              ? `현재 팀 기준 ${qualificationVersionLabel(q.currentVersion)}`
+              : '과거 기록 · 기록 보존'
           }}</span>
           <span v-if="q.progress !== 'none'">{{ progressLabels[q.progress] }}</span>
           <span v-if="q.renewalState !== 'not_applicable'">{{

@@ -5,7 +5,7 @@ import { ref, watch, nextTick } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
-import type { Qualification } from '@eks/contracts';
+import { qualificationVersionLabel, type Qualification } from '@eks/contracts';
 import AppDialog from './AppDialog.vue';
 import RowActions from './RowActions.vue';
 const props = defineProps<{
@@ -32,7 +32,7 @@ type Impact = {
   canDelete: boolean;
   blockers: string[];
   mode: 'archive' | 'remove';
-  replacement: { id: string; version: number; title: string } | null;
+  replacement: { id: string; version: number | null; title: string } | null;
   affectedOrganizations: { id: string; name: string }[];
 };
 const impact = ref<Impact>();
@@ -128,11 +128,15 @@ async function remove() {
       }
     "
   >
-    <h3>{{ qualification.title || '이름 없는 자격' }} · v{{ qualification.version }}</h3>
+    <h3>
+      {{ qualification.title || '이름 없는 자격' }} ·
+      {{ qualificationVersionLabel(qualification.version) }}
+    </h3>
     <p>{{ store.managementOrganization?.name }}</p>
     <template v-if="impact">
       <p v-if="impact.replacement">
-        삭제 후 현재 기준: {{ impact.replacement.title }} · v{{ impact.replacement.version }}
+        삭제 후 현재 기준: {{ impact.replacement.title }} ·
+        {{ qualificationVersionLabel(impact.replacement.version) }}
       </p>
       <p v-else>남은 기준이 없어 신규 계획·학습·갱신 시작을 제한합니다.</p>
       <p v-if="impact.affectedOrganizations.length">

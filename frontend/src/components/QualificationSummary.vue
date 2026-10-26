@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import PropertyList from './PropertyList.vue';
-import { credentialCurrent, kstDate, type Assignment, type Qualification } from '@eks/contracts';
+import {
+  credentialCurrent,
+  kstDate,
+  qualificationVersionLabel,
+  type Assignment,
+  type Qualification,
+} from '@eks/contracts';
 import { computed, ref, useId } from 'vue';
 import StatusBadge from './StatusBadge.vue';
 import ValidityBadge from './ValidityBadge.vue';
@@ -29,7 +35,7 @@ const validity = computed(() => {
       <div class="learning-hero-title">
         <h1>{{ qualification.title }}</h1>
         <div class="learning-hero-meta">
-          <span class="small-label">v{{ qualification.version }}</span>
+          <span class="small-label">{{ qualificationVersionLabel(qualification.version) }}</span>
           <StatusBadge
             v-if="assignment.excludedReason || assignment.certifiedAt"
             :status="assignment.excludedReason ? 'excluded' : 'certified'"

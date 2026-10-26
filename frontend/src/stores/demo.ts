@@ -300,7 +300,9 @@ export const useDemo = defineStore('workspace', () => {
   });
   async function command(path: string, body: unknown = {}, method = 'POST') {
     const managed =
-      /^\/(courses|qualifications|assignments|notices|qualification-templates)(\/|$)/.test(path) ||
+      /^\/(courses|qualifications|assignments|notices|qualification-templates|team-users)(\/|$)/.test(
+        path,
+      ) ||
       (path === '/planning-requests' && method === 'POST');
     if (managed) path = managementPath(path);
     const scope = actorId.value;

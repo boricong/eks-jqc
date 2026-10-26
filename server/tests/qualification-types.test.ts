@@ -297,7 +297,7 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
     "PUT",
   );
   const workbook = exportCatalog(f.store.snapshot(), "org-photo", [q.id]);
-  assert.equal(workbook.format, "eks-catalog-v11");
+  assert.equal(workbook.format, "eks-catalog-v12");
   const xlsx = await readCatalogWorkbook(await writeCatalogWorkbook(workbook));
   assert.deepEqual(xlsx.workbook, workbook);
   const altered = structuredClone(workbook);
@@ -336,8 +336,8 @@ test("Auditor 개별/일괄 기준 저장·v9/기본정보5 왕복은 허용하�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 8);
-  assert.equal(master.stateSchemaVersion, 18);
+  assert.equal(master.formatVersion, 9);
+  assert.equal(master.stateSchemaVersion, 19);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -397,7 +397,7 @@ function auditorProgress(s: ReturnType<typeof seedState>) {
         entityId: q.entityId,
         qualificationId: q.id,
         title: q.title,
-        version: q.version,
+        version: q.version!,
       },
     ],
     selections: [],
@@ -463,12 +463,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 18);
-  assert.equal(preview.state.revision, raw.revision + 5);
+  assert.equal(preview.state.schemaVersion, 19);
+  assert.equal(preview.state.revision, raw.revision + 6);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 5;
-  normalized.audits.splice(-5);
+  normalized.revision -= 6;
+  normalized.audits.splice(-6);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,
@@ -522,7 +522,11 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
   assert.deepEqual(await readFile(applied.stateBackup), before);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 5, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateQualificationTypes,
   );
   assert.deepEqual(await readFile(f.file), after);

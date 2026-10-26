@@ -9,7 +9,8 @@ export function currentTeamQualifications(s: {
     if (q.deletedAt) continue;
     const key = `${q.lv1OrganizationId}:${q.entityId}`;
     const previous = latest.get(key);
-    if (!previous || q.version > previous.version) latest.set(key, q);
+    if (!previous || (q.version ?? 0) > (previous.version ?? 0))
+      latest.set(key, q);
   }
   return [...latest.values()].map((q) => ({
     lv1OrganizationId: q.lv1OrganizationId,

@@ -200,6 +200,8 @@ test("요청 당시 필수 고정·추가 자격 선택·필수 해제 후 확�
       extra = s.qualifications.find((q) => q.id === created.id)!;
     extra.courseIds = [...source.courseIds];
     extra.validity = source.validity;
+    extra.version = 1;
+    extra.lifecycleStatus = "Active";
   });
   const q2 = f.store
     .snapshot()
@@ -376,7 +378,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 18);
+  assert.equal(next.state.schemaVersion, 19);
   assert.deepEqual(next.state.plans, raw.plans);
   assert.deepEqual(
     next.state.planningRequests[0]!.targets,

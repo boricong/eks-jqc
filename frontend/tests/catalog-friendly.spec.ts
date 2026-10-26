@@ -157,7 +157,9 @@ test('자격·인증Set 중심 편집: 코드 없이 문항 작성, 제외 취�
   await page.getByRole('button', { name: '선택 기준 저장', exact: true }).click();
   await expect(page.getByText('서버 기준과 같습니다.', { exact: true })).toBeVisible();
   const snapshot = backend.store.snapshot(),
-    q = snapshot.qualifications.find((q) => q.version > 1 && q.entityId === 'demo-qualification')!;
+    q = snapshot.qualifications.find(
+      (q) => (q.version ?? 0) > 1 && q.entityId === 'demo-qualification',
+    )!;
   expect(q).toBeTruthy();
   const courses = q.courseIds.map((id) => snapshot.courses.find((c) => c.id === id)!);
   expect(courses.map((c) => c.title)).toEqual(['자료 확인 개정', '기록 작성']);

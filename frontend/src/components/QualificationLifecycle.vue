@@ -102,7 +102,7 @@ async function createVersion() {
 }
 </script>
 <template>
-  <CollapsibleSection title="자격 기준 운영 상태">
+  <CollapsibleSection v-if="qualification.version !== null" title="자격 기준 운영 상태">
     <template #summary>
       <span class="lifecycle-badge" :data-status="qualification.lifecycleStatus || 'Active'">{{
         criterionLifecycleLabels[qualification.lifecycleStatus || 'Active']
@@ -167,7 +167,11 @@ async function createVersion() {
       <label v-if="qualification.lifecycleStatus !== 'Revoke'" class="field"
         >변경할 운영 상태<select v-model="status" :disabled="busy">
           <option
-            v-for="(label, key) in criterionLifecycleLabels"
+            v-for="(label, key) in {
+              Active: criterionLifecycleLabels.Active,
+              Hold: criterionLifecycleLabels.Hold,
+              Revoke: criterionLifecycleLabels.Revoke,
+            }"
             :key="key"
             :value="key"
             :disabled="key === (qualification.lifecycleStatus || 'Active')"

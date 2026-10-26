@@ -23,7 +23,7 @@ export async function configureTestPolicies(
   const versions = [
     ...new Map(
       selected
-        .sort((a, b) => a.version - b.version)
+        .sort((a, b) => (a.version ?? 0) - (b.version ?? 0))
         .map((q) => [q.entityId, q]),
     ).values(),
   ];

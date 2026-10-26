@@ -135,7 +135,7 @@ test("최신 버전 삭제는 이전 기준으로 돌아가고 마지막 삭제�
       s.qualifications.push({
         ...structuredClone(q),
         id: nextId,
-        version: q.version + 1,
+        version: q.version! + 1,
         parentId: q.id,
       });
       return {};
@@ -284,7 +284,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 18);
+  assert.equal(next.state.schemaVersion, 19);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -523,6 +523,14 @@ test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 
     original,
   );
   const registered = await registerFixtureQualification(f.store);
+  const ready = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === registered.id)!;
+  await f.call(
+    `/qualifications/${ready.id}`,
+    { ...ready, renewalLeadMonths: 4 },
+    "PUT",
+  );
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === registered.id)!;

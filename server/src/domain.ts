@@ -1,3 +1,4 @@
+import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import { canContinueType, canReadPersonal } from "./personal-access.ts";
 import { activeAuditorCertification } from "./auditor-program.ts";
@@ -412,7 +413,11 @@ function reconcile(
       learnerId: a.learnerId,
       qualificationId: a.qualificationId,
       date: at,
-      snapshot: snapshot({ ...q, ...a.qualificationMetadata }),
+      snapshot: snapshot({
+        ...q,
+        ...a.qualificationMetadata,
+        version: numberedQualificationVersion(q),
+      }),
       qualificationMetadata: a.qualificationMetadata || metadata(q),
       validity: structuredClone(q.validity),
       ...(q.validity.type === "months"
@@ -780,6 +785,12 @@ export function execute(
       body.id,
     );
     if (action === "catalog.clone") {
+      demand(
+        isCourse || item.version !== null,
+        409,
+        "Ready 자격은 최초 기준 저장으로 v1을 시작해 주세요.",
+        "QUALIFICATION_READY",
+      );
       if (!isCourse)
         checkCommonFields(s, item as State["qualifications"][number], body);
       demand(!item.deletedAt, 409, "삭제된 기준입니다.");
@@ -802,7 +813,7 @@ export function execute(
           Math.max(
             ...list
               .filter((x) => x.entityId === item.entityId)
-              .map((x) => x.version),
+              .map((x) => x.version ?? 0),
           ) + 1,
         revision: 1,
 
@@ -836,12 +847,17 @@ export function execute(
         u,
         action,
         result.id,
-        result.newVersion ? "기존 기준을 보존하고 새 버전 저장" : "기준 저장",
+        result.initialConfiguration
+          ? "Ready 최초 설정 v1 저장"
+          : result.newVersion
+            ? "기존 기준을 보존하고 새 버전 저장"
+            : "기준 저장",
         undefined,
         {
           sourceId: item.id,
           sourceVersion: item.version,
           resultVersion: result.version,
+          initialConfiguration: result.initialConfiguration ?? false,
           versionMode: body.versionMode ?? null,
           versionPolicy: result.versionPolicy ?? null,
           changes: result.changes,

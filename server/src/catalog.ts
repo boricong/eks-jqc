@@ -1,4 +1,5 @@
 import { auditorAssessmentChanged } from "./course-types.ts";
+import { configureInitialQualification } from "@eks/contracts";
 import { currentQualification } from "./qualification-templates.ts";
 import {
   referencedCatalog,
@@ -63,7 +64,7 @@ export function exportCatalog(
     "자격을 1~100개 선택해 주세요.",
   );
   return {
-    format: "eks-catalog-v11",
+    format: "eks-catalog-v12",
     lv1OrganizationId: scope,
     sheets: ids.map((id, qi) => {
       const original = s.qualifications.find((q) => q.id === id);
@@ -180,7 +181,7 @@ export function exportCatalog(
 }
 export function emptyCatalog(scope: string): CatalogWorkbook {
   return {
-    format: "eks-catalog-v11",
+    format: "eks-catalog-v12",
     lv1OrganizationId: scope,
     sheets: [
       {
@@ -274,6 +275,7 @@ export function prepareCatalog(
         "eks-catalog-v9",
         "eks-catalog-v10",
         "eks-catalog-v11",
+        "eks-catalog-v12",
       ].includes(raw?.format) &&
       raw.lv1OrganizationId === scope &&
       Array.isArray(raw.sheets) &&
@@ -873,7 +875,7 @@ export function prepareCatalog(
       id: original?.id || randomUUID(),
       entityId: original?.entityId || randomUUID(),
       lv1OrganizationId: scope,
-      version: original?.version || 1,
+      version: original ? original.version : 1,
       revision: original?.revision || 1,
       catalogCode: sheet.code,
       templateId: original!.templateId,
@@ -903,11 +905,14 @@ export function prepareCatalog(
       original &&
       same(qContent(q), qContent(original)) &&
       sheet.code === codeOf(original);
+    const initialConfiguration =
+      !!original && configureInitialQualification(original, q, !noChange);
     if (noChange) {
       q = original!;
     } else {
       if (
         original &&
+        !initialConfiguration &&
         referencedCatalog(s, "qualifications", original.id, organizations)
       ) {
         q = {
@@ -918,7 +923,7 @@ export function prepareCatalog(
             Math.max(
               ...s.qualifications
                 .filter((i) => i.entityId === original!.entityId)
-                .map((i) => i.version),
+                .map((i) => i.version ?? 0),
             ) + 1,
           revision: 1,
         };
@@ -946,6 +951,7 @@ export function prepareCatalog(
       title: sheet.title,
       kind: !original ? "new" : noChange ? "unchanged" : "changed",
       version: q.version,
+      initialConfiguration,
       details: describeChanges(
         original ? exportCatalog(s, scope, [original.id]).sheets[0] : undefined,
         sheet,
@@ -1029,6 +1035,12 @@ export function saveCatalogBatch(
       fileHash: fileHash || "",
       contentHash: batch.contentHash,
       qualifications: qualifications.length,
+      initialConfigurationIds: prepared.changes
+        .filter((change) => change.initialConfiguration)
+        .map(
+          (change) =>
+            qualifications.find((q) => q.catalogCode === change.code)!.id,
+        ),
       courses: courses.length,
       resultIds: [...batch.qualificationIds, ...batch.courseIds],
     },

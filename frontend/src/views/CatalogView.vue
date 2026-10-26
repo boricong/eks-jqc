@@ -10,6 +10,8 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import {
   catalogTables,
   catalogLabels,
+  qualificationVersionLabel,
+  criterionLifecycleLabels,
   qualificationUseErrors,
   courseUseErrors,
   type CatalogWorkbook,
@@ -115,7 +117,7 @@ const eligible = computed(() =>
     (q) =>
       !q.deletedAt &&
       !store.data.qualifications.some(
-        (o) => !o.deletedAt && o.entityId === q.entityId && o.version > q.version,
+        (o) => !o.deletedAt && o.entityId === q.entityId && (o.version ?? 0) > (q.version ?? 0),
       ),
   ),
 );
@@ -398,6 +400,7 @@ async function recover(record: CatalogRecovery) {
       'eks-catalog-v9',
       'eks-catalog-v10',
       'eks-catalog-v11',
+      'eks-catalog-v12',
     ].includes(record.workbook.format)
   ) {
     error.value =
@@ -827,6 +830,7 @@ async function backToList() {
                 'eks-catalog-v9',
                 'eks-catalog-v10',
                 'eks-catalog-v11',
+                'eks-catalog-v12',
               ].includes(v.workbook.format),
           )"
           :key="r.id + '-download'"
@@ -894,7 +898,10 @@ async function backToList() {
                 </td>
                 <td>
                   <strong>{{ q.title || '이름 없는 자격' }}</strong
-                  ><small>v{{ q.version }} · {{ q.lifecycleStatus || 'Active' }}</small>
+                  ><small
+                    >{{ qualificationVersionLabel(q.version) }} ·
+                    {{ criterionLifecycleLabels[q.lifecycleStatus || 'Active'] }}</small
+                  >
                 </td>
                 <td>{{ q.courseIds.length }}개</td>
                 <td>
@@ -1248,7 +1255,11 @@ async function backToList() {
       </div>
       <details v-for="c in selectedChanges" :key="c.code" class="catalog-diff">
         <summary>
-          {{ c.title || '이름 없는 자격' }} · v{{ c.version }} · 변경 {{ c.details?.length || 0 }}개
+          {{ c.title || '이름 없는 자격' }} ·
+          {{
+            c.initialConfiguration ? 'v1으로 최초 설정 저장' : qualificationVersionLabel(c.version)
+          }}
+          · 변경 {{ c.details?.length || 0 }}개
         </summary>
         <div v-for="(d, i) in c.details" :key="i">
           <strong

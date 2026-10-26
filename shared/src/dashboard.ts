@@ -145,8 +145,8 @@ export interface DashboardQualificationOption {
   title: string;
   registered: boolean;
   currentQualificationId?: string;
-  currentVersion?: number;
-  criterionStatus?: "Active" | "Hold" | "Revoke";
+  currentVersion?: number | null;
+  criterionStatus?: "Ready" | "Active" | "Hold" | "Revoke";
   hasRecords: boolean;
 }
 export interface DashboardOptions {
@@ -176,7 +176,7 @@ export interface DashboardQualificationCell {
   title: string;
   required: boolean;
   registered: boolean;
-  currentVersion?: number;
+  currentVersion?: number | null;
   efficacy: DashboardEfficacy;
   progress: DashboardProgress;
   selected: boolean;

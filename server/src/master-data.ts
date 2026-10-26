@@ -105,7 +105,7 @@ export function masterCandidate(
   );
   const state = validateState(
     {
-      schemaVersion: 18,
+      schemaVersion: 19,
       auditorPrograms: structuredClone(p.auditorPrograms || []),
       qualificationTemplates: structuredClone(p.qualificationTemplates),
       revision: stateRevision,
@@ -126,8 +126,8 @@ export function exportMaster(
   const payload = masterPayload(s, org);
   return {
     format: "eks-master",
-    formatVersion: 8,
-    stateSchemaVersion: 18,
+    formatVersion: 9,
+    stateSchemaVersion: 19,
     organizationSchemaVersion: 3,
     createdAt: at,
     counts: masterCounts(payload),
@@ -167,7 +167,16 @@ const payloadSchema = z
 export function readMaster(input: unknown): MasterFile {
   try {
     const version = (input as any)?.formatVersion;
-    if (version >= 4 && version <= 8) {
+    if (version < 9)
+      demand(
+        ((input as any)?.payload?.qualifications || []).every(
+          (q: any) => q.version !== null && q.lifecycleStatus !== "Ready",
+        ),
+        422,
+        "Ready 자격은 기본정보 JSON v9 이상에서만 사용할 수 있습니다.",
+        "MASTER_FILE_INVALID",
+      );
+    if (version >= 4 && version <= 9) {
       const payload = (input as any)?.payload;
       for (const item of [
         ...(payload?.qualificationTemplates || []),
@@ -260,7 +269,9 @@ export function readMaster(input: unknown): MasterFile {
                       ? 6
                       : version === 7
                         ? 7
-                        : 8,
+                        : version === 8
+                          ? 8
+                          : 9,
         ),
         stateSchemaVersion: legacy
           ? z.literal(10)
@@ -276,7 +287,9 @@ export function readMaster(input: unknown): MasterFile {
                     ? z.literal(16)
                     : version === 7
                       ? z.literal(17)
-                      : z.literal(18),
+                      : version === 8
+                        ? z.literal(18)
+                        : z.literal(19),
         organizationSchemaVersion: z.literal(version < 8 ? 2 : 3),
         createdAt: z.iso.datetime(),
         counts: z.record(z.string(), z.number().int().nonnegative()),
@@ -377,8 +390,8 @@ export function readMaster(input: unknown): MasterFile {
     );
     return {
       ...result,
-      formatVersion: 8,
-      stateSchemaVersion: 18,
+      formatVersion: 9,
+      stateSchemaVersion: 19,
       organizationSchemaVersion: 3,
       payload,
       sha256: contentHash(payload),
@@ -388,7 +401,7 @@ export function readMaster(input: unknown): MasterFile {
     if (e instanceof DomainError) throw e;
     throw new DomainError(
       422,
-      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v8(업무18·조직3), 호환 형식 v1~v7(업무10~17·조직2)입니다. ${e instanceof Error ? e.message : ""}`,
+      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v9(업무19·조직3), 호환 형식 v1~v8(업무10~18·조직2~3)입니다. ${e instanceof Error ? e.message : ""}`,
       "MASTER_FILE_INVALID",
     );
   }

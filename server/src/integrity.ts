@@ -23,7 +23,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 18) {
+  if (!legacy && (input as any)?.schemaVersion === 19) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -308,8 +308,11 @@ export function validateState(
     );
   for (const list of [s.courses, s.qualifications])
     check(
-      new Set(list.map((x) => `${x.entityId}:${x.version}`)).size ===
-        list.length,
+      new Set(
+        list.map(
+          (x) => `${x.entityId}:${x.version === null ? x.id : x.version}`,
+        ),
+      ).size === list.length,
       "기준 버전 중복",
     );
   for (const list of [s.courses, s.qualifications]) {
@@ -332,10 +335,57 @@ export function validateState(
               parent.id === item.parentId &&
               parent.entityId === item.entityId &&
               parent.lv1OrganizationId === item.lv1OrganizationId &&
+              parent.version !== null &&
+              item.version !== null &&
               parent.version < item.version,
           ),
           "기준 버전 계보",
         );
+    }
+  }
+  for (const q of s.qualifications) {
+    check(
+      (q.version === null) === (q.lifecycleStatus === "Ready"),
+      "Ready 자격의 버전·상태 불일치",
+    );
+    if (q.version === null) {
+      check(
+        q.qualificationType === "auditee" && !q.parentId,
+        "Ready 최초 등록 계보 불일치",
+      );
+      check(
+        !s.qualifications.some(
+          (other) => other.entityId === q.entityId && other.version !== null,
+        ) || !!q.deletedAt,
+        "번호 있는 계보의 Ready 등록",
+      );
+      check(
+        q.deletedAt ||
+          s.qualifications.filter(
+            (other) =>
+              other.entityId === q.entityId &&
+              other.version === null &&
+              !other.deletedAt,
+          ).length === 1,
+        "현재 Ready 등록 중복",
+      );
+      check(
+        ![
+          ...s.plans,
+          ...s.assignments,
+          ...s.certifications,
+          ...s.renewals,
+        ].some((r) => r.qualificationId === q.id),
+        "Ready 자격의 업무 근거 참조",
+      );
+      check(
+        !s.planningRequests.some((r) =>
+          [...(r.targets || []), ...(r.selections || [])].some(
+            (t) => t.qualificationId === q.id,
+          ),
+        ),
+        "Ready 자격의 계획 요청 참조",
+      );
     }
   }
   for (const c of s.courses) {

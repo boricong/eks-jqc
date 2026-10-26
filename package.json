@@ -39,6 +39,7 @@
     "data:migrate-course-types": "node --import tsx server/src/cli.ts migrate-course-types",
     "data:migrate-auditor-program": "node --import tsx server/src/cli.ts migrate-auditor-program",
     "data:migrate-auditor-workflow": "node --import tsx server/src/cli.ts migrate-auditor-workflow",
+    "data:migrate-ready-qualifications": "node --import tsx server/src/cli.ts migrate-ready-qualifications",
     "data:migrate-automatic-criteria": "node --import tsx server/src/cli.ts migrate-automatic-criteria"
   },
   "devDependencies": {

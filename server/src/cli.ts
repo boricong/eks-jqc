@@ -1,4 +1,5 @@
 import { migrateAutomaticCriteria } from "./automatic-criteria-migration.ts";
+import { migrateReadyQualifications } from "./ready-qualification-migration.ts";
 import { migrateAuditorProgram } from "./auditor-program-migration.ts";
 import { migrateAuditorWorkflow } from "./auditor-migration.ts";
 import { migrateCourseTypes } from "./course-type-migration.ts";
@@ -46,6 +47,7 @@ if (
     "migrate-auditor-workflow",
     "migrate-auditor-program",
     "migrate-automatic-criteria",
+    "migrate-ready-qualifications",
   ].includes(command)
 ) {
   const mappingFile = optionsMapping();
@@ -61,30 +63,32 @@ if (
     ? JSON.parse(await readFile(path.resolve(mappingFile), "utf8"))
     : {};
   const transform =
-    command === "migrate-automatic-criteria"
-      ? migrateAutomaticCriteria
-      : command === "migrate-auditor-program"
-        ? migrateAuditorProgram
-        : command === "migrate-auditor-workflow"
-          ? migrateAuditorWorkflow
-          : command === "migrate-course-types"
-            ? migrateCourseTypes
-            : command === "migrate-qualification-types"
-              ? migrateQualificationTypes
-              : command === "migrate-planning"
-                ? migratePlanning
-                : command === "migrate-templates"
-                  ? (a: unknown, b: unknown) =>
-                      migrateTemplates(a, b, undefined, mapping)
-                  : command === "migrate-catalog-editing"
-                    ? migrateCatalogEditing
-                    : command === "migrate-assessment-flow"
-                      ? migrateAssessmentFlow
-                      : command === "migrate-lifecycle"
-                        ? migrateLifecycle
-                        : command === "migrate-administration"
-                          ? migrateAdministration
-                          : migratePolicies;
+    command === "migrate-ready-qualifications"
+      ? migrateReadyQualifications
+      : command === "migrate-automatic-criteria"
+        ? migrateAutomaticCriteria
+        : command === "migrate-auditor-program"
+          ? migrateAuditorProgram
+          : command === "migrate-auditor-workflow"
+            ? migrateAuditorWorkflow
+            : command === "migrate-course-types"
+              ? migrateCourseTypes
+              : command === "migrate-qualification-types"
+                ? migrateQualificationTypes
+                : command === "migrate-planning"
+                  ? migratePlanning
+                  : command === "migrate-templates"
+                    ? (a: unknown, b: unknown) =>
+                        migrateTemplates(a, b, undefined, mapping)
+                    : command === "migrate-catalog-editing"
+                      ? migrateCatalogEditing
+                      : command === "migrate-assessment-flow"
+                        ? migrateAssessmentFlow
+                        : command === "migrate-lifecycle"
+                          ? migrateLifecycle
+                          : command === "migrate-administration"
+                            ? migrateAdministration
+                            : migratePolicies;
   const options = process.argv.slice(3),
     value = (name: string) =>
       options.find((v) => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -110,28 +114,30 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-automatic-criteria"
-            ? "automatic-criteria"
-            : command === "migrate-auditor-program" ||
-                command === "migrate-auditor-workflow"
-              ? "auditor-workflow"
-              : command === "migrate-course-types"
-                ? "course-types"
-                : command === "migrate-qualification-types"
-                  ? "qualification-types"
-                  : command === "migrate-planning"
-                    ? "planning"
-                    : command === "migrate-templates"
-                      ? "qualification-templates"
-                      : command === "migrate-catalog-editing"
-                        ? "catalog-editing"
-                        : command === "migrate-assessment-flow"
-                          ? "assessment-flow"
-                          : command === "migrate-lifecycle"
-                            ? "lifecycle"
-                            : command === "migrate-administration"
-                              ? "administration"
-                              : "policies",
+          command === "migrate-ready-qualifications"
+            ? "ready-qualifications"
+            : command === "migrate-automatic-criteria"
+              ? "automatic-criteria"
+              : command === "migrate-auditor-program" ||
+                  command === "migrate-auditor-workflow"
+                ? "auditor-workflow"
+                : command === "migrate-course-types"
+                  ? "course-types"
+                  : command === "migrate-qualification-types"
+                    ? "qualification-types"
+                    : command === "migrate-planning"
+                      ? "planning"
+                      : command === "migrate-templates"
+                        ? "qualification-templates"
+                        : command === "migrate-catalog-editing"
+                          ? "catalog-editing"
+                          : command === "migrate-assessment-flow"
+                            ? "assessment-flow"
+                            : command === "migrate-lifecycle"
+                              ? "lifecycle"
+                              : command === "migrate-administration"
+                                ? "administration"
+                                : "policies",
         ),
         null,
         2,

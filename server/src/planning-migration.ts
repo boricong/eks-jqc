@@ -8,7 +8,7 @@ export function migratePlanning(
   at = new Date().toISOString(),
 ) {
   const raw = input as any;
-  if (![12, 13, 14, 15, 16, 17, 18].includes(raw?.schemaVersion))
+  if (![12, 13, 14, 15, 16, 17, 18, 19].includes(raw?.schemaVersion))
     throw new Error("계획 요청 이관에는 업무12·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput),
     next = structuredClone(raw);
@@ -37,7 +37,7 @@ export function migratePlanning(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 18,
+      alreadyApplied: raw.schemaVersion === 19,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       requests: state.planningRequests.length,

@@ -1,3 +1,4 @@
+import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import {
   organizationEntries,
@@ -280,7 +281,7 @@ export function dashboardReader(
       (pool.has(q.entityId) || recordEntities.has(q.entityId))
     ) {
       const old = entityQualifications.get(q.entityId);
-      if (!old || q.version > old.version)
+      if (!old || (q.version ?? 0) > (old.version ?? 0))
         entityQualifications.set(q.entityId, q);
     }
   for (const p of pool.values()) {
@@ -573,7 +574,7 @@ export function dashboardReader(
         ? {
             recordQualificationId: q.id,
             recordTitle: record?.qualificationMetadata?.title || q.title,
-            recordVersion: q.version,
+            recordVersion: numberedQualificationVersion(q),
           }
         : {}),
       ...(cert
@@ -736,7 +737,7 @@ export function dashboardReader(
         title: o.title,
         recordTitle:
           c.qualificationMetadata?.title || c.snapshot?.title || q.title,
-        recordVersion: q.version,
+        recordVersion: numberedQualificationVersion(q),
         certificationId: c.id,
         assignmentId: a.id,
         efficacy,
@@ -1261,7 +1262,7 @@ export function dashboardReader(
           assignmentId: a.id,
           entityId: q.entityId,
           title: a.qualificationMetadata?.title || q.title,
-          version: q.version,
+          version: numberedQualificationVersion(q),
           assignedOn: kstDate(a.assignedAt),
           organizationPath: a.organizationPath,
           currentOrganization:

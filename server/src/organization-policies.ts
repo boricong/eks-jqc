@@ -1,3 +1,4 @@
+import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import {
@@ -45,7 +46,7 @@ export function validatePolicies(s: State, doc: OrganizationDocument) {
     requireQualificationProcess(q!);
     const key = `${p.lv1OrganizationId}:${p.entityId}`;
     demand(!seen.has(key), 422, "팀 자격 목록이 중복되었습니다.");
-    seen.add(key);
+    if (q!.version !== null) seen.add(key);
   }
   for (const e of entries) {
     const ids = e.requiredQualifications || [];
@@ -176,7 +177,7 @@ export function requiredQualifications(
         entityId,
         qualificationId: q.id,
         title: q.title,
-        version: q.version,
+        version: numberedQualificationVersion(q),
         status: "waiting",
         reason: previous
           ? "Revoke · 다시 취득하려면 관리자의 새 계획 요청이 필요합니다."
@@ -374,7 +375,12 @@ export function policiesView(
         ).length,
       })),
     qualifications: currentTeamQualifications(s)
-      .filter((p) => p.lv1OrganizationId === scope)
+      .filter(
+        (p) =>
+          p.lv1OrganizationId === scope &&
+          s.qualifications.find((q) => q.id === p.qualificationId)!.version !==
+            null,
+      )
       .map((p) => {
         const q = currentQualification(
           s,
@@ -383,7 +389,7 @@ export function policiesView(
         return {
           ...p,
           title: q.title,
-          version: q.version,
+          version: numberedQualificationVersion(q),
           errors: qualificationUseErrors(q, s.courses),
         };
       }),

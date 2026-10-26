@@ -246,7 +246,7 @@ test('선택만 남은 항목은 계획 미작성으로 제외할 수 있고 비
     (s) => {
       const q = s.qualifications.find((q) => q.id === 'demo-qualification')!;
       s.planningRequests[0]!.selections = [
-        { entityId: q.entityId, qualificationId: q.id, title: q.title, version: q.version },
+        { entityId: q.entityId, qualificationId: q.id, title: q.title, version: q.version! },
       ];
       return {};
     },
