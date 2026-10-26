@@ -9,7 +9,7 @@ export function migrateSubjective(
 ) {
   const raw = structuredClone(input) as any;
   const organizations = validateOrganizations(orgInput);
-  if (![21, 22, 23].includes(raw?.schemaVersion))
+  if (![21, 22, 23, 24].includes(raw?.schemaVersion))
     throw new Error(
       "주관식 답변 이관에는 업무21·조직4 또는 현행 파일이 필요합니다.",
     );
@@ -52,7 +52,7 @@ export function migrateSubjective(
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 23,
+      schemaVersion: 24,
       organizationSchemaVersion: 4,
       revision: state.revision,
       organizationRevision: organizations.revision,

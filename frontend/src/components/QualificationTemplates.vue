@@ -9,7 +9,12 @@ import { confirmAction } from '../composables/useConfirmation';
 import AppDialog from './AppDialog.vue';
 import CoursePreviewDialog from './CoursePreviewDialog.vue';
 import type { CommonCourse } from '@eks/contracts';
-type TemplateItem = QualificationTemplate & { canChangeType: boolean; typeChangeReason: string };
+type TemplateItem = QualificationTemplate & {
+  canChangeType: boolean;
+  typeChangeReason: string;
+  auditorCriteriaEditable: boolean;
+  auditorReadiness: string[];
+};
 const commonCourses = ref<(CommonCourse & { readiness: string[] })[]>([]),
   commonSearch = ref(''),
   previewCommon = ref<CommonCourse | null>(null);
@@ -19,6 +24,15 @@ const commonOptions = computed(() =>
       c.operationalStatus === 'active' &&
       c.qualificationType === draft.value?.qualificationType &&
       (c.title.includes(commonSearch.value) || draft.value?.defaultCommonCourseIds.includes(c.id)),
+  ),
+);
+const prerequisiteSearch = ref('');
+const generalTemplates = computed(() =>
+  items.value.filter(
+    (t) =>
+      t.qualificationType === 'auditor' &&
+      t.auditorLevel === 'general' &&
+      (t.title.includes(prerequisiteSearch.value) || t.id === draft.value?.prerequisiteTemplateId),
   ),
 );
 const typeFilter = ref('all');
@@ -31,6 +45,8 @@ const store = useDemo(),
   busy = ref(false);
 const draft = ref<{
   defaultCommonCourseIds: string[];
+  auditorLevel: 'general' | 'main' | null;
+  prerequisiteTemplateId: string | null;
   id?: string;
   revision?: number;
   qualificationType: QualificationType;
@@ -71,6 +87,8 @@ function edit(item?: QualificationTemplate) {
     ? {
         defaultCommonCourseIds: [...item.defaultCommonCourseIds],
         id: item.id,
+        auditorLevel: item.auditorLevel || null,
+        prerequisiteTemplateId: item.prerequisiteTemplateId || null,
         qualificationType: item.qualificationType,
         revision: item.revision,
         title: item.title,
@@ -80,6 +98,8 @@ function edit(item?: QualificationTemplate) {
     : {
         defaultCommonCourseIds: [],
         qualificationType: 'auditee',
+        auditorLevel: null,
+        prerequisiteTemplateId: null,
         title: '',
         englishName: '',
         description: '',
@@ -108,6 +128,11 @@ async function save() {
       `/system/qualification-templates${id ? `/${id}` : ''}`,
       {
         ...body,
+        auditorLevel: body.qualificationType === 'auditor' ? body.auditorLevel : null,
+        prerequisiteTemplateId:
+          body.qualificationType === 'auditor' && body.auditorLevel === 'main'
+            ? body.prerequisiteTemplateId
+            : null,
         commonCourseRevisions: Object.fromEntries(
           commonCourses.value.map((c) => [c.id, c.revision]),
         ),
@@ -130,12 +155,22 @@ function historyChanges(a: AuditEvent) {
     after?: Partial<QualificationTemplate>;
   };
   return (
-    ['title', 'englishName', 'description', 'qualificationType', 'defaultCommonCourseIds'] as const
+    [
+      'title',
+      'englishName',
+      'description',
+      'qualificationType',
+      'defaultCommonCourseIds',
+      'auditorLevel',
+      'prerequisiteTemplateId',
+    ] as const
   )
     .filter((k) => JSON.stringify(d?.before?.[k]) !== JSON.stringify(d?.after?.[k]))
     .map((k) => ({
       label: {
         defaultCommonCourseIds: '공통인증Set 목록',
+        auditorLevel: 'Auditor 등급',
+        prerequisiteTemplateId: '선행 일반 기본자격',
         title: '자격명',
         englishName: '영문명',
         description: '설명',
@@ -253,6 +288,40 @@ watch(
         <p v-if="draft.qualificationType === 'auditor'" class="muted">
           Auditor는 필수 학습항목의 본인 완료 확인으로 수료·인증됩니다.
         </p>
+        <fieldset
+          v-if="draft.qualificationType === 'auditor'"
+          :disabled="busy || (!!draft.id && !typeEditing?.auditorCriteriaEditable)"
+        >
+          <legend>Auditor 등급·선행 조건</legend>
+          <label class="field"
+            >Auditor 등급<select aria-label="Auditor 등급" v-model="draft.auditorLevel">
+              <option :value="null">미지정</option>
+              <option value="general">일반</option>
+              <option value="main">메인</option>
+            </select></label
+          >
+          <template v-if="draft.auditorLevel === 'main'">
+            <label class="field"
+              >선행 일반 기본자격 검색<input v-model="prerequisiteSearch" type="search"
+            /></label>
+            <label class="field"
+              >선행 일반 기본자격<select
+                aria-label="선행 일반 기본자격"
+                v-model="draft.prerequisiteTemplateId"
+              >
+                <option :value="null">미지정</option>
+                <option v-for="t in generalTemplates" :key="t.id" :value="t.id">
+                  {{ t.title }}
+                </option>
+              </select></label
+            >
+          </template>
+          <p class="muted">
+            등급·선행 조건이 미완성이면 저장은 가능하지만 팀 등록은 제한됩니다. 팀 등록 후에는
+            변경할 수 없습니다. 기존 등급 미지정 자격은 연결된 팀 자격을 모두 Hold로 전환한 뒤 최초
+            보완할 수 있습니다.
+          </p>
+        </fieldset>
         <label class="field"
           >기본자격명<input v-model="draft.title" :disabled="busy" maxlength="300" required
         /></label>

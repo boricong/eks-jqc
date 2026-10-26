@@ -19,6 +19,11 @@ type Status = {
   legacyCertifications: Certification[];
   levels: {
     level: AuditorLevel;
+    qualificationId: string;
+    qualificationRevision: number;
+    templateRevision: number;
+    title: string;
+    prerequisiteTitle: string | null;
     certification: Certification | null;
     assignment: StoredAssignment | null;
     history: Certification[];
@@ -52,12 +57,16 @@ watch(
   },
   { immediate: true },
 );
-async function start(level: AuditorLevel) {
+async function start(item: Status['levels'][number]) {
   if (busy.value) return;
   busy.value = true;
   error.value = '';
   try {
-    const result = (await store.command('/me/auditor/starts', { level })) as {
+    const result = (await store.command('/me/auditor/starts', {
+      qualificationId: item.qualificationId,
+      qualificationRevision: item.qualificationRevision,
+      templateRevision: item.templateRevision,
+    })) as {
       assignmentId: string;
     };
     await router.push({
@@ -98,8 +107,15 @@ async function start(level: AuditorLevel) {
           </li>
         </ul>
       </details>
-      <article v-for="item in data.levels" :key="item.level" class="auditor-level">
-        <h3>{{ auditorLevelLabels[item.level] }}</h3>
+      <p v-if="!data.levels.length" class="muted">팀에서 Auditor 자격을 준비 중입니다.</p>
+      <article v-for="item in data.levels" :key="item.qualificationId" class="auditor-level">
+        <h3>{{ item.title }}</h3>
+        <p class="muted">
+          {{ auditorLevelLabels[item.level]
+          }}<span v-if="item.prerequisiteTitle">
+            · 선행 일반 자격: {{ item.prerequisiteTitle }}</span
+          >
+        </p>
         <template v-if="item.certification"
           ><p>유효 · 만료일 {{ item.certification.expiresOn || '무기한' }}</p>
           <RouterLink
@@ -126,7 +142,7 @@ async function start(level: AuditorLevel) {
           v-else-if="item.canStart"
           class="button primary"
           :disabled="busy"
-          @click="start(item.level)"
+          @click="start(item)"
         >
           {{
             item.kind === 'reacquisition'

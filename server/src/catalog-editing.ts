@@ -1,3 +1,4 @@
+import { auditorCriteria } from "./auditor-pool.ts";
 import { validateCommonSelection } from "./common-courses.ts";
 import {
   latestQualification,
@@ -309,6 +310,9 @@ export function prepareCatalogSave(
           ...body,
           ...metadata,
           lifecycleStatus: (source as Qualification).lifecycleStatus,
+          ...(auditorCriteria(s, source as Qualification)
+            ? { auditorCriteria: auditorCriteria(s, source as Qualification) }
+            : {}),
           templateId: (source as Qualification).templateId,
         });
   if (section === "courses" && (source as Course).category === "common")

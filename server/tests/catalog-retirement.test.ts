@@ -171,12 +171,12 @@ test("과거 일괄 이력·영수증은 업무20에서 보존되며 개별 편�
     f.store.organizations.snapshot(),
   );
   assert.deepEqual(loaded.catalogBatches, before.catalogBatches);
-  assert.equal(loaded.schemaVersion, 23);
+  assert.equal(loaded.schemaVersion, 24);
   const master = exportMaster(
     after,
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 13);
+  assert.equal(master.formatVersion, 14);
   assert.deepEqual(readMaster(master).payload, master.payload);
 });

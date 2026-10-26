@@ -1,3 +1,4 @@
+import { auditorCriteria, auditorTemplateErrors } from "./auditor-pool.ts";
 import { validateDefaultCommonCourses } from "./common-courses.ts";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -52,6 +53,9 @@ export function currentQualification(
   demand(t, 422, "연결된 기본자격을 찾을 수 없습니다.");
   return {
     ...q,
+    ...(auditorCriteria(s, q)
+      ? { auditorCriteria: auditorCriteria(s, q) }
+      : {}),
     qualificationType: t.qualificationType,
     title: t.title,
     englishName: t.englishName,
@@ -81,6 +85,14 @@ export function checkCommonFields(s: State, q: Qualification, input: any) {
     409,
     "기본자격 정보가 변경되었습니다. 최신 공통 정보를 확인한 뒤 다시 저장해 주세요.",
     "TEMPLATE_CHANGED",
+  );
+  demand(
+    input.auditorCriteria === undefined ||
+      JSON.stringify(input.auditorCriteria) ===
+        JSON.stringify(current.auditorCriteria),
+    422,
+    "Auditor 등급·선행 조건은 팀에서 변경할 수 없습니다.",
+    "AUDITOR_CRITERIA_READ_ONLY",
   );
   for (const field of [
     "title",
@@ -113,6 +125,8 @@ export function saveTemplate(
         .optional(),
       revision: z.number().int().positive().optional(),
       qualificationType: QualificationTypeSchema.optional(),
+      auditorLevel: z.enum(["general", "main"]).nullable().optional(),
+      prerequisiteTemplateId: z.string().min(1).nullable().optional(),
       title: z.string().trim().min(1).max(300),
       englishName: z.string().trim().max(300),
       description: z.string().trim().max(20000).default(""),
@@ -126,7 +140,7 @@ export function saveTemplate(
   demand(
     old?.scope !== "team",
     409,
-    "팀 소유 자격은 Auditor 운영에서 수정해 주세요.",
+    "이전 팀 전용 기본자격은 보존됩니다. 새로운 이름·등급 관계는 시스템 기본자격을 만들어 등록해 주세요.",
     "TEAM_TEMPLATE_MANAGED",
   );
   demand(
@@ -153,9 +167,71 @@ export function saveTemplate(
     defaultCommonCourseIds,
     input.commonCourseRevisions,
   );
+  const auditorLevel =
+    input.auditorLevel === null
+      ? undefined
+      : (input.auditorLevel ?? old?.auditorLevel);
+  const prerequisiteTemplateId =
+    input.prerequisiteTemplateId === null
+      ? undefined
+      : (input.prerequisiteTemplateId ?? old?.prerequisiteTemplateId);
+  demand(
+    qualificationType === "auditor" ||
+      (!auditorLevel && !prerequisiteTemplateId),
+    422,
+    "Auditee에는 Auditor 등급·선행 자격을 지정할 수 없습니다.",
+  );
+  demand(
+    !prerequisiteTemplateId ||
+      (auditorLevel === "main" &&
+        s.qualificationTemplates.some(
+          (t) =>
+            t.id === prerequisiteTemplateId &&
+            t.qualificationType === "auditor" &&
+            t.auditorLevel === "general" &&
+            t.scope !== "team",
+        )),
+    422,
+    "선행 일반 기본자격을 확인해 주세요.",
+  );
+  const related = old
+    ? s.qualifications.filter((q) => q.templateId === old.id)
+    : [];
+  if (
+    old &&
+    (old.auditorLevel !== auditorLevel ||
+      old.prerequisiteTemplateId !== prerequisiteTemplateId) &&
+    related.length
+  ) {
+    demand(
+      !old.auditorLevel &&
+        related
+          .filter((q) => !q.deletedAt)
+          .every((q) => q.lifecycleStatus === "Hold"),
+      409,
+      "등록 후 등급·선행 연결은 변경할 수 없습니다. 기존 미지정 등급의 최초 보완은 연결된 팀 자격을 모두 Hold로 전환한 뒤 가능합니다.",
+      "AUDITOR_CRITERIA_LOCKED",
+    );
+  }
+  if (
+    old &&
+    old.auditorLevel === "general" &&
+    (qualificationType !== "auditor" || auditorLevel !== "general")
+  )
+    demand(
+      !s.qualificationTemplates.some(
+        (t) => t.prerequisiteTemplateId === old.id,
+      ),
+      409,
+      "메인의 선행 자격으로 연결되어 있습니다.",
+    );
   const at = new Date().toISOString();
   const next = QualificationTemplateSchema.parse({
     ...input,
+    auditorLevel,
+    prerequisiteTemplateId,
+    ...(auditorLevel ? { auditorLevel } : {}),
+    ...(prerequisiteTemplateId ? { prerequisiteTemplateId } : {}),
     defaultCommonCourseIds,
     qualificationType,
     id: old?.id || randomUUID(),
@@ -175,7 +251,7 @@ export function saveTemplate(
       : "qualification-template.create",
     targetId: next.id,
     reason: "시스템 공통 기본자격 관리",
-    details: { before: old || null, after: next },
+    details: JSON.parse(JSON.stringify({ before: old || null, after: next })),
   });
   return next;
 }
@@ -184,6 +260,16 @@ export function templateTypeEditing(s: State, id: string) {
   const canChangeType = !s.qualifications.some((q) => q.templateId === id);
   return {
     canChangeType,
+    auditorCriteriaEditable:
+      canChangeType ||
+      (!s.qualificationTemplates.find((t) => t.id === id)?.auditorLevel &&
+        s.qualifications
+          .filter((q) => q.templateId === id && !q.deletedAt)
+          .every((q) => q.lifecycleStatus === "Hold")),
+    auditorReadiness: auditorTemplateErrors(
+      s,
+      s.qualificationTemplates.find((t) => t.id === id)!,
+    ),
     typeChangeReason: canChangeType
       ? "팀 등록 전까지 유형을 변경할 수 있습니다."
       : "팀 등록 이력이 있어 유형을 변경할 수 없습니다.",

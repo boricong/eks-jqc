@@ -1,3 +1,4 @@
+import { registerAuditorFromPool } from './auditor-helpers';
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { createCourse, saveCriterion } from './catalog-helpers';
 import { addQualification } from '../../server/tests/dashboard-fixtures';
@@ -172,7 +173,7 @@ test('팀 기준의 동일 유형 인증Set만 선택·조회하고 Auditor 작�
     JSON.stringify(measurements, null, 2),
   );
 });
-test('Auditor는 전용 운영에서 팀 자격을 만들고 Auditee 등록 모달·계정 전환은 유지한다', async ({
+test('Auditor는 풀에서 팀 자격을 등록하고 Auditee 등록 모달·계정 전환은 유지한다', async ({
   page,
   backend,
 }) => {
@@ -183,17 +184,11 @@ test('Auditor는 전용 운영에서 팀 자격을 만들고 Auditee 등록 모�
   await expect(
     page.getByRole('link', { name: '일반·메인 자격과 지정 안내 관리', exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('link', { name: 'Auditor 운영', exact: true }).click();
-  await page.getByLabel('일반 Auditor 자격명', { exact: true }).fill('팀 직접 생성 일반 Auditor');
-  await page.getByRole('button', { name: '일반 Auditor 자격 생성', exact: true }).click();
-  await expect(page.getByText('현재 기준 버전 · v1', { exact: true })).toBeVisible();
+  await registerAuditorFromPool(page, '풀 등록 일반 Auditor');
   expect(
-    backend.store
-      .snapshot()
-      .qualificationTemplates.some(
-        (t) => t.scope === 'team' && t.title === '팀 직접 생성 일반 Auditor',
-      ),
-  ).toBe(true);
+    backend.store.snapshot().qualifications.find((q) => q.title === '풀 등록 일반 Auditor')!
+      .lifecycleStatus,
+  ).toBe('Hold');
   await page.goto('/admin/qualifications?lv1OrganizationId=org-photo&type=auditor');
   await page.getByRole('tab', { name: 'Auditee(피심사자)', exact: true }).click();
   await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();

@@ -334,7 +334,7 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   const s = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
     file = exportMaster(s, org, new Date().toISOString());
-  assert.equal(file.formatVersion, 13);
+  assert.equal(file.formatVersion, 14);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   old.formatVersion = 12;
@@ -355,8 +355,8 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   delete raw.organizationQualificationRequirements;
   const before = structuredClone(raw),
     m = migrateOrganizationNeeds(raw, org);
-  assert.equal(m.state.schemaVersion, 23);
-  assert.equal(m.state.revision, raw.revision + 1);
+  assert.equal(m.state.schemaVersion, 24);
+  assert.equal(m.state.revision, raw.revision + 2);
   assert.deepEqual(m.state.planningRequests, before.planningRequests);
   assert.deepEqual(migrateOrganizationNeeds(m.state, org).state, m.state);
   assert.deepEqual(raw, before);

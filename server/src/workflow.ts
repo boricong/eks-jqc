@@ -1,3 +1,4 @@
+import { auditorTemplateErrors } from "./auditor-pool.ts";
 import {
   previewPlanningRequest,
   closePlanningRequest,
@@ -263,11 +264,19 @@ export function executeWorkflow(
       const expected = body.templateRevisions?.[template.id];
       demand(
         (expected === undefined &&
+          template.qualificationType !== "auditor" &&
           template.defaultCommonCourseIds.length === 0) ||
           expected === template.revision,
         409,
         "기본자격 기본 목록이 변경되었습니다. 등록 목록을 다시 확인해 주세요.",
         "TEMPLATE_CHANGED",
+      );
+      const auditorErrors = auditorTemplateErrors(s, template);
+      demand(
+        !auditorErrors.length,
+        409,
+        auditorErrors.join(" · "),
+        "AUDITOR_NOT_READY",
       );
       const commonIds = previous ? [] : template.defaultCommonCourseIds;
       validateDefaultCommonCourses(
@@ -300,7 +309,23 @@ export function executeWorkflow(
           templateId,
           templateRevision: template.revision,
           description: template.description,
-          lifecycleStatus: ready ? "Ready" : "Active",
+          lifecycleStatus: ready
+            ? "Ready"
+            : template.qualificationType === "auditor"
+              ? "Hold"
+              : "Active",
+          ...(template.auditorLevel
+            ? {
+                auditorCriteria: {
+                  level: template.auditorLevel,
+                  ...(template.prerequisiteTemplateId
+                    ? {
+                        prerequisiteTemplateId: template.prerequisiteTemplateId,
+                      }
+                    : {}),
+                },
+              }
+            : {}),
           renewalLeadMonths: 3,
           commonCourseEntityIds:
             previous?.commonCourseEntityIds ?? copies.map((c) => c.entityId),

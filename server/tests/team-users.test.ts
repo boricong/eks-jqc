@@ -1,3 +1,5 @@
+import { saveTemplate } from "../src/qualification-templates.ts";
+import { executeWorkflow as mutate } from "../src/workflow.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -9,10 +11,7 @@ import { JsonStore } from "../src/storage.ts";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations, userView } from "../src/organizations.ts";
 import { buildApp } from "../src/app.ts";
-import {
-  createAuditorQualification,
-  saveAuditorProgram,
-} from "../src/auditor-program.ts";
+import { saveAuditorProgram } from "../src/auditor-program.ts";
 
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-team-users-")),
@@ -310,13 +309,24 @@ test("Auditor 준비·안내 원자성·재시도·재지정과 비활성 조직
         doc,
       ),
       at = new Date().toISOString();
-    const result = createAuditorQualification(
+    const template = saveTemplate(s, "operator-1", undefined, {
+      qualificationType: "auditor",
+      auditorLevel: "general",
+      title: "일반 Auditor",
+      englishName: "",
+    });
+    const imported = mutate(
       s,
       admin,
-      "org-photo",
-      { revision: 0, level: "general", title: "일반 Auditor" },
-      at,
-    );
+      "template.import",
+      "",
+      {
+        templateIds: [template.id],
+        templateRevisions: { [template.id]: template.revision },
+      },
+      doc,
+    ) as { imported: string[] };
+    const result = { id: imported.imported[0] };
     const q = s.qualifications.find((q) => q.id === result.id)!,
       c = structuredClone(s.courses.find((c) => c.id === "demo-course-1")!);
     c.id = randomUUID();
@@ -330,13 +340,14 @@ test("Auditor 준비·안내 원자성·재시도·재지정과 비활성 조직
     ];
     s.courses.push(c);
     q.courseIds = [c.id];
+    q.lifecycleStatus = "Active";
     q.validity = { type: "unlimited", months: null, reminderDays: [] };
     saveAuditorProgram(
       s,
       admin,
       "org-photo",
       {
-        revision: s.auditorPrograms[0]!.revision,
+        revision: s.auditorPrograms[0]?.revision || 0,
         notice: { title: "지정 안내", body: "교육 기준", links: [] },
       },
       at,

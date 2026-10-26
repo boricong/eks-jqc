@@ -1,3 +1,5 @@
+import { createPoolQualification } from "./auditor-fixture.ts";
+import { userView } from "../src/organizations.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -194,12 +196,28 @@ test("마지막 삭제의 두 파일 실패·재시도·중간 재시작은 필�
 
 test("Auditor 기준은 설명 없이 생성하며 마지막 삭제 후 같은 계보의 다음 버전을 작성한다", async (t) => {
   const f = await fixture(t);
-  const created = await f.call("admin-1", "/auditor-program/qualifications", {
-    revision: 0,
-    level: "general",
-    title: "일반 심사원",
-  });
-  const ref = f.store.snapshot().auditorPrograms[0]!.general!;
+  const template = await f.call(
+    "operator-1",
+    "/system/qualification-templates",
+    {
+      qualificationType: "auditor",
+      auditorLevel: "general",
+      title: "일반 심사원",
+      englishName: "",
+    },
+  );
+  const registered = await f.call(
+    "admin-1",
+    "/qualification-templates/import",
+    {
+      templateIds: [template.id],
+      templateRevisions: { [template.id]: template.revision },
+    },
+  );
+  const created = { id: registered.imported[0] };
+  const ref = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === created.id)!;
   const impact = await f.call(
     "admin-1",
     `/qualifications/${created.id}/deletion-impact`,
@@ -212,14 +230,16 @@ test("Auditor 기준은 설명 없이 생성하며 마지막 삭제 후 같은 �
     200,
     "DELETE",
   );
-  let view = await f.call("admin-1", "/auditor-program");
-  assert.equal(view.general.qualification, null);
-  assert.equal(view.readiness.ready, false);
-  const recreated = await f.call("admin-1", "/auditor-program/qualifications", {
-    revision: view.program.revision,
-    level: "general",
-    title: "일반 심사원",
-  });
+  assert.equal((await f.call("admin-1", "/auditor-program")).program, null);
+  const importedAgain = await f.call(
+    "admin-1",
+    "/qualification-templates/import",
+    {
+      templateIds: [template.id],
+      templateRevisions: { [template.id]: template.revision },
+    },
+  );
+  const recreated = { id: importedAgain.imported[0] };
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === recreated.id)!;
@@ -227,12 +247,12 @@ test("Auditor 기준은 설명 없이 생성하며 마지막 삭제 후 같은 �
   assert.equal(q.templateId, ref.templateId);
   assert.equal(q.version, 2);
   assert.equal(q.description, "");
-  view = await f.call("admin-1", "/auditor-program");
+
   await f.call(
     "admin-1",
     "/auditor-program",
     {
-      revision: view.program.revision,
+      revision: 0,
       generalQualificationId: created.id,
       notice: { title: "", body: "", links: [] },
     },
@@ -243,17 +263,46 @@ test("Auditor 기준은 설명 없이 생성하며 마지막 삭제 후 같은 �
 
 test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 실패 복구·재실행을 보존한다", async (t) => {
   const f = await fixture(t);
-  const auditor = await f.call("admin-1", "/auditor-program/qualifications", {
-    revision: 0,
-    level: "general",
-    title: "이관할 일반 Auditor",
-  });
+  // A preserved pre-pool team-owned qualification, explicitly constructed as historical input.
+  let auditor: { id: string };
+  await f.store.transact(
+    "operator-1",
+    randomUUID(),
+    randomUUID(),
+    () => {},
+    (s) => {
+      auditor = createPoolQualification(
+        s,
+        userView(
+          s.users.find((u) => u.id === "admin-1")!,
+          f.store.organizations.snapshot(),
+        ),
+        "org-photo",
+        { level: "general", title: "이관할 일반 Auditor" },
+        new Date().toISOString(),
+      );
+      const q = s.qualifications.find((q) => q.id === auditor.id)!,
+        template = s.qualificationTemplates.find((t) => t.id === q.templateId)!;
+      delete q.auditorCriteria;
+      template.scope = "team";
+      template.ownerLv1OrganizationId = "org-photo";
+      s.auditorPrograms.push({
+        lv1OrganizationId: "org-photo",
+        revision: 1,
+        notice: { revision: 0, title: "", body: "", links: [] },
+        general: { templateId: template.id, entityId: q.entityId },
+        updatedBy: "admin-1",
+        updatedAt: new Date().toISOString(),
+      });
+      return {};
+    },
+  );
   const raw: any = f.store.snapshot(),
     org: any = f.store.organizations.snapshot();
   const lineage = structuredClone(raw.auditorPrograms[0].general);
   raw.auditorPrograms[0].general = {
     templateId: lineage.templateId,
-    qualificationId: auditor.id,
+    qualificationId: auditor!.id,
   };
   raw.schemaVersion = 17;
   org.schemaVersion = 2;
@@ -292,7 +341,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 23);
+  assert.equal(migrated.snapshot().schemaVersion, 24);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(migrated.snapshot().assignments, raw.assignments);
@@ -307,7 +356,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     migrated.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 13);
+  assert.equal(master.formatVersion, 14);
   assert(!("qualificationPools" in master.payload.organizations));
   delete master.payload.commonCourses;
   delete master.counts.commonCourses;
@@ -320,7 +369,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
   master.counts.poolEntries = org.qualificationPools.length;
   master.payload.auditorPrograms[0].general = raw.auditorPrograms[0].general;
   master.sha256 = contentHash(master.payload);
-  assert.equal(readMaster(master).formatVersion, 13);
+  assert.equal(readMaster(master).formatVersion, 14);
   assert.deepEqual(
     readMaster(master).payload.auditorPrograms![0]!.general,
     lineage,

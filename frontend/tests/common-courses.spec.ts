@@ -27,6 +27,8 @@ for (const type of ['auditee', 'auditor'] as const) {
     await page.getByRole('button', { name: '새 기본자격 만들기', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '기본자격 편집', exact: true });
     await dialog.getByLabel('인증 유형', { exact: true }).selectOption(type);
+    if (type === 'auditor')
+      await dialog.getByLabel('Auditor 등급', { exact: true }).selectOption('general');
     await dialog.getByLabel('기본자격명', { exact: true }).fill('공통 연계 ' + type);
     await dialog.getByRole('checkbox', { name: new RegExp(title) }).check();
     await dialog.getByRole('button', { name: '내용 보기', exact: true }).click();

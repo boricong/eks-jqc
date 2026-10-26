@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QualificationTemplate } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import { randomUUID } from '../uuid';
 import PageHeading from '../components/PageHeading.vue';
@@ -47,6 +48,7 @@ import {
   type QualificationVersionMode,
 } from '@eks/contracts';
 import type { Assignment, Course, Notice, Qualification, AuditEvent } from '../types';
+const auditorTemplates = ref<QualificationTemplate[]>([]);
 const store = useDemo(),
   route = useRoute(),
   router = useRouter();
@@ -708,6 +710,26 @@ async function canLeave() {
 }
 onBeforeRouteLeave(canLeave);
 onBeforeRouteUpdate(canLeave);
+let auditorTemplateSequence = 0;
+watch(
+  [
+    () => store.managementLv1,
+    () => store.actorId,
+    () => qualificationDraft.value?.qualificationType,
+  ],
+  async () => {
+    const seq = ++auditorTemplateSequence;
+    auditorTemplates.value = [];
+    if (qualificationDraft.value?.qualificationType !== 'auditor' || !store.managementLv1) return;
+    try {
+      const result = await api<QualificationTemplate[]>(
+        store.managementPath('/qualification-templates'),
+      );
+      if (seq === auditorTemplateSequence) auditorTemplates.value = result;
+    } catch {}
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <AppDialog
@@ -857,6 +879,23 @@ onBeforeRouteUpdate(canLeave);
             class="qualification-save-notice"
           >
             {{ AUDITOR_PREPARATION_MESSAGE }}
+            등급:
+            {{
+              qualificationDraft.auditorCriteria?.level === 'general'
+                ? '일반'
+                : qualificationDraft.auditorCriteria?.level === 'main'
+                  ? '메인'
+                  : '미지정 · 시스템 운영자 보완 필요'
+            }}.
+            <span v-if="qualificationDraft.auditorCriteria?.prerequisiteTemplateId"
+              >선행 일반 자격:
+              {{
+                auditorTemplates.find(
+                  (t) => t.id === qualificationDraft!.auditorCriteria?.prerequisiteTemplateId,
+                )?.title || '기본자격 목록 확인'
+              }}.</span
+            >
+            등급과 선행 조건은 기본자격에서 지정합니다.
           </p>
           <QualificationLifecycle
             v-if="qualificationDraft && qualificationDraft.version !== null && !readOnly"
@@ -1854,6 +1893,7 @@ onBeforeRouteUpdate(canLeave);
 
 <style scoped>
 .assignment-progress {
+  margin-top: 32px;
   display: grid;
   gap: 16px;
   min-width: 0;

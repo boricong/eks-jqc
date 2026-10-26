@@ -12,7 +12,6 @@ const data = ref<OrganizationRequirementsView>(),
   draft = ref<Record<string, string[]>>({}),
   busy = ref(false),
   error = ref(''),
-  search = ref(''),
   preview = ref<RequirementsPreview>();
 let generation = 0;
 const changed = computed(
@@ -27,12 +26,6 @@ const names = (ids: string[]) =>
   ids
     .map((id) => data.value?.qualifications.find((q) => q.entityId === id)?.title || id)
     .join(', ');
-const choices = computed(
-  () =>
-    data.value?.qualifications.filter((q) =>
-      `${q.title}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()),
-    ) || [],
-);
 watch(changed, (v) => emit('dirty', v));
 watch(busy, (v) => emit('busy', v));
 async function load(preserveInput = false) {
@@ -156,10 +149,6 @@ defineExpose({ canLeave });
 <template>
   <section class="needs-editor">
     <h3>{{ entityId ? '필요 조직 설정' : '조직 필요자격' }}</h3>
-    <p class="muted">
-      상위 조직의 필요자격을 누적 상속합니다. 직접 지정만 해제할 수 있으며 변경은 새 계획 요청부터
-      적용됩니다.
-    </p>
     <p v-if="error" role="alert" class="error-message">
       {{ error }}
       <button class="button secondary" :disabled="disabled || busy" @click="reload">
@@ -214,30 +203,31 @@ defineExpose({ canLeave });
       </template>
       <template v-else-if="org">
         <h4>직접 지정</h4>
-        <label class="field">필요자격 검색<input v-model="search" type="search" /></label>
-        <div v-for="q in choices" :key="q.entityId" class="need-row">
-          <label
-            ><input
-              type="checkbox"
-              :checked="draft[org.id]?.includes(q.entityId)"
-              :disabled="
-                disabled ||
-                busy ||
-                !org.editable ||
-                (!draft[org.id]?.includes(q.entityId) &&
-                  (!org.effectiveActive || !!q.issues.length))
-              "
-              @change="toggle(org.id, q.entityId, ($event.target as HTMLInputElement).checked)"
-            />{{ q.title }} · v{{ q.version }}</label
-          >
-          <details v-if="q.issues.length" class="muted">
-            <summary>운영 준비 확인 필요 · {{ q.issues.length }}개 사유</summary>
-            <ul>
-              <li v-for="(issue, index) in q.issues" :key="index">{{ issue }}</li>
-            </ul>
-          </details>
+        <div class="need-choices" role="group" aria-label="직접 지정 필요자격 목록" tabindex="0">
+          <div v-for="q in data.qualifications" :key="q.entityId" class="need-row">
+            <label
+              ><input
+                type="checkbox"
+                :checked="draft[org.id]?.includes(q.entityId)"
+                :disabled="
+                  disabled ||
+                  busy ||
+                  !org.editable ||
+                  (!draft[org.id]?.includes(q.entityId) &&
+                    (!org.effectiveActive || !!q.issues.length))
+                "
+                @change="toggle(org.id, q.entityId, ($event.target as HTMLInputElement).checked)"
+              />{{ q.title }} · v{{ q.version }}</label
+            >
+            <details v-if="q.issues.length" class="muted">
+              <summary>운영 준비 확인 필요 · {{ q.issues.length }}개 사유</summary>
+              <ul>
+                <li v-for="(issue, index) in q.issues" :key="index">{{ issue }}</li>
+              </ul>
+            </details>
+          </div>
         </div>
-        <p v-if="!choices.length" class="muted">
+        <p v-if="!data.qualifications.length" class="muted">
           지정할 수 있는 자격이 없습니다. 팀 자격을 먼저 준비해 주세요.
         </p>
         <h4>상속된 필요자격</h4>
@@ -283,7 +273,7 @@ defineExpose({ canLeave });
       </div>
       <button
         v-else
-        class="button primary"
+        class="button primary needs-confirm"
         :disabled="disabled || busy || !changed"
         @click="review"
       >
@@ -295,6 +285,29 @@ defineExpose({ canLeave });
 <style scoped>
 .needs-editor {
   min-width: 0;
+}
+.need-choices {
+  border: 1px solid var(--line, #e3e8ee);
+  border-radius: 6px;
+  max-height: 394px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.need-choices > .need-row {
+  min-height: 49px;
+  box-sizing: border-box;
+  padding: 12px;
+}
+.need-choices > .need-row:last-child {
+  border-bottom: 0;
+}
+.need-choices:focus-visible {
+  outline: 2px solid var(--primary, #533afd);
+  outline-offset: 2px;
+}
+.needs-confirm {
+  display: block;
+  margin-left: auto;
 }
 .need-row {
   padding: 12px 0;

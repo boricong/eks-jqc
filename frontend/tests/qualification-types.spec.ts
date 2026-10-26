@@ -1,3 +1,4 @@
+import { registerAuditorFromPool } from './auditor-helpers';
 import { test, expect, actor } from './fixtures';
 import {
   configureDashboardFixture,
@@ -33,26 +34,23 @@ async function mixedTypes(backend: any) {
   await backend.store.refreshNotifications(DASHBOARD_NOW);
 }
 
-test('Auditor 전용 생성·기준 편집·미완성 준비 차단과 팀 소유 정보 분리', async ({
+test('Auditor 풀 등록·기준 편집·Hold 유지와 안내문 전용 화면', async ({
   page,
   backend,
 }, testInfo) => {
-  await page.goto('/');
-  await actor(page, 'admin-1');
-  await page.goto('/admin/auditor');
-  await page.getByLabel('일반 Auditor 자격명', { exact: true }).fill('협력업체 Auditor 기준');
-  await page.getByRole('button', { name: '일반 Auditor 자격 생성', exact: true }).click();
-  await expect(page.getByText('현재 기준 버전 · v1', { exact: true })).toBeVisible();
-  const representative = backend.store.snapshot().auditorPrograms[0]!.general!;
-  expect(
-    backend.store.snapshot().qualificationTemplates.find((t) => t.id === representative.templateId)!
-      .scope,
-  ).toBe('team');
+  await registerAuditorFromPool(page, '협력업체 Auditor 기준');
+  const q = backend.store
+    .snapshot()
+    .qualifications.find((q) => q.title === '협력업체 Auditor 기준')!;
+  const representative = { entityId: q.entityId, templateId: q.templateId };
+  expect(q.lifecycleStatus).toBe('Hold');
   await page.goto('/admin/courses?type=auditor');
   await createCourse(page, 'Auditor', '심사 준비 자료');
   await page.goto(`/admin/qualifications/${representative.entityId}`);
   await expect(
-    page.getByText('Auditor는 필수 학습항목을 본인이 모두 확인하면 수료됩니다.', { exact: true }),
+    page
+      .getByText('Auditor는 필수 학습항목을 본인이 모두 확인하면 수료됩니다.', { exact: false })
+      .first(),
   ).toBeVisible();
   await page.getByLabel('인증기간', { exact: true }).selectOption('unlimited');
   await page.getByRole('checkbox', { name: /심사 준비 자료/ }).check();
@@ -70,21 +68,19 @@ test('Auditor 전용 생성·기준 편집·미완성 준비 차단과 팀 소�
   }
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.goto('/admin/auditor');
-  const latest = backend.store
-    .snapshot()
-    .qualifications.filter((q) => q.templateId === representative.templateId)
-    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
   await expect(
-    page.getByText(`현재 기준 버전 · v${latest.version}`, { exact: true }),
+    page.getByRole('heading', { name: 'Auditor 지정 학습 안내문 설정', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('신규 지정 준비 · 확인 필요', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '일반 Auditor 자격 생성', exact: true }),
+  ).toHaveCount(0);
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/qualification-templates');
   await page.getByLabel('인증 유형 필터', { exact: true }).selectOption('auditor');
   await expect(
     page.getByRole('button', { name: '협력업체 Auditor 기준', exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
   expect(backend.store.snapshot().certifications).toHaveLength(0);
 });
 

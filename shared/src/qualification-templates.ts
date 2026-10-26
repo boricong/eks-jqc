@@ -17,6 +17,7 @@ export const QualificationTemplateSchema = z.object({
   scope: z.enum(["system", "team"]).optional(),
   ownerLv1OrganizationId: z.string().optional(),
   auditorLevel: z.enum(["general", "main"]).optional(),
+  prerequisiteTemplateId: z.string().min(1).optional(),
   qualificationType: QualificationTypeSchema.default("auditee"),
   id: z.string().min(1).max(160),
   revision: z.number().int().positive(),

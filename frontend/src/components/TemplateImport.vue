@@ -22,6 +22,9 @@ const templates = ref<
     englishName: string;
     description: string;
     imported: boolean;
+    auditorLevel?: 'general' | 'main';
+    prerequisiteTemplateId?: string;
+    auditorReadiness: string[];
     qualificationType: QualificationType;
   }[]
 >([]);
@@ -109,6 +112,10 @@ onBeforeRouteUpdate(leave);
     <p v-if="qualificationType === 'auditee'" class="muted">
       처음 등록하는 자격은 버전 없는 Ready · 대기 상태입니다. 최초 기준 저장 시 v1부터 시작합니다.
     </p>
+    <p v-if="qualificationType === 'auditor'" class="muted">
+      Auditor 자격은 v1 · Hold로 등록됩니다. 기준을 준비한 뒤 Active로 전환해 주세요. 등급별 Active
+      자격은 팀에 하나만 운영할 수 있습니다.
+    </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <div v-if="!listed.length" class="empty-state">
       <p>등록할 {{ qualificationTypeLabels[qualificationType] }} 기본자격이 없습니다.</p>
@@ -130,12 +137,24 @@ onBeforeRouteUpdate(leave);
           v-model="chosen"
           type="checkbox"
           :value="t.id"
-          :disabled="t.imported || busy"
+          :disabled="t.imported || busy || !!t.auditorReadiness?.length"
         /><span
           >{{ t.title
           }}<small class="muted"
             >{{ qualificationTypeLabels[t.qualificationType] }} · {{ t.englishName
             }}{{ t.imported ? ' · 등록됨' : '' }}</small
+          ><small v-if="t.qualificationType === 'auditor'" class="muted"
+            >{{
+              t.auditorLevel === 'general'
+                ? '일반'
+                : t.auditorLevel === 'main'
+                  ? '메인'
+                  : '등급 미지정'
+            }}<span v-if="t.prerequisiteTemplateId">
+              · 선행: {{ templates.find((x) => x.id === t.prerequisiteTemplateId)?.title }}</span
+            ><span v-if="t.auditorReadiness?.length">
+              · {{ t.auditorReadiness.join(' · ') }}</span
+            ></small
           ><small v-if="t.commonCourses.length" class="muted"
             >공통인증Set {{ t.commonCourses.length }}개:
             {{ t.commonCourses.map((c) => c.title || '이름 없음').join(', ')

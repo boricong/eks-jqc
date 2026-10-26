@@ -1,3 +1,4 @@
+import { auditorTemplateErrors } from "./auditor-pool.ts";
 import { registerOrganizationRequirementRoutes } from "./organization-requirement-routes.ts";
 import {
   subjectiveOwner,
@@ -365,6 +366,7 @@ export async function buildApp(
       .qualificationTemplates.filter((t) => t.scope !== "team")
       .map((t) => ({
         ...t,
+        auditorReadiness: auditorTemplateErrors(store.snapshot(), t),
         commonCourses: t.defaultCommonCourseIds.map((id) =>
           commonCourseView(
             store.snapshot(),

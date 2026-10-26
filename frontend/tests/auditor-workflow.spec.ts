@@ -1,11 +1,8 @@
+import { createPoolQualification as createAuditorQualification } from '../../server/tests/auditor-fixture';
 import { configureNeeds } from './workflow-helpers';
 import { test, expect, actor } from './fixtures';
 import type { Page } from '@playwright/test';
-import {
-  createAuditorQualification,
-  saveAuditorProgram,
-  designateAuditor,
-} from '../../server/src/auditor-program';
+import { saveAuditorProgram, designateAuditor } from '../../server/src/auditor-program';
 import { userView } from '../../server/src/organizations';
 import { carouselContrast } from './carousel-visual-helpers';
 
@@ -133,7 +130,7 @@ async function prepare(backend: any, roles = ['learner', 'evaluator']) {
         admin,
         'org-photo',
         {
-          revision: s.auditorPrograms[0].revision,
+          revision: s.auditorPrograms[0]?.revision || 0,
           notice: {
             title: 'Auditor 지정 교육 안내',
             body: '필수학습과 일반·메인 인증기준을 확인해 주세요.',
@@ -328,7 +325,7 @@ test('Auditor 확인 응답 유실 재시도와 지정 해제 후 기존 학습 
   await page.goto(`/qualifications/${a.id}`);
   await expect(page.locator('.auditor-checklist')).toHaveCount(0);
 });
-test('Auditor 운영·선택 재발송·설정 충돌 입력 보존과 Auditee 요청 화면 분리', async ({
+test('Auditor 안내문 전용 운영·설정 충돌 입력 보존과 Auditee 요청 화면 분리', async ({
   page,
   backend,
 }, info) => {
@@ -344,7 +341,10 @@ test('Auditor 운영·선택 재발송·설정 충돌 입력 보존과 Auditee �
     ).toBeTruthy();
     await page.screenshot({ path: info.outputPath(`auditor-admin-${width}.png`), fullPage: true });
   }
-  await page.getByRole('button', { name: '지정 안내문', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Auditor 지정 학습 안내문 설정', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: '일반 Auditor 자격 생성' })).toHaveCount(0);
   await carouselContrast(page, '.auditor-admin');
   await page.getByLabel('안내 제목', { exact: true }).fill('수정한 안내');
   const p = (await call(page, '/auditor-program')).program;
@@ -367,17 +367,10 @@ test('Auditor 운영·선택 재발송·설정 충돌 입력 보존과 Auditee �
   await expect
     .poll(() => backend.store.snapshot().auditorPrograms[0]!.notice.title)
     .toBe('수정한 안내');
-  await page.getByRole('checkbox', { name: '정하린' }).check();
-  await page.getByRole('button', { name: '발송 미리보기', exact: true }).click();
-  await expect(page.getByRole('region', { name: '발송 미리보기' })).toContainText('수정한 안내');
-  await page.getByRole('button', { name: '안내 발송', exact: true }).click();
-  await expect
-    .poll(
-      () =>
-        backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation')
-          .length,
-    )
-    .toBe(2);
+  expect(
+    backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation'),
+  ).toHaveLength(1);
+  await expect(page.getByRole('button', { name: '안내 발송', exact: true })).toHaveCount(0);
   await configureNeeds(page);
   await page.goto('/admin/assignments');
   await expect(page.getByRole('tab', { name: /Auditor/ })).toHaveCount(0);

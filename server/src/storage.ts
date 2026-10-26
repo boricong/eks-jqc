@@ -108,7 +108,7 @@ export class FileStore<T extends Document> {
     } catch (e) {
       await this.release();
       throw new Error(
-        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 업무22는 data:migrate-organization-needs, 업무21은 data:migrate-subjective, 업무20은 data:migrate-remove-required-qualifications, 업무8은 data:migrate-lifecycle, 업무7은 data:migrate-administration, 업무6·조직1은 data:migrate-policies의 보존 이관을 확인하세요. 손상 파일은 백업 쌍 복구가 필요합니다. ${String(e)}`,
+        `저장소를 열 수 없습니다: ${this.file}. 자동 초기화하지 않습니다. 업무23은 data:migrate-auditor-pool, 업무22는 data:migrate-organization-needs, 업무21은 data:migrate-subjective, 업무20은 data:migrate-remove-required-qualifications, 업무8은 data:migrate-lifecycle, 업무7은 data:migrate-administration, 업무6·조직1은 data:migrate-policies의 보존 이관을 확인하세요. 손상 파일은 백업 쌍 복구가 필요합니다. ${String(e)}`,
       );
     }
     return this;
@@ -952,7 +952,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       demand(
-        raw.schemaVersion === 23,
+        raw.schemaVersion === 24,
         422,
         "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
       );

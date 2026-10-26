@@ -1,3 +1,4 @@
+import { validateAuditorPool } from "./auditor-pool.ts";
 import { validateRequirements } from "./organization-requirements.ts";
 import { validateSubjective } from "./subjective.ts";
 import { validateCommonSelection } from "./common-courses.ts";
@@ -26,7 +27,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 23) {
+  if (!legacy && (input as any)?.schemaVersion === 24) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -179,11 +180,7 @@ export function validateState(
             t.qualificationType === "auditor",
           "팀 소유 자격 범위",
         );
-      else
-        check(
-          !t.ownerLv1OrganizationId && !t.auditorLevel,
-          "시스템 자격 소유 정보",
-        );
+      else check(!t.ownerLv1OrganizationId, "시스템 자격 소유 정보");
       if (t.scope === "team")
         check(
           s.qualifications
@@ -238,7 +235,8 @@ export function validateState(
         !a.planId &&
           a.createdBy === a.learnerId &&
           t?.auditorLevel === a.auditor!.level &&
-          t.ownerLv1OrganizationId === a.lv1OrganizationId &&
+          (a.auditor!.criteriaPolicy === "pool" ||
+            t.ownerLv1OrganizationId === a.lv1OrganizationId) &&
           a.qualificationPolicySnapshot &&
           a.qualificationMetadata,
         "Auditor 자율 학습 근거",
@@ -257,11 +255,17 @@ export function validateState(
             (g) =>
               g.id === c.auditor!.prerequisiteCertificationId &&
               g.learnerId === c.learnerId &&
-              g.auditor?.level === "general",
+              g.auditor?.level === "general" &&
+              (a?.auditor?.criteriaPolicy !== "pool" ||
+                (s.assignments.find((x) => x.id === g.assignmentId)
+                  ?.lv1OrganizationId === a.lv1OrganizationId &&
+                  s.qualifications.find((q) => q.id === g.qualificationId)
+                    ?.templateId === a.auditor.prerequisiteTemplateId)),
           ),
           "최초 메인 선행 인증 근거",
         );
     }
+    validateAuditorPool(s);
     const templates = new Set(s.qualificationTemplates.map((t) => t.id));
     check(
       templates.size === s.qualificationTemplates.length,

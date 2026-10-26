@@ -6,7 +6,12 @@ import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ organizationId: string; canManage: boolean }>();
-const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean]; error: [] }>();
+const emit = defineEmits<{
+  dirty: [value: boolean];
+  busy: [value: boolean];
+  error: [];
+  summary: [value: string];
+}>();
 const store = useDemo(),
   view = ref<OrganizationAdministratorsView>(),
   chosen = ref<string[]>([]),
@@ -40,10 +45,23 @@ async function load() {
     );
     if (key !== context() || seq !== generation) return;
     view.value = result;
+    const assigned = result.candidates.filter((u) => u.assigned);
+    emit(
+      'summary',
+      assigned.length
+        ? assigned
+            .slice(0, 2)
+            .map((u) => u.name)
+            .join(', ') + (assigned.length > 2 ? ` 외 ${assigned.length - 2}명` : '')
+        : '지정된 관리자 없음',
+    );
     chosen.value = result.candidates.filter((u) => u.assigned).map((u) => u.id);
     baseline.value = JSON.stringify([...chosen.value].sort());
   } catch (e) {
-    if (key === context() && seq === generation) error.value = (e as Error).message;
+    if (key === context() && seq === generation) {
+      error.value = (e as Error).message;
+      emit('summary', '관리자 조회 실패');
+    }
   }
 }
 async function reload() {
@@ -90,6 +108,7 @@ watch(
   context,
   () => {
     view.value = undefined;
+    emit('summary', '불러오는 중');
     chosen.value = [];
     query.value = '';
     baseline.value = '[]';

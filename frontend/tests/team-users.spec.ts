@@ -1,5 +1,6 @@
+import { createPoolQualification as createAuditorQualification } from '../../server/tests/auditor-fixture';
 import { test, expect, actor, answerConfirmation } from './fixtures';
-import { createAuditorQualification, saveAuditorProgram } from '../../server/src/auditor-program';
+import { saveAuditorProgram } from '../../server/src/auditor-program';
 import { userView } from '../../server/src/organizations';
 
 async function setupMembers(backend: any) {
@@ -204,13 +205,14 @@ test('Auditor 준비 안내·저장 제한과 준비 후 지정 알림을 재사
       ];
       s.courses.push(c);
       q.courseIds = [c.id];
+      q.lifecycleStatus = 'Active';
       q.validity = { type: 'unlimited', months: null, reminderDays: [] };
       saveAuditorProgram(
         s,
         admin,
         'org-photo',
         {
-          revision: s.auditorPrograms[0]!.revision,
+          revision: s.auditorPrograms[0]?.revision || 0,
           notice: { title: '팀 지정 안내', body: '본인 교육 확인', links: [] },
         },
         at,

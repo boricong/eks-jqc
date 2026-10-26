@@ -1,3 +1,4 @@
+import { assignmentPrerequisite } from "./auditor-pool.ts";
 import {
   authorizeSubjective,
   executeSubjective,
@@ -7,7 +8,6 @@ import { teamCourseModified } from "./common-courses.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import { canContinueType, canReadPersonal } from "./personal-access.ts";
-import { activeAuditorCertification } from "./auditor-program.ts";
 import { courseTypeEditing } from "./course-types.ts";
 import { planningView } from "./planning.ts";
 import {
@@ -401,7 +401,7 @@ function reconcile(
       (learner.certificationEligibility !== "hold" &&
         (a.auditor.level !== "main" ||
           a.auditor.kind === "reacquisition" ||
-          !!activeAuditorCertification(s, a.learnerId, "general", at)))) &&
+          !!assignmentPrerequisite(s, a, at)))) &&
     completed.every((ev) => ev.completionId) &&
     !s.certifications.some((cert) => cert.assignmentId === a.id)
   ) {
@@ -415,10 +415,9 @@ function reconcile(
               kind: a.auditor.kind,
               ...(a.auditor.level === "main" && a.auditor.kind === "initial"
                 ? {
-                    prerequisiteCertificationId: activeAuditorCertification(
+                    prerequisiteCertificationId: assignmentPrerequisite(
                       s,
-                      a.learnerId,
-                      "general",
+                      a,
                       at,
                     )!.id,
                   }

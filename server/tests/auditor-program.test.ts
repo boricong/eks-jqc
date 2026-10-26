@@ -1,3 +1,7 @@
+import { setup } from "./auditor-test-fixture.ts";
+import { createPoolQualification, startInput } from "./auditor-fixture.ts";
+import { saveTemplate } from "../src/qualification-templates.ts";
+import { userView } from "../src/organizations.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -15,173 +19,6 @@ import {
   masterCandidate,
   contentHash,
 } from "../src/master-data.ts";
-
-async function setup(t: TestContext) {
-  const dir = await mkdtemp(path.join(tmpdir(), "eks-auditor-program-")),
-    file = path.join(dir, "runtime/state.json");
-  const seed = seedState(true);
-  seed.users.push({
-    id: "detail-auditor",
-    name: "세부 관리자",
-    roles: ["learner"],
-    organizationId: "org-photo",
-    revision: 1,
-    organizationAdministration: {
-      organizationId: "org-photo",
-      grantedBy: "admin-1",
-      grantedAt: "2026-10-26T00:00:00.000Z",
-    },
-  });
-  await new JsonStore(file).initialize(seed);
-  const store = await new JsonStore(file).load();
-  let at = "2026-10-26T01:00:00.000Z";
-  const app = await buildApp(store, { clock: () => at }),
-    cookies = new Map<string, string>();
-  t.after(async () => {
-    await app.close();
-    await rm(dir, { recursive: true, force: true });
-  });
-  async function call(
-    actor: string,
-    url: string,
-    body?: any,
-    status = 200,
-    method = body === undefined ? "GET" : "POST",
-    key = randomUUID(),
-  ) {
-    if (!cookies.has(actor)) {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/session",
-        payload: { actorId: actor },
-      });
-      cookies.set(actor, `${r.cookies[0]!.name}=${r.cookies[0]!.value}`);
-    }
-    const r = await app.inject({
-      method: method as any,
-      url: "/api" + url,
-      headers: { cookie: cookies.get(actor)!, "idempotency-key": key },
-      ...(body === undefined ? {} : { payload: body }),
-    });
-    assert.equal(r.statusCode, status, `${method} ${url}: ${r.body}`);
-    return r.json();
-  }
-  async function update(fn: (s: ReturnType<typeof seedState>) => void) {
-    return store.transact(
-      "operator-1",
-      randomUUID(),
-      randomUUID(),
-      () => {},
-      (s) => {
-        fn(s);
-        return {};
-      },
-    );
-  }
-  async function program(level: "general" | "main" = "general") {
-    const p = (await call("admin-1", "/auditor-program")).program;
-    const created = await call("admin-1", "/auditor-program/qualifications", {
-      revision: p?.revision || 0,
-      level,
-      title: level === "general" ? "일반 심사원" : "메인 심사원",
-      description: "",
-    });
-    await update((s) => {
-      const q = s.qualifications.find((q) => q.id === created.id)!;
-      const c = structuredClone(
-        s.courses.find((c) => c.id === "demo-course-1")!,
-      );
-      c.id = randomUUID();
-      c.entityId = c.id;
-      c.qualificationType = "auditor";
-      c.assessmentKinds = [];
-      c.questions = [];
-      c.practicalQuestions = [];
-      c.learningItems = [
-        {
-          id: randomUUID(),
-          title: "운영 기준 원문 확인",
-          type: "team",
-          required: true,
-        },
-      ];
-      s.courses.push(c);
-      q.courseIds = [c.id];
-      q.validity = { type: "months", months: 12, reminderDays: [] };
-      q.lifecycleStatus = "Active";
-    });
-    const current = await call("admin-1", "/auditor-program");
-    await call(
-      "admin-1",
-      "/auditor-program",
-      {
-        revision: current.program.revision,
-        notice: {
-          title: "Auditor 지정 안내",
-          body: "필수 교육 및 인증기준을 확인해 주세요.",
-          links: [{ title: "자료", url: "https://example.com/training" }],
-        },
-      },
-      200,
-      "PUT",
-    );
-    return created.id as string;
-  }
-  async function designate(
-    roles = ["learner", "evaluator"],
-    status = 200,
-    key = randomUUID(),
-  ) {
-    const u = store.snapshot().users.find((u) => u.id === "learner-2")!;
-    return call(
-      "operator-1",
-      `/system/users/${u.id}`,
-      {
-        revision: u.revision,
-        name: u.name,
-        organizationId: u.organizationId,
-        roles,
-      },
-      status,
-      "PATCH",
-      key,
-    );
-  }
-  async function complete(id: string) {
-    for (const e of store
-      .snapshot()
-      .enrollments.filter((e) => e.assignmentId === id)) {
-      const c = store.snapshot().courses.find((c) => c.id === e.courseId)!;
-      for (const item of c.learningItems.filter((i) => i.required)) {
-        const revision =
-          store
-            .snapshot()
-            .learningChecklists.find((l) => l.enrollmentId === e.id)
-            ?.revision || 0;
-        await call(
-          "learner-2",
-          `/enrollments/${e.id}/checklist`,
-          { revision, itemId: item.id, checked: true },
-          200,
-          "PUT",
-        );
-      }
-    }
-  }
-  return {
-    store,
-    app,
-    file,
-    call,
-    update,
-    program,
-    designate,
-    complete,
-    setTime: (value: string) => {
-      at = value;
-    },
-  };
-}
 
 test("Auditor 지정은 준비 검사·알림과 원자적이며 재시도·일반 수정·재지정·재발송을 구별한다", async (t) => {
   const f = await setup(t),
@@ -264,7 +101,7 @@ test("Auditor 지정은 준비 검사·알림과 원자적이며 재시도·일�
     "admin-1",
     "/auditor-program/notices/send",
     send,
-    200,
+    410,
     "POST",
     sendKey,
   );
@@ -272,7 +109,7 @@ test("Auditor 지정은 준비 검사·알림과 원자적이며 재시도·일�
     "admin-1",
     "/auditor-program/notices/send",
     send,
-    200,
+    410,
     "POST",
     sendKey,
   );
@@ -280,7 +117,7 @@ test("Auditor 지정은 준비 검사·알림과 원자적이며 재시도·일�
     f.store
       .snapshot()
       .notifications.filter((n) => n.type === "auditor_designation").length,
-    3,
+    2,
   );
   await f.call("detail-auditor", "/auditor-program", undefined, 403);
   const scoped = await f.call("detail-auditor", "/dashboard/auditor");
@@ -320,10 +157,23 @@ test("계획 없이 일반→메인 자동 취득, 일반 Hold 중 메인 대기
   await f.program();
   await f.program("main");
   await f.designate();
-  await f.call("learner-2", "/me/auditor/starts", { level: "main" }, 409);
+  await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+    409,
+  );
   const starts = await Promise.all([
-    f.call("learner-2", "/me/auditor/starts", { level: "general" }),
-    f.call("learner-2", "/me/auditor/starts", { level: "general" }),
+    f.call(
+      "learner-2",
+      "/me/auditor/starts",
+      startInput(f.store.snapshot(), "general"),
+    ),
+    f.call(
+      "learner-2",
+      "/me/auditor/starts",
+      startInput(f.store.snapshot(), "general"),
+    ),
   ]);
   assert.equal(starts[0].assignmentId, starts[1].assignmentId);
   const a = f.store
@@ -336,9 +186,11 @@ test("계획 없이 일반→메인 자동 취득, 일반 Hold 중 메인 대기
     .snapshot()
     .certifications.find((c) => c.assignmentId === a.id)!;
   assert.equal(general.auditor?.level, "general");
-  const main = await f.call("learner-2", "/me/auditor/starts", {
-    level: "main",
-  });
+  const main = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+  );
   await f.call("admin-1", `/certifications/${general.id}/status`, {
     revision: general.revision,
     status: "Hold",
@@ -373,7 +225,12 @@ test("계획 없이 일반→메인 자동 취득, 일반 Hold 중 메인 대기
     reason: "일반 독립 정지",
   });
   assert.equal((await f.call("learner-2", "/me/auditor")).currentLevel, "main");
-  await f.call("learner-2", "/me/auditor/starts", { level: "main" }, 403);
+  await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+    403,
+  );
   await f.call(
     "admin-1",
     "/planning-requests",
@@ -392,9 +249,11 @@ test("본인 교육·인증기준 확인 갱신은 발급 근거를 유지하고
   await f.program();
   await f.program("main");
   await f.designate();
-  const a = await f.call("learner-2", "/me/auditor/starts", {
-    level: "general",
-  });
+  const a = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+  );
   await f.complete(a.assignmentId);
   const c = f.store
     .snapshot()
@@ -456,9 +315,11 @@ test("본인 교육·인증기준 확인 갱신은 발급 근거를 유지하고
   assert.equal(proof.qualificationVersion, 1);
   assert.equal(proof.templateRevision, 1);
   f.setTime("2028-10-26T15:00:00.000Z");
-  const again = await f.call("learner-2", "/me/auditor/starts", {
-    level: "general",
-  });
+  const again = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+  );
   assert.notEqual(again.assignmentId, a.assignmentId);
   const enrollments = f.store
     .snapshot()
@@ -485,9 +346,11 @@ test("갱신 확인 중 이름·교육 기준이 바뀌면 다시 확인하고 �
   const f = await setup(t);
   await f.program();
   await f.designate();
-  const a = await f.call("learner-2", "/me/auditor/starts", {
-    level: "general",
-  });
+  const a = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+  );
   await f.complete(a.assignmentId);
   const c = f.store
     .snapshot()
@@ -496,28 +359,19 @@ test("갱신 확인 중 이름·교육 기준이 바뀌면 다시 확인하고 �
   const old = await f.call("learner-2", `/certifications/${c.id}/renewals`, {
     certificationRevision: c.revision,
   });
-  const p = (await f.call("admin-1", "/auditor-program")).program;
-  await f.call(
-    "admin-1",
-    "/auditor-program",
-    {
-      revision: p.revision,
-      notice: {
-        title: p.notice.title,
-        body: p.notice.body,
-        links: p.notice.links,
-      },
-      titles: [
-        {
-          level: "general",
-          title: "개정한 일반 기준",
-          description: "새 기준 원문",
-        },
-      ],
-    },
-    200,
-    "PUT",
-  );
+  await f.update((s) => {
+    const template = s.qualificationTemplates.find(
+      (t) =>
+        t.id ===
+        s.qualifications.find((q) => q.id === c.qualificationId)!.templateId,
+    )!;
+    saveTemplate(s, "operator-1", template.id, {
+      revision: template.revision,
+      title: "개정한 일반 기준",
+      description: "새 기준 원문",
+      englishName: template.englishName,
+    });
+  });
   await f.call(
     "learner-2",
     `/renewals/${old.id}/complete`,
@@ -566,7 +420,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   const s = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
     master = exportMaster(s, org, "2026-10-26T00:00:00.000Z");
-  assert.equal(master.formatVersion, 13);
+  assert.equal(master.formatVersion, 14);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const reset = masterCandidate(
     master.payload,
@@ -611,7 +465,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   delete legacy.auditorPrograms;
   legacy.users.find((u: any) => u.id === "learner-2").roles = ["evaluator"];
   const migrated = migrateAuditorProgram(legacy, org);
-  assert.equal(migrated.state.schemaVersion, 23);
+  assert.equal(migrated.state.schemaVersion, 24);
   assert.equal(
     migrated.state.users.find((u) => u.id === "learner-2")!.auditorDesignation
       ?.source,
@@ -624,7 +478,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   );
   assert.throws(() => validateState(legacy, org));
   const bytes = await readFile(f.file);
-  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 23);
+  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 24);
 });
 
 test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 다시 시작해도 중복 발급하지 않는다", async (t) => {
@@ -632,16 +486,20 @@ test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 
   await f.program();
   await f.program("main");
   await f.designate();
-  const general = await f.call("learner-2", "/me/auditor/starts", {
-    level: "general",
-  });
+  const general = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+  );
   await f.complete(general.assignmentId);
   const c = f.store
     .snapshot()
     .certifications.find((c) => c.assignmentId === general.assignmentId)!;
-  const main = await f.call("learner-2", "/me/auditor/starts", {
-    level: "main",
-  });
+  const main = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+  );
   await f.call("admin-1", `/certifications/${c.id}/status`, {
     revision: c.revision,
     status: "Hold",
@@ -747,9 +605,11 @@ test("시작 당시 기준·자료를 보존하고 과거 메인 취득자는 �
     qid = await f.program();
   await f.program("main");
   await f.designate();
-  const generalStart = await f.call("learner-2", "/me/auditor/starts", {
-    level: "general",
-  });
+  const generalStart = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+  );
   const original = f.store.snapshot().qualifications.find((q) => q.id === qid)!,
     beforeAssignment = f.store
       .snapshot()
@@ -798,9 +658,11 @@ test("시작 당시 기준·자료를 보존하고 과거 메인 취득자는 �
     .snapshot()
     .certifications.find((c) => c.assignmentId === generalStart.assignmentId)!;
   assert.equal(general.validity?.months, 12);
-  const main = await f.call("learner-2", "/me/auditor/starts", {
-    level: "main",
-  });
+  const main = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+  );
   await f.complete(main.assignmentId);
   const firstMain = f.store
     .snapshot()
@@ -810,16 +672,23 @@ test("시작 당시 기준·자료를 보존하고 과거 메인 취득자는 �
       "hold";
   });
   assert.equal((await f.call("learner-2", "/me/auditor")).currentLevel, "main");
-  await f.call("learner-2", "/me/auditor/starts", { level: "general" }, 403);
+  await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "general"),
+    403,
+  );
   await f.update((s) => {
     s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
       "eligible";
   });
   f.setTime("2027-10-26T15:00:00.000Z");
   await f.store.refreshNotifications("2027-10-26T15:00:00.000Z");
-  const next = await f.call("learner-2", "/me/auditor/starts", {
-    level: "main",
-  });
+  const next = await f.call(
+    "learner-2",
+    "/me/auditor/starts",
+    startInput(f.store.snapshot(), "main"),
+  );
   await f.complete(next.assignmentId);
   const renewed = f.store
     .snapshot()

@@ -11,6 +11,7 @@ test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 
   await page.getByRole('button', { name: '새 기본자격 만들기', exact: true }).click();
   const editor = page.getByRole('dialog');
   await editor.getByLabel('인증 유형', { exact: true }).selectOption('auditor');
+  await editor.getByLabel('Auditor 등급', { exact: true }).selectOption('general');
   await editor.getByLabel('기본자격명', { exact: true }).fill('공통 현장 Auditor');
   await editor.getByLabel('영문명', { exact: true }).fill('Shared Field Auditor');
   await editor.getByRole('button', { name: '기본자격 저장', exact: true }).click();
@@ -44,6 +45,8 @@ test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 
   const q = backend.store.snapshot().qualifications.find((q) => q.templateId === template.id)!;
   expect(q.lv1OrganizationId).toBe('org-photo');
   expect(q.qualificationType).toBe('auditor');
+  expect(q.lifecycleStatus).toBe('Hold');
+  expect(q.version).toBe(1);
   expect(backend.store.snapshot().auditorPrograms).toHaveLength(0);
 
   await register.click();
@@ -84,4 +87,66 @@ test('Auditor 공통 기본자격이 없으면 등록 창에서 준비 안내를
   await expect(dialog.getByRole('button', { name: '팀 자격 등록', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
+});
+
+test('등급 미완성은 팀 등록을 막고 메인 선행 선택·등록 후 등급 잠금은 시스템에서 확인한다', async ({
+  page,
+  backend,
+}, info) => {
+  await page.goto('/');
+  await actor(page, 'operator-1');
+  await page.goto('/system/qualification-templates');
+  await page.getByRole('button', { name: '새 기본자격 만들기', exact: true }).click();
+  let dialog = page.getByRole('dialog');
+  await dialog.getByLabel('인증 유형', { exact: true }).selectOption('auditor');
+  await dialog.getByLabel('기본자격명', { exact: true }).fill('등급 보완 일반');
+  await dialog.getByRole('button', { name: '기본자격 저장', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await actor(page, 'admin-1');
+  await page.goto('/admin/qualifications?type=auditor');
+  await page.getByRole('button', { name: 'Auditor 자격 등록', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('checkbox', { name: /등급 보완 일반/ })).toBeDisabled();
+  await expect(dialog).toContainText('Auditor 등급을 지정해 주세요.');
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await actor(page, 'operator-1');
+  await page.goto('/system/qualification-templates');
+  await page.getByRole('button', { name: '등급 보완 일반', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Auditor 등급', { exact: true }).selectOption('general');
+  await dialog.getByRole('button', { name: '기본자격 저장', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await page.getByRole('button', { name: '새 기본자격 만들기', exact: true }).click();
+  await dialog.getByLabel('인증 유형', { exact: true }).selectOption('auditor');
+  await dialog.getByLabel('Auditor 등급', { exact: true }).selectOption('main');
+  await dialog.getByLabel('기본자격명', { exact: true }).fill('메인 현장 심사');
+  await dialog.getByLabel('선행 일반 기본자격 검색', { exact: true }).fill('등급 보완');
+  const general = backend.store
+    .snapshot()
+    .qualificationTemplates.find((t) => t.title === '등급 보완 일반')!;
+  await dialog.getByLabel('선행 일반 기본자격', { exact: true }).selectOption(general.id);
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: info.outputPath(`auditor-prerequisite-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await dialog.getByRole('button', { name: '기본자격 저장', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await actor(page, 'admin-1');
+  await page.goto('/admin/qualifications?type=auditor');
+  await page.getByRole('button', { name: 'Auditor 자격 등록', exact: true }).click();
+  await dialog.getByRole('checkbox', { name: /메인 현장 심사/ }).check();
+  await expect(dialog).toContainText('선행: 등급 보완 일반');
+  await dialog.getByRole('button', { name: '팀 자격 등록', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await actor(page, 'operator-1');
+  await page.goto('/system/qualification-templates');
+  await page.getByRole('button', { name: '메인 현장 심사', exact: true }).click();
+  await expect(dialog.getByLabel('Auditor 등급', { exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel('선행 일반 기본자격', { exact: true })).toBeDisabled();
 });

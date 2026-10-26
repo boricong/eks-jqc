@@ -742,7 +742,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 23);
+  assert.equal(candidate.schemaVersion, 24);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

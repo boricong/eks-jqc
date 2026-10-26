@@ -39,7 +39,15 @@ export const AuditorDesignationSchema = z.object({
   at: z.iso.datetime(),
   source: z.enum(["designation", "migration"]),
 });
+export const AuditorCriteriaSchema = z
+  .object({
+    level: AuditorLevelSchema,
+    prerequisiteTemplateId: z.string().min(1).optional(),
+  })
+  .strict();
 export const AuditorAssignmentSchema = z.object({
+  criteriaPolicy: z.literal("pool").optional(),
+  prerequisiteTemplateId: z.string().optional(),
   pendingGeneralCertification: z.boolean().optional(),
   level: AuditorLevelSchema,
   kind: z.enum(["initial", "reacquisition"]),

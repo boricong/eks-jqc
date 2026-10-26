@@ -132,7 +132,7 @@ export function registerMasterDataRoutes(
       const result = await preview(r, "master-import", readMaster(r.body));
       return {
         ...result,
-        ...((r.body as any)?.formatVersion < 13
+        ...((r.body as any)?.formatVersion < 14
           ? {
               compatibility: (() => {
                 const pending = [

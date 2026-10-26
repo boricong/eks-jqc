@@ -284,8 +284,8 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
   const before = structuredClone(raw),
     hashes = raw.courses.map(courseContentHash);
   const result = migrateSubjective(raw, org);
-  assert.equal(result.state.schemaVersion, 23);
-  assert.equal(result.state.revision, raw.revision + 2);
+  assert.equal(result.state.schemaVersion, 24);
+  assert.equal(result.state.revision, raw.revision + 3);
   assert.deepEqual(result.state.courses.map(courseContentHash), hashes);
   for (const key of Object.keys(before))
     if (
@@ -301,7 +301,7 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
   assert.deepEqual(migrateSubjective(result.state, org).state, result.state);
   assert.deepEqual(raw, before);
   const file = exportMaster(result.state, org, new Date().toISOString());
-  assert.equal(file.formatVersion, 13);
+  assert.equal(file.formatVersion, 14);
   assert.deepEqual(readMaster(file).payload, file.payload);
   assert.ok(!("subjectiveResponses" in file.payload));
   const old: any = structuredClone(file);
@@ -315,7 +315,7 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
     delete c.subjectiveQuestions;
   }
   old.sha256 = contentHash(old.payload);
-  assert.equal(readMaster(old).formatVersion, 13);
+  assert.equal(readMaster(old).formatVersion, 14);
   old.payload.courses[0].subjectiveEnabled = true;
   old.sha256 = contentHash(old.payload);
   assert.throws(() => readMaster(old));
@@ -477,7 +477,7 @@ test("주관식 명시 이관의 해시 충돌·파일 교체 실패는 세 원�
   );
   const after = await Promise.all(files.map((f) => readFile(f)));
   await new JsonStore(file).migratePolicies(
-    { ...expected, revision: old.revision + 2, stateHash: hash(after[0]!) },
+    { ...expected, revision: old.revision + 3, stateHash: hash(after[0]!) },
     migrateSubjective,
     "subjective",
   );

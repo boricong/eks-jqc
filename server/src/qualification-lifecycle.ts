@@ -1,3 +1,4 @@
+import { validateAuditorActivation } from "./auditor-pool.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { latestQualification, currentTeamQualifications } from "@eks/contracts";
 import {
@@ -413,20 +414,7 @@ export function renewalAvailability(
       p.lv1OrganizationId === learner.lv1OrganizationId &&
       p.entityId === original.entityId,
   );
-  const program = s.auditorPrograms.find(
-    (p) => p.lv1OrganizationId === learner.lv1OrganizationId,
-  );
-  const q = s.qualifications.find(
-      (q) =>
-        q.id ===
-        (c.auditor
-          ? latestQualification(
-              s,
-              learner.lv1OrganizationId,
-              program?.[c.auditor.level]?.entityId || "",
-            )?.id
-          : pool?.qualificationId),
-    ),
+  const q = s.qualifications.find((q) => q.id === pool?.qualificationId),
     p = latestPeriod(c);
   const opensOn = p && renewalOpensOn(p);
   if (original.qualificationType === "auditor" && !c.auditor)
@@ -631,6 +619,7 @@ export function executeLifecycle(
     );
     const before = q.lifecycleStatus || "Active";
     demand(before !== input.status, 409, "이미 같은 상태입니다.");
+    if (input.status === "Active") validateAuditorActivation(s, q);
     q.lifecycleStatus = input.status;
     q.revision++;
     event(

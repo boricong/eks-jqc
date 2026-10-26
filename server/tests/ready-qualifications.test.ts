@@ -311,7 +311,7 @@ test("개별 무변경 저장은 Ready를 유지하며 삭제 재등록과 최�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 13);
+  assert.equal(file.formatVersion, 14);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   delete old.payload.commonCourses;
@@ -383,8 +383,8 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   });
   const org = f.store.organizations.snapshot(),
     migrated = migrateReadyQualifications(raw, org);
-  assert.equal(migrated.state.schemaVersion, 23);
-  assert.equal(migrated.state.revision, raw.revision + 5);
+  assert.equal(migrated.state.schemaVersion, 24);
+  assert.equal(migrated.state.revision, raw.revision + 6);
   for (const field of [
     "qualifications",
     "courses",
@@ -443,7 +443,7 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   assert.deepEqual(await readFile(report.maintenanceBackup), maintenance);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 5, stateHash: hash(after) },
+    { ...expected, revision: raw.revision + 6, stateHash: hash(after) },
     migrateReadyQualifications,
     "ready-qualifications",
   );

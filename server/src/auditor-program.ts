@@ -1,16 +1,21 @@
+import {
+  auditorCriteria,
+  activeAuditorQualifications,
+  currentAuditorQualifications,
+  prerequisiteCertification,
+  auditorTemplateErrors,
+} from "./auditor-pool.ts";
 import { latestQualification } from "@eks/contracts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
-  AuditorLevelSchema,
   AuditorNoticeSchema,
-  QualificationSchema,
   qualificationPolicySnapshot,
   qualificationUseErrors,
   effectiveCredentialStatus,
   credentialCurrent,
-  auditorLevelLabels,
   type State,
+  type Qualification,
   type OrganizationDocument,
   type UserView,
   type User,
@@ -30,8 +35,9 @@ export function programFor(s: State, team: string) {
   return s.auditorPrograms.find((p) => p.lv1OrganizationId === team);
 }
 export function appliedAuditor(s: State, team: string, level: AuditorLevel) {
-  const ref = programFor(s, team)?.[level];
-  return ref ? latestQualification(s, team, ref.entityId) : undefined;
+  return activeAuditorQualifications(s, team).find(
+    (q) => auditorCriteria(s, q)?.level === level,
+  );
 }
 export function auditorReadiness(s: State, team: string, level: AuditorLevel) {
   const q = appliedAuditor(s, team, level);
@@ -47,9 +53,7 @@ export function auditorReadiness(s: State, team: string, level: AuditorLevel) {
     ready: !reasons.length,
     reasons,
     template:
-      s.qualificationTemplates.find(
-        (t) => t.id === programFor(s, team)?.[level]?.templateId,
-      ) || null,
+      s.qualificationTemplates.find((t) => t.id === q?.templateId) || null,
     qualification: q ? currentQualification(s, q) : null,
   };
 }
@@ -88,18 +92,50 @@ export function auditorMe(
   doc?: OrganizationDocument,
 ) {
   const settings = auditorProgramView(s, u.lv1OrganizationId);
-  const levels = (["general", "main"] as const).map((level) => {
-    const certification = activeAuditorCertification(s, u.id, level, at);
-    const history = s.certifications.filter(
-      (c) => c.learnerId === u.id && c.auditor?.level === level,
-    );
-    const assignment = s.assignments.find(
+  const entries = new Map<string, Qualification>();
+  for (const q of currentAuditorQualifications(s, u.lv1OrganizationId))
+    if (auditorCriteria(s, q))
+      entries.set(q.lv1OrganizationId + ":" + q.entityId, q);
+  for (const a of s.assignments.filter(
+    (a) => a.learnerId === u.id && a.auditor,
+  )) {
+    const original = s.qualifications.find((q) => q.id === a.qualificationId)!;
+    const key = original.lv1OrganizationId + ":" + original.entityId;
+    if (!entries.has(key))
+      entries.set(
+        key,
+        latestQualification(s, original.lv1OrganizationId, original.entityId) ||
+          original,
+      );
+  }
+  const levels = [...entries.values()].map((q) => {
+    const criteria = auditorCriteria(s, q),
+      level =
+        criteria?.level ||
+        s.assignments.find((a) => a.qualificationId === q.id && a.auditor)
+          ?.auditor?.level ||
+        "general";
+    const assignments = s.assignments.filter(
       (a) =>
         a.learnerId === u.id &&
-        a.auditor?.level === level &&
+        a.lv1OrganizationId === q.lv1OrganizationId &&
+        a.auditor &&
+        s.qualifications.find((x) => x.id === a.qualificationId)?.entityId ===
+          q.entityId,
+    );
+    const history = s.certifications.filter((c) =>
+      assignments.some((a) => a.id === c.assignmentId),
+    );
+    const certification = history.find(
+      (c) =>
+        effectiveCredentialStatus(c, at) === "Active" &&
+        !assignments.find((a) => a.id === c.assignmentId)?.excludedReason,
+    );
+    const assignment = assignments.find(
+      (a) =>
         !a.excludedReason &&
         !a.acquisitionClosedAt &&
-        !s.certifications.some((c) => c.assignmentId === a.id),
+        !history.some((c) => c.assignmentId === a.id),
     );
     const reasons: string[] = [];
     if (!u.roles.includes("evaluator"))
@@ -109,29 +145,61 @@ export function auditorMe(
     if (!u.organizationActive) reasons.push("사용 중인 조직이 필요합니다.");
     if (u.certificationEligibility === "hold")
       reasons.push("취득 대상자 Hold 상태입니다.");
+    if (q.lv1OrganizationId !== u.lv1OrganizationId)
+      reasons.push("이전 팀의 자격 기록입니다.");
     if (certification) reasons.push("이미 유효한 자격을 보유하고 있습니다.");
     if (history.some((c) => effectiveCredentialStatus(c, at) === "Hold"))
       reasons.push("정지된 인증의 효력을 먼저 확인해 주세요.");
-    if (
-      level === "main" &&
-      !history.length &&
-      !activeAuditorCertification(s, u.id, "general", at)
-    )
-      reasons.push("최초 메인 취득에는 유효한 일반 Auditor 인증이 필요합니다.");
-    reasons.push(...settings[level].reasons);
-    const enrollments = s.enrollments.filter(
-      (e) => e.assignmentId === assignment?.id,
+    const template = s.qualificationTemplates.find(
+      (t) => t.id === q.templateId,
+    )!;
+    reasons.push(
+      ...qualificationUseErrors(q, s.courses),
+      ...auditorTemplateErrors(s, template),
     );
-    const completed = enrollments.filter((e) =>
-      s.completions.some((c) => c.enrollmentId === e.id),
-    ).length;
+    if (q.deletedAt) reasons.push("삭제된 자격입니다.");
+    const prerequisite = criteria?.prerequisiteTemplateId
+      ? s.qualificationTemplates.find(
+          (t) => t.id === criteria.prerequisiteTemplateId,
+        )
+      : undefined;
+    if (level === "main" && !history.length) {
+      const satisfied = criteria?.prerequisiteTemplateId
+        ? prerequisiteCertification(
+            s,
+            u.id,
+            u.lv1OrganizationId,
+            criteria.prerequisiteTemplateId,
+            at,
+          )
+        : template.scope === "team"
+          ? activeAuditorCertification(s, u.id, "general", at)
+          : undefined;
+      if (!satisfied)
+        reasons.push(
+          prerequisite
+            ? `최초 메인 취득에는 현재 팀의 ${prerequisite.title} 유효 인증이 필요합니다.`
+            : "최초 메인 취득에는 유효한 일반 Auditor 인증이 필요합니다.",
+        );
+    }
+    const enrollments = s.enrollments.filter(
+        (e) => e.assignmentId === assignment?.id,
+      ),
+      completed = enrollments.filter((e) =>
+        s.completions.some((c) => c.enrollmentId === e.id),
+      ).length;
     const renewal =
-      certification && doc
-        ? renewalAvailability(s, doc, certification, at)
-        : null;
-    const canStart = !reasons.length && !assignment;
+        certification && doc
+          ? renewalAvailability(s, doc, certification, at)
+          : null,
+      canStart = !reasons.length && !assignment;
     return {
       level,
+      qualificationId: q.id,
+      qualificationRevision: q.revision,
+      templateRevision: template.revision,
+      title: template.title,
+      prerequisiteTitle: prerequisite?.title || null,
       certification: certification
         ? { ...certification, ...credentialCurrent(certification) }
         : null,
@@ -158,9 +226,9 @@ export function auditorMe(
   });
   return {
     designated: u.roles.includes("evaluator"),
-    currentLevel: levels[1]!.certification
+    currentLevel: levels.some((l) => l.level === "main" && l.certification)
       ? "main"
-      : levels[0]!.certification
+      : levels.some((l) => l.level === "general" && l.certification)
         ? "general"
         : null,
     notice: settings.program?.notice || null,
@@ -234,35 +302,11 @@ export function saveAuditorProgram(
     .object({
       revision: z.number().int().nonnegative(),
       notice: AuditorNoticeSchema.omit({ revision: true }),
-      titles: z
-        .array(
-          z.object({
-            level: AuditorLevelSchema,
-            title: z.string().trim().min(1).max(300),
-            description: z.string().max(20000).default(""),
-          }),
-        )
-        .max(2)
-        .optional(),
     })
     .strict()
     .parse(body);
   checkRevision(programFor(s, team), input.revision);
   const p = ensureProgram(s, team, u, at);
-  for (const edit of input.titles || []) {
-    const t = s.qualificationTemplates.find(
-      (t) =>
-        t.id === p[edit.level]?.templateId && t.ownerLv1OrganizationId === team,
-    );
-    demand(t, 422, "팀의 대표 자격을 먼저 생성해 주세요.");
-    if (t.title !== edit.title || t.description !== edit.description) {
-      t.title = edit.title;
-      t.description = edit.description;
-      t.revision++;
-      t.updatedAt = at;
-      t.updatedBy = u.id;
-    }
-  }
   if (
     JSON.stringify(input.notice) !==
     JSON.stringify({
@@ -277,93 +321,6 @@ export function saveAuditorProgram(
   p.updatedAt = at;
   audit(s, u, team, "auditor.program.save", team, at);
   return auditorProgramView(s, team);
-}
-export function createAuditorQualification(
-  s: State,
-  u: UserView,
-  team: string,
-  body: unknown,
-  at: string,
-) {
-  const input = z
-    .object({
-      revision: z.number().int().nonnegative(),
-      level: AuditorLevelSchema,
-      title: z.string().trim().min(1).max(300),
-      description: z.string().max(20000).default(""),
-    })
-    .strict()
-    .parse(body);
-  checkRevision(programFor(s, team), input.revision);
-  const p = ensureProgram(s, team, u, at);
-  demand(
-    !appliedAuditor(s, team, input.level),
-    409,
-    "등급별 대표 자격은 하나만 생성할 수 있습니다. 기존 계보를 개정해 주세요.",
-  );
-  const previous = p[input.level];
-  const templateId = previous?.templateId || randomUUID(),
-    id = randomUUID();
-  if (previous) {
-    const template = s.qualificationTemplates.find((t) => t.id === templateId)!;
-    template.title = input.title;
-    template.description = input.description;
-    template.revision++;
-    template.updatedBy = u.id;
-    template.updatedAt = at;
-  }
-  if (!previous)
-    s.qualificationTemplates.push({
-      id: templateId,
-      defaultCommonCourseIds: [],
-      scope: "team",
-      ownerLv1OrganizationId: team,
-      auditorLevel: input.level,
-      qualificationType: "auditor",
-      revision: 1,
-      title: input.title,
-      description: input.description,
-      englishName: "",
-      updatedBy: u.id,
-      updatedAt: at,
-    });
-  s.qualifications.push(
-    QualificationSchema.parse({
-      id,
-      entityId: previous?.entityId || id,
-      lv1OrganizationId: team,
-      version: previous
-        ? Math.max(
-            ...s.qualifications
-              .filter(
-                (q) =>
-                  q.entityId === previous.entityId &&
-                  q.lv1OrganizationId === team,
-              )
-              .map((q) => q.version ?? 0),
-          ) + 1
-        : 1,
-      revision: 1,
-      title: input.title,
-      description: input.description,
-      englishName: "",
-      qualificationType: "auditor",
-      templateId,
-      templateRevision: s.qualificationTemplates.find(
-        (t) => t.id === templateId,
-      )!.revision,
-      courseIds: [],
-      validity: { type: "unknown", months: null, reminderDays: [] },
-      renewalLeadMonths: 3,
-      renewalNoticeDaysBefore: 7,
-    }),
-  );
-  p[input.level] = { templateId, entityId: previous?.entityId || id };
-  p.revision++;
-  p.updatedBy = u.id;
-  p.updatedAt = at;
-  audit(s, u, team, "auditor.qualification.create", id, at);
-  return { id, ...auditorProgramView(s, team) };
 }
 export function sendAuditorNotice(
   s: State,
@@ -429,12 +386,41 @@ export function startAuditor(
   body: unknown,
   at: string,
 ) {
-  const { level } = z
-    .object({ level: AuditorLevelSchema })
+  const input = z
+    .object({
+      qualificationId: z.string().min(1),
+      qualificationRevision: z.number().int().positive(),
+      templateRevision: z.number().int().positive(),
+    })
     .strict()
     .parse(body);
   reconcileLifecycle(s, at);
-  const view = auditorMe(s, u, at).levels.find((l) => l.level === level)!;
+  const view = auditorMe(s, u, at).levels.find(
+    (l) => l.qualificationId === input.qualificationId,
+  );
+  demand(
+    view,
+    409,
+    "현재 팀의 Auditor 자격을 다시 확인해 주세요.",
+    "AUDITOR_START_UNAVAILABLE",
+  );
+  const q = currentQualification(
+    s,
+    s.qualifications.find((q) => q.id === input.qualificationId)!,
+  );
+  demand(
+    q.lv1OrganizationId === u.lv1OrganizationId,
+    403,
+    "현재 팀의 자격만 시작할 수 있습니다.",
+  );
+  demand(
+    q.revision === input.qualificationRevision &&
+      q.templateRevision === input.templateRevision,
+    409,
+    "자격 기준이 변경되었습니다. 다시 확인해 주세요.",
+    "REVISION_CONFLICT",
+  );
+  const level = view.level;
   demand(
     u.roles.includes("evaluator") &&
       u.organizationActive &&
@@ -454,8 +440,11 @@ export function startAuditor(
     view.reasons.join(" · "),
     "AUDITOR_START_UNAVAILABLE",
   );
-  const p = programFor(s, u.lv1OrganizationId)!,
-    q = currentQualification(s, appliedAuditor(s, u.lv1OrganizationId, level)!);
+  const p = programFor(s, u.lv1OrganizationId),
+    criteria = auditorCriteria(s, q)!,
+    template = s.qualificationTemplates.find((t) => t.id === q.templateId)!;
+  const manager =
+    p?.updatedBy || u.auditorDesignation?.actorId || template.updatedBy;
   const previous = view.history.at(-1);
   const id = randomUUID();
   s.assignments.push({
@@ -466,8 +455,16 @@ export function startAuditor(
       level,
       kind: previous ? "reacquisition" : "initial",
       designationId: u.auditorDesignation?.id || `legacy:${u.id}`,
-      programRevision: p.revision,
-      criteriaManagerId: p.updatedBy,
+      programRevision: p?.revision || 1,
+      criteriaManagerId: manager,
+      ...(template.scope !== "team"
+        ? {
+            criteriaPolicy: "pool" as const,
+            ...(criteria.prerequisiteTemplateId
+              ? { prerequisiteTemplateId: criteria.prerequisiteTemplateId }
+              : {}),
+          }
+        : {}),
     },
     lv1OrganizationId: u.lv1OrganizationId,
     organizationPath: structuredClone(u.organizationPath),
@@ -476,7 +473,7 @@ export function startAuditor(
     qualificationMetadata: metadata(q),
     qualificationPolicySnapshot: qualificationPolicySnapshot(q),
     learnerId: u.id,
-    ownerAdminId: p.updatedBy,
+    ownerAdminId: manager,
     assignedAt: at,
     createdBy: u.id,
     revision: 1,

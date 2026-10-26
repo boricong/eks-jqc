@@ -63,7 +63,7 @@ export function migrateTemplates(
 ) {
   const raw = input as any;
   if (
-    ![11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].includes(
+    ![11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].includes(
       raw?.schemaVersion,
     )
   )
@@ -101,7 +101,7 @@ export function migrateTemplates(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 23,
+      alreadyApplied: raw.schemaVersion === 24,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       templates: state.qualificationTemplates.length,

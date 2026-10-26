@@ -49,8 +49,8 @@ watch([() => route.fullPath, () => store.actorId], load, { immediate: true });
           }}
         </h3>
         <p>{{ m.designated ? '지정' : '지정 해제' }}</p>
-        <p v-for="level in m.levels" :key="level.level">
-          {{ auditorLevelLabels[level.level as AuditorLevel] }} ·
+        <p v-for="level in m.levels" :key="level.qualificationId">
+          {{ level.title }} · {{ auditorLevelLabels[level.level as AuditorLevel] }} ·
           {{
             level.certified
               ? '유효'

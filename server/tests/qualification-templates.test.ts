@@ -282,7 +282,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 23);
+  assert.equal(next.state.schemaVersion, 24);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);

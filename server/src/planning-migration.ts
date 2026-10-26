@@ -9,7 +9,7 @@ export function migratePlanning(
 ) {
   const raw = input as any;
   if (
-    ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].includes(
+    ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].includes(
       raw?.schemaVersion,
     )
   )
@@ -41,7 +41,7 @@ export function migratePlanning(
     state,
     organizations,
     report: {
-      alreadyApplied: raw.schemaVersion === 23,
+      alreadyApplied: raw.schemaVersion === 24,
       schemaVersion: state.schemaVersion,
       revision: state.revision,
       requests: state.planningRequests.length,

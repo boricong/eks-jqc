@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { State, UserView } from "@eks/contracts";
@@ -11,11 +11,8 @@ import {
   auditorProgramView,
   auditorMe,
   auditorMembers,
-  createAuditorQualification,
   saveAuditorProgram,
   startAuditor,
-  sendAuditorNotice,
-  programFor,
 } from "./auditor-program.ts";
 
 export function registerAuditorRoutes(
@@ -62,6 +59,8 @@ export function registerAuditorRoutes(
         currentLevel: u.currentLevel,
         levels: u.levels.map((l) => ({
           level: l.level,
+          qualificationId: l.qualificationId,
+          title: l.title,
           started: !!l.assignment || !!l.history.length,
           learning: !!l.assignment,
           completed: l.completed,
@@ -96,16 +95,40 @@ export function registerAuditorRoutes(
         .lv1OrganizationId,
     );
   app.get("/api/auditor-program", async (r) =>
-    auditorProgramView(store.snapshot(), team(r)),
+    (() => {
+      const v = auditorProgramView(store.snapshot(), team(r));
+      return {
+        readiness: v.readiness,
+        program: v.program
+          ? {
+              lv1OrganizationId: v.program.lv1OrganizationId,
+              revision: v.program.revision,
+              notice: v.program.notice,
+              updatedBy: v.program.updatedBy,
+              updatedAt: v.program.updatedAt,
+            }
+          : null,
+      };
+    })(),
   );
-  app.get("/api/auditor-program/members", async (r) =>
-    auditorMembers(
-      store.snapshot(),
-      store.organizations.snapshot(),
-      team(r),
-      clock(),
-    ),
-  );
+  for (const [method, url] of [
+    ["GET", "/api/auditor-program/members"],
+    ["POST", "/api/auditor-program/qualifications"],
+    ["POST", "/api/auditor-program/notices/send"],
+  ] as const)
+    app.route({
+      method,
+      url,
+      onRequest: async (r, reply) => {
+        team(r);
+        return reply.code(410).send({
+          code: "FEATURE_REMOVED",
+          message:
+            "이 기능은 종료되었습니다. 팀 자격 설정과 지정 안내문 설정을 사용해 주세요.",
+        });
+      },
+      handler: async () => {},
+    });
   app.get("/api/me/auditor", async (r) => {
     actor(r);
     await store.refreshNotifications(clock());
@@ -118,8 +141,6 @@ export function registerAuditorRoutes(
   });
   for (const [method, url, action] of [
     ["PUT", "/api/auditor-program", "save"],
-    ["POST", "/api/auditor-program/qualifications", "create"],
-    ["POST", "/api/auditor-program/notices/send", "send"],
     ["POST", "/api/me/auditor/starts", "start"],
   ] as const) {
     app.route({
@@ -128,6 +149,32 @@ export function registerAuditorRoutes(
       handler: async (r) => {
         const u = actor(r),
           scope = action === "start" ? u.lv1OrganizationId : team(r);
+        if (
+          action === "start" &&
+          r.body &&
+          typeof r.body === "object" &&
+          "level" in r.body
+        )
+          demand(
+            false,
+            410,
+            "자격 목록을 새로고침해 주세요.",
+            "FEATURE_REMOVED",
+          );
+        if (
+          action === "save" &&
+          r.body &&
+          typeof r.body === "object" &&
+          ["titles", "generalQualificationId", "mainQualificationId"].some(
+            (k) => k in (r.body as object),
+          )
+        )
+          demand(
+            false,
+            410,
+            "대표 자격 편집은 종료되었습니다.",
+            "FEATURE_REMOVED",
+          );
         const key = z
           .string()
           .min(1)
@@ -141,16 +188,36 @@ export function registerAuditorRoutes(
           key,
           hash,
           (s) => {
-            actor(r, s);
+            const current = actor(r, s);
+            if (action === "start")
+              demand(
+                current.lv1OrganizationId === scope &&
+                  current.roles.includes("evaluator") &&
+                  current.organizationActive &&
+                  current.certificationEligibility !== "hold",
+                403,
+                "현재 조직의 Auditor 지정·취득 가능 상태를 확인해 주세요.",
+              );
             if (action !== "start") team(r, s);
           },
           (s) => {
             const current = actor(r, s),
               at = clock();
-            if (action === "save")
-              return saveAuditorProgram(s, current, scope, r.body, at);
-            if (action === "create")
-              return createAuditorQualification(s, current, scope, r.body, at);
+            if (action === "save") {
+              const v = saveAuditorProgram(s, current, scope, r.body, at);
+              return {
+                readiness: v.readiness,
+                program: v.program
+                  ? {
+                      lv1OrganizationId: v.program.lv1OrganizationId,
+                      revision: v.program.revision,
+                      notice: v.program.notice,
+                      updatedBy: v.program.updatedBy,
+                      updatedAt: v.program.updatedAt,
+                    }
+                  : null,
+              };
+            }
             if (action === "start")
               return startAuditor(
                 s,
@@ -159,49 +226,6 @@ export function registerAuditorRoutes(
                 r.body,
                 at,
               );
-            const input = z
-              .object({
-                revision: z.number().int().positive(),
-                recipientIds: z.array(z.string()).min(1).max(200),
-              })
-              .strict()
-              .parse(r.body);
-            demand(
-              programFor(s, scope)?.revision === input.revision,
-              409,
-              "안내문이 변경되었습니다. 미리보기를 다시 확인해 주세요.",
-              "REVISION_CONFLICT",
-            );
-            const ids = [...new Set(input.recipientIds)],
-              batch = randomUUID();
-            for (const id of ids) {
-              const recipient = s.users.find((u) => u.id === id);
-              demand(
-                recipient?.roles.includes("evaluator") &&
-                  userView(recipient, store.organizations.snapshot())
-                    .lv1OrganizationId === scope,
-                403,
-                "선택한 팀의 현재 Auditor 지정자에게만 보낼 수 있습니다.",
-              );
-              sendAuditorNotice(
-                s,
-                scope,
-                id,
-                `auditor:resend:${batch}:${id}`,
-                at,
-              );
-            }
-            s.audits.push({
-              id: batch,
-              actorId: current.id,
-              lv1OrganizationId: scope,
-              action: "auditor.notice.resend",
-              targetId: batch,
-              date: at,
-              reason: "선택 대상자에게 지정 안내 재발송",
-              details: { recipientIds: ids, revision: input.revision },
-            });
-            return { sent: ids.length };
           },
           { action: `auditor.${action}`, lv1OrganizationId: scope },
         );

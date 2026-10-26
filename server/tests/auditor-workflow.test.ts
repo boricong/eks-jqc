@@ -488,8 +488,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 23);
-  assert.equal(preview.state.revision, raw.revision + 8);
+  assert.equal(preview.state.schemaVersion, 24);
+  assert.equal(preview.state.revision, raw.revision + 9);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {
@@ -530,7 +530,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     fresh.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 13);
+  assert.equal(master.formatVersion, 14);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const legacy: any = structuredClone(master);
   delete legacy.payload.commonCourses;

@@ -89,7 +89,12 @@ const baseInput = {
 const fieldInput = (t: any, type?: string) => ({
   ...baseInput,
   revision: t.revision,
-  ...(type ? { qualificationType: type } : {}),
+  ...(type
+    ? {
+        qualificationType: type,
+        ...(type === "auditor" ? { auditorLevel: "general" } : {}),
+      }
+    : {}),
 });
 
 test("유형 생성 기본값·권한·변경 이력·등록/삭제 이력 이후 잠금과 입력 위조", async (t) => {
@@ -98,7 +103,7 @@ test("유형 생성 기본값·권한·변경 이력·등록/삭제 이력 이�
     await f.call(
       actor,
       "/system/qualification-templates",
-      { ...baseInput, qualificationType: "auditor" },
+      { ...baseInput, qualificationType: "auditor", auditorLevel: "general" },
       403,
     );
   await f.call(
@@ -136,7 +141,10 @@ test("유형 생성 기본값·권한·변경 이력·등록/삭제 이력 이�
   const registered = await f.call(
     "admin-1",
     "/qualification-templates/import",
-    { templateIds: [template.id] },
+    {
+      templateIds: [template.id],
+      templateRevisions: { [template.id]: template.revision },
+    },
   );
   const q = f.store
     .snapshot()
@@ -207,6 +215,11 @@ test("등록과 유형 수정이 동시에 요청되어도 팀/기본자격 유�
   const [registered] = await Promise.all([
     f.call("admin-1", "/qualification-templates/import", {
       templateIds: [template.id],
+      templateRevisions: {
+        [template.id]: f.store
+          .snapshot()
+          .qualificationTemplates.find((t) => t.id === template.id)!.revision,
+      },
     }),
     f.call(
       "operator-1",
@@ -233,12 +246,15 @@ test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적
   const template = await f.call(
     "operator-1",
     "/system/qualification-templates",
-    { ...baseInput, qualificationType: "auditor" },
+    { ...baseInput, qualificationType: "auditor", auditorLevel: "general" },
   );
   const registered = await f.call(
     "admin-1",
     "/qualification-templates/import",
-    { templateIds: [template.id] },
+    {
+      templateIds: [template.id],
+      templateRevisions: { [template.id]: template.revision },
+    },
   );
   let q = f.store
     .snapshot()
@@ -291,8 +307,8 @@ test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 13);
-  assert.equal(master.stateSchemaVersion, 23);
+  assert.equal(master.formatVersion, 14);
+  assert.equal(master.stateSchemaVersion, 24);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -303,7 +319,7 @@ test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적
     (x) => x.id === q.id,
   )!.qualificationType = "auditee";
   mismatched.sha256 = contentHash(mismatched.payload);
-  assert.throws(() => readMaster(mismatched), /유형 불일치/);
+  assert.throws(() => readMaster(mismatched), /유형 불일치|Auditor 기준 근거/);
   const missingType: any = structuredClone(master);
   delete missingType.payload.qualifications[0].qualificationType;
   missingType.sha256 = contentHash(missingType.payload);
@@ -417,12 +433,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 23);
-  assert.equal(preview.state.revision, raw.revision + 10);
+  assert.equal(preview.state.schemaVersion, 24);
+  assert.equal(preview.state.revision, raw.revision + 11);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 10;
-  normalized.audits.splice(-10 - raw.planningRequests.length);
+  normalized.revision -= 11;
+  normalized.audits.splice(-11 - raw.planningRequests.length);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,

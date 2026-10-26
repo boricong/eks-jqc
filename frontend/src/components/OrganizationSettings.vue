@@ -18,7 +18,8 @@ const store = useDemo(),
   orgId = ref('');
 const requirementsDirty = ref(false),
   requirementsBusy = ref(false);
-const administratorsDirty = ref(false),
+const administratorSummary = ref('불러오는 중'),
+  administratorsDirty = ref(false),
   administratorsBusy = ref(false),
   informationOpen = ref(true),
   administratorsOpen = ref(false);
@@ -202,7 +203,7 @@ watch(
             </div>
           </CollapsibleSection>
           <button
-            class="button primary"
+            class="button primary organization-confirm"
             :disabled="busy || administratorsBusy || !canSave || !metaDirty"
             @click="review = true"
           >
@@ -221,11 +222,13 @@ watch(
             class="policy-support-section"
           >
             <template #summary>{{
-              administratorsBusy ? '저장 중' : administratorsDirty ? '미저장 변경' : '지정 현황'
+              administratorSummary +
+              (administratorsBusy ? ' · 저장 중' : administratorsDirty ? ' · 미저장 변경' : '')
             }}</template>
             <OrganizationAdministrators
               :organization-id="orgId"
               :can-manage="doc.canAssignAdministrators && store.fullManagement"
+              @summary="administratorSummary = $event"
               @dirty="administratorsDirty = $event"
               @busy="administratorsBusy = $event"
               @error="administratorsOpen = true"
@@ -258,6 +261,13 @@ watch(
 </template>
 
 <style scoped>
+.organization-confirm {
+  display: block;
+  margin-left: auto;
+}
+.policy-support-section :deep(.collapsible-section-summary) {
+  overflow-wrap: anywhere;
+}
 .policy-support-section :deep(.collapsible-section-toggle) {
   min-height: 44px;
   padding: 12px 0;

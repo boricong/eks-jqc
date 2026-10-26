@@ -73,6 +73,7 @@ async function fixture(t: TestContext) {
       title: "기본자격 " + randomUUID(),
       englishName: "",
       qualificationType: c.qualificationType,
+      ...(c.qualificationType === "auditor" ? { auditorLevel: "general" } : {}),
       defaultCommonCourseIds: [c.id],
       commonCourseRevisions: { [c.id]: c.revision },
     });
@@ -347,7 +348,7 @@ test("JSON10 왕복은 공통·특화·선택 범위와 무변경 Ready를 보�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(m.formatVersion, 13);
+  assert.equal(m.formatVersion, 14);
   assert.deepEqual(readMaster(m).payload, m.payload);
   const candidate = masterCandidate(readMaster(m).payload, 0, 0);
   assert.deepEqual(candidate.state.commonCourses, m.payload.commonCourses);
@@ -369,8 +370,8 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
   const before = structuredClone(old),
     org = f.store.organizations.snapshot(),
     r = migrateCommonCourses(old, org);
-  assert.equal(r.state.schemaVersion, 23);
-  assert.equal(r.state.revision, old.revision + 4);
+  assert.equal(r.state.schemaVersion, 24);
+  assert.equal(r.state.revision, old.revision + 5);
   assert.deepEqual(r.organizations, org);
   for (const key of [
     "users",
@@ -417,7 +418,10 @@ test("Auditor 공통도 학습 확인 기준을 복사하고 유형 잠금·기�
     .snapshot()
     .qualifications.find((x) => x.id === saved.id)!;
   assert.deepEqual(
-    qualificationUseErrors(next, f.store.snapshot().courses),
+    qualificationUseErrors(
+      { ...next, lifecycleStatus: "Active" },
+      f.store.snapshot().courses,
+    ),
     [],
   );
   await f.call(

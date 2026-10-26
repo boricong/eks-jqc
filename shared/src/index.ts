@@ -1,3 +1,4 @@
+import { AuditorCriteriaSchema } from "./auditor.ts";
 import { OrganizationQualificationRequirementSchema } from "./organization-requirements.ts";
 export * from "./organization-requirements.ts";
 export {
@@ -244,6 +245,7 @@ export const CourseSchema = CourseContentSchema.extend({
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
+  auditorCriteria: AuditorCriteriaSchema.optional(),
   qualificationType: QualificationTypeSchema.default("auditee"),
   ...revision,
   version: z.number().int().positive().nullable(),
@@ -462,7 +464,7 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(23),
+  schemaVersion: z.literal(24),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
     .default([]),
