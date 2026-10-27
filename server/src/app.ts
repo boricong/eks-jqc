@@ -1,4 +1,5 @@
 import { registerReleaseRoutes } from "./release-routes.ts";
+import { registerTestDataRoutes } from "./test-data-routes.ts";
 import { auditorTemplateErrors } from "./auditor-pool.ts";
 import { registerOrganizationRequirementRoutes } from "./organization-requirement-routes.ts";
 import {
@@ -120,6 +121,7 @@ export async function buildApp(
   registerAuditorRoutes(app, store, actor, clock);
   registerTeamUserRoutes(app, store, actor);
   registerReleaseRoutes(app, store, actor);
+  registerTestDataRoutes(app, store, actor, clock, () => sessions.clear());
   registerCommonCourseRoutes(app, store, actor);
   registerOrganizationRequirementRoutes(app, store, actor, clock);
   app.addHook("onRequest", async (request, reply) => {
@@ -159,7 +161,11 @@ export async function buildApp(
       );
   });
   app.addHook("onSend", async (_request, reply, payload) => {
-    if (requestGenerations.get(_request) !== store.generation) {
+    reply.header("X-EKS-Data-Generation", store.generation);
+    if (
+      requestGenerations.get(_request) !== store.generation &&
+      _request.routeOptions.url !== "/api/system/test-data/apply"
+    ) {
       reply.header("X-EKS-Data-Generation", store.generation);
       reply.code(409).type("application/json");
       payload = JSON.stringify({

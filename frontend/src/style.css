@@ -2308,6 +2308,69 @@ input[type='radio'] {
   font-weight: var(--weight-title);
 }
 
+.test-data-panel {
+  display: grid;
+  gap: 20px;
+}
+.test-data-panel > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.test-data-counts {
+  margin: 0;
+}
+.test-data-counts > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.test-data-counts dt {
+  overflow-wrap: anywhere;
+}
+.test-data-counts dd {
+  margin: 0;
+  text-align: right;
+  flex-shrink: 0;
+}
+.test-data-actions {
+  flex-wrap: wrap;
+}
+.test-data-result {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+}
+.test-data-panel details li {
+  margin-bottom: 8px;
+}
+.test-data-panel summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-height);
+  font-weight: var(--weight-title);
+}
+.test-data-panel summary::before {
+  content: '+';
+  color: var(--ink-muted);
+}
+.test-data-panel details[open] > summary::before {
+  content: '−';
+}
+@media (max-width: 767px) {
+  .test-data-counts > div {
+    gap: 8px;
+    font-size: var(--text-caption);
+  }
+  .test-data-counts dd {
+    max-width: 55%;
+    flex-shrink: 1;
+  }
+}
+
 [aria-invalid='true']:not([type='checkbox']) {
   border-color: var(--danger) !important;
 }

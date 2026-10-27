@@ -33,6 +33,7 @@ test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존
   await page.getByRole('button', { name: '주관식 문항 추가', exact: true }).click();
   await page.getByLabel('주관식 문제', { exact: true }).fill('공통 문제');
   await page.getByRole('button', { name: '공통인증Set 저장', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByRole('heading', { name: '공통인증Set 관리', exact: true })).toBeVisible();
   expect(backend.store.snapshot().commonCourses[0]!.subjectiveQuestions[0]!.prompt).toBe(
     '공통 문제',
@@ -51,7 +52,10 @@ test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존
   await page.getByRole('checkbox', { name: /주관식 평가/ }).uncheck();
   await saveCriterion(page);
   await expect(page).toHaveURL(/\/admin\/courses(?:\?|$)/);
-  const c = backend.store.snapshot().courses.find((c) => c.title === '주관식 특화')!;
+  const c = backend.store
+    .snapshot()
+    .courses.filter((c) => c.title === '주관식 특화')
+    .sort((a, b) => b.version - a.version)[0]!;
   expect(c.subjectiveEnabled).toBe(false);
   expect(c.subjectiveQuestions.map((q) => q.prompt)).toEqual(['둘째 문제', '첫 문제']);
 });

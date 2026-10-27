@@ -27,7 +27,7 @@ test('조직 직접 지정·상속과 미저장 보호·네 화면 폭', async (
   const title = backend.store
     .snapshot()
     .qualifications.find((q) => q.id === 'demo-qualification')!.title;
-  const box = page.getByRole('checkbox', { name: `${title} · v1`, exact: true });
+  const box = page.getByRole('checkbox', { name: `${title} · v1.0`, exact: true });
   await box.check();
   await page.getByRole('link', { name: '팀 자격 설정', exact: true }).click();
   await answerConfirmation(page, false);
@@ -170,7 +170,7 @@ test('세부 관리자는 상속 출처를 읽고 자기 조직의 직접 지정
   const title = backend.store
       .snapshot()
       .qualifications.find((q) => q.id === 'demo-qualification')!.title,
-    box = page.getByRole('checkbox', { name: `${title} · v1`, exact: true });
+    box = page.getByRole('checkbox', { name: `${title} · v1.0`, exact: true });
   await box.check();
   await page.getByRole('button', { name: '필요자격 변경 확인', exact: true }).click();
   await page.getByRole('button', { name: '필요자격 저장', exact: true }).click();
@@ -189,7 +189,7 @@ test('세부 관리자는 상속 출처를 읽고 자기 조직의 직접 지정
   ).toBeVisible();
   await actor(page, 'operator-1');
   await page.goto('/admin/organization-settings?lv1OrganizationId=org-photo');
-  await page.getByRole('checkbox', { name: `${title} · v1`, exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: `${title} · v1.0`, exact: true }).uncheck();
   await page.getByRole('button', { name: '필요자격 변경 확인', exact: true }).click();
   await page.getByRole('button', { name: '필요자격 저장', exact: true }).click();
   await expect(
@@ -209,7 +209,7 @@ test('필요자격 검토 충돌은 입력을 유지하고 최신 기준으로 �
   const title = backend.store
       .snapshot()
       .qualifications.find((q) => q.id === 'demo-qualification')!.title,
-    box = page.getByRole('checkbox', { name: `${title} · v1`, exact: true });
+    box = page.getByRole('checkbox', { name: `${title} · v1.0`, exact: true });
   await box.check();
   await backend.store.transact(
     'admin-1',

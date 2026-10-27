@@ -10,7 +10,13 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import type { State, OrganizationDocument } from "@eks/contracts";
+import { TEST_DATA_RECIPE_VERSION } from "@eks/contracts";
+import type {
+  State,
+  OrganizationDocument,
+  TestDataAction,
+  TestDataReceipt,
+} from "@eks/contracts";
 import { MaintenanceDocumentSchema, contentHash } from "./maintenance.ts";
 import { seedOrganizations, validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
@@ -328,7 +334,7 @@ export class JsonStore extends FileStore<State> {
             typeof source === "string" &&
               path.dirname(path.resolve(source)).toLowerCase() ===
                 path.resolve(dir!).toLowerCase() &&
-              /^before-(master-(reset|import)|test-(load|reset|reload|delete))-/.test(
+              /^before-(master-(reset|import)|test-(load|reset|reload|delete)|test-data-(load|reset))-/.test(
                 path.basename(source),
               ),
             422,
@@ -340,6 +346,29 @@ export class JsonStore extends FileStore<State> {
           JSON.parse(state.toString("utf8")),
           validateOrganizations(JSON.parse(org.toString("utf8"))),
         );
+        let maintenanceBytes: Buffer | undefined;
+        if (marker.backups.maintenance) {
+          const file = marker.backups.maintenance;
+          demand(
+            typeof file === "string" &&
+              path.dirname(path.resolve(file)).toLowerCase() ===
+                path.resolve(this.backupDir).toLowerCase() &&
+              /^before-test-data-(load|reset)-maintenance-/.test(
+                path.basename(file),
+              ),
+            422,
+            "관리 정보의 백업 경로를 확인해 주세요.",
+          );
+          maintenanceBytes = await readFile(file);
+          const saved = MaintenanceDocumentSchema.parse(
+            JSON.parse(maintenanceBytes.toString("utf8")),
+          );
+          demand(
+            contentHash(saved) === contentHash(metadata),
+            422,
+            "관리 정보 백업이 중단 표식과 다릅니다.",
+          );
+        }
         // Preserve the interrupted files before recovery; the original pair remains intact.
         const suffix = randomUUID();
         for (const [source, dir, label] of [
@@ -363,7 +392,10 @@ export class JsonStore extends FileStore<State> {
         }
         await this.writeAtomic(this.organizations.file, org);
         await this.writeAtomic(this.file, state);
-        await this.writeAtomic(this.maintenanceFile, metadata);
+        await this.writeAtomic(
+          this.maintenanceFile,
+          maintenanceBytes || marker.maintenanceBefore,
+        );
         await rm(this.replacementMarker);
         return {
           recovered: true,
@@ -377,10 +409,26 @@ export class JsonStore extends FileStore<State> {
     schemaVersion: 1,
     generation: randomUUID(),
     receipts: [],
+    testDataOperations: [],
   };
   get generation() {
     return this.maintenance.generation;
   }
+  get hasLegacyTestSnapshot() {
+    return Object.hasOwn(this.maintenance, "testEnvironment");
+  }
+  testDataOperation(key: string, actorId: string): TestDataReceipt | null {
+    const receipt = this.maintenance.testDataOperations.find(
+      (r) => r.key === key,
+    );
+    demand(
+      !receipt || receipt.actorId === actorId,
+      403,
+      "이 작업을 실행한 운영자 계정으로 확인해 주세요.",
+    );
+    return receipt ? structuredClone(receipt) : null;
+  }
+  beforeMaintenanceReplace?: () => void | Promise<void>;
   get maintenanceFile() {
     return `${this.file}.maintenance.json`;
   }
@@ -518,6 +566,172 @@ export class JsonStore extends FileStore<State> {
     return this.enqueue(() =>
       Promise.resolve(read(this.snapshot(), this.organizations.snapshot())),
     );
+  }
+  async replaceTestData(
+    actorId: string,
+    key: string,
+    fingerprint: string,
+    action: TestDataAction,
+    at: string,
+    authorize: (s: State) => void,
+    prepare: (
+      s: State,
+      o: OrganizationDocument,
+    ) => {
+      state: State;
+      organizations: OrganizationDocument;
+      before: Record<string, number>;
+      after: Record<string, number>;
+    },
+  ): Promise<TestDataReceipt> {
+    return this.enqueue(async () => {
+      demand(!this.closed, 503, "저장소가 닫혔습니다.");
+      authorize(this.snapshot());
+      const previous = this.maintenance.testDataOperations.find(
+        (r) => r.key === key,
+      );
+      if (previous) {
+        demand(
+          previous.actorId === actorId &&
+            previous.fingerprint === fingerprint &&
+            previous.action === action,
+          409,
+          "같은 실행 식별자로 다른 내용을 보냈습니다.",
+          "IDEMPOTENCY_CONFLICT",
+        );
+        return structuredClone(previous);
+      }
+      const current = this.snapshot(),
+        org = this.organizations.snapshot(),
+        candidate = prepare(current, org);
+      const structure = (nodes: OrganizationDocument["roots"]): unknown =>
+        nodes.map((n) => ({
+          id: n.id,
+          name: n.name,
+          active: n.active,
+          children: structure(n.children),
+        }));
+      demand(
+        candidate.state.revision === current.revision + 1 &&
+          candidate.organizations.revision === org.revision + 1,
+        422,
+        "저장소 revision 증가가 필요합니다.",
+      );
+      demand(
+        contentHash(current.users) === contentHash(candidate.state.users) &&
+          contentHash(structure(org.roots)) ===
+            contentHash(structure(candidate.organizations.roots)),
+        422,
+        "계정 정보와 조직 구조는 변경할 수 없습니다.",
+      );
+      const checked = validateState(
+        candidate.state,
+        validateOrganizations(candidate.organizations),
+      );
+      const [stateBytes, orgBytes, maintenanceBytes] = await Promise.all([
+        readFile(this.file),
+        readFile(this.organizations.file),
+        readFile(this.maintenanceFile),
+      ]);
+      demand(
+        contentHash(this.validate(JSON.parse(stateBytes.toString("utf8")))) ===
+          contentHash(current) &&
+          contentHash(
+            validateOrganizations(JSON.parse(orgBytes.toString("utf8"))),
+          ) === contentHash(org) &&
+          contentHash(
+            MaintenanceDocumentSchema.parse(
+              JSON.parse(maintenanceBytes.toString("utf8")),
+            ),
+          ) === contentHash(this.maintenance),
+        409,
+        "저장소 파일이 변경되었습니다. 다시 확인해 주세요.",
+        "REVISION_CONFLICT",
+      );
+      const operationId = randomUUID(),
+        generation = randomUUID(),
+        suffix = `${current.revision}-${operationId}`;
+      const backups = {
+        state: path.join(
+          this.backupDir,
+          `before-test-data-${action}-${suffix}.json`,
+        ),
+        organizations: path.join(
+          this.organizations.backupDir,
+          `before-test-data-${action}-${suffix}.json`,
+        ),
+        maintenance: path.join(
+          this.backupDir,
+          `before-test-data-${action}-maintenance-${suffix}.json`,
+        ),
+      };
+      await mkdir(this.backupDir, { recursive: true });
+      await mkdir(this.organizations.backupDir, { recursive: true });
+      await this.writeAtomic(backups.state, stateBytes);
+      await this.writeAtomic(backups.organizations, orgBytes);
+      await this.writeAtomic(backups.maintenance, maintenanceBytes);
+      const receipt: TestDataReceipt = {
+        operationId,
+        key,
+        actorId,
+        fingerprint,
+        action,
+        completedAt: at,
+        generation,
+        recipeVersion: TEST_DATA_RECIPE_VERSION,
+        stateRevision: checked.revision,
+        organizationRevision: candidate.organizations.revision,
+        before: candidate.before,
+        after: candidate.after,
+        backups,
+      };
+      const before = structuredClone(this.maintenance),
+        next = {
+          ...before,
+          generation,
+          testDataOperations: [...before.testDataOperations, receipt],
+        };
+      if (action === "reset") delete next.testEnvironment;
+      MaintenanceDocumentSchema.parse(next);
+      try {
+        await this.writeAtomic(this.replacementMarker, {
+          backups,
+          maintenanceBefore: before,
+          receipt,
+        });
+        await this.organizations.beforeReplace?.();
+        await this.writeAtomic(
+          this.organizations.file,
+          candidate.organizations,
+        );
+        await this.beforeReplace?.();
+        await this.writeAtomic(this.file, checked);
+        await this.beforeMaintenanceReplace?.();
+        await this.writeAtomic(this.maintenanceFile, next);
+        await rm(this.replacementMarker);
+      } catch (error) {
+        try {
+          await this.writeAtomic(this.organizations.file, orgBytes);
+          await this.writeAtomic(this.file, stateBytes);
+          await this.writeAtomic(this.maintenanceFile, maintenanceBytes);
+          await rm(this.replacementMarker, { force: true });
+        } catch {
+          this.block();
+          this.organizations.block();
+          throw new DomainError(
+            503,
+            "데이터 교체와 복구를 완료하지 못했습니다. 서버를 중지하고 data:recover-master로 복구해 주세요.",
+            "MAINTENANCE_RECOVERY_REQUIRED",
+          );
+        }
+        throw error;
+      }
+      this.organizations.publishSnapshot(candidate.organizations);
+      this.state = checked;
+      this.maintenance = next;
+      this.queue.invalidate();
+      return structuredClone(receipt);
+    });
   }
   async migratePolicies(
     expected: { revision: number; stateHash: string; organizationHash: string },

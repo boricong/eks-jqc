@@ -7,6 +7,7 @@ import {
   type ReleasePropagation,
 } from "./releases.ts";
 export * from "./releases.ts";
+export * from "./test-data.ts";
 import { AuditorCriteriaSchema } from "./auditor.ts";
 import { OrganizationQualificationRequirementSchema } from "./organization-requirements.ts";
 export * from "./organization-requirements.ts";

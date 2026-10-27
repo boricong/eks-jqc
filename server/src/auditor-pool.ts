@@ -25,7 +25,18 @@ export function auditorCriteria(
       : undefined)
   );
 }
-export function auditorTemplateErrors(s: State, t: QualificationTemplate) {
+export function auditorTemplateErrors(
+  s: {
+    qualificationTemplates: readonly Pick<
+      QualificationTemplate,
+      "id" | "qualificationType" | "auditorLevel" | "scope"
+    >[];
+  },
+  t: Pick<
+    QualificationTemplate,
+    "qualificationType" | "auditorLevel" | "scope" | "prerequisiteTemplateId"
+  >,
+) {
   if (t.qualificationType !== "auditor") return [];
   const errors: string[] = [];
   if (!t.auditorLevel) errors.push("Auditor 등급을 지정해 주세요.");

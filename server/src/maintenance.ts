@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { TestDataReceiptSchema } from "@eks/contracts";
 
 export function contentHash(value: unknown): string {
   const canonical = (v: any): any =>
@@ -21,6 +22,7 @@ export const MaintenanceDocumentSchema = z
   .object({
     schemaVersion: z.literal(1),
     generation: z.string().uuid(),
+    testDataOperations: z.array(TestDataReceiptSchema).default([]),
     // Opaque read-only legacy data: never executed or removed during normal load.
     testEnvironment: z.unknown().optional(),
     receipts: z.array(
@@ -56,4 +58,10 @@ export const MaintenanceDocumentSchema = z
   .refine(
     (v) => new Set(v.receipts.map((r) => r.key)).size === v.receipts.length,
     "실행 영수증 식별자 중복",
+  )
+  .refine(
+    (v) =>
+      new Set(v.testDataOperations.map((r) => r.key)).size ===
+      v.testDataOperations.length,
+    "테스트 데이터 실행 식별자 중복",
   );

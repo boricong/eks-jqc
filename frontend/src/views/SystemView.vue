@@ -9,6 +9,7 @@ import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
 import SystemNotices from '../components/SystemNotices.vue';
+import TestDataPanel from '../components/TestDataPanel.vue';
 const SystemDocuments = defineAsyncComponent(() => import('../components/SystemDocuments.vue'));
 const route = useRoute();
 const store = useDemo();
@@ -53,7 +54,9 @@ watch(
         mode="system"
       /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
         v-else-if="section === 'notices'"
-      /><SystemDocuments v-else-if="section === 'documents'" />
+      /><SystemDocuments v-else-if="section === 'documents'" /><TestDataPanel
+        v-else-if="section === 'test-data'"
+      />
     </div>
   </div>
 </template>

@@ -134,7 +134,7 @@ export const router = createRouter({
       meta: { role: 'system_operator', title: '문서 조회' },
     },
     {
-      path: '/system/:section(organizations|users|overview|notices|qualification-templates|common-courses)',
+      path: '/system/:section(organizations|users|overview|notices|qualification-templates|common-courses|test-data)',
       component: SystemView,
       meta: { role: 'system_operator' },
     },

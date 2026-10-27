@@ -285,7 +285,7 @@ export const useDemo = defineStore('workspace', () => {
     data.value = empty();
     workspaceScope.value = '';
     connectionError.value =
-      '설정·기준 초기화 또는 교체로 세션이 종료되었습니다. 계정을 다시 선택해 주세요.';
+      '데이터 로드 또는 전체 초기화로 세션이 종료되었습니다. 계정을 다시 선택해 주세요.';
     void api<User[]>('/actors')
       .then((v) => {
         actors.value = v;
