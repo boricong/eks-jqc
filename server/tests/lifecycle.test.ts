@@ -1,3 +1,4 @@
+import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -16,7 +17,7 @@ import {
 } from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { validateState } from "../src/integrity.ts";
 import { migrateLifecycle } from "../src/lifecycle-migration.ts";
 const qid = "demo-qualification",
@@ -305,11 +306,16 @@ test("기준 Hold/Revoke는 새 계획·확정만 막고 기존 배정의 자동
     },
     409,
   );
-  const clone = await f.call("admin-1", `/qualifications/${qid}/versions`, {});
+  const clone = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "qualifications", qid),
+    200,
+    "PUT",
+  );
   assert.equal(
     f.store.snapshot().qualifications.find((q) => q.id === clone.id)!
       .lifecycleStatus,
-    "Active",
+    "Revoke",
   );
 });
 test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 답안과 개인 효력은 유지", async (t) => {
@@ -477,7 +483,7 @@ test("짧은 인증기간 갱신은 다음 유효기간 시작 전 반복할 수
   f.setTime("2026-02-28T15:00:00.000Z");
   assert.equal((await history(f, c.id)).renewal.canStart, true);
 });
-test("재인증 적용 버전 변경은 완료를 거부하고 새 시작 후 무기한 갱신은 원본을 보존", async (t) => {
+test("재인증 시작 후 최신 변경에도 시작 당시 기준과 발급 원본을 보존", async (t) => {
   const f = await fixture(t),
     c = await earn(f);
   f.setTime("2026-11-01T00:00:00.000Z");
@@ -493,16 +499,14 @@ test("재인증 적용 버전 변경은 완료를 거부하고 새 시작 후 �
       validity: { type: "unlimited", months: null, reminderDays: [] },
     });
   });
-  assert.equal(
-    (await complete(f, c.id, r, 409)).code,
-    "RENEWAL_CRITERIA_CHANGED",
-  );
-  const r2 = await start(f, c.id);
-  await complete(f, c.id, r2);
+  await complete(f, c.id, r);
   const h = await history(f, c.id);
-  assert.equal(h.current.validity.type, "unlimited");
-  assert.equal(h.current.expiresOn, undefined);
-  assert.equal(h.renewals[0].status, "closed");
+  assert.equal(
+    f.store.snapshot().renewals.find((x) => x.id === r.id)!.qualificationId,
+    qid,
+  );
+  assert.equal(h.current.validity.type, "months");
+  assert.equal(h.renewals[0].status, "completed");
   assert.equal(h.certification.expiresOn, c.expiresOn);
   assert.equal(h.renewal.canStart, false);
 });
@@ -553,7 +557,7 @@ test("개인 Hold·해제·대상자 Hold와 관계없이 만료 자동 폐기·
     409,
   );
 });
-test("폐기 후 새 요청·취득 회차·새 인증과 독립 평가, 초기화 후 과거 회차 재활성 금지", async (t) => {
+test("폐기 후 새 요청·취득 회차·새 인증과 독립 평가", async (t) => {
   const f = await fixture(t),
     p = await plan(f),
     a = await confirm(f, p),
@@ -588,31 +592,6 @@ test("폐기 후 새 요청·취득 회차·새 인증과 독립 평가, 초기�
   assert.notEqual(second.id, first.id);
   assert.equal(second.previousCertificationId, first.id);
   assert.equal((await history(f, first.id)).effectiveStatus, "Revoke");
-  await eligibility(f, "hold");
-  await criterion(f, "Hold");
-  const preview = await f.call("operator-1", "/testing/progress?scope=all");
-  await f.call("operator-1", "/testing/progress/reset", {
-    revision: preview.revision,
-    confirmation: "초기화",
-    scope: { type: "all" },
-  });
-  const state = f.store.snapshot();
-  assert.equal(state.certifications.length, 0);
-  assert.equal(state.renewals.length, 0);
-  assert.ok(state.assignments.find((x) => x.id === a)!.acquisitionClosedAt);
-  assert.equal(
-    state.assignments.find((x) => x.id === secondA)!.acquisitionClosedAt,
-    undefined,
-  );
-  assert.equal(
-    state.users.find((x) => x.id === learner)!.certificationEligibility,
-    "hold",
-  );
-  assert.equal(
-    state.qualifications.find((q) => q.id === qid)!.lifecycleStatus,
-    "Hold",
-  );
-  validateState(state, f.store.organizations.snapshot());
 });
 test("갱신 저장 실패·동시 완료·관리자 revision 충돌은 부분 저장과 중복을 만들지 않는다", async (t) => {
   const f = await fixture(t),
@@ -743,7 +722,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 25);
+  assert.equal(candidate.schemaVersion, 26);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { computed, ref } from 'vue';
 import { useDemo } from '../stores/demo';
 import {
@@ -58,8 +59,11 @@ const rows = computed(() =>
             <td>
               {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
               }}<small class="muted">
-                · 최초 v{{
-                  store.qualification(a.qualificationId, a.qualificationMetadata).version
+                · 최초
+                {{
+                  releaseVersionLabel(
+                    store.qualification(a.qualificationId, a.qualificationMetadata),
+                  )
                 }}</small
               >
             </td>

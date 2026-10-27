@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { createPoolQualification } from "./auditor-fixture.ts";
 import { userView } from "../src/organizations.ts";
@@ -14,9 +15,9 @@ import {
 } from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateAutomaticCriteria } from "../src/automatic-criteria-migration.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-automatic-criteria-"));
@@ -343,10 +344,13 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 25);
+  assert.equal(migrated.snapshot().schemaVersion, 26);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
-  assert.deepEqual(migrated.snapshot().assignments, raw.assignments);
+  assert.deepEqual(
+    historicalContent(migrated.snapshot().assignments),
+    historicalContent(raw.assignments),
+  );
   assert.deepEqual(
     migrated.organizations
       .snapshot()
@@ -358,7 +362,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     migrated.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 14);
+  assert.equal(master.formatVersion, 15);
   assert(!("qualificationPools" in master.payload.organizations));
   delete master.payload.commonCourses;
   delete master.counts.commonCourses;
@@ -371,7 +375,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
   master.counts.poolEntries = org.qualificationPools.length;
   master.payload.auditorPrograms[0].general = raw.auditorPrograms[0].general;
   master.sha256 = contentHash(master.payload);
-  assert.equal(readMaster(master).formatVersion, 14);
+  assert.equal(readMaster(master).formatVersion, 15);
   assert.deepEqual(
     readMaster(master).payload.auditorPrograms![0]!.general,
     lineage,

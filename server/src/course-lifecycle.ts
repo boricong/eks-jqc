@@ -1,3 +1,4 @@
+import { releaseVersionLabel } from "@eks/contracts";
 import { z } from "zod";
 import type { State, CourseUsage, UserView } from "@eks/contracts";
 import { demand } from "./errors.ts";
@@ -44,7 +45,8 @@ export function courseUsage(
         ]
       : []),
     ...qualifications.map(
-      (q) => `연결된 자격: ${q.title || "이름 없는 자격"} v${q.version}`,
+      (q) =>
+        `연결된 자격: ${q.title || "이름 없는 자격"} ${releaseVersionLabel(q)}`,
     ),
     ...(Object.values(counts).some((n) => n > 0)
       ? ["수강·평가·수료·인증 또는 이전 보존 자료가 연결되어 있습니다."]

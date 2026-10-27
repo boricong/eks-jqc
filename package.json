@@ -25,7 +25,6 @@
     "data:migrate-lifecycle": "node --import tsx server/src/cli.ts migrate-lifecycle",
     "data:migrate-policies": "node --import tsx server/src/cli.ts migrate-policies",
     "data:transition-assessments": "node --import tsx server/src/cli.ts transition-assessments",
-    "data:setup-photo": "node --import tsx server/src/cli.ts setup-photo",
     "data:organizations:restore": "node --import tsx server/src/cli.ts organizations:restore",
     "data:backup": "node --import tsx server/src/cli.ts backup",
     "data:recover-master": "node --import tsx server/src/cli.ts recover-master",
@@ -46,7 +45,8 @@
     "data:migrate-subjective": "node --import tsx server/src/cli.ts migrate-subjective",
     "data:migrate-organization-needs": "node --import tsx server/src/cli.ts migrate-organization-needs",
     "data:migrate-qualification-plans": "node --import tsx server/src/cli.ts migrate-qualification-plans",
-    "data:migrate-auditor-pool": "node --import tsx server/src/cli.ts migrate-auditor-pool"
+    "data:migrate-auditor-pool": "node --import tsx server/src/cli.ts migrate-auditor-pool",
+    "data:migrate-releases": "node --import tsx server/src/cli.ts migrate-releases"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,6 +1,10 @@
 # 자격 단위 계획 계약과 운영
 
-2026-10-27 · 업무 25 · 조직 4 · 기본정보 JSON 14 · personal-certification-v6
+현재 제품의 테스트·데이터 관리와 설정 JSON 이전 기능은 종료했다. 아래 해당 형식 설명은 과거 이관/호환 검증 기록이며 [종료 계약](TEST_MANAGEMENT.md)을 우선한다. 일반 업무·버전·발급 근거와 CLI 백업/복구는 유지한다.
+
+2026-10-27 · 업무 26 · 조직 4 · 기본정보 JSON 15 · personal-certification-v6
+
+[불변 버전 계약](RELEASE_VERSIONS.md)에 따라 최종 확인 전 최신 기준의 차이를 안내하고 사용자의 재확인을 받는다. 계획·배정의 frozenCriteria와 기존 메타데이터/정책 스냅샷을 원자적으로 저장하며 이후 학습·평가·수료·인증서까지 같은 버전을 사용한다.
 
 ## 계획 수립
 
@@ -14,7 +18,7 @@ Auditee는 관리자 요청 당시 고정한 조직 필요자격마다 계획 �
 
 - `POST /api/plans`: 기존 requestId·requestRevision·qualificationId 입력을 유지하고 자격별 기본 날짜와 빈 목표로 시작한다.
 - `PUT /api/plans/:id`: revision·startOn·endOn·goal을 받는다. 확정 계획 API 변경은 기존처럼 사유가 필요하며 개인 UI는 읽기 전용이다. 알 수 없는 필드와 보존 이력 쓰기를 거부한다.
-- `POST /api/plans/:id/complete`: 기존 revision·요청 키를 사용한다. 권한·조직·Hold·현재 기준·날짜를 다시 확인하고 배정/수강과 함께 원자적으로 확정한다.
+- `POST /api/plans/:id/complete`: revision·criteriaToken·요청 키를 사용한다. 권한·조직·Hold·현재 기준·날짜를 다시 확인하고 배정/수강과 함께 원자적으로 확정한다.
 - `POST /api/plans/:id/schedule-defaults`: 기존 미초기화 초안에서 자격 날짜의 빈 값만 한 번 채운다. 이관된 초안에는 적용 완료 표식을 남겨 날짜를 임의 생성하지 않는다.
 - 인증·본인 권한 확인 뒤 구형 schedules·targetOn·assessmentOn·learningStart·learningEnd 입력은 410 FEATURE_REMOVED로 새로고침을 안내한다. 이전 저장 영수증으로 재실행하지 않는다. revision 충돌은 409이고 로컬 입력을 보존한다.
 - 현황 응답/정렬은 endOn을 사용한다. 이전 targetOn 정렬은 endOn으로 해석한다. 평가 예정일과 overdueAssessments는 응답에서 제거하며 해당 지표 API 요청은 관리 권한·조직 확인 후 410이다. 이전 화면 URL에서는 폐지 조건만 지운다.
@@ -27,7 +31,7 @@ Auditee는 관리자 요청 당시 고정한 조직 필요자격마다 계획 �
 
 previousSchedule에 이전 workflow·목표 인증일·인증Set 일정·목표·이관 시각·목표 재검토 여부를 보존한다. 개인/기존 계획 조회 권한의 관리자만 이전 이력을 읽으며 운영 일정과 집계에 사용하지 않는다. 계획 ID·상태·배정/요청 연결·기존 완료 근거를 유지하고 revision+1·updatedAt·workflow v6와 기본값 적용 표식만 함께 갱신한다. 전체 revision+1과 감사에 변환 전후를 기록한다. 재실행은 무변경이며 잘못된 날짜/인증Set 참조가 있는 기존 확정 계획은 이관을 보류한다.
 
-JSON 14는 계획·이전 이력·학습 진행을 내보내지 않는다. stateSchemaVersion 24/25를 모두 읽고 새 내보내기는 25로 표시한다. 체크섬 검증은 원본을 기준으로 유지한다. 기준 보존 초기화는 계획과 그 이전 이력을 진행 데이터로 정리한다.
+JSON 15는 버전 이력·출처·보류 정보를 보존하고 계획·이전 이력·학습 진행은 내보내지 않는다. 구형 JSON14의 업무24/25는 호환 변환하고 새 내보내기는 업무26으로 표시한다. 체크섬 검증은 원본을 기준으로 유지한다. 기준 보존 초기화는 계획과 그 이전 이력을 진행 데이터로 정리한다.
 
 ## 배포와 복구
 

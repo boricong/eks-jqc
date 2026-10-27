@@ -10,7 +10,11 @@ export async function savePlanViaApi(
   reason: string,
 ) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
-  const headers = { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() };
+  const headers = {
+    'X-Session-Tab': tab!,
+    'X-EKS-Release-Contract': '1',
+    'Idempotency-Key': crypto.randomUUID(),
+  };
   const workspace = await (await page.request.get('/api/workspace', { headers })).json();
   const plan = workspace.plans.find((p: PersonalPlan) => p.id === id) as PersonalPlan;
   const response = await page.request.put(`/api/plans/${id}`, {
@@ -31,7 +35,11 @@ export async function savePlanViaApi(
 export async function configureNeeds(page: Page) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
-  const headers = { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() };
+  const headers = {
+    'X-Session-Tab': tab!,
+    'X-EKS-Release-Contract': '1',
+    'Idempotency-Key': crypto.randomUUID(),
+  };
   const url = `/api/organization-qualification-requirements?lv1OrganizationId=${scope}`;
   const view = await (await page.request.get(url, { headers })).json();
   const response = await page.request.put(url, {
@@ -55,7 +63,11 @@ export async function configureNeeds(page: Page) {
 export async function requestPlan(page: Page, learnerName: string) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
-  const headers = { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() };
+  const headers = {
+    'X-Session-Tab': tab!,
+    'X-EKS-Release-Contract': '1',
+    'Idempotency-Key': crypto.randomUUID(),
+  };
   const ws = await (
     await page.request.get(`/api/workspace?lv1OrganizationId=${scope}`, { headers })
   ).json();

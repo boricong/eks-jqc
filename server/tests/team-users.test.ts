@@ -10,7 +10,7 @@ import { organizationEntries } from "@eks/contracts";
 import { JsonStore } from "../src/storage.ts";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations, userView } from "../src/organizations.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { saveAuditorProgram } from "../src/auditor-program.ts";
 
 async function fixture(t: TestContext) {

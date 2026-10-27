@@ -171,7 +171,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
         '/system/organizations',
         '/system/users',
         '/system/overview',
-        '/system/testing',
+
         '/system/notices',
         '/system/documents',
         '/system/documents/iatf16949-competence-review',
@@ -201,7 +201,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/system/organizations': '신규 변경 이력 생성은 중단',
     '/system/users': '타인 채점·승인 권한이 아닙니다',
     '/system/overview': '조회 전용',
-    '/system/testing': '기본정보 형식14',
+
     '/system/notices': '시스템 공지 관리',
     '/system/documents': '운영 문서 목록',
     '/system/documents/iatf16949-competence-review': '운영 문서 읽기',

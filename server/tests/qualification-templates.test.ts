@@ -9,10 +9,10 @@ import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateTemplates } from "../src/template-migration.ts";
 import { currentQualification } from "../src/qualification-templates.ts";
-import { exportMaster, readMaster } from "../src/master-data.ts";
+import { exportMaster, readMaster } from "./legacy-master-data.ts";
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-template-")),
     file = path.join(dir, "runtime/state.json"),
@@ -285,7 +285,7 @@ test("11→12 이관은 원문·진행·조직을 보존하고 미연결은 중�
     templates: legacyTemplates.filter((t: any) => t.id.startsWith("fixture-")),
   };
   const next = migrateTemplates(raw, org, undefined, mapping);
-  assert.equal(next.state.schemaVersion, 25);
+  assert.equal(next.state.schemaVersion, 26);
   assert.deepEqual(next.state.qualifications, raw.qualifications);
   assert.deepEqual(next.organizations, org);
   assert.deepEqual(migrateTemplates(next.state, org).state, next.state);
@@ -413,7 +413,14 @@ test("공통 정보 충돌·저장 실패는 원본을 보존하고 팀 설정�
       .revision,
     2,
   );
-  teamA = store.snapshot().qualifications.find((q) => q.id === teamA.id)!;
+  teamA = store
+    .snapshot()
+    .qualifications.filter((q) => q.entityId === teamA.entityId)
+    .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!;
+  teamB = store
+    .snapshot()
+    .qualifications.filter((q) => q.entityId === teamB.entityId)
+    .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!;
   assert.equal(
     currentQualification(store.snapshot(), teamA).title,
     "변경 이름",
@@ -556,7 +563,7 @@ test("기본자격 이관은 백업·원본 해시·실패 복구·재실행을 
   legacy.stateSchemaVersion = 11;
   delete legacy.payload.qualificationTemplates;
   delete legacy.counts.qualificationTemplates;
-  const { contentHash } = await import("../src/master-data.ts");
+  const { contentHash } = await import("./legacy-master-data.ts");
   legacy.sha256 = contentHash(legacy.payload);
   assert.equal(readMaster(legacy).payload.qualificationTemplates.length, 15);
   legacy.payload.qualifications = [

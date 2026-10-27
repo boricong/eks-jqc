@@ -43,32 +43,23 @@ test('자료 목록·상단 탭·연결형 세로 번호의 네 화면 폭과 �
   page.on('pageerror', (e) => errors.push(e.message));
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await courseSection(page, '학습자료');
+    await courseSection(page, '학습 정보');
     await expect(tabs).toHaveAttribute('aria-orientation', 'horizontal');
     await expect(tabs.getByRole('tab').first()).toHaveCSS('font-size', '14px');
     await expect(tabs.getByRole('tab').first()).toHaveCSS('min-height', '44px');
-    const row = page.locator('.editor-material-row').nth(1);
-    await expect(row.locator('h3')).toHaveCSS('font-size', '16px');
-    await expect(row.locator('h3')).toHaveCSS('font-weight', '500');
-    await expect(row.locator('.editor-material-info > p').first()).toHaveCSS('font-size', '14px');
-    await expect(row.locator('.editor-material-url')).toHaveCSS('font-size', '13px');
-    await expect(row.locator('.editor-material-url')).toContainText('https://example.com/');
-    const title = await row.locator('h3').boundingBox();
-    const description = await row.locator('.editor-material-info > p').first().boundingBox();
-    const url = await row.locator('.editor-material-url').boundingBox();
-    expect(title!.x).toBeCloseTo(description!.x, 0);
-    expect(url!.x).toBeCloseTo(title!.x, 0);
-    expect(url!.y).toBeGreaterThanOrEqual(description!.y + description!.height);
-    const actions = await row.locator('.editor-material-actions').boundingBox();
-    if (width < 1024) expect(actions!.y).toBeGreaterThanOrEqual(url!.y + url!.height);
-    else expect(actions!.x).toBeGreaterThan(title!.x + title!.width);
-    await expect(page.locator('.editor-material-row').last()).toContainText('신규 운영 전 보완');
+    const infoTabs = page.getByRole('tablist', { name: '학습 정보 항목', exact: true });
+    await infoTabs.getByRole('tab', { name: /자료 2/ }).click();
+    await expect(page.getByLabel('자료명', { exact: true })).toHaveValue('EDM 작업 표준');
+    await expect(page.getByLabel('자료명', { exact: true })).toHaveCSS(
+      'font-size',
+      width <= 768 ? '16px' : '14px',
+    );
+    await expect(page.getByLabel('URL', { exact: true })).toHaveValue(
+      new RegExp('^https://example[.]com/'),
+    );
+    await expect(infoTabs.getByRole('tab', { name: /자료 3/ })).toHaveAccessibleName(/보완 필요/);
     await page.screenshot({ path: info.outputPath(`materials-${width}.png`), fullPage: true });
-    await row.getByRole('button', { name: '수정', exact: true }).click();
-    const form = page.getByRole('group', { name: '자료 수정', exact: true });
-    await expect(form.getByLabel('자료명')).toHaveCSS('font-size', width <= 768 ? '16px' : '14px');
-    await form.getByRole('button', { name: '취소', exact: true }).click();
-    for (const name of ['학습 항목', '지식 평가', '상황 대응 평가']) {
+    for (const name of ['학습 정보', '지식 평가', '상황 대응 평가']) {
       await courseSection(page, name);
       const rail = page.locator('.course-editor-content .number-tabs:visible');
       await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
@@ -89,7 +80,7 @@ test('자료 목록·상단 탭·연결형 세로 번호의 네 화면 폭과 �
       await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
       await expect(panel.locator('h3')).toHaveCSS('font-size', '16px');
       const add = page.getByRole('button', {
-        name: name === '학습 항목' ? '학습 항목 추가' : '문항 추가',
+        name: name === '학습 정보' ? '교육 추가' : '문항 추가',
         exact: true,
       });
       const addBox = await add.boundingBox();
@@ -289,6 +280,7 @@ test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복�
       const course = structuredClone(state.courses.find((c) => c.id === 'demo-course-1')!);
       course.id = course.entityId = 'empty-course';
       course.learningItems = [];
+      course.materials = [];
       course.questions = [];
       course.practicalQuestions = [];
       state.courses.push(course);
@@ -298,22 +290,22 @@ test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복�
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/courses/empty-course');
-  await courseSection(page, '학습 항목');
+  await courseSection(page, '학습 정보');
   await expect(page.locator('.course-editor-content .number-tabs:visible')).toHaveCount(0);
   const empty = page.locator('.number-editor.is-empty:visible');
   expect(
     await empty.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
   ).toBe(1);
-  await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
-  await expect(page.getByLabel('학습 항목명')).toBeFocused();
-  await page.getByLabel('학습 항목명').fill('독립 수행');
-  await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
-  await page.getByLabel('학습 항목명').fill('작업 확인');
-  const rail = page.getByRole('tablist', { name: '학습 항목', exact: true });
+  await page.getByRole('button', { name: '교육 추가', exact: true }).click();
+  await expect(page.getByLabel('교육명')).toBeFocused();
+  await page.getByLabel('교육명').fill('독립 수행');
+  await page.getByRole('button', { name: '교육 추가', exact: true }).click();
+  await page.getByLabel('교육명').fill('작업 확인');
+  const rail = page.getByRole('tablist', { name: '학습 정보 항목', exact: true });
   await rail.getByRole('tab').last().press('ArrowUp');
-  await expect(page.getByLabel('학습 항목명')).toHaveValue('독립 수행');
+  await expect(page.getByLabel('교육명')).toHaveValue('독립 수행');
   await rail.getByRole('tab').first().press('ArrowDown');
-  await expect(page.getByLabel('학습 항목명')).toHaveValue('작업 확인');
+  await expect(page.getByLabel('교육명')).toHaveValue('작업 확인');
   await rail.getByRole('tab').last().press('ArrowUp');
   await page.getByRole('button', { name: '이 항목 삭제', exact: true }).click();
   await answerConfirmation(page, false);
@@ -329,7 +321,7 @@ test('빈 항목·문항의 전체 폭 안내, 추가 초점과 삭제 후 복�
       page.getByLabel(kind === '지식 평가' ? '문항' : '상황 설명', { exact: true }),
     ).toBeFocused();
     await page.getByLabel('문항', { exact: true }).fill(`${kind} 입력 보존`);
-    await courseSection(page, '학습 항목');
+    await courseSection(page, '학습 정보');
     await courseSection(page, kind);
     await expect(page.getByLabel('문항', { exact: true })).toHaveValue(`${kind} 입력 보존`);
   }

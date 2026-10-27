@@ -6,7 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { validateState } from "../src/integrity.ts";
 
 async function fixture(t: TestContext) {
@@ -96,7 +96,7 @@ test("과거 비교 자료는 schema13·파일 재시작·무결성 검사에서
   const reopened = await new JsonStore(file).load();
   try {
     const restored = reopened.snapshot();
-    assert.equal(restored.schemaVersion, 25);
+    assert.equal(restored.schemaVersion, 26);
     assert.deepEqual(restored.comparisons, before.comparisons);
     for (const field of [
       "attempts",

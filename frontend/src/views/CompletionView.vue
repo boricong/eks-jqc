@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
@@ -49,7 +50,7 @@ const back = computed(() =>
       <p>{{ record.snapshot?.learnerName || store.username(a.learnerId) }}</p>
       <h2>{{ record.snapshot?.title || store.course(record.courseId).title }}</h2>
       <CourseCategory :course="store.course(record.courseId)" />
-      <p>v{{ record.snapshot?.version || store.course(record.courseId).version }}</p>
+
       <p>
         {{
           (record.snapshot?.organizationPath || a.organizationPath).map((p) => p.name).join(' › ')
@@ -59,6 +60,9 @@ const back = computed(() =>
         수료일 {{ new Date(record.date).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) }}
       </p>
       <p class="small-label">발급번호 {{ record.id }}</p>
+      <p class="release-footer">
+        인증Set {{ releaseVersionLabel(record.snapshot || store.course(record.courseId)) }}
+      </p>
       <p v-if="record.snapshot?.source === 'migration'" class="muted">
         표기 정보는 이관 시 확보한 정보입니다.
       </p>

@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -5,10 +6,14 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CourseContentSchema, qualificationUseErrors } from "@eks/contracts";
+import {
+  CourseContentSchema,
+  qualificationUseErrors,
+  courseUseErrors,
+} from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import {
   courseContentHash,
   teamCourseModified,
@@ -17,9 +22,81 @@ import {
   exportMaster,
   readMaster,
   masterCandidate,
-} from "../src/master-data.ts";
+} from "./legacy-master-data.ts";
 import { migrateCommonCourses } from "../src/common-course-migration.ts";
 import { validateState } from "../src/integrity.ts";
+test("학습 정보 없는 공통인증Set 저장·팀 복사와 유형별 운영 준비", async (t) => {
+  const f = await fixture(t);
+  for (const type of ["auditee", "auditor"] as const) {
+    const content = CourseContentSchema.parse(seedState(true).courses[0]);
+    content.qualificationType = type;
+    content.learningItems = [];
+    content.materials = [];
+    if (type === "auditor") {
+      content.assessmentKinds = [];
+      content.questions = [];
+      content.practicalQuestions = [];
+      content.passScore = content.practicalPassScore = null;
+    }
+    const common = await f.call(
+      "operator-1",
+      "/system/common-courses",
+      content,
+    );
+    assert.deepEqual(common.learningItems, []);
+    assert.deepEqual(common.materials, []);
+    assert.equal(
+      common.readiness.some((m: string) => m.includes("필수 교육")),
+      type === "auditor",
+    );
+    if (type === "auditee") {
+      assert.deepEqual(common.readiness, []);
+      const base = await f.template(common);
+      const qualification = await f.register(base, common);
+      const copy = f.store
+        .snapshot()
+        .courses.find(
+          (c) =>
+            c.commonCourseSource?.id === common.id &&
+            c.lv1OrganizationId === qualification.lv1OrganizationId,
+        )!;
+      assert.deepEqual(courseUseErrors(copy), []);
+      assert.deepEqual(copy.learningItems, []);
+      assert.deepEqual(copy.materials, []);
+      assert.equal(teamCourseModified(copy), false);
+      assert.deepEqual(
+        courseUseErrors({
+          ...copy,
+          learningItems: [
+            {
+              id: "optional-education",
+              type: "ojt",
+              title: "선택 교육",
+              required: false,
+            },
+          ],
+        }),
+        [],
+      );
+    } else {
+      const optional = {
+        ...content,
+        learningItems: [
+          {
+            id: "optional-education",
+            type: "ojt" as const,
+            title: "선택 교육",
+            required: false,
+          },
+        ],
+      };
+      assert.ok(courseUseErrors(optional).some((m) => m.includes("필수 교육")));
+      optional.learningItems[0]!.required = true;
+      assert.deepEqual(courseUseErrors(optional), []);
+    }
+  }
+});
+
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-common-")),
     file = path.join(dir, "runtime/state.json");
@@ -172,7 +249,7 @@ test("공통 원본 권한·유형·기본 목록 수정 확인과 사용 이력
     reason: "재사용",
   });
 });
-test("등록은 독립 사본·고정 선택 범위를 생성하고 원본 변경은 이후 신규 등록에만 반영한다", async (t) => {
+test("등록은 독립 사본·고정 선택 범위를 생성하고 원본 변경은 새 사본 버전·신규 등록에 반영하며 과거 사본은 보존한다", async (t) => {
   const f = await fixture(t),
     c = await f.common(),
     base = await f.template(c),
@@ -218,7 +295,10 @@ test("등록은 독립 사본·고정 선택 범위를 생성하고 원본 변�
   await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
-    { ...q, courseIds: [copy2.id] },
+    {
+      ...f.store.snapshot().qualifications.find((x) => x.id === q.id)!,
+      courseIds: [copy2.id],
+    },
     422,
     "PUT",
   );
@@ -349,7 +429,7 @@ test("JSON10 왕복은 공통·특화·선택 범위와 무변경 Ready를 보�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(m.formatVersion, 14);
+  assert.equal(m.formatVersion, 15);
   assert.deepEqual(readMaster(m).payload, m.payload);
   const candidate = masterCandidate(readMaster(m).payload, 0, 0);
   assert.deepEqual(candidate.state.commonCourses, m.payload.commonCourses);
@@ -372,8 +452,8 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
   const before = structuredClone(old),
     org = f.store.organizations.snapshot(),
     r = migrateCommonCourses(old, org);
-  assert.equal(r.state.schemaVersion, 25);
-  assert.equal(r.state.revision, old.revision + 6);
+  assert.equal(r.state.schemaVersion, 26);
+  assert.equal(r.state.revision, old.revision + 7);
   assert.deepEqual(r.organizations, org);
   for (const key of [
     "users",
@@ -385,7 +465,10 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
     "certifications",
     "requests",
   ] as const)
-    assert.deepEqual(r.state[key], before[key]);
+    assert.deepEqual(
+      historicalContent(r.state[key]),
+      historicalContent(before[key]),
+    );
   assert.ok(r.state.courses.every((c) => c.category === "specialized"));
   assert.ok(
     r.state.qualifications.every((q) => !q.commonCourseEntityIds.length),

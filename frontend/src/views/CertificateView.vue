@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import PageHeading from '../components/PageHeading.vue';
 import PropertyList from '../components/PropertyList.vue';
 import { computed, ref, watch } from 'vue';
@@ -75,6 +76,9 @@ const evidence = computed(() => {
       completion,
       title: completion?.snapshot?.title || course?.title || '인증Set 기록 확인 필요',
       version: completion?.snapshot?.version || course?.version,
+      releaseVersion: completion?.snapshot
+        ? completion.snapshot.releaseVersion || { major: completion.snapshot.version, minor: 0 }
+        : course?.releaseVersion,
       retired: course?.operationalStatus === 'retired',
       attempts: (completion?.evidence || []).map((item) => ({
         kind: item.kind,
@@ -141,12 +145,14 @@ const back = computed(() =>
               }}
             </dd>
           </div>
-          <div>
-            <dt>적용 자격 버전</dt>
-            <dd>v{{ snapshot?.version || qualification?.version }}</dd>
-          </div>
         </PropertyList>
       </section>
+      <footer class="release-footer" aria-label="확정 당시 적용 기준">
+        <p>자격 {{ releaseVersionLabel(snapshot || qualification) }}</p>
+        <p v-for="item in evidence" :key="item.id">
+          {{ item.title }} {{ releaseVersionLabel(item) }}
+        </p>
+      </footer>
     </article>
     <p v-if="qualification?.description.includes('프로세스 검증용')" class="test-data-disclaimer">
       프로세스 검증용 가상 기준으로 발급된 시험 인증입니다. 실제 사내 직무 자격으로 사용하지
@@ -174,7 +180,8 @@ const back = computed(() =>
           >
             <summary>
               <span class="evidence-course-name"
-                >{{ item.title }}<small v-if="item.version">v{{ item.version }}</small></span
+                >{{ item.title
+                }}<small v-if="item.version">{{ releaseVersionLabel(item) }}</small></span
               ><StatusBadge v-if="item.completion" status="complete" /><StatusBadge
                 v-if="item.retired"
                 status="retired"

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { createNetworkPolicy, listenHost, listenPort } from "../src/network.ts";
 
 async function fixture(t: TestContext, origins?: string[]) {

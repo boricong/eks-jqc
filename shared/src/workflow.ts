@@ -1,3 +1,4 @@
+import { ReleaseVersionSchema, FrozenCriteriaSchema } from "./releases.ts";
 import {
   QualificationTypeSchema,
   type QualificationType,
@@ -45,6 +46,7 @@ export type QualificationVersionMode = z.infer<
   typeof QualificationVersionModeSchema
 >;
 export const QualificationPolicySnapshotSchema = z.object({
+  releaseVersion: ReleaseVersionSchema.optional(),
   id,
   entityId: id,
   version: z.number().int().positive(),
@@ -86,6 +88,7 @@ export const learningTypeLabels = {
   ojt: "현업 OJT",
 };
 export const AwardSnapshotSchema = z.object({
+  releaseVersion: ReleaseVersionSchema.optional(),
   learnerName: z.string().min(1),
   organizationPath: OrganizationPathSchema,
   title: z.string(),
@@ -93,6 +96,7 @@ export const AwardSnapshotSchema = z.object({
   source: z.enum(["issued", "migration"]),
 });
 export const PlanningTargetSchema = z.object({
+  releaseVersion: ReleaseVersionSchema.optional(),
   entityId: id,
   qualificationId: id,
   title: z.string(),
@@ -157,6 +161,7 @@ export const PlanScheduleSchema = z.object({
   goal: z.string().max(2000),
 });
 export const PersonalPlanSchema = z.object({
+  frozenCriteria: FrozenCriteriaSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
   qualificationPolicySnapshot: QualificationPolicySnapshotSchema.optional(),
   id,

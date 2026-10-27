@@ -8,14 +8,14 @@ import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations, userView } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import {
   effectiveRequirements,
   saveRequirements,
   previewPlanningRequest,
 } from "../src/organization-requirements.ts";
 import { migrateOrganizationNeeds } from "../src/organization-requirement-migration.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 import { linkFixtureTemplates } from "./template-helpers.ts";
 const root = "org-photo",
   child = "org-photo-fmg",
@@ -335,7 +335,7 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   const s = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
     file = exportMaster(s, org, new Date().toISOString());
-  assert.equal(file.formatVersion, 14);
+  assert.equal(file.formatVersion, 15);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   old.formatVersion = 12;
@@ -357,8 +357,8 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   delete raw.organizationQualificationRequirements;
   const before = structuredClone(raw),
     m = migrateOrganizationNeeds(raw, org);
-  assert.equal(m.state.schemaVersion, 25);
-  assert.equal(m.state.revision, raw.revision + 3);
+  assert.equal(m.state.schemaVersion, 26);
+  assert.equal(m.state.revision, raw.revision + 4);
   assert.deepEqual(m.state.planningRequests, before.planningRequests);
   assert.deepEqual(migrateOrganizationNeeds(m.state, org).state, m.state);
   assert.deepEqual(raw, before);

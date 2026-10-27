@@ -103,10 +103,7 @@ async function addUser(page: Page, name: string, role: string, root = 'org-etch'
   await expect(page.locator('tbody')).toContainText(name);
 }
 
-test('운영자 조직·사용자 편집, 공동 관리자 UI, 초기화 후 메타정보 보존', async ({
-  page,
-  backend,
-}) => {
+test('운영자 조직·사용자 편집, 공동 관리자 UI와 메타정보 보존', async ({ page, backend }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
@@ -175,12 +172,6 @@ test('운영자 조직·사용자 편집, 공동 관리자 UI, 초기화 후 메
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const master = await readFile(backend.store.organizations.file, 'utf8'),
     users = backend.store.snapshot().users;
-  await page.getByRole('link', { name: '테스트 관리', exact: true }).click();
-  await page.getByLabel('초기화 대상', { exact: true }).selectOption('org-photo');
-  await page.getByRole('button', { name: '진행 내역 초기화', exact: true }).click();
-  await page.getByLabel('확인을 위해 ‘초기화’를 입력해 주세요.').fill('초기화');
-  await page.getByRole('button', { name: '초기화 실행', exact: true }).click();
-  await expect(page.getByText('초기화할 진행 내역이 없습니다.', { exact: true })).toBeVisible();
   expect(await readFile(backend.store.organizations.file, 'utf8')).toBe(master);
   expect(backend.store.snapshot().users).toEqual(users);
   await page.getByRole('link', { name: '조직 관리', exact: true }).click();

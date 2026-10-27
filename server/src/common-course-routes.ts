@@ -59,7 +59,18 @@ export function registerCommonCourseRoutes(
           (s) => systemOperator(actor(r, s)),
           (s) =>
             action === "create" || action === "update"
-              ? saveCommonCourse(s, u.id, target, r.body)
+              ? (() => {
+                  const { review, ...content } = r.body as any;
+                  demand(
+                    review?.stateRevision === s.revision &&
+                      review?.organizationRevision ===
+                        store.organizations.snapshot().revision,
+                    409,
+                    "검토 후 연결이나 기준이 변경되었습니다. 다시 검토해 주세요.",
+                    "REVISION_CONFLICT",
+                  );
+                  return saveCommonCourse(s, u.id, target, content);
+                })()
               : changeCommonCourseStatus(s, u.id, target!, action, r.body),
           { action: "common-course." + action, preserveBackup: true },
         );

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import { kstDate, type Assignment, type PlanningRequest } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
@@ -236,7 +237,7 @@ onBeforeUnmount(() => {
           </template>
           <template v-else>
             <span class="small-label"
-              >v{{ card.qualification.version }} · 필수 인증Set {{ card.total }}개</span
+              >{{ releaseVersionLabel(card.qualification) }} · 필수 인증Set {{ card.total }}개</span
             >
             <h3>{{ card.qualification.title }}</h3>
             <p class="home-qualification-description">

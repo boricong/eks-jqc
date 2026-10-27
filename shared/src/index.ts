@@ -1,3 +1,12 @@
+import {
+  releaseVersionLabel,
+  ReleaseVersionSchema,
+  ReleaseInfoSchema,
+  FrozenCriteriaSchema,
+  CommonUpdateSchema,
+  type ReleasePropagation,
+} from "./releases.ts";
+export * from "./releases.ts";
 import { AuditorCriteriaSchema } from "./auditor.ts";
 import { OrganizationQualificationRequirementSchema } from "./organization-requirements.ts";
 export * from "./organization-requirements.ts";
@@ -61,7 +70,6 @@ import {
   OrganizationPathSchema,
   RequestRecordSchema,
   type OrganizationEntry,
-  type ResetScope,
 } from "./organizations.ts";
 export * from "./organizations.ts";
 
@@ -169,6 +177,8 @@ export const MaterialSchema = z.object({
 });
 export type LearningMaterial = z.infer<typeof MaterialSchema>;
 const revision = {
+  releaseVersion: ReleaseVersionSchema.nullable().optional(),
+  releaseInfo: ReleaseInfoSchema.optional(),
   id,
   catalogCode: z.string().max(160).optional(),
   lv1OrganizationId: id,
@@ -220,6 +230,8 @@ export const CourseContentSchema = z.object({
 });
 export type CourseContent = z.infer<typeof CourseContentSchema>;
 export const CommonCourseSchema = CourseContentSchema.extend({
+  releaseVersion: ReleaseVersionSchema.optional(),
+  headReleaseId: z.string().optional(),
   id,
   revision: z.number().int().positive(),
   operationalStatus: z.enum(["active", "retired"]),
@@ -229,6 +241,13 @@ export const CommonCourseSchema = CourseContentSchema.extend({
   updatedBy: id,
 });
 export type CommonCourse = z.infer<typeof CommonCourseSchema>;
+export const CommonCourseReleaseSchema = CourseContentSchema.extend({
+  id: z.string(),
+  commonCourseId: z.string(),
+  sequence: z.number().int().positive(),
+  releaseVersion: ReleaseVersionSchema,
+  releaseInfo: ReleaseInfoSchema,
+});
 export const CourseSchema = CourseContentSchema.extend({
   ...revision,
   category: z.enum(["common", "specialized"]).default("specialized"),
@@ -237,6 +256,8 @@ export const CourseSchema = CourseContentSchema.extend({
       id,
       revision: z.number().int().positive(),
       baselineHash: z.string().regex(/^[a-f0-9]{64}$/),
+      releaseId: z.string().optional(),
+      releaseVersion: ReleaseVersionSchema.optional(),
     })
     .optional(),
   operationalStatus: z.enum(["active", "retired"]),
@@ -280,6 +301,13 @@ export function qualificationForRecord(
   };
 }
 export interface CatalogItemSavePreview {
+  propagation?: ReleasePropagation;
+  releaseChange?: {
+    kind: "none" | "initial" | "minor" | "major";
+    before: string;
+    after: string;
+    reasons: string[];
+  };
   candidate: Course | Qualification;
   changes: { label: string; before: string; after: string }[];
   unchanged: boolean;
@@ -289,7 +317,12 @@ export interface CatalogItemSavePreview {
   stateRevision: number;
   organizationRevision: number;
   readiness: string[];
-  linkedQualifications: { id: string; title: string; version: number | null }[];
+  linkedQualifications: {
+    id: string;
+    title: string;
+    version: number | null;
+    releaseVersion?: { major: number; minor: number } | null;
+  }[];
   versionPolicy?: {
     changeKind: "none" | "minor" | "major";
     requiresNewVersion: boolean;
@@ -335,6 +368,7 @@ export const EnrollmentSchema = z.object({
   courseId: id,
 });
 export const AssignmentSchema = z.object({
+  frozenCriteria: FrozenCriteriaSchema.optional(),
   auditor: AuditorAssignmentSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
   qualificationPolicySnapshot: QualificationPolicySnapshotSchema.optional(),
@@ -384,6 +418,7 @@ export const CompletionSchema = z.object({
 });
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
+  frozenCriteria: FrozenCriteriaSchema.optional(),
   auditor: AuditorCertificationSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
   id,
@@ -465,11 +500,13 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.literal(25),
+  schemaVersion: z.union([z.literal(25), z.literal(26)]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
     .default([]),
   commonCourses: z.array(CommonCourseSchema),
+  commonCourseReleases: z.array(CommonCourseReleaseSchema).default([]),
+  commonUpdates: z.array(CommonUpdateSchema).default([]),
   auditorPrograms: z.array(AuditorProgramSchema).default([]),
   qualificationTemplates: z.array(QualificationTemplateSchema),
   revision: z.number().int().nonnegative(),
@@ -507,25 +544,6 @@ export const LegacyStateSchema = StateSchema.extend({
   ),
 });
 export type State = z.infer<typeof StateSchema>;
-export interface ProgressSummary {
-  revision: number;
-  scope: ResetScope;
-  counts: {
-    subjectiveResponses: number;
-    objectiveAttempts: number;
-    practicalAttempts: number;
-    learningRecords: number;
-    learningChecklists: number;
-    notifications: number;
-    completions: number;
-    certifications: number;
-    comparisons: number;
-    renewals: number;
-    certificationPeriods: number;
-    credentialEvents: number;
-  };
-}
-
 // Client projections contain only the fields accessible to the selected actor.
 export interface Attempt extends Partial<Draft> {
   id: string;
@@ -649,7 +667,7 @@ export function courseErrors(course: CourseContent): string[] {
       course.learningItems.length ||
     course.learningItems.some((i) => !i.title.trim())
   )
-    errors.push("학습 항목의 이름·식별자를 확인해 주세요.");
+    errors.push("학습 정보 · 교육의 이름·식별자를 확인해 주세요.");
   const all = [...course.questions, ...course.practicalQuestions];
   if (new Set(all.map((q) => q.id)).size !== all.length)
     errors.push("항목 식별자가 중복되었습니다.");
@@ -659,7 +677,7 @@ export function courseErrors(course: CourseContent): string[] {
     errors.push("자료 식별자가 중복되었습니다.");
   course.materials.forEach((m, i) => {
     if (!m.title.trim() || (m.type === "text" ? !m.content.trim() : !m.url))
-      errors.push(`${i + 1}번째 학습자료의 이름과 내용을 확인해 주세요.`);
+      errors.push(`학습 정보 · 자료 ${i + 1}번의 이름과 내용을 확인해 주세요.`);
   });
   for (const kind of requiredKinds(course)) {
     const score = assessmentPassScore(course, kind),
@@ -685,8 +703,7 @@ export function courseErrors(course: CourseContent): string[] {
   }
   return errors;
 }
-// Publication/new plans require a learner-recordable prerequisite; legacy
-// published versions keep their original structure for existing assignments.
+// Auditee completion uses assessments; only Auditor requires self-confirmable education.
 export function courseUseErrors(course: CourseContent): string[] {
   return [
     ...courseErrors(course),
@@ -695,8 +712,9 @@ export function courseUseErrors(course: CourseContent): string[] {
     !course.assessmentKinds.includes("objective")
       ? ["상황 대응 평가를 사용하려면 지식 평가도 필수로 설정해 주세요."]
       : []),
-    ...(!course.learningItems.some((item) => item.required)
-      ? ["필수 학습 항목을 하나 이상 설정해 주세요."]
+    ...(course.qualificationType === "auditor" &&
+    !course.learningItems.some((item) => item.required)
+      ? ["운영하려면 필수 교육을 하나 이상 설정해 주세요."]
       : []),
   ];
 }
@@ -756,7 +774,7 @@ export function qualificationUseErrors(
     ...qualificationReadinessErrors(q, courses),
     ...retiredCourses(q, courses).map(
       (c) =>
-        `운영 종료된 인증Set ${c.title} v${c.version}을 제거하거나 대체해 주세요.`,
+        `운영 종료된 인증Set ${c.title} ${releaseVersionLabel(c)}을 제거하거나 대체해 주세요.`,
     ),
   ];
 }
@@ -771,7 +789,6 @@ export function assessmentPassScore(course: CourseContent, kind: Kind) {
   return kind === "objective" ? course.passScore : course.practicalPassScore;
 }
 
-export * from "./master-data.ts";
 export * from "./dashboard.ts";
 
 export const courseCategoryLabels = {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import PropertyList from './PropertyList.vue';
 import {
   credentialCurrent,
@@ -35,7 +36,6 @@ const validity = computed(() => {
       <div class="learning-hero-title">
         <h1>{{ qualification.title }}</h1>
         <div class="learning-hero-meta">
-          <span class="small-label">{{ qualificationVersionLabel(qualification.version) }}</span>
           <StatusBadge
             v-if="assignment.excludedReason || assignment.certifiedAt"
             :status="assignment.excludedReason ? 'excluded' : 'certified'"
@@ -115,5 +115,6 @@ const validity = computed(() => {
         }}
       </p>
     </section>
+    <p class="release-footer">{{ releaseVersionLabel(qualification) }}</p>
   </section>
 </template>

@@ -1,3 +1,10 @@
+import {
+  criteriaFingerprint,
+  freezeCriteria,
+  releaseInfo,
+  releaseNumber,
+} from "./releases.ts";
+import { latestQualification, nextReleaseVersion } from "@eks/contracts";
 import { auditorTemplateErrors } from "./auditor-pool.ts";
 import {
   previewPlanningRequest,
@@ -301,6 +308,12 @@ export function executeWorkflow(
           entityId: previous?.entityId || id,
           parentId: previous?.version != null ? previous.id : undefined,
           version: ready ? null : maximumVersion + 1,
+          releaseVersion: ready
+            ? null
+            : previous?.version
+              ? nextReleaseVersion(releaseNumber(previous), "major")
+              : { major: 1, minor: 0 },
+          releaseInfo: releaseInfo("initial", u.id, "팀 자격 등록"),
           revision: 1,
           lv1OrganizationId: scope,
           qualificationType: template.qualificationType,
@@ -704,7 +717,36 @@ export function executeWorkflow(
     );
     expected(p, body.revision);
     const before = structuredClone(p);
-    if (action === "plan.delete" || action === "plan.schedule-defaults") {
+    if (action === "plan.review-criteria") {
+      demand(
+        p.status === "draft",
+        409,
+        "확정 계획은 기준을 변경할 수 없습니다.",
+      );
+      const latest = latestQualification(s, p.lv1OrganizationId, q.entityId);
+      demand(
+        latest &&
+          body.qualificationId === latest.id &&
+          body.criteriaToken === criteriaFingerprint(s, latest),
+        409,
+        "다시 변경된 기준을 확인해 주세요.",
+        "CRITERIA_CHANGED",
+      );
+      const errors = planPolicyErrors(
+        s,
+        organizations,
+        u,
+        { ...p, qualificationId: latest.id },
+        at,
+      );
+      demand(!errors.length, 409, errors.join(" · "), "POLICY_CHANGED");
+      p.qualificationId = latest.id;
+      p.qualificationMetadata = metadata(latest);
+      delete p.qualificationPolicySnapshot;
+    } else if (
+      action === "plan.delete" ||
+      action === "plan.schedule-defaults"
+    ) {
       demand(
         p.status === "draft" &&
           !p.assignmentId &&
@@ -791,6 +833,12 @@ export function executeWorkflow(
     } else if (action === "plan.complete") {
       demand(p.status === "draft", 409, "이미 완료한 계획입니다.");
       demand(
+        body.criteriaToken === criteriaFingerprint(s, q),
+        409,
+        "최종 확인 기준이 변경되었습니다. 다시 검토해 주세요.",
+        "CRITERIA_CHANGED",
+      );
+      demand(
         u.organizationActive,
         422,
         "사용 중인 조직에서 계획을 완료할 수 있습니다.",
@@ -832,6 +880,7 @@ export function executeWorkflow(
         qualificationId: q.id,
         qualificationMetadata: metadata(currentQualification(s, q)),
         qualificationPolicySnapshot: qualificationPolicySnapshot(q),
+        frozenCriteria: freezeCriteria(s, q, u.id, "plan", at),
         learnerId: u.id,
         ownerAdminId: request.requestedBy,
         createdBy: u.id,
@@ -847,6 +896,7 @@ export function executeWorkflow(
       );
       Object.assign(p, {
         status: "completed",
+        frozenCriteria: freezeCriteria(s, q, u.id, "plan", at),
         qualificationMetadata: metadata(currentQualification(s, q)),
         qualificationPolicySnapshot: qualificationPolicySnapshot(q),
         completedAt: at,

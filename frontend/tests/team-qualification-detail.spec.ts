@@ -122,8 +122,9 @@ test('정확한 버전 구성만 조회하고 체크·검색·입력·초점을 
     await button.click();
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('region', { name: '기본정보' })).toBeInViewport();
-    await expect(dialog).toContainText(`v${version} 자료 원문`);
     await expect(dialog).toContainText(`v${version} 학습 범위`);
+    await dialog.getByRole('tab', { name: /^자료 1/ }).click();
+    await expect(dialog).toContainText(`v${version} 자료 원문`);
     await expect(dialog.getByRole('region', { name: '평가 요약' })).toContainText(`${version}문항`);
     await expect(dialog).toContainText(version === 1 ? '합격 기준 70% 이상' : '합격 기준 미정');
     if (version === 1) await expect(dialog).toContainText('운영 종료');
@@ -194,8 +195,7 @@ test('빈 구성·삭제 자격의 읽기 전용 조회와 버전 이동 시 초
   await expect(page.getByRole('button', { name: '저장', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '빈 인증Set v1 내용 조회' }).click();
   const dialog = page.getByRole('dialog', { name: '인증Set 내용 조회' });
-  await expect(dialog).toContainText('등록된 학습자료가 없습니다.');
-  await expect(dialog).toContainText('등록된 학습 항목이 없습니다.');
+  await expect(dialog).toContainText('등록된 학습 정보가 없습니다.');
   await expect(dialog.getByRole('region', { name: '평가 요약' })).toContainText(
     '설정된 평가가 없습니다.',
   );
@@ -293,6 +293,7 @@ test('긴 정보·네 화면 폭의 구역 정렬·글꼴·모달 본문 스크�
     const dialog = page.getByRole('dialog', { name: '인증Set 내용 조회' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('region', { name: '기본정보' })).toBeInViewport();
+    await dialog.getByRole('tab', { name: /^자료 1/ }).click();
     const geometry = await dialog.evaluate((el) => {
       const rect = el.getBoundingClientRect(),
         body = el.querySelector('.dialog-body')!;

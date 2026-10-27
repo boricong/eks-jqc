@@ -294,6 +294,9 @@ export function dashboardReader(
       ...(pool.has(entityId)
         ? {
             currentQualificationId: pool.get(entityId)!.qualificationId,
+            currentReleaseVersion: qualifications.get(
+              pool.get(entityId)!.qualificationId,
+            )?.releaseVersion,
             currentVersion: qualifications.get(
               pool.get(entityId)!.qualificationId,
             )?.version,
@@ -546,7 +549,10 @@ export function dashboardReader(
       title: option.title,
       registered: option.registered,
       ...(option.currentVersion
-        ? { currentVersion: option.currentVersion }
+        ? {
+            currentVersion: option.currentVersion,
+            currentReleaseVersion: option.currentReleaseVersion,
+          }
         : {}),
       efficacy: cert ? effectiveCredentialStatus(cert, at) : "none",
       progress,
@@ -567,6 +573,7 @@ export function dashboardReader(
             recordQualificationId: q.id,
             recordTitle: record?.qualificationMetadata?.title || q.title,
             recordVersion: numberedQualificationVersion(q),
+            recordReleaseVersion: q.releaseVersion,
           }
         : {}),
       ...(cert
@@ -695,6 +702,7 @@ export function dashboardReader(
         recordTitle:
           c.qualificationMetadata?.title || c.snapshot?.title || q.title,
         recordVersion: numberedQualificationVersion(q),
+        recordReleaseVersion: q.releaseVersion,
         certificationId: c.id,
         assignmentId: a.id,
         efficacy,
@@ -1129,6 +1137,7 @@ export function dashboardReader(
           entityId: q.entityId,
           title: a.qualificationMetadata?.title || q.title,
           version: numberedQualificationVersion(q),
+          releaseVersion: q.releaseVersion,
           assignedOn: kstDate(a.assignedAt),
           organizationPath: a.organizationPath,
           currentOrganization:
@@ -1238,6 +1247,7 @@ export function dashboardReader(
             ).length,
             title: done?.snapshot?.title || course.title,
             version: course.version,
+            releaseVersion: course.releaseVersion,
             completed: !!done,
             ...(done ? { completedOn: kstDate(done.date) } : {}),
             objective: state("objective"),

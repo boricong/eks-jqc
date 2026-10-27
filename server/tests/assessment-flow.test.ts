@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -16,7 +17,7 @@ import {
 } from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateAssessmentFlow } from "../src/assessment-flow-migration.ts";
 const clock = "2028-01-31T01:00:00.000Z";
 async function fixture(t: TestContext) {
@@ -326,8 +327,8 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 25);
-  assert.equal(next.state.revision, raw.revision + 16);
+  assert.equal(next.state.schemaVersion, 26);
+  assert.equal(next.state.revision, raw.revision + 17);
   for (const key of [
     "attempts",
     "completions",
@@ -335,7 +336,10 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
     "assignments",
     "enrollments",
   ] as const)
-    assert.deepEqual(next.state[key], raw[key]);
+    assert.deepEqual(
+      historicalContent(next.state[key]),
+      historicalContent(raw[key]),
+    );
   assert.deepEqual(
     next.state.certifications[0]!.evidence,
     raw.certifications[0].evidence,

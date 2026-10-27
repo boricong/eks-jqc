@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import PropertyList from './PropertyList.vue';
 import { ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
@@ -319,7 +320,13 @@ const eventLabels: Record<string, string> = {
                     ? '본인 기준 확인 갱신'
                     : '종합평가 재인증'
               }}
-              · 적용 v{{ p.qualificationVersion }}</strong
+              · 적용
+              {{
+                releaseVersionLabel({
+                  releaseVersion: p.releaseVersion,
+                  version: p.qualificationVersion,
+                })
+              }}</strong
             >
             <p>
               {{ p.startsOn }} ~
@@ -344,7 +351,7 @@ const eventLabels: Record<string, string> = {
                 {{ dates(renewalProof(p.renewalId)!.confirmedAt) }} 본인 확인
               </p>
               <article v-for="course in renewalProof(p.renewalId)!.courses" :key="course.id">
-                <h4>{{ course.title }} · v{{ course.version }}</h4>
+                <h4>{{ course.title }} · {{ releaseVersionLabel(course) }}</h4>
                 <ul>
                   <li v-for="item in course.learningItems.filter((i) => i.required)" :key="item.id">
                     {{ item.title }}
@@ -471,9 +478,8 @@ const eventLabels: Record<string, string> = {
     <template v-if="data">
       <template v-if="mode === 'renew'"
         ><h3>
-          {{ data.renewal.appliedQualification?.title }} · v{{
-            data.renewal.appliedQualification?.version
-          }}
+          {{ data.renewal.appliedQualification?.title }} ·
+          {{ releaseVersionLabel(data.renewal.appliedQualification) }}
         </h3>
         <PropertyList class="lifecycle-facts">
           <div>
@@ -495,7 +501,7 @@ const eventLabels: Record<string, string> = {
         >
           <p>{{ data.renewal.auditorCriteria.description }}</p>
           <article v-for="course in data.renewal.auditorCriteria.courses" :key="course.id">
-            <h4>{{ course.title }} · v{{ course.version }}</h4>
+            <h4>{{ course.title }} · {{ releaseVersionLabel(course) }}</h4>
             <ul>
               <li v-for="item in course.learningItems.filter((i) => i.required)" :key="item.id">
                 {{ item.title }}

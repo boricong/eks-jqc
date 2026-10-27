@@ -34,7 +34,7 @@ export function migrateAutomaticCriteria(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (![17, 18, 19, 20, 21, 22, 23, 24, 25].includes(state?.schemaVersion))
+  if (![17, 18, 19, 20, 21, 22, 23, 24, 25, 26].includes(state?.schemaVersion))
     throw new Error("최신 기준 이관에는 업무17·조직2가 필요합니다.");
   const actorId = state.users.find((u: any) =>
     u.roles.includes("system_operator"),

@@ -1,3 +1,4 @@
+import { releaseFixture } from "./release-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import {
   linkFixtureTemplates,
@@ -20,7 +21,7 @@ import type { State, Kind, Course } from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
 import { validateState } from "../src/integrity.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { organizationEntries } from "@eks/contracts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { migrateState } from "../src/migration.ts";
@@ -43,8 +44,8 @@ async function secondOrganization(f: Fixture) {
     "org-etch-equipment-1",
   );
   const ft = await createUser(f, "Etch FT", ["learner"], "org-etch");
-  const course = await f.call("admin-2", "/courses", {});
-  await f.call(
+  let course = await f.call("admin-2", "/courses", {});
+  course = await f.call(
     "admin-2",
     `/courses/${course.id}`,
     {
@@ -369,52 +370,6 @@ test("쓰기 대기열에서 최신 역할을 다시 검사", async (t) => {
   await staleQueued;
   release();
   await Promise.all([first, demote, stale]);
-});
-
-test("선택 Lv1 초기화가 다른 조직·조직 JSON·소속·운영 이력을 보존", async (t) => {
-  const f = await fixture(t),
-    other = await secondOrganization(f);
-  await start(f, eid, "practical");
-  const otherAttempt = await start(
-    f,
-    other.enrollment,
-    "practical",
-    other.learner,
-  );
-  await saved(f, otherAttempt.id, true, other.ft);
-  const before = f.store.snapshot(),
-    master = await readFile(f.store.organizations.file, "utf8");
-  const preview = await f.call(
-    "operator-1",
-    "/testing/progress?scope=organization&lv1OrganizationId=org-photo",
-  );
-  await f.call("operator-1", "/testing/progress/reset", {
-    revision: preview.revision,
-    confirmation: "초기화",
-    scope: preview.scope,
-  });
-  const after = f.store.snapshot();
-  assert.deepEqual(
-    after.attempts,
-    before.attempts.filter((a) => a.enrollmentId === other.enrollment),
-  );
-  assert.deepEqual(
-    after.requests.filter((r) => r.lv1OrganizationId === "org-etch"),
-    before.requests.filter((r) => r.lv1OrganizationId === "org-etch"),
-  );
-  assert.deepEqual(after.users, before.users);
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), master);
-  assert.deepEqual(
-    after.audits.filter((e) => e.action.startsWith("user.")),
-    before.audits.filter((e) => e.action.startsWith("user.")),
-  );
-  await f.call("operator-1", "/testing/progress", undefined, 422);
-  await f.call(
-    "operator-1",
-    "/testing/progress/reset",
-    { revision: after.revision, confirmation: "초기화" },
-    422,
-  );
 });
 
 test("조직 백업·실패 보존·일반 데이터 복구가 조직 파일을 변경하지 않음", async (t) => {
@@ -779,7 +734,7 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
   await f.call("admin-1", `/courses/${draft.id}`, command, 403, key, "DELETE");
 });
 
-test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·자격 개정·재개·초기화", async (t) => {
+test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·자격 개정·재개", async (t) => {
   const f = await fixture(t);
   // Finish the original assignment before retirement, and assign a new untouched one.
   for (const e of f.store.snapshot().enrollments)
@@ -801,7 +756,13 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     learnerId: "learner-2",
     ftId: "ft-1",
   });
-  const v2 = await f.call("admin-1", "/courses/demo-course-1/versions", {});
+  const v2 = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "courses", "demo-course-1"),
+    200,
+    undefined,
+    "PUT",
+  );
   await f.call(
     "admin-1",
     `/courses/${v2.id}`,
@@ -819,7 +780,14 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   assert.deepEqual(f.store.snapshot().certifications, preserved.certifications);
   assert.deepEqual(f.store.snapshot().completions, preserved.completions);
   assert.deepEqual(f.store.snapshot().attempts, preserved.attempts);
-  assert.deepEqual(f.store.snapshot().qualifications, preserved.qualifications);
+  assert.deepEqual(
+    f.store
+      .snapshot()
+      .qualifications.filter((q) =>
+        preserved.qualifications.some((p) => p.id === q.id),
+      ),
+    preserved.qualifications,
+  );
   await f.call(
     "admin-1",
     "/assignments",
@@ -828,8 +796,14 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   );
   const nextQ = await f.call(
     "admin-1",
-    "/qualifications/demo-qualification/versions",
-    {},
+    ...releaseFixture(
+      f.store.snapshot(),
+      "qualifications",
+      "demo-qualification",
+    ),
+    200,
+    undefined,
+    "PUT",
   );
   let q = f.store.snapshot().qualifications.find((q) => q.id === nextQ.id)!;
   await f.call(
@@ -882,7 +856,13 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
   assert.ok(
     f.store.snapshot().certifications.some((c) => c.assignmentId === a.id),
   );
-  const clone = await f.call("admin-1", "/courses/demo-course-1/versions", {});
+  const clone = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "courses", "demo-course-1"),
+    200,
+    undefined,
+    "PUT",
+  );
   const cloned = f.store.snapshot().courses.find((c) => c.id === clone.id)!;
   assert.equal(cloned.operationalStatus, "active");
   assert.equal("status" in cloned, false);
@@ -905,33 +885,20 @@ test("선택 버전 운영 종료·기존 배정 완료·인증 근거 보존·�
     undefined,
   );
   await planAssignment(f, "admin-1", {
-    qualificationId: q.id,
+    qualificationId: f.store
+      .snapshot()
+      .qualifications.filter((x) => x.entityId === q.entityId)
+      .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!.id,
     learnerId: await createUser(f, "재개 후 대상자", ["learner"]),
     ftId: "ft-1",
   });
   await lifecycle(f, "demo-course-1", "retirement");
-  const courseStates = f.store.snapshot().courses,
-    audits = f.store
-      .snapshot()
-      .audits.filter((e) => e.action.startsWith("course."));
-  orgBefore = await readFile(f.store.organizations.file, "utf8");
-  await f.call("operator-1", "/testing/progress/reset", {
-    scope: { type: "all" },
-    confirmation: "초기화",
-    revision: f.store.snapshot().revision,
-  });
-  assert.deepEqual(f.store.snapshot().courses, courseStates);
-  assert.deepEqual(
-    f.store.snapshot().audits.filter((e) => e.action.startsWith("course.")),
-    audits,
-  );
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), orgBefore);
 });
 
 test("미참조 인증Set 삭제와 종료 상태 위조 방지", async (t) => {
   const f = await fixture(t);
-  const draft = await f.call("admin-1", "/courses", {});
-  await f.call(
+  let draft = await f.call("admin-1", "/courses", {});
+  draft = await f.call(
     "admin-1",
     `/courses/${draft.id}`,
     {
@@ -1296,15 +1263,27 @@ test("기준 버전 계보·사용 등록 검증·고정·공지 영속 저장",
     randomUUID(),
     "PUT",
   );
-  const v2 = await f.call("admin-1", `/courses/${original.id}/versions`, {}),
-    v3 = await f.call("admin-1", `/courses/${original.id}/versions`, {});
+  const v2 = await f.call(
+      "admin-1",
+      ...releaseFixture(f.store.snapshot(), "courses", original.id),
+      200,
+      undefined,
+      "PUT",
+    ),
+    v3 = await f.call(
+      "admin-1",
+      ...releaseFixture(f.store.snapshot(), "courses", original.id),
+      200,
+      undefined,
+      "PUT",
+    );
   const s = f.store.snapshot();
   assert.equal(s.courses.find((c) => c.id === v2.id)!.version, 2);
   assert.equal(s.courses.find((c) => c.id === v3.id)!.version, 3);
-  const draft = s.courses.find((c) => c.id === v2.id)!;
+  const draft = s.courses.find((c) => c.id === v3.id)!;
   await f.call(
     "admin-1",
-    `/courses/${v2.id}`,
+    `/courses/${v3.id}`,
     {
       ...draft,
       materials: [
@@ -1421,166 +1400,6 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
     const result = await submit(f, t.id);
     assert.equal(result.result, score === 66 ? "passed" : "failed");
   }
-});
-
-test("전체 진행 초기화·설정 보존·사전 백업·재시도·첫 회차 재시작", async (t) => {
-  const f = await fixture(t);
-  const practical = await start(f, eid, "practical");
-  await saved(f, practical.id);
-
-  await saved(f, practical.id, true, "ft-2");
-  await submit(f, practical.id, "ft-2");
-  await finish(f, "assignment-1:demo-course-2", "objective");
-  await finish(
-    f,
-    "assignment-1:demo-course-2",
-    "practical",
-    true,
-    "learner-1",
-    "ft-2",
-  );
-  const original = f.store.snapshot();
-  assert.equal(original.certifications.length, 1);
-  assert.ok(original.attempts.length > 0);
-  const preview = await f.call("operator-1", "/testing/progress?scope=all");
-  assert.deepEqual(preview.counts, {
-    renewals: 0,
-    certificationPeriods: 1,
-    credentialEvents: 1,
-    subjectiveResponses: 0,
-    objectiveAttempts: 2,
-    practicalAttempts: 3,
-    learningRecords: 0,
-    learningChecklists: 0,
-    notifications: 3,
-    completions: 2,
-    certifications: 1,
-    comparisons: 0,
-  });
-  const key = randomUUID(),
-    body = {
-      revision: preview.revision,
-      confirmation: "초기화",
-      scope: { type: "all" },
-    };
-  const reset = await f.call(
-    "operator-1",
-    "/testing/progress/reset",
-    body,
-    200,
-    key,
-  );
-  const cleared = f.store.snapshot();
-  for (const field of [
-    "attempts",
-    "completions",
-    "certifications",
-    "comparisons",
-  ] as const)
-    assert.deepEqual(cleared[field], []);
-  for (const field of [
-    "users",
-    "courses",
-    "qualifications",
-    "assignments",
-    "enrollments",
-    "notices",
-  ] as const)
-    assert.deepEqual(cleared[field], original[field]);
-  assert.equal(
-    cleared.requests.filter((r) => r.action === "progress.reset").length,
-    1,
-  );
-  assert.ok(
-    cleared.requests.every(
-      (r) =>
-        !r.action?.startsWith("attempt.") &&
-        !r.action?.startsWith("comparison."),
-    ),
-  );
-  assert.ok(cleared.audits.some((a) => a.action === "progress.reset"));
-  assert.ok(
-    cleared.audits.every(
-      (a) =>
-        !a.action.startsWith("attempt.") &&
-        !a.action.startsWith("comparison.") &&
-        !a.details.archivedDrafts,
-    ),
-  );
-  const backups = (await readdir(f.store.backupDir)).filter((name) =>
-    name.startsWith("before-reset-"),
-  );
-  assert.equal(backups.length, 1);
-  assert.deepEqual(
-    JSON.parse(
-      await readFile(path.join(f.store.backupDir, backups[0]!), "utf8"),
-    ),
-    original,
-  );
-  await f.call(
-    "ft-2",
-    `/attempts/${practical.id}/submit`,
-    { revision: 1 },
-    404,
-  );
-  const fresh = await start(f, eid, "objective");
-  assert.notEqual(fresh.id, practical.id);
-  assert.equal(f.store.snapshot().attempts[0]!.round, 1);
-  // A delayed retry of the reset must not clear the newly started attempt.
-  assert.deepEqual(
-    await f.call("operator-1", "/testing/progress/reset", body, 200, key),
-    reset,
-  );
-  assert.equal(f.store.snapshot().attempts.length, 1);
-  await f.restart();
-  assert.equal(f.store.snapshot().attempts[0]!.id, fresh.id);
-});
-
-test("진행 초기화의 운영자 권한·명시적 확인·동시 변경 검사", async (t) => {
-  const f = await fixture(t);
-  const preview = await f.call("operator-1", "/testing/progress?scope=all");
-  const body = {
-    revision: preview.revision,
-    confirmation: "초기화",
-    scope: { type: "all" },
-  };
-  for (const actor of ["learner-1", "ft-1", "admin-1"]) {
-    await f.call(actor, "/testing/progress?scope=all", undefined, 403);
-    await f.call(actor, "/testing/progress/reset", body, 403);
-  }
-  await f.call(
-    "operator-1",
-    "/testing/progress/reset",
-    { ...body, confirmation: "" },
-    422,
-  );
-  const pending = await start(f, eid, "practical");
-  await f.call("operator-1", "/testing/progress/reset", body, 409);
-  assert.ok(f.store.snapshot().attempts.some((a) => a.id === pending.id));
-  assert.ok(
-    !(await readdir(f.store.backupDir)).some((name) =>
-      name.startsWith("before-reset-"),
-    ),
-  );
-});
-
-test("초기화 전 백업 실패 시 진행 내역 보존", async (t) => {
-  const f = await fixture(t);
-  const original = f.store.snapshot();
-  await mkdir(path.dirname(f.store.backupDir), { recursive: true });
-  await writeFile(f.store.backupDir, "백업 경로 장애 시험");
-  await f.call(
-    "operator-1",
-    "/testing/progress/reset",
-    {
-      revision: original.revision,
-      confirmation: "초기화",
-      scope: { type: "all" },
-    },
-    503,
-  );
-  assert.deepEqual(f.store.snapshot(), original);
-  assert.deepEqual(JSON.parse(await readFile(f.file, "utf8")), original);
 });
 
 test("저장소 잠금·손상 중단·백업 복구·잘못된 근거 파일 거부", async (t) => {

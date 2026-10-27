@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -8,13 +9,13 @@ import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateTemplates } from "../src/template-migration.ts";
 import {
   metadata,
   currentQualification,
 } from "../src/qualification-templates.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 async function fixture(
   t: TestContext,
   prepare?: (s: ReturnType<typeof seedState>) => void,
@@ -308,8 +309,8 @@ test("Auditor 개별 기준 저장·JSON10 왕복은 허용하고 구형 팀 적
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 14);
-  assert.equal(master.stateSchemaVersion, 25);
+  assert.equal(master.formatVersion, 15);
+  assert.equal(master.stateSchemaVersion, 26);
   assert.equal(
     readMaster(master).payload.qualifications.find((x) => x.id === q.id)!
       .qualificationType,
@@ -430,12 +431,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 25);
-  assert.equal(preview.state.revision, raw.revision + 12);
+  assert.equal(preview.state.schemaVersion, 26);
+  assert.equal(preview.state.revision, raw.revision + 13);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 12;
-  normalized.audits.splice(-12 - raw.planningRequests.length);
+  normalized.revision -= 13;
+  normalized.audits.splice(-13 - raw.planningRequests.length);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,
@@ -449,11 +450,11 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     ),
   ])
     delete v.qualificationType;
-  assert.deepEqual(normalized, raw);
+  assert.deepEqual(historicalContent(normalized), historicalContent(raw));
   assert.deepEqual(
-    preview.state.certifications,
+    historicalContent(preview.state.certifications),
     raw.certifications.map((c: any) => ({
-      ...c,
+      ...historicalContent(c),
       qualificationMetadata: {
         ...c.qualificationMetadata,
         qualificationType: "auditee",

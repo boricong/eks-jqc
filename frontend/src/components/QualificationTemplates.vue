@@ -124,18 +124,36 @@ async function save() {
   busy.value = true;
   error.value = '';
   try {
+    const content = {
+      ...body,
+      auditorLevel: body.qualificationType === 'auditor' ? body.auditorLevel : null,
+      prerequisiteTemplateId:
+        body.qualificationType === 'auditor' && body.auditorLevel === 'main'
+          ? body.prerequisiteTemplateId
+          : null,
+      commonCourseRevisions: Object.fromEntries(commonCourses.value.map((c) => [c.id, c.revision])),
+    };
+    const preview = await api<any>('/system/qualification-templates/save-preview', {
+      method: 'POST',
+      body: JSON.stringify({ id, content }),
+    });
+    if (
+      preview.updatedQualifications.length &&
+      !(await confirmAction(
+        preview.updatedQualifications.map((q: any) => q.title + ' ' + q.version).join('\n'),
+        '버전 저장',
+        '연결 자격 마이너 업데이트',
+      ))
+    )
+      return;
     await store.command(
       `/system/qualification-templates${id ? `/${id}` : ''}`,
       {
-        ...body,
-        auditorLevel: body.qualificationType === 'auditor' ? body.auditorLevel : null,
-        prerequisiteTemplateId:
-          body.qualificationType === 'auditor' && body.auditorLevel === 'main'
-            ? body.prerequisiteTemplateId
-            : null,
-        commonCourseRevisions: Object.fromEntries(
-          commonCourses.value.map((c) => [c.id, c.revision]),
-        ),
+        ...content,
+        review: {
+          stateRevision: preview.stateRevision,
+          organizationRevision: preview.organizationRevision,
+        },
       },
       id ? 'PUT' : 'POST',
     );
@@ -261,10 +279,7 @@ watch(
       <p v-if="!listed.length" class="empty-state">등록된 기본자격이 없습니다.</p>
     </div>
     <AppDialog :open="!!draft" title="기본자격 편집" @update:open="(value) => !value && close()">
-      <template v-if="draft"
-        ><p class="muted">
-          공통 정보는 현재 팀 목록에 반영됩니다. 확정된 계획·평가·인증의 당시 정보는 유지됩니다.
-        </p>
+      <template v-if="draft">
         <div v-if="error" role="alert">
           <p class="error-message">{{ error }}</p>
           <button v-if="draft.id" class="button secondary" :disabled="busy" @click="reloadDraft">
@@ -338,13 +353,6 @@ watch(
         </label>
         <fieldset :disabled="busy" class="common-defaults">
           <legend>공통인증Set 목록</legend>
-          <button type="button" class="text-link" :disabled="busy" @click="load">
-            선택 유지·공통 목록 다시 확인
-          </button>
-          <p class="muted">
-            이후 새로 등록하는 팀 자격의 기본값입니다. 이미 등록한 팀 자격에는 반영되지 않습니다.
-            팀은 내용을 수정하거나 제외할 수 있습니다.
-          </p>
           <label class="field"
             >공통인증Set 검색<input v-model="commonSearch" type="search"
           /></label>
@@ -372,13 +380,7 @@ watch(
               · {{ c.readiness.length ? '보완 필요' : '준비 완료' }}</label
             ><button type="button" class="text-link" @click="previewCommon = c">내용 보기</button>
           </div>
-          <p v-if="!commonOptions.length" class="muted">
-            선택할 공통인증Set이 없습니다. 공통인증Set 관리에서 같은 유형의 항목을 생성해 주세요.
-          </p>
         </fieldset>
-        <p v-if="!draft.description.trim()" class="muted">
-          설명은 선택 항목이며 비워 두어도 자격을 사용할 수 있습니다.
-        </p>
         <details v-if="draft.id">
           <summary>변경 이력</summary>
           <ol class="template-history">

@@ -1,3 +1,11 @@
+import {
+  courseChange,
+  qualificationChange,
+  releaseNumber,
+  releaseInfo,
+  propagateCourses,
+} from "./releases.ts";
+import { nextReleaseVersion, releaseVersionLabel } from "@eks/contracts";
 import { auditorCriteria } from "./auditor-pool.ts";
 import { validateCommonSelection } from "./common-courses.ts";
 import {
@@ -82,6 +90,8 @@ export function catalogContent(value: Course | Qualification) {
     id,
     entityId,
     version,
+    releaseVersion,
+    releaseInfo,
     revision,
     parentId,
     deletedAt,
@@ -132,12 +142,12 @@ function editingChanges(
         .join(", "),
       "지식 합격 기준": String(item.passScore ?? "미정"),
       "상황 대응 합격 기준": String(item.practicalPassScore ?? "미정"),
-      학습자료: item.materials
+      "학습 정보 · 자료": item.materials
         .map((m) =>
           [m.title, m.content, m.url, m.description].filter(Boolean).join("\n"),
         )
         .join("\n\n"),
-      "학습 항목": item.learningItems
+      "학습 정보 · 교육": item.learningItems
         .map(
           (m) =>
             `${m.title} · ${m.required ? "필수" : "선택"} · ${m.type === "mtc" ? "MTC교육" : m.type === "team" ? "팀 특화 교육" : "현업 OJT"}`,
@@ -173,6 +183,15 @@ export function validateCatalogStructure(
       new Set(q.courseIds).size === q.courseIds.length,
       422,
       "인증Set 연결이 중복되었습니다.",
+    );
+    demand(
+      new Set(
+        q.courseIds.map(
+          (id) => s.courses.find((c) => c.id === id)?.entityId || id,
+        ),
+      ).size === q.courseIds.length,
+      422,
+      "같은 인증Set의 버전은 하나만 선택해 주세요.",
     );
     demand(
       q.courseIds.every((id) =>
@@ -240,6 +259,17 @@ export function prepareCatalogSave(
   const source = list.find((i) => i.id === id);
   demand(source, 404, "기준을 찾을 수 없습니다.");
   demand(
+    !list.some(
+      (i) =>
+        i.entityId === source.entityId &&
+        !i.deletedAt &&
+        (i.version || 0) > (source.version || 0),
+    ),
+    409,
+    "과거 버전은 조회만 가능합니다. 최신 버전에서 편집해 주세요.",
+    "RELEASE_NOT_CURRENT",
+  );
+  demand(
     source.lv1OrganizationId === scope,
     403,
     "선택한 팀의 기준만 수정할 수 있습니다.",
@@ -277,6 +307,8 @@ export function prepareCatalogSave(
     entityId: source.entityId,
     lv1OrganizationId: scope,
     version: source.version,
+    releaseVersion: source.releaseVersion,
+    releaseInfo: source.releaseInfo,
     revision: source.revision,
     parentId: source.parentId,
     deletedAt: undefined,
@@ -330,10 +362,6 @@ export function prepareCatalogSave(
       422,
       "Auditor 인증Set은 평가 설정을 변경할 수 없습니다. 학습항목을 작성해 주세요.",
     );
-  const versionMode =
-    section === "qualifications"
-      ? QualificationVersionModeSchema.optional().parse(body.versionMode)
-      : undefined;
   const sameCourses =
     section === "qualifications" &&
     (source as Qualification).courseIds.length ===
@@ -351,7 +379,16 @@ export function prepareCatalogSave(
     catalogContent(source),
   );
   const references = catalogReferences(s, section, id, org);
-  const requiresNewVersion = section === "qualifications" && !sameCourses;
+  const changeKind =
+    section === "courses"
+      ? courseChange(source as Course, candidate as Course)
+      : qualificationChange(
+          s,
+          source as Qualification,
+          candidate as Qualification,
+        );
+  if (section === "courses") unchanged = changeKind === "none";
+  const requiresNewVersion = !unchanged;
   let initialConfiguration =
     section === "qualifications" &&
     configureInitialQualification(
@@ -370,14 +407,8 @@ export function prepareCatalogSave(
     (candidate as Qualification).lifecycleStatus = "Active";
     unchanged = false;
   }
-  const automatic = Object.values(references).some((n) => n > 0);
   const newVersion =
-    !unchanged &&
-    !(section === "qualifications" && source.version === null) &&
-    (requiresNewVersion ||
-      (section === "qualifications" && versionMode
-        ? versionMode === "new"
-        : automatic));
+    !unchanged && !(section === "qualifications" && source.version === null);
   const nextVersion =
     Math.max(
       ...list
@@ -392,6 +423,27 @@ export function prepareCatalogSave(
       candidate.revision = 1;
     } else candidate.revision++;
   }
+  if (!unchanged) {
+    candidate.releaseVersion =
+      candidate.version === null
+        ? null
+        : source.version === null
+          ? { major: 1, minor: 0 }
+          : nextReleaseVersion(
+              releaseNumber(source),
+              changeKind === "major" ? "major" : "minor",
+            );
+    candidate.releaseInfo = releaseInfo(
+      source.version === null
+        ? "initial"
+        : changeKind === "major"
+          ? "major"
+          : "minor",
+      "preview",
+      "내용 변경 저장",
+      newVersion ? source.id : undefined,
+    );
+  }
   const changes = editingChanges(source, candidate).map((change) =>
     change.label === "인증Set 연결"
       ? {
@@ -399,20 +451,49 @@ export function prepareCatalogSave(
           before: (source as Qualification).courseIds
             .map((id) => {
               const c = s.courses.find((c) => c.id === id);
-              return `${c?.title} v${c?.version}`;
+              return `${c?.title} ${c ? releaseVersionLabel(c) : ""}`;
             })
             .join("\n"),
           after: (candidate as Qualification).courseIds
             .map((id) => {
               const c = s.courses.find((c) => c.id === id);
-              return `${c?.title} v${c?.version}`;
+              return `${c?.title} ${c ? releaseVersionLabel(c) : ""}`;
             })
             .join("\n"),
         }
       : change,
   );
+  if (!unchanged && candidate.releaseInfo)
+    candidate.releaseInfo.summary =
+      changes.map((c) => c.label).join(" · ") || candidate.releaseInfo.cause;
   return {
     candidate,
+    releaseChange: {
+      kind: unchanged
+        ? "none"
+        : source.version === null
+          ? "initial"
+          : changeKind === "major"
+            ? "major"
+            : "minor",
+      before: releaseVersionLabel(source),
+      after: releaseVersionLabel(candidate),
+      reasons: changes.map((c) => c.label),
+    },
+    ...(section === "courses" && !unchanged
+      ? {
+          propagation: (() => {
+            const previewState = structuredClone(s);
+            previewState.courses.push(candidate as Course);
+            return propagateCourses(
+              previewState,
+              [candidate as Course],
+              "preview",
+              "인증Set 자동 반영",
+            );
+          })(),
+        }
+      : {}),
     changes,
     unchanged,
     newVersion,
@@ -422,7 +503,7 @@ export function prepareCatalogSave(
           versionPolicy: {
             changeKind: unchanged
               ? ("none" as const)
-              : requiresNewVersion
+              : changeKind === "major"
                 ? ("major" as const)
                 : ("minor" as const),
             requiresNewVersion: requiresNewVersion && !initialConfiguration,
@@ -442,7 +523,12 @@ export function prepareCatalogSave(
       section === "courses"
         ? s.qualifications
             .filter((q) => q.courseIds.includes(id))
-            .map((q) => ({ id: q.id, title: q.title, version: q.version }))
+            .map((q) => ({
+              id: q.id,
+              title: q.title,
+              version: q.version,
+              releaseVersion: q.releaseVersion,
+            }))
         : [],
   };
 }
@@ -454,16 +540,11 @@ export function saveCatalogItem(
   id: string,
   body: any,
   scope: string,
+  actorId = "system",
 ) {
   const result = prepareCatalogSave(s, org, section, id, body, scope);
-  demand(
-    !(
-      result.versionPolicy?.requiresNewVersion && body.versionMode === "current"
-    ),
-    409,
-    "인증Set 구성이 변경되어 새 버전 생성이 필요합니다. 다시 검토해 주세요.",
-    "QUALIFICATION_NEW_VERSION_REQUIRED",
-  );
+  if (!result.unchanged && result.candidate.releaseInfo)
+    result.candidate.releaseInfo.createdBy = actorId;
   if (!result.unchanged) {
     if (section === "qualifications") {
       const q = result.candidate as Qualification;
@@ -495,6 +576,7 @@ export function saveCatalogItem(
             entityId: copyId,
             parentId: undefined,
             version: 1,
+            releaseVersion: { major: 1, minor: 0 },
             revision: 1,
           }),
         );
@@ -505,7 +587,19 @@ export function saveCatalogItem(
     if (result.newVersion) list.push(result.candidate);
     else list[list.findIndex((i) => i.id === id)] = result.candidate;
   }
+  const propagation =
+    section === "courses" && !result.unchanged
+      ? propagateCourses(
+          s,
+          [result.candidate as Course],
+          actorId,
+          "인증Set 버전 자동 반영",
+        )
+      : undefined;
   return {
+    propagation,
+    releaseChange: result.releaseChange,
+    releaseVersion: result.candidate.releaseVersion,
     id: result.candidate.id,
     revision: result.candidate.revision,
     version: result.candidate.version,

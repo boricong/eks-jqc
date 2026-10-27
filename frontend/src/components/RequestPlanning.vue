@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import type { PlanningRequest, PlanningRequestView, PlanningCandidate } from '@eks/contracts';
@@ -154,7 +155,7 @@ onBeforeRouteUpdate(() => !busy.value);
               }}
               지정</span
             >
-            <small>v{{ c.version }} · {{ labels[c.status] }}</small>
+            <small>{{ releaseVersionLabel(c) }} · {{ labels[c.status] }}</small>
           </span>
         </div>
         <p>

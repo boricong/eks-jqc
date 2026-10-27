@@ -1,3 +1,4 @@
+import { ReleaseVersionSchema, FrozenCriteriaSchema } from "./releases.ts";
 import { z } from "zod";
 import {
   ValiditySchema,
@@ -22,6 +23,8 @@ export const criterionLifecycleLabels = {
 export const RenewalNoticeDaysSchema = z.number().int().min(0).max(365);
 export const RenewalLeadSchema = z.number().int().min(1).max(1200);
 export const CertificationPeriodSchema = z.object({
+  releaseVersion: ReleaseVersionSchema.optional(),
+  frozenCriteria: FrozenCriteriaSchema.optional(),
   id: z.string(),
   sequence: z.number().int().positive(),
   kind: z.enum(["initial", "renewal"]),
@@ -40,6 +43,7 @@ export const CertificationPeriodSchema = z.object({
 });
 export type CertificationPeriod = z.infer<typeof CertificationPeriodSchema>;
 export const RenewalSchema = z.object({
+  frozenCriteria: FrozenCriteriaSchema.optional(),
   id: z.string(),
   certificationId: z.string(),
   periodId: z.string(),
@@ -68,6 +72,7 @@ export const RenewalSchema = z.object({
       qualificationId: z.string(),
       qualificationRevision: z.number().int().positive(),
       qualificationVersion: z.number().int().positive(),
+      releaseVersion: ReleaseVersionSchema.optional(),
       templateId: z.string(),
       templateRevision: z.number().int().positive(),
       title: z.string(),
@@ -76,6 +81,7 @@ export const RenewalSchema = z.object({
         z.object({
           id: z.string(),
           version: z.number().int().positive(),
+          releaseVersion: ReleaseVersionSchema.optional(),
           revision: z.number().int().positive(),
           title: z.string(),
           learningItems: z.array(LearningItemSchema),

@@ -13,9 +13,9 @@ import {
 } from "../src/organizations.ts";
 import { validateState } from "../src/integrity.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateRequiredQualifications } from "../src/required-qualification-migration.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 
 const at = "2026-10-26T03:00:00.000Z";
 function oldPair() {
@@ -131,7 +131,7 @@ test("20/3→21/4는 필수 설정·원래 요청을 감사에 보존하고 선�
     before = structuredClone(old),
     result = migrateRequiredQualifications(old.state, old.organizations, at);
   assert.deepEqual(old, before, "미리보기는 입력을 변경하지 않음");
-  assert.equal(result.state.schemaVersion, 25);
+  assert.equal(result.state.schemaVersion, 26);
   assert.equal(result.organizations.schemaVersion, 4);
   assert.ok(
     organizationEntries(result.organizations).every(
@@ -364,8 +364,8 @@ test("JSON11 왕복·구형JSON10 변환은 필수 지정 복원을 막고 검�
       f.store.organizations.snapshot(),
       at,
     );
-  assert.equal(file.formatVersion, 14);
-  assert.equal(file.stateSchemaVersion, 25);
+  assert.equal(file.formatVersion, 15);
+  assert.equal(file.stateSchemaVersion, 26);
   assert.equal(file.organizationSchemaVersion, 4);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
@@ -387,12 +387,6 @@ test("JSON11 왕복·구형JSON10 변환은 필수 지정 복원을 막고 검�
     ),
     false,
   );
-  const preview = await f.call(
-    "operator-1",
-    "/system/master-data/import-preview",
-    old,
-  );
-  assert.match(preview.compatibility, /필수자격 지정 1개는 제외/);
   const invalid = structuredClone(old);
   invalid.payload.organizations.roots[0].requiredQualifications.push(
     "tampered",
@@ -446,9 +440,9 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
     expected,
     migrateRequiredQualifications,
   );
-  assert.equal((result as { schemaVersion: number }).schemaVersion, 25);
+  assert.equal((result as { schemaVersion: number }).schemaVersion, 26);
   const loaded = await new JsonStore(file).load();
-  assert.equal(loaded.snapshot().schemaVersion, 25);
+  assert.equal(loaded.snapshot().schemaVersion, 26);
   const after = loaded.snapshot();
   const organizations = loaded.organizations.snapshot();
   await loaded.close();

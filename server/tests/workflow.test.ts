@@ -1,3 +1,4 @@
+import { releaseFixture } from "./release-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import { registerFixtureQualification } from "./template-helpers.ts";
 import test, { type TestContext } from "node:test";
@@ -15,7 +16,7 @@ import {
   type State,
   type ValidityPolicy,
 } from "@eks/contracts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
 import { migrateState } from "../src/migration.ts";
@@ -479,8 +480,8 @@ async function catalog(
   root = "org-photo",
   kinds: Kind[] = ["objective", "practical"],
 ) {
-  const c = await f.call("operator-1", scope("/courses", root), {});
-  await f.call(
+  let c = await f.call("operator-1", scope("/courses", root), {});
+  c = await f.call(
     "operator-1",
     scope(`/courses/${c.id}`, root),
     {
@@ -680,9 +681,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
     200,
     "PUT",
   );
-  assert.ok(
-    noLearning.readiness.some((m: string) => m.includes("필수 학습 항목")),
-  );
+  assert.deepEqual(noLearning.readiness, []);
   const templates = await f.call(
     "operator-1",
     scope("/qualification-templates"),
@@ -954,95 +953,6 @@ test("계획 완료 직전 운영 종료 차단, 기존 미시작 계획 배정�
   );
 });
 
-test("선택 조직 초기화는 계획·학습 일정·역할·기준을 보존하고 진행만 삭제", async (t) => {
-  const f = await fixture(t),
-    photo = await catalog(f, "org-photo", ["objective"]),
-    etch = await catalog(f, "org-etch", ["objective"]);
-  const a = await plan(f, photo.q),
-    b = await plan(f, etch.q, "etch-learner", null, "org-etch");
-  await learning(f, a.e.id);
-  await finish(f, a.e.id, "objective");
-  await learning(f, b.e.id, "etch-learner");
-  await finish(f, b.e.id, "objective", "etch-learner");
-  const old = f.store.snapshot(),
-    master = await readFile(f.store.organizations.file, "utf8");
-  const preview = await f.call(
-    "operator-1",
-    "/testing/progress?scope=organization&lv1OrganizationId=org-photo",
-  );
-  assert.equal(preview.counts.learningRecords, 1);
-  assert.ok(preview.counts.notifications > 0);
-  const key = randomUUID(),
-    payload = {
-      revision: preview.revision,
-      scope: preview.scope,
-      confirmation: "초기화",
-    };
-  const reset = await f.call(
-    "operator-1",
-    "/testing/progress/reset",
-    payload,
-    200,
-    "POST",
-    key,
-  );
-  const after = f.store.snapshot();
-  for (const field of [
-    "plans",
-    "planningRequests",
-    "assignments",
-    "courses",
-    "qualifications",
-    "users",
-  ] as const)
-    assert.deepEqual(after[field], old[field]);
-  assert.deepEqual(
-    after.learningRecords,
-    old.learningRecords.filter((r) => r.enrollmentId === b.e.id),
-  );
-  assert.deepEqual(
-    after.certifications,
-    old.certifications.filter((r) => r.assignmentId === b.a.id),
-  );
-  assert.deepEqual(
-    after.requests.filter((r) => r.lv1OrganizationId === "org-etch"),
-    old.requests.filter((r) => r.lv1OrganizationId === "org-etch"),
-  );
-  assert.ok(
-    after.notifications.some(
-      (n) => n.type === "planning" && n.recipientId === "learner-2",
-    ),
-  );
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), master);
-  const previousLearning = old.learningRecords.find(
-    (r) => r.enrollmentId === a.e.id,
-  )!;
-  await f.call(
-    "learner-2",
-    `/enrollments/${a.e.id}/learning`,
-    { ...previousLearning, reason: "오래된 탭" },
-    410,
-    "PUT",
-  );
-  await learning(f, a.e.id);
-  assert.deepEqual(
-    await f.call(
-      "operator-1",
-      "/testing/progress/reset",
-      payload,
-      200,
-      "POST",
-      key,
-    ),
-    reset,
-  );
-  assert.ok(
-    f.store.snapshot().learningRecords.some((r) => r.enrollmentId === a.e.id),
-  );
-  await f.restart();
-  assert.equal(await readFile(f.store.organizations.file, "utf8"), master);
-});
-
 test("개월·월말·윤년·KST 만료일 경계와 무기한·기존 미설정의 구분", () => {
   assert.equal(
     expirationDate("2024-01-31T00:00:00.000Z", period),
@@ -1176,10 +1086,13 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
   const etch = await catalog(f, "org-etch");
   const etchDraft = await f.call(
     "operator-1",
-    scope(`/qualifications/${etch.q}/versions`, "org-etch"),
-    {},
+    releaseFixture(f.store.snapshot(), "qualifications", etch.q)[0] +
+      "?lv1OrganizationId=org-etch",
+    releaseFixture(f.store.snapshot(), "qualifications", etch.q)[1],
+    200,
+    "PUT",
   );
-  await f.call(
+  const etchSaved = await f.call(
     "operator-1",
     scope(`/qualifications/${etchDraft.id}`, "org-etch"),
     {
@@ -1194,7 +1107,7 @@ test("추가 계획 요청은 새 기한·안내를 보존하고 같은 요청 �
     period,
   );
   assert.equal(
-    f.store.snapshot().qualifications.find((x) => x.id === etchDraft.id)!
+    f.store.snapshot().qualifications.find((x) => x.id === etchSaved.id)!
       .validity.months,
     6,
   );
@@ -1212,18 +1125,6 @@ test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적
     getPlan().qualificationPolicySnapshot?.validity,
     original.validity,
   );
-  await f.store.transact(
-    "operator-1",
-    randomUUID(),
-    "legacy-completed",
-    () => {},
-    (s) => {
-      delete s.plans.find((p) => p.id === first.p)!.qualificationPolicySnapshot;
-      delete s.assignments.find((a) => a.id === first.a.id)!
-        .qualificationPolicySnapshot;
-      return {};
-    },
-  );
   const saved = await f.call(
     "operator-1",
     scope(`/qualifications/${ids.q}`, "org-photo"),
@@ -1237,8 +1138,8 @@ test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적
     200,
     "PUT",
   );
-  assert.equal(saved.id, ids.q);
-  assert.equal(saved.newVersion, false);
+  assert.notEqual(saved.id, ids.q);
+  assert.equal(saved.newVersion, true);
   assert.deepEqual(
     getPlan().qualificationPolicySnapshot?.validity,
     original.validity,
@@ -1278,7 +1179,7 @@ test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적
     requestRevision: f.store
       .snapshot()
       .planningRequests.find((r) => r.id === request)!.revision,
-    qualificationId: ids.q,
+    qualificationId: saved.id,
   });
   const p = f.store.snapshot().plans.find((p) => p.id === draft.id)!;
   await f.call(

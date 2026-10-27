@@ -1,3 +1,5 @@
+import { appendQualification } from "./releases.ts";
+import { currentTeamQualifications } from "@eks/contracts";
 import { auditorCriteria, auditorTemplateErrors } from "./auditor-pool.ts";
 import { validateDefaultCommonCourses } from "./common-courses.ts";
 import { readFileSync } from "node:fs";
@@ -51,6 +53,7 @@ export function currentQualification(
 ): Qualification {
   const t = s.qualificationTemplates.find((t) => t.id === q.templateId);
   demand(t, 422, "연결된 기본자격을 찾을 수 없습니다.");
+  if (q.version !== null && q.releaseInfo) return q;
   return {
     ...q,
     ...(auditorCriteria(s, q)
@@ -242,6 +245,37 @@ export function saveTemplate(
   if (old)
     s.qualificationTemplates[s.qualificationTemplates.indexOf(old)] = next;
   else s.qualificationTemplates.push(next);
+  if (
+    old &&
+    [
+      "title",
+      "englishName",
+      "description",
+      "auditorLevel",
+      "prerequisiteTemplateId",
+    ].some((k) => (old as any)[k] !== (next as any)[k])
+  ) {
+    for (const ref of currentTeamQualifications(s)) {
+      const q = s.qualifications.find((q) => q.id === ref.qualificationId)!;
+      if (q.templateId !== next.id) continue;
+      appendQualification(
+        s,
+        q,
+        {
+          ...q,
+          title: next.title,
+          englishName: next.englishName,
+          description: next.description,
+          templateRevision: next.revision,
+          ...(auditorCriteria(s, q)
+            ? { auditorCriteria: auditorCriteria(s, q) }
+            : {}),
+        },
+        actorId,
+        "기본자격 공통 정보 변경",
+      );
+    }
+  }
   s.audits.push({
     id: randomUUID(),
     actorId,

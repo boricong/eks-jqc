@@ -1,3 +1,4 @@
+import { freezeCriteria } from "./releases.ts";
 import {
   auditorCriteria,
   activeAuditorQualifications,
@@ -472,6 +473,13 @@ export function startAuditor(
     qualificationId: q.id,
     qualificationMetadata: metadata(q),
     qualificationPolicySnapshot: qualificationPolicySnapshot(q),
+    frozenCriteria: freezeCriteria(
+      s,
+      q,
+      u.id,
+      previous ? "renewal" : "auditor",
+      at,
+    ),
     learnerId: u.id,
     ownerAdminId: manager,
     assignedAt: at,

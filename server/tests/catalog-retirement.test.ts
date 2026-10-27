@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { validateState } from "../src/integrity.ts";
-import { exportMaster, readMaster } from "../src/master-data.ts";
+import { exportMaster, readMaster } from "./legacy-master-data.ts";
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-retired-catalog-")),
     file = path.join(dir, "runtime/state.json"),
@@ -171,12 +171,12 @@ test("과거 일괄 이력·영수증은 업무20에서 보존되며 개별 편�
     f.store.organizations.snapshot(),
   );
   assert.deepEqual(loaded.catalogBatches, before.catalogBatches);
-  assert.equal(loaded.schemaVersion, 25);
+  assert.equal(loaded.schemaVersion, 26);
   const master = exportMaster(
     after,
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 14);
+  assert.equal(master.formatVersion, 15);
   assert.deepEqual(readMaster(master).payload, master.payload);
 });

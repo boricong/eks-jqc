@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import CourseCategory from './CourseCategory.vue';
 import { credentialCurrent, qualificationVersionLabel } from '@eks/contracts';
 import CourseMaterials from './CourseMaterials.vue';
@@ -181,7 +182,7 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ q.title || '이름 없는 기준' }} · {{ qualificationVersionLabel(q.version) }}
+        {{ q.title || '이름 없는 기준' }} · {{ releaseVersionLabel(q) }}
         <StatusBadge :status="q.lifecycleStatus || 'Active'" />
       </summary>
       <p class="muted">{{ rootName(q.lv1OrganizationId) }} · {{ q.englishName }}</p>
@@ -211,7 +212,8 @@ const actionLabels: Record<string, string> = {
       class="panel record-detail"
     >
       <summary>
-        {{ c.title || '이름 없는 기준' }} · v{{ c.version }} <CourseCategory :course="c" />
+        {{ c.title || '이름 없는 기준' }} · {{ releaseVersionLabel(c) }}
+        <CourseCategory :course="c" />
         <StatusBadge :status="c.operationalStatus === 'retired' ? 'retired' : 'active'" />
       </summary>
       <p class="muted">{{ rootName(c.lv1OrganizationId) }}</p>

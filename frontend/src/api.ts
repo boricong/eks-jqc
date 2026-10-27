@@ -32,6 +32,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
         'X-Session-Tab': sessionTab,
+        'X-EKS-Release-Contract': '1',
         ...(getDataGeneration() ? { 'X-EKS-Data-Generation': getDataGeneration() } : {}),
       },
     });
@@ -84,15 +85,4 @@ export async function mutate<T = { id: string; revision: number }>(
       pending.delete(fingerprint);
     throw error;
   }
-}
-export async function downloadMasterData() {
-  const file = await api<unknown>('/system/master-data/export');
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }),
-  );
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `eks-master-${new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date())}.eksmaster.json`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import PropertyList from './PropertyList.vue';
 import CollapsibleSection from './CollapsibleSection.vue';
 import { ref, watch } from 'vue';
@@ -158,7 +159,7 @@ async function createVersion() {
   </AppDialog>
   <AppDialog v-model:open="open" title="자격 기준 상태 변경">
     <template v-if="impact">
-      <h3>{{ qualification.title }} · v{{ qualification.version }}</h3>
+      <h3>{{ qualification.title }} · {{ releaseVersionLabel(qualification) }}</h3>
       <PropertyList class="lifecycle-facts">
         <div v-for="(count, key) in impact.counts" :key="key">
           <dt>{{ countLabels[key] }}</dt>

@@ -1,3 +1,4 @@
+import { releaseNumber, freezeCriteria } from "./releases.ts";
 import { validateAuditorActivation } from "./auditor-pool.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { latestQualification, currentTeamQualifications } from "@eks/contracts";
@@ -103,8 +104,10 @@ export function initializeCertification(
       id: `${c.id}:period:1`,
       sequence: 1,
       kind: "initial",
+      frozenCriteria: c.frozenCriteria,
       qualificationId: q.id,
       qualificationVersion: numberedQualificationVersion(q),
+      releaseVersion: releaseNumber(q),
       validity,
       renewalLeadMonths: q.renewalLeadMonths ?? 3,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
@@ -370,6 +373,7 @@ function auditorRenewalCriteria(s: State, original: Qualification) {
     qualificationId: q.id,
     qualificationRevision: q.revision,
     qualificationVersion: numberedQualificationVersion(q),
+    releaseVersion: releaseNumber(q),
     templateId: q.templateId,
     templateRevision: q.templateRevision,
     title: q.title,
@@ -379,6 +383,7 @@ function auditorRenewalCriteria(s: State, original: Qualification) {
       return {
         id: course.id,
         version: course.version,
+        releaseVersion: releaseNumber(course),
         revision: course.revision,
         title: course.title,
         learningItems: structuredClone(course.learningItems),
@@ -414,7 +419,12 @@ export function renewalAvailability(
       p.lv1OrganizationId === learner.lv1OrganizationId &&
       p.entityId === original.entityId,
   );
-  const q = s.qualifications.find((q) => q.id === pool?.qualificationId),
+  const ongoing = s.renewals.find(
+    (r) => r.certificationId === c.id && r.status === "draft",
+  );
+  const q = s.qualifications.find(
+      (q) => q.id === (ongoing?.qualificationId || pool?.qualificationId),
+    ),
     p = latestPeriod(c);
   const opensOn = p && renewalOpensOn(p);
   if (original.qualificationType === "auditor" && !c.auditor)
@@ -466,6 +476,7 @@ export function renewalAvailability(
           id: q.id,
           title: currentQualification(s, q).title,
           version: numberedQualificationVersion(q),
+          releaseVersion: releaseNumber(q),
           revision: q.revision,
           validity: q.validity,
           renewalLeadMonths: q.renewalLeadMonths ?? 3,
@@ -819,6 +830,7 @@ export function executeLifecycle(
       lv1OrganizationId: scope,
       qualificationId: q.id,
       qualificationRevision: q.revision,
+      frozenCriteria: freezeCriteria(s, q, u.id, "renewal", at),
       ...(c.auditor
         ? { criteriaFingerprint: auditorCriteriaFingerprint(s, q) }
         : {}),
@@ -887,6 +899,7 @@ export function executeLifecycle(
     kind: "renewal" as const,
     qualificationId: q.id,
     qualificationVersion: numberedQualificationVersion(q),
+    releaseVersion: releaseNumber(q),
     validity: structuredClone(r!.validity),
     renewalLeadMonths: r!.renewalLeadMonths,
     renewalNoticeDaysBefore: r!.renewalNoticeDaysBefore ?? 7,
@@ -898,6 +911,7 @@ export function executeLifecycle(
     completedAt: at,
     previousPeriodId: p.id,
     renewalId: r!.id,
+    frozenCriteria: r!.frozenCriteria,
     source: "issued" as const,
   };
   c.periods!.push(next);

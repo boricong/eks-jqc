@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import {
   learningStage,
   qualificationLocation,
@@ -259,8 +260,10 @@ const list = computed(() =>
               class="test-data-tag"
               >시험 데이터</span
             ><span class="muted"
-              >v{{ store.qualification(a.qualificationId, a.qualificationMetadata).version }} · 필수
-              {{ a.enrollments.length }}인증Set</span
+              >{{
+                releaseVersionLabel(store.qualification(a.qualificationId, a.qualificationMetadata))
+              }}
+              · 필수 {{ a.enrollments.length }}인증Set</span
             ><span v-if="a.certification" class="muted"
               >취득 {{ kstDate(a.certifiedAt!) }} ·
               {{

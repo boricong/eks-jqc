@@ -70,12 +70,12 @@ test('상단 편집 탭·키보드와 반응형에서 구역/세로 번호 탐�
   await expect(tabs).toHaveAttribute('aria-orientation', 'horizontal');
   await tabs.getByRole('tab', { name: '기본정보', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(tabs.getByRole('tab', { name: '학습자료', exact: true })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: '학습 정보', exact: true })).toBeFocused();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await courseSection(page, '지식 평가');
     await page.getByLabel('문항', { exact: true }).fill('긴 문항과 선택지의 배치 확인 · 지식 기준');
-    await courseSection(page, '학습 항목');
+    await courseSection(page, '학습 정보');
     await courseSection(page, '지식 평가');
     await expect(page.getByLabel('문항', { exact: true })).toHaveValue(
       '긴 문항과 선택지의 배치 확인 · 지식 기준',

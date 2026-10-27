@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -8,11 +9,11 @@ import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { courseTypeEditing } from "../src/course-types.ts";
 import { migrateCourseTypes } from "../src/course-type-migration.ts";
 import { validateState } from "../src/integrity.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 import { addQualification } from "./dashboard-fixtures.ts";
 async function fixture(
   t: TestContext,
@@ -125,7 +126,7 @@ test("인증Set 생성 유형·권한·입력 검증과 미사용 첫 버전의 
     ...c,
     qualificationType: "auditee",
   });
-  assert.equal(preview.newVersion, false);
+  assert.equal(preview.newVersion, true);
   assert(
     preview.changes.some(
       (x: any) =>
@@ -153,10 +154,10 @@ test("인증Set 생성 유형·권한·입력 검증과 미사용 첫 버전의 
     await f.call("admin-1", `/courses/${c.id}`, body, 200, "PUT", key),
     result,
   );
-  c = f.store.snapshot().courses.find((c) => c.id === r.id)!;
+  c = f.store.snapshot().courses.find((c) => c.id === result.id)!;
   assert.equal(c.qualificationType, "auditee");
-  assert.equal(c.version, 1);
-  assert.equal(c.revision, 2);
+  assert.equal(c.version, 2);
+  assert.equal(c.revision, 1);
   const legacy: any = { ...c, title: "기존 호출" };
   delete legacy.qualificationType;
   await f.call("admin-1", `/courses/${c.id}`, legacy, 200, "PUT");
@@ -167,7 +168,7 @@ test("인증Set 생성 유형·권한·입력 검증과 미사용 첫 버전의 
   const w = await f.call("admin-1", "/workspace");
   assert.equal(
     w.courses.find((x: any) => x.id === c.id).typeEditing.canChangeType,
-    true,
+    false,
   );
   assert(
     !("typeEditing" in f.store.snapshot().courses.find((x) => x.id === c.id)!),
@@ -307,7 +308,7 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   const before = structuredClone(raw),
     result = migrateCourseTypes(raw, org);
   assert.deepEqual(raw, before);
-  assert.equal(result.state.schemaVersion, 25);
+  assert.equal(result.state.schemaVersion, 26);
   for (const id of [c.id, "future-version"])
     assert.equal(
       result.state.courses.find((c) => c.id === id)!.qualificationType,
@@ -319,11 +320,11 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   );
   const stripped: any = structuredClone(result.state);
   stripped.schemaVersion = 14;
-  stripped.revision -= 11;
-  stripped.audits.splice(-11 - raw.planningRequests.length);
+  stripped.revision -= 12;
+  stripped.audits.splice(-12 - raw.planningRequests.length);
   stripped.qualificationTemplates.forEach((t: any) => delete t.scope);
   stripped.courses.forEach((c: any) => delete c.qualificationType);
-  assert.deepEqual(stripped, raw);
+  assert.deepEqual(historicalContent(stripped), historicalContent(raw));
   assert.deepEqual(migrateCourseTypes(result.state, org).state, result.state);
   const mixed = structuredClone(raw);
   mixed.qualifications
@@ -387,8 +388,8 @@ test("인증Set 유형 이관 실패는 파일 쌍을 보존하고 백업·재�
     restarted.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 14);
-  assert.equal(file.stateSchemaVersion, 25);
+  assert.equal(file.formatVersion, 15);
+  assert.equal(file.stateSchemaVersion, 26);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   delete old.payload.commonCourses;

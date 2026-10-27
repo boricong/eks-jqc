@@ -1,3 +1,4 @@
+import { releaseInfo, releaseNumber, freezeCriteria } from "./releases.ts";
 import { assignmentPrerequisite } from "./auditor-pool.ts";
 import {
   authorizeSubjective,
@@ -36,15 +37,12 @@ import {
   type State,
   type UserView as User,
   type OrganizationDocument,
-  type ResetScope,
-  ResetScopeSchema,
   organizationEntries,
   type AssessmentAttempt,
   type Workspace,
   type StoredAssignment,
   type Kind,
   type AuditEvent,
-  type ProgressSummary,
   KindSchema,
   assessmentQuestions,
   assessmentPassScore,
@@ -56,7 +54,7 @@ import {
   qualificationForRecord,
 } from "@eks/contracts";
 import { demand, DomainError } from "./storage.ts";
-import { userView, organization, systemOperator } from "./organizations.ts";
+import { userView, organization } from "./organizations.ts";
 import { changeCourseLifecycle, courseUsage } from "./course-lifecycle.ts";
 import {
   isWorkflowAction,
@@ -135,7 +133,7 @@ function recordAudit(
 ) {
   s.audits.push({
     id: uid(),
-    lv1OrganizationId: action === "progress.reset" ? undefined : scope,
+    lv1OrganizationId: scope,
     actorId: u.id,
     date: now(),
     action,
@@ -234,10 +232,6 @@ export function authorize(
   }
   if (isWorkflowAction(action))
     return authorizeWorkflow(s, u, action, target, body, managementLv1);
-  if (action === "progress.reset") {
-    systemOperator(u);
-    return;
-  }
   if (action === "notice.save") {
     authorizeNotice(s, u, body, "team", managementLv1);
     return;
@@ -345,13 +339,18 @@ function reconcile(
   active(a);
   const learner = find(s.users, a.learnerId),
     q = qualificationForRecord(find(s.qualifications, a.qualificationId), a);
-  const snapshot = (catalog: { title: string; version: number }) => ({
+  const snapshot = (catalog: {
+    title: string;
+    version: number;
+    releaseVersion?: { major: number; minor: number } | null;
+  }) => ({
     learnerName: learner.name,
     organizationPath: structuredClone(
       userView(learner, organizations).organizationPath,
     ),
     title: catalog.title,
     version: catalog.version,
+    releaseVersion: releaseNumber(catalog),
     source: "issued" as const,
   });
   requireQualificationProcess(q);
@@ -429,6 +428,7 @@ function reconcile(
       assignmentId: a.id,
       learnerId: a.learnerId,
       qualificationId: a.qualificationId,
+      frozenCriteria: a.frozenCriteria,
       date: at,
       snapshot: snapshot({
         ...q,
@@ -604,136 +604,6 @@ export function execute(
         ?.id,
     };
   }
-  if (action === "progress.reset") {
-    const input = z
-      .object({
-        revision: z.number().int().nonnegative(),
-        confirmation: z.literal("초기화"),
-        scope: ResetScopeSchema,
-      })
-      .parse(body);
-    expected(s, input.revision);
-    if (input.scope.type === "organization")
-      demand(
-        organization(organizations, input.scope.lv1OrganizationId).level === 1,
-        422,
-        "Lv1 조직을 선택해 주세요.",
-      );
-    const { counts } = progressSummary(s, input.scope);
-    const affected = new Set(
-      s.assignments
-        .filter((a) => inScope(a.lv1OrganizationId, input.scope))
-        .map((a) => a.id),
-    );
-    const enrollments = new Set(
-      s.enrollments
-        .filter((e) => affected.has(e.assignmentId))
-        .map((e) => e.id),
-    );
-    s.subjectiveResponses = s.subjectiveResponses.filter(
-      (r) => !enrollments.has(r.enrollmentId),
-    );
-    s.attempts = s.attempts.filter((r) => !enrollments.has(r.enrollmentId));
-    s.learningChecklists = s.learningChecklists.filter(
-      (r) => !enrollments.has(r.enrollmentId),
-    );
-    s.learningRecords = s.learningRecords.filter(
-      (r) => !enrollments.has(r.enrollmentId),
-    );
-    s.notifications = s.notifications.filter(
-      (r) => !r.assignmentId || !affected.has(r.assignmentId),
-    );
-    s.completions = s.completions.filter(
-      (r) => !enrollments.has(r.enrollmentId),
-    );
-    const removedCertIds = new Set(
-      s.certifications
-        .filter((c) => affected.has(c.assignmentId))
-        .map((c) => c.id),
-    );
-    s.certifications = s.certifications.filter(
-      (r) => !affected.has(r.assignmentId),
-    );
-    s.renewals = s.renewals.filter(
-      (r) => !removedCertIds.has(r.certificationId),
-    );
-    s.lifecycleEvents = s.lifecycleEvents.filter(
-      (e) => e.subject !== "certification" || !removedCertIds.has(e.targetId),
-    );
-    const groups = new Map<string, StoredAssignment[]>();
-    for (const a of s.assignments.filter((a) => affected.has(a.id))) {
-      const key = `${a.learnerId}:${find(s.qualifications, a.qualificationId).entityId}`;
-      groups.set(key, [...(groups.get(key) || []), a]);
-      if (
-        a.previousCertificationId &&
-        removedCertIds.has(a.previousCertificationId)
-      ) {
-        a.resetPreviousCertificationId = a.previousCertificationId;
-        delete a.previousCertificationId;
-      }
-    }
-    for (const group of groups.values())
-      for (const a of group.slice(0, -1)) a.acquisitionClosedAt ||= at;
-    for (const p of s.plans)
-      if (
-        p.previousCertificationId &&
-        removedCertIds.has(p.previousCertificationId)
-      )
-        delete p.previousCertificationId;
-    for (const r of s.planningRequests)
-      for (const t of r.selections)
-        if (
-          t.previousCertificationId &&
-          removedCertIds.has(t.previousCertificationId)
-        )
-          delete t.previousCertificationId;
-    s.comparisons = s.comparisons.filter(
-      (r) => !enrollments.has(r.enrollmentId),
-    );
-    s.requests = s.requests.filter(
-      (r) =>
-        !(
-          (r.lv1OrganizationId &&
-            inScope(r.lv1OrganizationId, input.scope) &&
-            (!r.action ||
-              r.action === "legacy" ||
-              r.action.startsWith("attempt.") ||
-              r.action.startsWith("subjective.") ||
-              r.action.startsWith("learning.") ||
-              r.action === "notification.read" ||
-              r.action.startsWith("comparison."))) ||
-          (r.lv1OrganizationId &&
-            inScope(r.lv1OrganizationId, input.scope) &&
-            (r.action?.startsWith("renewal.") ||
-              r.action?.startsWith("credential.")))
-        ),
-    );
-    s.audits = s.audits.filter(
-      (ev) =>
-        !(
-          ev.assignmentId &&
-          affected.has(ev.assignmentId) &&
-          (ev.action.startsWith("attempt.") ||
-            ev.action.startsWith("subjective.") ||
-            ev.action.startsWith("learning.") ||
-            ev.action.startsWith("comparison."))
-        ),
-    );
-    for (const event of s.audits)
-      if (event.assignmentId && affected.has(event.assignmentId))
-        delete event.details.archivedDrafts;
-    const id = uid();
-    audit(
-      s,
-      u,
-      action,
-      id,
-      "MVP 반복 테스트를 위한 진행 내역 초기화",
-      undefined,
-      { counts, scope: input.scope },
-    );
-    return { id, revision: s.revision + 1 };
-  }
   if (action.startsWith("course.")) {
     const result = changeCourseLifecycle(s, u, action, target, body, scope);
     audit(s, u, action, target, result.reason, undefined, result.details);
@@ -777,6 +647,8 @@ export function execute(
           lv1OrganizationId: scope,
           entityId: id,
           version: 1,
+          releaseVersion: { major: 1, minor: 0 },
+          releaseInfo: releaseInfo("initial", u.id, "인증Set 생성"),
           revision: 1,
           title: "",
         };
@@ -818,55 +690,13 @@ export function execute(
       list as (State["courses"][number] | State["qualifications"][number])[],
       body.id,
     );
-    if (action === "catalog.clone") {
+    if (action === "catalog.clone")
       demand(
-        isCourse || item.version !== null,
-        409,
-        "Ready 자격은 최초 기준 저장으로 v1을 시작해 주세요.",
-        "QUALIFICATION_READY",
+        false,
+        410,
+        "내용을 변경해 저장하면 새 버전이 자동 생성됩니다.",
+        "RELEASE_CONTRACT_CHANGED",
       );
-      if (!isCourse)
-        checkCommonFields(s, item as State["qualifications"][number], body);
-      demand(!item.deletedAt, 409, "삭제된 기준입니다.");
-      if (body.revision != null)
-        demand(
-          body.revision === item.revision,
-          409,
-          "기준이 변경되었습니다. 최신 내용을 확인해 주세요.",
-          "REVISION_CONFLICT",
-        );
-      const clone = {
-        ...structuredClone(
-          isCourse
-            ? item
-            : currentQualification(s, item as State["qualifications"][number]),
-        ),
-        id: uid(),
-        parentId: item.id,
-        version:
-          Math.max(
-            ...list
-              .filter((x) => x.entityId === item.entityId)
-              .map((x) => x.version ?? 0),
-          ) + 1,
-        revision: 1,
-
-        ...(isCourse
-          ? {
-              operationalStatus: "active",
-              retiredAt: undefined,
-              retiredBy: undefined,
-              retirementReason: undefined,
-            }
-          : { lifecycleStatus: "Active" }),
-      };
-      if (isCourse) s.courses.push(CourseSchema.parse(clone));
-      else s.qualifications.push(QualificationSchema.parse(clone));
-      audit(s, u, action, clone.id, "새 버전", undefined, {
-        parentId: item.id,
-      });
-      return { id: clone.id };
-    }
     const result = saveCatalogItem(
       s,
       organizations,
@@ -874,6 +704,7 @@ export function execute(
       item.id,
       body,
       scope,
+      u.id,
     );
     if (!result.unchanged)
       audit(
@@ -1064,66 +895,6 @@ export function execute(
   }
   if (action === "notice.save") return saveNotice(s, u, body, "team", scope);
   demand(false, 404, "지원하지 않는 요청입니다.");
-}
-
-export const inScope = (lv1: string, scope: ResetScope) =>
-  scope.type === "all" || scope.lv1OrganizationId === lv1;
-export function progressSummary(s: State, scope: ResetScope): ProgressSummary {
-  const assignments = new Set(
-    s.assignments
-      .filter((a) => inScope(a.lv1OrganizationId, scope))
-      .map((a) => a.id),
-  );
-  const enrollments = new Set(
-    s.enrollments
-      .filter((e) => assignments.has(e.assignmentId))
-      .map((e) => e.id),
-  );
-  return {
-    revision: s.revision,
-    scope,
-    counts: {
-      renewals: s.renewals.filter((r) =>
-        s.certifications.some(
-          (c) => c.id === r.certificationId && assignments.has(c.assignmentId),
-        ),
-      ).length,
-      certificationPeriods: s.certifications
-        .filter((c) => assignments.has(c.assignmentId))
-        .reduce((n, c) => n + (c.periods?.length || 0), 0),
-      credentialEvents: s.lifecycleEvents.filter(
-        (e) =>
-          e.subject === "certification" &&
-          !!e.assignmentId &&
-          assignments.has(e.assignmentId),
-      ).length,
-      subjectiveResponses: s.subjectiveResponses.filter((r) =>
-        enrollments.has(r.enrollmentId),
-      ).length,
-      objectiveAttempts: s.attempts.filter(
-        (t) => enrollments.has(t.enrollmentId) && t.kind === "objective",
-      ).length,
-      practicalAttempts: s.attempts.filter(
-        (t) => enrollments.has(t.enrollmentId) && t.kind === "practical",
-      ).length,
-      learningChecklists: s.learningChecklists.filter((r) =>
-        enrollments.has(r.enrollmentId),
-      ).length,
-      learningRecords: s.learningRecords.filter((r) =>
-        enrollments.has(r.enrollmentId),
-      ).length,
-      notifications: s.notifications.filter(
-        (n) => n.assignmentId && assignments.has(n.assignmentId),
-      ).length,
-      completions: s.completions.filter((r) => enrollments.has(r.enrollmentId))
-        .length,
-      certifications: s.certifications.filter((r) =>
-        assignments.has(r.assignmentId),
-      ).length,
-      comparisons: s.comparisons.filter((r) => enrollments.has(r.enrollmentId))
-        .length,
-    },
-  };
 }
 
 export function attemptView(

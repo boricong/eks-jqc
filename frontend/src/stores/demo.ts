@@ -1,5 +1,5 @@
+import { releaseVersionLabel } from '@eks/contracts';
 import { randomUUID } from '../uuid';
-import { pendingMaintenance, clearMaintenance } from '../maintenance-operation';
 import { DATASET_EVENT } from '../data-generation';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
@@ -18,7 +18,6 @@ import {
   type Kind,
   type UserView as User,
   type Workspace,
-  type MaintenanceReceipt,
   type Notice,
 } from '@eks/contracts';
 
@@ -145,7 +144,6 @@ export const useDemo = defineStore('workspace', () => {
   function rememberManagement(lv1: string) {
     sessionStorage.setItem(`eks-management-${actorId.value}`, lv1);
   }
-  const maintenanceResult = ref<MaintenanceReceipt | null>(null);
   const toast = ref('');
   let toastTimer: ReturnType<typeof setTimeout>;
   function notify(message: string) {
@@ -185,6 +183,11 @@ export const useDemo = defineStore('workspace', () => {
     }
   }
   async function initialize() {
+    try {
+      sessionStorage.removeItem('eks-maintenance-pending');
+    } catch {
+      /* Optional browser storage. */
+    }
     if (boot) return boot;
     boot = (async () => {
       loading.value = true;
@@ -221,15 +224,6 @@ export const useDemo = defineStore('workspace', () => {
       workspaceScope.value = '';
       await refresh();
       toast.value = '';
-      maintenanceResult.value = null;
-      const operationKey = pendingMaintenance();
-      if (operationKey && result.actor.roles.includes('system_operator')) {
-        const status = await api<{ receipt: MaintenanceReceipt | null }>(
-          `/system/master-data/operations/${encodeURIComponent(operationKey)}`,
-        );
-        maintenanceResult.value = status.receipt;
-        clearMaintenance();
-      }
     } catch (error) {
       connectionError.value = (error as Error).message;
       throw error;
@@ -276,6 +270,7 @@ export const useDemo = defineStore('workspace', () => {
     newVersion?: boolean;
     version?: number;
     readiness?: string[];
+    releaseVersion?: { major: number; minor: number };
     linkedQualifications?: { id: string; title: string; version: number }[];
     id: string;
     revision: number;
@@ -289,7 +284,6 @@ export const useDemo = defineStore('workspace', () => {
     sessionActor.value = null;
     data.value = empty();
     workspaceScope.value = '';
-    maintenanceResult.value = null;
     connectionError.value =
       '설정·기준 초기화 또는 교체로 세션이 종료되었습니다. 계정을 다시 선택해 주세요.';
     void api<User[]>('/actors')
@@ -347,7 +341,7 @@ export const useDemo = defineStore('workspace', () => {
     const result = await command(`/${section}/${item.id}`, { ...item, ...review }, 'PUT');
     notify(
       result.newVersion
-        ? `기존 기록을 보존하고 v${result.version} 버전을 저장했습니다. 최신 저장 버전을 신규 업무에 사용합니다.`
+        ? `${releaseVersionLabel(result)} 버전을 저장했습니다. 확정된 계획의 기준은 유지됩니다.`
         : '기준을 저장했습니다.',
     );
     return result;
@@ -375,7 +369,6 @@ export const useDemo = defineStore('workspace', () => {
   }
   return {
     data,
-    maintenanceResult,
     actors,
     actor,
     actorId,

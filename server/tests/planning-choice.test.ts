@@ -1,3 +1,4 @@
+import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -8,7 +9,7 @@ import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migratePlanning } from "../src/planning-migration.ts";
 import { validateState } from "../src/integrity.ts";
 import { registerFixtureQualification } from "./template-helpers.ts";
@@ -334,7 +335,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 25);
+  assert.equal(next.state.schemaVersion, 26);
   assert.deepEqual(
     next.state.plans.map((p) => p.previousSchedule!.schedules),
     raw.plans.map((p: any) => p.schedules),
@@ -515,7 +516,7 @@ test("13 이관의 교체 실패·해시 충돌은 원본 파일 쌍을 보존�
   );
   assert.deepEqual(await readFile(f.file), bytes);
 });
-test("인증 근거로 완료한 요청은 만료와 진행 초기화 후에도 당시 근거와 완료를 보존한다", async (t) => {
+test("인증 근거로 완료한 요청은 만료 후에도 당시 근거와 완료를 보존한다", async (t) => {
   const f = await fixture(t);
   await f.mutate((s) => {
     s.qualifications.find((q) => q.id === qid)!.validity = {
@@ -575,19 +576,6 @@ test("인증 근거로 완료한 요청은 만료와 진행 초기화 후에도 
       )!.lifecycleStatus,
     "Revoke",
   );
-  const preview = await f.call(
-    "operator-1",
-    "/testing/progress?scope=organization&lv1OrganizationId=org-photo",
-  );
-  await f.call("operator-1", "/testing/progress/reset", {
-    revision: preview.revision,
-    scope: preview.scope,
-    confirmation: "초기화",
-  });
-  assert.deepEqual(f.row(id).completion, evidence);
-  assert.equal((await f.view(id)).stage, "계획 완료");
-  assert.equal(f.store.snapshot().certifications.length, 0);
-  validateState(f.store.snapshot(), f.store.organizations.snapshot());
 });
 
 test("직접 계획 시작은 요청 포함·초안·감사를 함께 저장하고 실패·재전송·동시 요청을 보호한다", async (t) => {
@@ -762,7 +750,12 @@ test("적용 버전이 바뀌면 원본 초안을 보존하고 새 초안만 재
   await f.pool();
   const request = await f.req(),
     old = await f.plan(request);
-  const next = await f.call("admin-1", `/qualifications/${qid}/versions`, {});
+  const next = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "qualifications", qid),
+    200,
+    "PUT",
+  );
   await f.pool([next.id]);
   const current = await f.plan(request, next.id);
   assert.notEqual(current.id, old.id);

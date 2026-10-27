@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import PropertyList from '../components/PropertyList.vue';
 import ActionBar from '../components/ActionBar.vue';
@@ -404,7 +405,7 @@ onBeforeRouteUpdate(leave);
       </div>
       <p class="assessment-context">
         <CourseCategory :course="c" /><strong>{{ c.title }}</strong
-        ><span>v{{ c.version }} · {{ kindLabels[kind] }}</span>
+        ><span>{{ releaseVersionLabel(c) }} · {{ kindLabels[kind] }}</span>
       </p>
       <section v-show="infoOpen" :id="uid + '-info'" class="assessment-info" aria-label="평가 정보">
         <PropertyList>

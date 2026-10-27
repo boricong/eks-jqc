@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -9,13 +10,13 @@ import { randomUUID, createHash } from "node:crypto";
 import { qualificationUseErrors } from "@eks/contracts";
 import { JsonStore } from "../src/storage.ts";
 import { seedState } from "../src/seed.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import {
   exportMaster,
   readMaster,
   contentHash,
   masterCandidate,
-} from "../src/master-data.ts";
+} from "./legacy-master-data.ts";
 import { migrateReadyQualifications } from "../src/ready-qualification-migration.ts";
 import { validateState } from "../src/integrity.ts";
 import { currentQualification } from "../src/qualification-templates.ts";
@@ -173,7 +174,7 @@ test("Ready 등록·중복·무변경·공통 정보 수정은 버전 없이 유
     `/qualifications/${id}/versions`,
     { revision: current.revision },
     "POST",
-    409,
+    410,
   );
 });
 
@@ -312,7 +313,7 @@ test("개별 무변경 저장은 Ready를 유지하며 삭제 재등록과 최�
     f.store.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(file.formatVersion, 14);
+  assert.equal(file.formatVersion, 15);
   assert.deepEqual(readMaster(file).payload, file.payload);
   const old: any = structuredClone(file);
   delete old.payload.commonCourses;
@@ -385,8 +386,8 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   });
   const org = f.store.organizations.snapshot(),
     migrated = migrateReadyQualifications(raw, org);
-  assert.equal(migrated.state.schemaVersion, 25);
-  assert.equal(migrated.state.revision, raw.revision + 7);
+  assert.equal(migrated.state.schemaVersion, 26);
+  assert.equal(migrated.state.revision, raw.revision + 8);
   for (const field of [
     "qualifications",
     "courses",
@@ -397,7 +398,10 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
     "users",
     "requests",
   ] as const)
-    assert.deepEqual(migrated.state[field], raw[field]);
+    assert.deepEqual(
+      historicalContent(migrated.state[field]),
+      historicalContent(raw[field]),
+    );
   assert.deepEqual(
     migrateReadyQualifications(migrated.state, org).state,
     migrated.state,
@@ -445,7 +449,11 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   assert.deepEqual(await readFile(report.maintenanceBackup), maintenance);
   const after = await readFile(f.file);
   await disk.migratePolicies(
-    { ...expected, revision: raw.revision + 7, stateHash: hash(after) },
+    {
+      ...expected,
+      revision: JSON.parse(after.toString()).revision,
+      stateHash: hash(after),
+    },
     migrateReadyQualifications,
     "ready-qualifications",
   );

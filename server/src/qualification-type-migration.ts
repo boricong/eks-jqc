@@ -10,14 +10,14 @@ export function migrateQualificationTypes(
 ) {
   const raw = input as any;
   if (
-    ![13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25].includes(
+    ![13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].includes(
       raw?.schemaVersion,
     )
   )
     throw new Error("인증 유형 이관에는 업무13·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput);
   const next = structuredClone(raw);
-  const alreadyApplied = raw.schemaVersion === 25;
+  const alreadyApplied = raw.schemaVersion >= 25;
   const counts = {
     templates: next.qualificationTemplates.length,
     qualifications: next.qualifications.length,

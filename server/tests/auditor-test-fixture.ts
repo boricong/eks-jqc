@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { validateState } from "../src/integrity.ts";
 import { migrateAuditorProgram } from "../src/auditor-program-migration.ts";
 import {
@@ -17,7 +17,7 @@ import {
   readMaster,
   masterCandidate,
   contentHash,
-} from "../src/master-data.ts";
+} from "./legacy-master-data.ts";
 
 export async function setup(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-auditor-program-")),

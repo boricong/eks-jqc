@@ -1,3 +1,11 @@
+import {
+  courseChange,
+  releaseNumber,
+  releaseInfo,
+  propagateCommon,
+  latestCompleteCommon,
+} from "./releases.ts";
+import { nextReleaseVersion, releaseVersionLabel } from "@eks/contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -175,14 +183,44 @@ export function saveCommonCourse(
     updatedAt: at,
     updatedBy: actorId,
   });
-  if (
-    old &&
-    isDeepStrictEqual(
-      CourseContentSchema.parse(old),
-      CourseContentSchema.parse(next),
-    )
-  )
-    return commonCourseView(s, old);
+  if (old && courseChange(old, next) === "none")
+    return {
+      ...commonCourseView(s, old),
+      releaseChange: {
+        kind: "none",
+        before: releaseVersionLabel(old),
+        after: releaseVersionLabel(old),
+        reasons: [],
+      },
+    };
+  const kind = old ? courseChange(old, next) : "none";
+  const released = {
+    ...CourseContentSchema.parse(next),
+    id: randomUUID(),
+    commonCourseId: next.id,
+    sequence:
+      Math.max(
+        0,
+        ...s.commonCourseReleases
+          .filter((r) => r.commonCourseId === next.id)
+          .map((r) => r.sequence),
+      ) + 1,
+    releaseVersion: old
+      ? nextReleaseVersion(
+          releaseNumber(old),
+          kind === "major" ? "major" : "minor",
+        )
+      : { major: 1, minor: 0 },
+    releaseInfo: releaseInfo(
+      old ? (kind === "major" ? "major" : "minor") : "initial",
+      actorId,
+      "공통 원본 저장",
+      old?.headReleaseId,
+    ),
+  };
+  next.releaseVersion = released.releaseVersion;
+  next.headReleaseId = released.id;
+  s.commonCourseReleases.push(released);
   if (old) s.commonCourses[s.commonCourses.indexOf(old)] = next;
   else s.commonCourses.push(next);
   s.audits.push({
@@ -194,7 +232,23 @@ export function saveCommonCourse(
     reason: "시스템 공통인증Set 관리",
     details: { before: old ?? null, after: next },
   });
-  return commonCourseView(s, next);
+  const propagation = propagateCommon(s, released, actorId);
+  return {
+    ...commonCourseView(s, next),
+    propagation,
+    releaseChange: {
+      kind: old ? kind : "initial",
+      before: releaseVersionLabel(old),
+      after: releaseVersionLabel(next),
+      reasons: [
+        old
+          ? kind === "major"
+            ? "채점 문항 변경"
+            : "이름·학습 정보·평가 설정 변경"
+          : "최초 저장",
+      ],
+    },
+  };
 }
 export function changeCommonCourseStatus(
   s: State,
@@ -249,7 +303,14 @@ export function changeCommonCourseStatus(
 export function copyCommonCourses(s: State, ids: string[], team: string) {
   return ids.map((id) => {
     const original = s.commonCourses.find((c) => c.id === id)!;
-    const content = CourseContentSchema.parse(original),
+    const released = latestCompleteCommon(s, id);
+    demand(
+      released,
+      422,
+      "완성된 공통인증Set 버전이 없습니다. 원본 기준을 보완해 주세요.",
+      "COMMON_COURSE_INCOMPLETE",
+    );
+    const content = CourseContentSchema.parse(released),
       fresh = (items: { id: string }[]) =>
         items.map((item) => ({
           ...structuredClone(item),
@@ -263,6 +324,12 @@ export function copyCommonCourses(s: State, ids: string[], team: string) {
       entityId: copyId,
       lv1OrganizationId: team,
       version: 1,
+      releaseVersion: { major: 1, minor: 0 },
+      releaseInfo: releaseInfo(
+        "initial",
+        "system",
+        "공통 원본에서 팀 사본 등록",
+      ),
       revision: 1,
       operationalStatus: "active",
       category: "common",
@@ -270,6 +337,8 @@ export function copyCommonCourses(s: State, ids: string[], team: string) {
         id: original.id,
         revision: original.revision,
         baselineHash: courseContentHash(content),
+        releaseId: released.id,
+        releaseVersion: released.releaseVersion,
       },
       learningItems: fresh(content.learningItems),
       materials: fresh(content.materials),

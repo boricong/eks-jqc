@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -8,7 +9,7 @@ import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { migrateQualificationPlans } from "../src/qualification-plan-migration.ts";
 import { JsonStore } from "../src/storage.ts";
 import { validateState } from "../src/integrity.ts";
-import { exportMaster, readMaster } from "../src/master-data.ts";
+import { exportMaster, readMaster } from "./legacy-master-data.ts";
 
 async function start(f: Awaited<ReturnType<typeof setup>>) {
   const r = await legacyRequestFixture(f.store, "admin-1", {
@@ -144,7 +145,11 @@ test("24→25 날짜·긴 목표·원문 보존, JSON14 호환·재이관 및 �
   assert.deepEqual(raw, before);
   for (const k of Object.keys(raw))
     if (!["schemaVersion", "revision", "audits", "plans"].includes(k))
-      assert.deepEqual((result.state as any)[k], raw[k], k);
+      assert.deepEqual(
+        historicalContent((result.state as any)[k]),
+        historicalContent(raw[k]),
+        k,
+      );
   assert.deepEqual(
     migrateQualificationPlans(result.state, org).state,
     result.state,
@@ -175,11 +180,11 @@ test("24→25 날짜·긴 목표·원문 보존, JSON14 호환·재이관 및 �
   assert.equal(empty.endOn, "");
   assert.ok(empty.scheduleDefaultsAppliedAt);
   const json = exportMaster(result.state, org, "2026-10-27T00:00:00.000Z");
-  assert.equal(json.formatVersion, 14);
-  assert.equal(json.stateSchemaVersion, 25);
+  assert.equal(json.formatVersion, 15);
+  assert.equal(json.stateSchemaVersion, 26);
   assert.equal(Object.hasOwn(json.payload, "plans"), false);
   assert.deepEqual(
-    readMaster({ ...json, stateSchemaVersion: 24 }).payload,
+    readMaster({ ...json, formatVersion: 14, stateSchemaVersion: 24 }).payload,
     json.payload,
   );
 });
@@ -229,7 +234,11 @@ test("명시 이관은 실행 중 자동 적용하지 않으며 해시·실패·
   const after = await Promise.all(files.map((v) => readFile(v)));
   assert.deepEqual(after[1], before[1]);
   await store.migratePolicies(
-    { ...expected, revision: raw.revision + 1, stateHash: hash(after[0]!) },
+    {
+      ...expected,
+      revision: JSON.parse(after[0]!.toString()).revision,
+      stateHash: hash(after[0]!),
+    },
     migrateQualificationPlans,
     "qualification-plans",
   );

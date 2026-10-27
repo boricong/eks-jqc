@@ -17,25 +17,27 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
   await page.goto('/admin/courses/demo-course-1');
   const group = page.getByRole('group', { name: '평가 유형' });
   await expect(group.getByRole('checkbox')).toHaveCount(3);
-  await courseSection(page, '학습 항목');
-  await page.getByRole('button', { name: '학습 항목 추가' }).click();
-  await expect(page.getByRole('tablist', { name: '학습 항목' }).getByRole('tab')).toHaveCount(2);
-  const title = page.getByLabel('학습 항목명');
+  await courseSection(page, '학습 정보');
+  await page.getByRole('button', { name: '교육 추가' }).click();
+  await expect(
+    page.getByRole('tablist', { name: '학습 정보 항목' }).getByRole('tab', { name: /^교육/ }),
+  ).toHaveCount(2);
+  const title = page.getByLabel('교육명');
   await expect(title).toBeFocused();
   await title.fill('안전 상태 확인');
-  await page.getByRole('button', { name: '학습 항목 추가' }).click();
+  await page.getByRole('button', { name: '교육 추가' }).click();
   await title.fill('결과 기록');
-  const tabs = page.getByRole('tablist', { name: '학습 항목' });
-  await tabs.getByRole('tab', { name: /3번 결과 기록/ }).press('ArrowUp');
-  await expect(tabs.getByRole('tab', { name: /2번 안전 상태 확인/ })).toHaveAttribute(
+  const tabs = page.getByRole('tablist', { name: '학습 정보 항목' });
+  await tabs.getByRole('tab', { name: /교육 3 · 결과 기록/ }).press('ArrowUp');
+  await expect(tabs.getByRole('tab', { name: /교육 2 · 안전 상태 확인/ })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await page.getByRole('button', { name: '이 항목 삭제' }).click();
   await answerConfirmation(page, true);
-  await expect(tabs.getByRole('tab')).toHaveCount(2);
-  await expect(tabs.getByRole('tab', { name: /3번 결과 기록/ })).toHaveCount(0);
-  await expect(tabs.getByRole('tab', { name: /2번 결과 기록/ })).toHaveAttribute(
+  await expect(tabs.getByRole('tab', { name: /^교육/ })).toHaveCount(2);
+  await expect(tabs.getByRole('tab', { name: /교육 3 · 결과 기록/ })).toHaveCount(0);
+  await expect(tabs.getByRole('tab', { name: /교육 2 · 결과 기록/ })).toHaveAttribute(
     'aria-selected',
     'true',
   );

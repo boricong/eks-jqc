@@ -123,15 +123,6 @@ export function organizationEntries(
   }
   return entries;
 }
-export const ResetScopeSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("all") }),
-  z.object({
-    type: z.literal("organization"),
-    lv1OrganizationId: organizationId,
-  }),
-]);
-export type ResetScope = z.infer<typeof ResetScopeSchema>;
-
 export interface RequestProgress {
   id: string;
   learnerId: string;

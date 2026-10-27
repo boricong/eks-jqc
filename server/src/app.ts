@@ -1,3 +1,4 @@
+import { registerReleaseRoutes } from "./release-routes.ts";
 import { auditorTemplateErrors } from "./auditor-pool.ts";
 import { registerOrganizationRequirementRoutes } from "./organization-requirement-routes.ts";
 import {
@@ -17,7 +18,6 @@ import {
   prepareCatalogSave,
   qualificationDeletionImpact,
 } from "./catalog-editing.ts";
-import { registerMasterDataRoutes } from "./master-data-routes.ts";
 import Fastify, { type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
@@ -25,12 +25,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { z } from "zod";
-import {
-  ResetScopeSchema,
-  organizationEntries,
-  type UserView,
-  type State,
-} from "@eks/contracts";
+import { organizationEntries, type UserView, type State } from "@eks/contracts";
 import {
   userView,
   organization,
@@ -60,13 +55,7 @@ import {
   changeOrganizationSettings,
   validatePolicies,
 } from "./organization-settings.ts";
-import {
-  authorize,
-  execute,
-  workspace,
-  attemptView,
-  progressSummary,
-} from "./domain.ts";
+import { authorize, execute, workspace, attemptView } from "./domain.ts";
 
 export async function buildApp(
   store: JsonStore,
@@ -130,9 +119,24 @@ export async function buildApp(
   const requestGenerations = new WeakMap<FastifyRequest, string>();
   registerAuditorRoutes(app, store, actor, clock);
   registerTeamUserRoutes(app, store, actor);
+  registerReleaseRoutes(app, store, actor);
   registerCommonCourseRoutes(app, store, actor);
   registerOrganizationRequirementRoutes(app, store, actor, clock);
   app.addHook("onRequest", async (request, reply) => {
+    if (
+      !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+      /^\/api\/(courses|qualifications|plans|common-course-updates|system\/(common-courses|qualification-templates))(\/|$)/.test(
+        request.url,
+      )
+    ) {
+      actor(request);
+      demand(
+        request.headers["x-eks-release-contract"] === "1",
+        409,
+        "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
+        "RELEASE_CONTRACT_CHANGED",
+      );
+    }
     requestGenerations.set(request, store.generation);
     demand(
       network.acceptsHost(request.headers.host),
@@ -157,19 +161,12 @@ export async function buildApp(
   app.addHook("onSend", async (_request, reply, payload) => {
     if (requestGenerations.get(_request) !== store.generation) {
       reply.header("X-EKS-Data-Generation", store.generation);
-      if (
-        ![
-          "/api/testing/master-reset",
-          "/api/system/master-data/import",
-        ].includes(_request.url)
-      ) {
-        reply.code(409).type("application/json");
-        payload = JSON.stringify({
-          code: "DATASET_CHANGED",
-          message:
-            "데이터가 초기화 또는 교체되었습니다. 계정을 다시 선택해 주세요.",
-        });
-      }
+      reply.code(409).type("application/json");
+      payload = JSON.stringify({
+        code: "DATASET_CHANGED",
+        message:
+          "데이터가 초기화 또는 교체되었습니다. 계정을 다시 선택해 주세요.",
+      });
     }
     reply.header("Cache-Control", "no-store");
     reply.header("X-Content-Type-Options", "nosniff");
@@ -202,6 +199,26 @@ export async function buildApp(
         "저장하지 못했습니다. 입력을 유지한 상태에서 다시 시도해 주세요.",
     });
   });
+  // Retired product management APIs never parse input or replay a request ledger.
+  for (const url of [
+    "/api/testing",
+    "/api/testing/*",
+    "/api/system/master-data",
+    "/api/system/master-data/*",
+  ]) {
+    app.route({
+      method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+      url,
+      onRequest: async (request, reply) => {
+        systemOperator(actor(request));
+        return reply.code(410).send({
+          code: "FEATURE_REMOVED",
+          message: "테스트 관리·데이터 초기화·설정 이전 기능이 종료되었습니다.",
+        });
+      },
+      handler: async () => {},
+    });
+  }
   app.get("/api/health", async () => ({
     ok: true,
     revision: store.snapshot().revision,
@@ -244,8 +261,8 @@ export async function buildApp(
     reply.clearCookie(cookieName, { path: "/api" });
     return { ok: true };
   });
-  app.get("/api/workspace", async (request) =>
-    workspace(
+  app.get("/api/workspace", async (request) => ({
+    ...workspace(
       store.snapshot(),
       actor(request),
       store.organizations.snapshot(),
@@ -254,28 +271,7 @@ export async function buildApp(
         .parse(request.query).lv1OrganizationId,
       clock(),
     ),
-  );
-  app.get("/api/testing/progress", async (request) => {
-    systemOperator(actor(request));
-    const query = z
-      .object({
-        scope: z.enum(["all", "organization"]),
-        lv1OrganizationId: z.string().optional(),
-      })
-      .parse(request.query);
-    const scope = ResetScopeSchema.parse({
-      type: query.scope,
-      lv1OrganizationId: query.lv1OrganizationId,
-    });
-    if (scope.type === "organization")
-      demand(
-        organization(store.organizations.snapshot(), scope.lv1OrganizationId)
-          .level === 1,
-        422,
-        "Lv1 조직을 선택해 주세요.",
-      );
-    return progressSummary(store.snapshot(), scope);
-  });
+  }));
   app.get("/api/home", async (request) => {
     const view = workspace(
       store.snapshot(),
@@ -436,7 +432,7 @@ export async function buildApp(
       completions: a.enrollments.map((e) => e.completion),
     };
   });
-  registerMasterDataRoutes(app, store, actor, clock, () => sessions.clear());
+
   registerCatalogRoutes(app, store, actor);
   registerLifecycleRoutes(app, store, actor, clock);
   registerDashboardRoutes(app, store, actor, clock);
@@ -477,9 +473,7 @@ export async function buildApp(
         let scope: string | undefined;
         const transactionOptions = {
           preserveBackup:
-            action === "progress.reset" ||
-            action === "course.delete" ||
-            action === "qualification.delete",
+            action === "course.delete" || action === "qualification.delete",
           backupPurpose:
             action === "qualification.delete"
               ? ("qualification-delete" as const)
@@ -504,9 +498,7 @@ export async function buildApp(
                 )
               : undefined;
             transactionOptions.lv1OrganizationId =
-              action === "progress.reset"
-                ? undefined
-                : scope || current.lv1OrganizationId;
+              scope || current.lv1OrganizationId;
             const previous = s.requests.find(
               (r) => r.actorId === current.id && r.key === key,
             );
@@ -762,7 +754,18 @@ export async function buildApp(
           key,
           fingerprint,
           (s) => systemOperator(actor(request, s)),
-          (s) => saveTemplate(s, u.id, target, request.body),
+          (s) => {
+            const { review, ...content } = request.body as any;
+            demand(
+              review?.stateRevision === s.revision &&
+                review?.organizationRevision ===
+                  store.organizations.snapshot().revision,
+              409,
+              "검토 후 기준이 변경되었습니다. 다시 검토해 주세요.",
+              "REVISION_CONFLICT",
+            );
+            return saveTemplate(s, u.id, target, content);
+          },
           { action: "qualification-template.save", preserveBackup: true },
         );
       },
@@ -996,6 +999,7 @@ export async function buildApp(
   );
   mutation("DELETE", "/api/plans/:id", "plan.delete");
   mutation("POST", "/api/plans/:id/complete", "plan.complete");
+  mutation("POST", "/api/plans/:id/review-criteria", "plan.review-criteria");
   app.put("/api/enrollments/:id/learning", async (request, reply) => {
     const u = actor(request),
       s = store.snapshot(),
@@ -1014,7 +1018,6 @@ export async function buildApp(
   });
   mutation("POST", "/api/notifications/:id/read", "notification.read");
   mutation("POST", "/api/notices", "notice.save", () => "");
-  mutation("POST", "/api/testing/progress/reset", "progress.reset", () => "");
   if (options.serveFrontend) {
     const root = fileURLToPath(new URL("../../frontend/dist", import.meta.url));
     if (existsSync(root)) {

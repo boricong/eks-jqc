@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import PreviousPlanSchedule from './PreviousPlanSchedule.vue';
 import { api } from '../api';
 import type { PlanningRequestPreview, PlanningRequest } from '@eks/contracts';
@@ -422,7 +423,7 @@ onBeforeRouteUpdate(leave);
           </p>
           <ul>
             <li v-for="target in r.selections" :key="target.entityId">
-              {{ target.title }} · 요청 당시 v{{ target.version }}
+              {{ target.title }} · 요청 당시 {{ releaseVersionLabel(target) }}
             </li>
           </ul>
         </section>

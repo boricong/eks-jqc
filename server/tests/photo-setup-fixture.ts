@@ -1,4 +1,4 @@
-import { scenarioQuestions } from "./assessment-transition.ts";
+import { scenarioQuestions } from "../src/assessment-transition.ts";
 import { createHash, randomUUID } from "node:crypto";
 import {
   CourseSchema,
@@ -10,9 +10,9 @@ import {
   type Qualification,
   type State,
 } from "@eks/contracts";
-import { validateState } from "./integrity.ts";
-import { PHOTO_ID } from "./organizations.ts";
-import { qualificationTemplates } from "./workflow.ts";
+import { validateState } from "../src/integrity.ts";
+import { PHOTO_ID } from "../src/organizations.ts";
+import { qualificationTemplates } from "../src/workflow.ts";
 import {
   PHOTO_FIXTURE_VERSION,
   photoCourseSpecs,

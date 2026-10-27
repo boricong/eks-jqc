@@ -1,3 +1,4 @@
+import { saveCommonCourse } from '../../server/src/common-courses';
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { courseSection, saveCriterion } from './catalog-helpers';
 import { CourseContentSchema } from '@eks/contracts';
@@ -6,10 +7,11 @@ async function systemCourse(page: any, type: 'auditee' | 'auditor', title: strin
   await page.getByRole('button', { name: '새 공통인증Set 만들기', exact: true }).click();
   await page.getByLabel('인증Set명', { exact: true }).fill(title);
   await page.getByLabel('인증 유형', { exact: true }).selectOption(type);
-  await courseSection(page, '학습 항목');
-  await page.getByRole('button', { name: '학습 항목 추가', exact: true }).click();
-  await page.getByLabel('학습 항목명', { exact: true }).fill('공통 필수 교육 확인');
+  await courseSection(page, '학습 정보');
+  await page.getByRole('button', { name: '교육 추가', exact: true }).click();
+  await page.getByLabel('교육명', { exact: true }).fill('공통 필수 교육 확인');
   await page.getByRole('button', { name: '공통인증Set 저장', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByRole('heading', { name: '공통인증Set 관리', exact: true })).toBeVisible();
 }
 for (const type of ['auditee', 'auditor'] as const) {
@@ -23,6 +25,23 @@ for (const type of ['auditee', 'auditor'] as const) {
     await actor(page, 'operator-1');
     const title = type === 'auditee' ? '공통 현장 교육' : '공통 심사 교육';
     await systemCourse(page, type, title);
+    if (type === 'auditee')
+      await backend.store.transact(
+        'operator-1',
+        crypto.randomUUID(),
+        'complete-common',
+        () => {},
+        (s) => {
+          const c = s.commonCourses[0]!;
+          saveCommonCourse(s, 'operator-1', c.id, {
+            ...CourseContentSchema.parse(s.courses[0]),
+            title: c.title,
+            learningItems: c.learningItems,
+            revision: c.revision,
+          });
+          return {};
+        },
+      );
     await page.goto('/system/qualification-templates');
     await page.getByRole('button', { name: '새 기본자격 만들기', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '기본자격 편집', exact: true });
@@ -72,11 +91,11 @@ for (const type of ['auditee', 'auditor'] as const) {
       await page.getByRole('button', { name: '최초 설정 저장', exact: true }).click();
       const confirm = page.getByRole('dialog', { name: '기준 저장 확인', exact: true });
       await expect(
-        confirm.getByText('v1으로 최초 설정 저장', { exact: true }).last(),
+        confirm.getByText('v1.0으로 최초 설정 저장', { exact: true }).last(),
       ).toBeVisible();
       await confirm
         .locator('.dialog-footer')
-        .getByRole('button', { name: 'v1으로 최초 설정 저장', exact: true })
+        .getByRole('button', { name: 'v1.0으로 최초 설정 저장', exact: true })
         .click();
       await expect
         .poll(() => backend.store.snapshot().qualifications.find((x) => x.id === q.id)!.version)
@@ -162,8 +181,12 @@ test('공통 원본 저장 충돌과 저장 실패는 입력을 유지하고 최
     crypto.randomUUID(),
     () => {},
     (s) => {
-      s.commonCourses[0]!.title = '다른 창의 변경';
-      s.commonCourses[0]!.revision++;
+      const c = s.commonCourses[0]!;
+      saveCommonCourse(s, 'operator-1', c.id, {
+        ...CourseContentSchema.parse(c),
+        title: '다른 창의 변경',
+        revision: c.revision,
+      });
       return {};
     },
   );
@@ -188,9 +211,11 @@ test('공통 원본 저장 충돌과 저장 실패는 입력을 유지하고 최
     } else await route.continue();
   });
   await page.getByRole('button', { name: '공통인증Set 저장', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByRole('alert')).toContainText('시험 저장 실패');
   await expect(page.getByLabel('인증Set명', { exact: true })).toHaveValue('내가 작성한 공통');
   await page.getByRole('button', { name: '공통인증Set 저장', exact: true }).click();
+  await answerConfirmation(page, true);
   await expect(page.getByRole('heading', { name: '공통인증Set 관리', exact: true })).toBeVisible();
   expect(backend.store.snapshot().commonCourses[0]!.title).toBe('내가 작성한 공통');
 });

@@ -5,7 +5,7 @@ import {
   CourseSchema,
 } from "@eks/contracts";
 import { validateLegacyState as validateState } from "./integrity.ts";
-import { photoCourseSpecs } from "./photo-certification-fixture.ts";
+import { photoCourseSpecs } from "./legacy-photo-specs.ts";
 
 export const ASSESSMENT_TRANSITION = "self-assessment-v6";
 // Historical conversion kept for fixture verification only. The one-time

@@ -126,6 +126,7 @@ export const router = createRouter({
       path: '/admin/comparisons/:id?',
       redirect: (to) => ({ path: '/admin/dashboard', query: to.query }),
     },
+    { path: '/system/:retired(testing|data)', redirect: '/system/organizations' },
     { path: '/system', redirect: '/system/organizations' },
     {
       path: '/system/:section(documents)/:id?',
@@ -133,7 +134,7 @@ export const router = createRouter({
       meta: { role: 'system_operator', title: '문서 조회' },
     },
     {
-      path: '/system/:section(organizations|users|overview|testing|notices|qualification-templates|common-courses)',
+      path: '/system/:section(organizations|users|overview|notices|qualification-templates|common-courses)',
       component: SystemView,
       meta: { role: 'system_operator' },
     },

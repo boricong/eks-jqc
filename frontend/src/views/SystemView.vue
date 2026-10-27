@@ -9,8 +9,6 @@ import OrganizationPanel from '../components/OrganizationPanel.vue';
 import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
 import SystemNotices from '../components/SystemNotices.vue';
-import MasterDataPanel from '../components/MasterDataPanel.vue';
-import TestProgressPanel from '../components/TestProgressPanel.vue';
 const SystemDocuments = defineAsyncComponent(() => import('../components/SystemDocuments.vue'));
 const route = useRoute();
 const store = useDemo();
@@ -55,11 +53,7 @@ watch(
         mode="system"
       /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
         v-else-if="section === 'notices'"
-      /><SystemDocuments v-else-if="section === 'documents'" /><template v-else
-        ><h1>테스트 관리</h1>
-        <TestProgressPanel />
-        <MasterDataPanel
-      /></template>
+      /><SystemDocuments v-else-if="section === 'documents'" />
     </div>
   </div>
 </template>

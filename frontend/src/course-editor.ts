@@ -5,6 +5,22 @@ export interface CourseIssue {
   field: string;
   message: string;
 }
+export function materialUrlIssue(
+  material: CourseContent['materials'][number],
+): CourseIssue | undefined {
+  if (material.type === 'text' || !material.url) return;
+  try {
+    if (['http:', 'https:'].includes(new URL(material.url).protocol)) return;
+  } catch {
+    /* Report invalid URLs at their field without losing the draft. */
+  }
+  return {
+    kind: 'materials',
+    itemId: material.id,
+    field: 'url',
+    message: '자료의 URL을 HTTP(S) 주소로 입력해 주세요.',
+  };
+}
 // Presentation locations supplement the shared publication rules; server validation remains authoritative.
 export function courseIssues(c: CourseContent): CourseIssue[] {
   const issues: CourseIssue[] = [];
@@ -25,21 +41,23 @@ export function courseIssues(c: CourseContent): CourseIssue[] {
     );
   c.materials.forEach((m, n) => {
     if (!m.title.trim())
-      add('materials', 'title', `학습자료 ${n + 1}번의 자료명을 입력해 주세요.`, m.id);
+      add('materials', 'title', `학습 정보 · 자료 ${n + 1}번의 자료명을 입력해 주세요.`, m.id);
     if (m.type === 'text' && !m.content.trim())
-      add('materials', 'content', `학습자료 ${n + 1}번의 본문을 입력해 주세요.`, m.id);
+      add('materials', 'content', `학습 정보 · 자료 ${n + 1}번의 본문을 입력해 주세요.`, m.id);
     if (m.type !== 'text' && !m.url)
-      add('materials', 'url', `학습자료 ${n + 1}번의 URL을 입력해 주세요.`, m.id);
+      add('materials', 'url', `학습 정보 · 자료 ${n + 1}번의 URL을 입력해 주세요.`, m.id);
+    const urlIssue = materialUrlIssue(m);
+    if (urlIssue) issues.push(urlIssue);
   });
   c.learningItems.forEach((i, n) => {
     if (!i.title.trim())
-      add('learning', 'title', `학습 항목 ${n + 1}번의 이름을 입력해 주세요.`, i.id);
+      add('learning', 'title', `학습 정보 · 교육 ${n + 1}번의 이름을 입력해 주세요.`, i.id);
   });
-  if (!c.learningItems.some((i) => i.required))
+  if (c.qualificationType === 'auditor' && !c.learningItems.some((i) => i.required))
     add(
       'learning',
       'required',
-      '필수 학습 항목을 하나 이상 설정해 주세요.',
+      '운영하려면 필수 교육을 하나 이상 설정해 주세요.',
       c.learningItems[0]?.id,
     );
   for (const kind of ['objective', 'practical'] as Kind[]) {

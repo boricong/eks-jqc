@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import AuditorChecklist from '../components/AuditorChecklist.vue';
 import PageHeading from '../components/PageHeading.vue';
@@ -182,13 +183,10 @@ function chooseCourse(id: string) {
         >
           <div class="section-heading qualification-course-heading">
             <div :class="{ 'learning-course-title': !showAssessments }">
-              <span v-if="showAssessments" class="small-label"
-                >선택 인증Set · v{{ course.version }}</span
-              >
+              <span v-if="showAssessments" class="small-label">선택 인증Set</span>
               <h2>{{ course.title }}</h2>
               <CourseCategory :course="course" />
               <template v-if="!showAssessments">
-                <span class="small-label">v{{ course.version }}</span>
                 <StatusBadge v-if="store.complete(selected)" status="complete" />
                 <span v-else class="status">{{ courseStatus(selected) }}</span>
               </template>
@@ -433,9 +431,13 @@ function chooseCourse(id: string) {
             </ol>
           </details>
         </template>
+        <p class="release-footer">인증Set {{ releaseVersionLabel(course) }}</p>
       </div>
     </div>
     <p v-else class="empty-inline">등록된 인증Set이 없습니다.</p>
+    <p v-if="showAssessments" class="release-footer">
+      자격 {{ releaseVersionLabel(qualification) }}
+    </p>
   </div>
   <div v-else class="container page empty-state">
     <h1>자격을 찾을 수 없습니다.</h1>

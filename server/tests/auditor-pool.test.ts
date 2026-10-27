@@ -1,3 +1,4 @@
+import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { prerequisiteCertification } from "../src/auditor-pool.ts";
 import test from "node:test";
@@ -9,7 +10,7 @@ import { startInput } from "./auditor-fixture.ts";
 import { migrateAuditorPool } from "../src/auditor-pool-migration.ts";
 import { JsonStore } from "../src/storage.ts";
 import { seedState } from "../src/seed.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 
 async function status(
   f: Awaited<ReturnType<typeof setup>>,
@@ -265,13 +266,13 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
   legacyPlanFixture(raw);
   const old = structuredClone(raw),
     converted = migrateAuditorPool(raw, org);
-  assert.equal(converted.state.schemaVersion, 25);
-  assert.equal(converted.state.revision, old.revision + 2);
+  assert.equal(converted.state.schemaVersion, 26);
+  assert.equal(converted.state.revision, old.revision + 3);
   const stripped: any = structuredClone(converted.state);
   stripped.schemaVersion = 23;
-  stripped.revision -= 2;
-  stripped.audits.splice(-2);
-  assert.deepEqual(stripped, old);
+  stripped.revision -= 3;
+  stripped.audits.splice(-3);
+  assert.deepEqual(historicalContent(stripped), historicalContent(old));
   assert.deepEqual(
     migrateAuditorPool(converted.state, org).state,
     converted.state,
@@ -284,7 +285,7 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
   master.formatVersion = 13;
   master.stateSchemaVersion = 23;
   master.sha256 = contentHash(master.payload);
-  assert.equal(readMaster(master).formatVersion, 14);
+  assert.equal(readMaster(master).formatVersion, 15);
   await f.app.close();
   await writeFile(f.file, JSON.stringify(raw));
   const files = [f.file, f.store.organizations.file, f.store.maintenanceFile],
@@ -311,7 +312,11 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
   );
   const after = await Promise.all(files.map((x) => readFile(x)));
   await new JsonStore(f.file).migratePolicies(
-    { ...expected, revision: raw.revision + 2, stateHash: hash(after[0]!) },
+    {
+      ...expected,
+      revision: JSON.parse(after[0]!.toString()).revision,
+      stateHash: hash(after[0]!),
+    },
     migrateAuditorPool,
     "auditor-pool",
   );

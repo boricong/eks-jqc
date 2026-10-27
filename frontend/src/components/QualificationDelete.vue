@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { managementTitle } from '../management-navigation';
 import { confirmAction } from '../composables/useConfirmation';
 import { ref, watch, nextTick } from 'vue';
@@ -129,13 +130,13 @@ async function remove() {
   >
     <h3>
       {{ qualification.title || '이름 없는 자격' }} ·
-      {{ qualificationVersionLabel(qualification.version) }}
+      {{ releaseVersionLabel(qualification) }}
     </h3>
     <p>{{ store.managementOrganization?.name }}</p>
     <template v-if="impact">
       <p v-if="impact.replacement">
         삭제 후 현재 기준: {{ impact.replacement.title }} ·
-        {{ qualificationVersionLabel(impact.replacement.version) }}
+        {{ releaseVersionLabel(impact.replacement) }}
       </p>
       <p v-else>남은 기준이 없어 신규 계획·학습·갱신 시작을 제한합니다.</p>
 

@@ -1,3 +1,4 @@
+import { validateReleases } from "./release-integrity.ts";
 import { validateAuditorPool } from "./auditor-pool.ts";
 import { validateRequirements } from "./organization-requirements.ts";
 import { validateSubjective } from "./subjective.ts";
@@ -27,7 +28,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && (input as any)?.schemaVersion === 25) {
+  if (!legacy && [25, 26].includes((input as any)?.schemaVersion)) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -64,6 +65,7 @@ export function validateState(
     : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
     validateSubjective(s);
+    if (s.schemaVersion === 26) validateReleases(s);
     if (organizations) validateRequirements(s, organizations);
     check(
       new Set(s.commonCourses.map((c) => c.id)).size === s.commonCourses.length,
@@ -126,8 +128,7 @@ export function validateState(
           .every(
             (x) =>
               x.category === c.category &&
-              JSON.stringify(x.commonCourseSource) ===
-                JSON.stringify(c.commonCourseSource),
+              x.commonCourseSource?.id === c.commonCourseSource?.id,
           ),
         "인증Set 계보의 공통 출처 불일치",
       );
@@ -317,6 +318,19 @@ export function validateState(
   if (!legacy) {
     const courseTypes = new Map<string, string>();
     for (const c of s.courses) {
+      // An unused first release may have changed type in the second release.
+      // Keep that original immutable content, but never allow a used release to change type.
+      const second = s.courses.find(
+        (v) => v.entityId === c.entityId && v.version === 2,
+      );
+      if (
+        s.schemaVersion === 26 &&
+        c.version === 1 &&
+        second?.releaseInfo?.kind === "minor" &&
+        !s.qualifications.some((q) => q.courseIds.includes(c.id)) &&
+        !s.enrollments.some((e) => e.courseId === c.id)
+      )
+        continue;
       check(
         !courseTypes.has(c.entityId) ||
           courseTypes.get(c.entityId) === c.qualificationType,

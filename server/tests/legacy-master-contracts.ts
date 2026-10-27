@@ -1,5 +1,6 @@
-import type { State } from "./index.ts";
-import type { OrganizationDocument } from "./organizations.ts";
+// Read-only historical format contracts for migration regression tests.
+import type { State } from "@eks/contracts";
+import type { OrganizationDocument } from "@eks/contracts";
 
 export const masterCountLabels = {
   organizationQualificationRequirements: "조직 필요자격 지정",
@@ -43,6 +44,8 @@ export type ClearedCounts = Record<keyof typeof clearedDataLabels, number>;
 export interface MasterPayload {
   organizationQualificationRequirements: State["organizationQualificationRequirements"];
   commonCourses: State["commonCourses"];
+  commonCourseReleases?: State["commonCourseReleases"];
+  commonUpdates?: State["commonUpdates"];
   auditorPrograms?: State["auditorPrograms"];
   qualificationTemplates: State["qualificationTemplates"];
   users: State["users"];
@@ -52,39 +55,11 @@ export interface MasterPayload {
 }
 export interface MasterFile {
   format: "eks-master";
-  formatVersion: 14;
-  stateSchemaVersion: 24 | 25;
+  formatVersion: 15;
+  stateSchemaVersion: 26;
   organizationSchemaVersion: 4;
   createdAt: string;
   counts: MasterCounts;
   sha256: string;
   payload: MasterPayload;
-}
-export interface MasterPreview {
-  previewId: string;
-  expiresAt: string;
-  generation: string;
-  stateRevision: number;
-  organizationRevision: number;
-  current: MasterCounts;
-  preserved: MasterCounts;
-  deleted: ClearedCounts;
-  fileHash: string;
-  fileCreatedAt?: string;
-  compatibility?: string;
-}
-export interface MaintenanceReceipt {
-  operationId: string;
-  key: string;
-  fingerprint: string;
-  actorId: string;
-  kind: "master-reset" | "master-import";
-  completedAt: string;
-  generation: string;
-  previousGeneration: string;
-  stateRevision: number;
-  organizationRevision: number;
-  preserved: MasterCounts;
-  deleted: ClearedCounts;
-  backups: { state: string; organizations: string };
 }

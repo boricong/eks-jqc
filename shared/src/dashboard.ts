@@ -121,6 +121,7 @@ export interface DashboardQualificationOption {
   registered: boolean;
   currentQualificationId?: string;
   currentVersion?: number | null;
+  currentReleaseVersion?: { major: number; minor: number } | null;
   criterionStatus?: "Ready" | "Active" | "Hold" | "Revoke";
   hasRecords: boolean;
 }
@@ -151,6 +152,7 @@ export interface DashboardQualificationCell {
   title: string;
   registered: boolean;
   currentVersion?: number | null;
+  currentReleaseVersion?: { major: number; minor: number } | null;
   efficacy: DashboardEfficacy;
   progress: DashboardProgress;
   selected: boolean;
@@ -160,6 +162,7 @@ export interface DashboardQualificationCell {
   recordQualificationId?: string;
   recordTitle?: string;
   recordVersion?: number;
+  recordReleaseVersion?: { major: number; minor: number } | null;
   issuedOn?: string;
   expiresOn?: string;
   expiryBucket?: DashboardExpiryBucket;
@@ -211,6 +214,7 @@ export interface DashboardRenewalRow extends DashboardPerson {
   title: string;
   recordTitle: string;
   recordVersion: number;
+  recordReleaseVersion?: { major: number; minor: number } | null;
   certificationId: string;
   assignmentId: string;
   efficacy: Exclude<DashboardEfficacy, "none">;
@@ -308,6 +312,7 @@ export interface DashboardDetails {
   rows: DashboardPage<DashboardDetailRow>;
 }
 export interface DashboardCourseSummary {
+  releaseVersion?: { major: number; minor: number } | null;
   qualificationType?: "auditee" | "auditor";
   confirmedItems?: number;
   requiredItems?: number;

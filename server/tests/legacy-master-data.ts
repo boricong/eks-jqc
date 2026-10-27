@@ -1,6 +1,16 @@
+// Historical JSON format reader retained only in development tests.
+import {
+  clearedDataLabels,
+  type MasterPayload,
+  type MasterFile,
+  type MasterCounts,
+  type ClearedCounts,
+} from "./legacy-master-contracts.ts";
+import { initializeReleases } from "../src/release-migration.ts";
+import { CommonCourseReleaseSchema, CommonUpdateSchema } from "@eks/contracts";
 import { OrganizationQualificationRequirementSchema } from "@eks/contracts";
-import { classifyCourseTypes } from "./course-types.ts";
-import { upgradeTemplateData } from "./template-migration.ts";
+import { classifyCourseTypes } from "../src/course-types.ts";
+import { upgradeTemplateData } from "../src/template-migration.ts";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -11,19 +21,15 @@ import {
   CommonCourseSchema,
   QualificationSchema,
   OrganizationDocumentSchema,
+  StateSchema,
   LegacyOrganizationNodeSchema,
   organizationEntries,
-  clearedDataLabels,
   type State,
   type OrganizationDocument,
-  type MasterPayload,
-  type MasterFile,
-  type MasterCounts,
-  type ClearedCounts,
 } from "@eks/contracts";
-import { validateState } from "./integrity.ts";
-import { validateOrganizations } from "./organizations.ts";
-import { demand, DomainError } from "./errors.ts";
+import { validateState } from "../src/integrity.ts";
+import { validateOrganizations } from "../src/organizations.ts";
+import { demand, DomainError } from "../src/errors.ts";
 
 export const MASTER_LIMIT = 64 * 1024 * 1024;
 export function contentHash(value: unknown): string {
@@ -50,6 +56,8 @@ export function masterPayload(
     organizationQualificationRequirements:
       state.organizationQualificationRequirements,
     commonCourses: state.commonCourses,
+    commonCourseReleases: state.commonCourseReleases,
+    commonUpdates: state.commonUpdates,
     auditorPrograms: state.auditorPrograms,
     qualificationTemplates: state.qualificationTemplates,
     users: state.users,
@@ -104,6 +112,7 @@ export function masterCandidate(
   p: MasterPayload,
   stateRevision: number,
   organizationRevision: number,
+  legacyCreatedAt = "1970-01-01T00:00:00.000Z",
 ) {
   const org = validateOrganizations({
     schemaVersion: 4,
@@ -118,20 +127,25 @@ export function masterCandidate(
       .map((k) => [k, []]),
   );
   const state = validateState(
-    {
-      schemaVersion: 25,
-      organizationQualificationRequirements: structuredClone(
-        p.organizationQualificationRequirements || [],
-      ),
-      commonCourses: structuredClone(p.commonCourses || []),
-      auditorPrograms: structuredClone(p.auditorPrograms || []),
-      qualificationTemplates: structuredClone(p.qualificationTemplates),
-      revision: stateRevision,
-      ...arrays,
-      users: structuredClone(p.users),
-      courses: structuredClone(p.courses),
-      qualifications: structuredClone(p.qualifications),
-    },
+    initializeReleases(
+      {
+        schemaVersion: 25,
+        organizationQualificationRequirements: structuredClone(
+          p.organizationQualificationRequirements || [],
+        ),
+        commonCourses: structuredClone(p.commonCourses || []),
+        commonCourseReleases: structuredClone(p.commonCourseReleases || []),
+        commonUpdates: structuredClone(p.commonUpdates || []),
+        auditorPrograms: structuredClone(p.auditorPrograms || []),
+        qualificationTemplates: structuredClone(p.qualificationTemplates),
+        revision: stateRevision,
+        ...arrays,
+        users: structuredClone(p.users),
+        courses: structuredClone(p.courses),
+        qualifications: structuredClone(p.qualifications),
+      },
+      legacyCreatedAt,
+    ),
     org,
   );
   return { state, organizations: org };
@@ -144,8 +158,8 @@ export function exportMaster(
   const payload = masterPayload(s, org);
   return {
     format: "eks-master",
-    formatVersion: 14,
-    stateSchemaVersion: 25,
+    formatVersion: 15,
+    stateSchemaVersion: 26,
     organizationSchemaVersion: 4,
     createdAt: at,
     counts: masterCounts(payload),
@@ -176,6 +190,8 @@ const payloadSchema = z
       .array(OrganizationQualificationRequirementSchema)
       .default([]),
     commonCourses: z.array(CommonCourseSchema).default([]),
+    commonCourseReleases: z.array(CommonCourseReleaseSchema).default([]),
+    commonUpdates: z.array(CommonUpdateSchema).default([]),
     auditorPrograms: z.array(AuditorProgramSchema).default([]),
     qualificationTemplates: z.array(QualificationTemplateSchema),
     users: z.array(UserSchema),
@@ -189,6 +205,29 @@ const payloadSchema = z
 export function readMaster(input: unknown): MasterFile {
   try {
     const version = (input as any)?.formatVersion;
+    if (version === 15) {
+      const p = (input as any)?.payload;
+      demand(
+        Array.isArray(p?.commonCourseReleases) &&
+          Array.isArray(p?.commonUpdates) &&
+          (p?.courses || []).every(
+            (c: any) => c.releaseVersion && c.releaseInfo,
+          ) &&
+          (p?.qualifications || []).every(
+            (q: any) =>
+              q.releaseInfo &&
+              (q.version === null
+                ? q.releaseVersion === null
+                : q.releaseVersion),
+          ) &&
+          (p?.commonCourses || []).every(
+            (c: any) => c.releaseVersion && c.headReleaseId,
+          ),
+        422,
+        "JSON15의 버전 이력과 표시 번호가 누락되었습니다. 원본 파일을 다시 내보내 주세요.",
+        "MASTER_FILE_INVALID",
+      );
+    }
     if (version < 14) {
       const p = (input as any)?.payload;
       demand(
@@ -237,7 +276,7 @@ export function readMaster(input: unknown): MasterFile {
         "Ready 자격은 기본정보 JSON v9 이상에서만 사용할 수 있습니다.",
         "MASTER_FILE_INVALID",
       );
-    if (version >= 4 && version <= 14) {
+    if (version >= 4 && version <= 15) {
       const payload = (input as any)?.payload;
       for (const item of [
         ...(payload?.qualificationTemplates || []),
@@ -361,7 +400,9 @@ export function readMaster(input: unknown): MasterFile {
                                   ? 12
                                   : version === 13
                                     ? 13
-                                    : 14,
+                                    : version === 14
+                                      ? 14
+                                      : 15,
         ),
         stateSchemaVersion: legacy
           ? z.literal(10)
@@ -389,7 +430,9 @@ export function readMaster(input: unknown): MasterFile {
                                 ? z.literal(22)
                                 : version === 13
                                   ? z.literal(23)
-                                  : z.union([z.literal(24), z.literal(25)]),
+                                  : version === 14
+                                    ? z.union([z.literal(24), z.literal(25)])
+                                    : z.literal(26),
         organizationSchemaVersion: z.literal(
           version < 8 ? 2 : version < 11 ? 3 : 4,
         ),
@@ -484,7 +527,7 @@ export function readMaster(input: unknown): MasterFile {
           };
         }
     }
-    masterCandidate(payload, 0, 0);
+    const upgraded = masterCandidate(payload, 0, 0, result.createdAt);
     const counts = masterCounts(payload);
     const previousCounts = { ...counts } as Record<string, number>;
     if (version < 13)
@@ -504,51 +547,21 @@ export function readMaster(input: unknown): MasterFile {
     );
     return {
       ...result,
-      formatVersion: 14,
-      stateSchemaVersion: 25,
+      formatVersion: 15,
+      stateSchemaVersion: 26,
       organizationSchemaVersion: 4,
-      payload,
-      sha256: contentHash(payload),
+      payload: masterPayload(upgraded.state, upgraded.organizations),
+      sha256: contentHash(
+        masterPayload(upgraded.state, upgraded.organizations),
+      ),
       counts,
     };
   } catch (e) {
     if (e instanceof DomainError) throw e;
     throw new DomainError(
       422,
-      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v14(업무24·조직4), 호환 형식 v1~v13(업무10~23·조직2~4)입니다. ${e instanceof Error ? e.message : ""}`,
+      `설정·기준 파일을 확인해 주세요. 지원 형식은 eks-master v15(업무26·조직4), 호환 형식 v1~v14입니다. ${e instanceof Error ? e.message : ""}`,
       "MASTER_FILE_INVALID",
     );
   }
 }
-
-export const MaintenanceDocumentSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    generation: z.string().uuid(),
-    receipts: z.array(
-      z
-        .object({
-          operationId: z.string().uuid(),
-          key: z.string().min(1).max(160),
-          fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-          actorId: z.string().min(1),
-          kind: z.enum(["master-reset", "master-import"]),
-          completedAt: z.iso.datetime(),
-          generation: z.string().uuid(),
-          previousGeneration: z.string().uuid(),
-          stateRevision: z.number().int().nonnegative(),
-          organizationRevision: z.number().int().nonnegative(),
-          preserved: z.record(z.string(), z.number().int().nonnegative()),
-          deleted: z.record(z.string(), z.number().int().nonnegative()),
-          backups: z
-            .object({ state: z.string(), organizations: z.string() })
-            .strict(),
-        })
-        .strict(),
-    ),
-  })
-  .strict()
-  .refine(
-    (v) => new Set(v.receipts.map((r) => r.key)).size === v.receipts.length,
-    "실행 영수증 식별자 중복",
-  );

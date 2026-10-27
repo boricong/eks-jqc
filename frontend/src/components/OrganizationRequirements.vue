@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import type { OrganizationRequirementsView, RequirementsPreview } from '@eks/contracts';
@@ -217,7 +218,7 @@ defineExpose({ canLeave });
                     (!org.effectiveActive || !!q.issues.length))
                 "
                 @change="toggle(org.id, q.entityId, ($event.target as HTMLInputElement).checked)"
-              />{{ q.title }} · v{{ q.version }}</label
+              />{{ q.title }} · {{ releaseVersionLabel(q) }}</label
             >
             <details v-if="q.issues.length" class="muted">
               <summary>운영 준비 확인 필요 · {{ q.issues.length }}개 사유</summary>

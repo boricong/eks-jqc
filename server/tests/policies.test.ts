@@ -1,3 +1,5 @@
+import { historicalContent } from "./historical-content.ts";
+import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import {
@@ -25,7 +27,7 @@ import {
   nodeFor,
 } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migratePolicies } from "../src/policy-migration.ts";
 import { validateState } from "../src/integrity.ts";
 
@@ -350,7 +352,12 @@ test("적용 버전·소속 변경은 초안 확정을 막고 입력과 요청 �
       endOn: p.endOn,
       goal: p.goal,
     });
-  const v = await f.call("admin-1", `/qualifications/${q1}/versions`, {});
+  const v = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "qualifications", q1),
+    200,
+    "PUT",
+  );
   const draft = f.store.snapshot().qualifications.find((q) => q.id === v.id)!;
   await f.call("admin-1", `/qualifications/${v.id}`, draft, undefined, "PUT");
   await f.pool([v.id]);
@@ -421,7 +428,12 @@ test("학습 기록 없이 두 평가·수료·인증, 유효 구버전 인증 �
     .snapshot()
     .certifications.find((c) => c.assignmentId === a.assignmentId)!;
   assert.ok(cert);
-  const v = await f.call("admin-1", `/qualifications/${q1}/versions`, {});
+  const v = await f.call(
+    "admin-1",
+    ...releaseFixture(f.store.snapshot(), "qualifications", q1),
+    200,
+    "PUT",
+  );
   await f.call(
     "admin-1",
     `/qualifications/${v.id}`,
@@ -585,7 +597,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 25);
+  assert.equal(migrated.schemaVersion, 26);
   assert.equal(master.schemaVersion, 4);
   for (const key of [
     "users",
@@ -601,6 +613,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
     assert.deepEqual(
       migrated[key].map((r: any) => {
         const copy = { ...r };
+        delete copy.frozenCriteria;
         delete copy.certificationEligibility;
         delete copy.lifecycleStatus;
         delete copy.renewalLeadMonths;
@@ -610,6 +623,7 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
       }),
       raw[key].map((r: any) => {
         const copy = { ...r };
+        delete copy.frozenCriteria;
         delete copy.certificationEligibility;
         delete copy.lifecycleStatus;
         delete copy.renewalLeadMonths;

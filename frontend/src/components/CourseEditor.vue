@@ -3,8 +3,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue';
 import { qualificationTypeLabels, type CourseContent, type Kind } from '@eks/contracts';
 import SubjectiveQuestionsEditor from './SubjectiveQuestionsEditor.vue';
 import CompactTabs from './CompactTabs.vue';
-import CourseMaterialsEditor from './CourseMaterialsEditor.vue';
-import CourseLearningEditor from './CourseLearningEditor.vue';
+import CourseLearningInfo from './CourseLearningInfo.vue';
 import CourseAssessmentEditor from './CourseAssessmentEditor.vue';
 import type { CourseIssue } from '../course-editor';
 const props = defineProps<{
@@ -17,15 +16,13 @@ const props = defineProps<{
 const uid = useId(),
   section = ref('basic');
 const tabs = ref<InstanceType<typeof CompactTabs>>(),
-  materials = ref<InstanceType<typeof CourseMaterialsEditor>>(),
-  learning = ref<InstanceType<typeof CourseLearningEditor>>(),
+  learning = ref<InstanceType<typeof CourseLearningInfo>>(),
   assessment = ref<InstanceType<typeof CourseAssessmentEditor>>();
 const kind = ref<Kind>('objective');
 const sections = computed(() =>
   [
     { id: 'basic', label: '기본정보' },
-    { id: 'materials', label: '학습자료' },
-    { id: 'learning', label: '학습 항목' },
+    { id: 'learning', label: '학습 정보' },
     ...(props.course.qualificationType !== 'auditor' &&
     props.course.assessmentKinds.includes('objective')
       ? [{ id: 'objective', label: '지식 평가' }]
@@ -37,7 +34,12 @@ const sections = computed(() =>
     ...(props.course.qualificationType === 'auditee' && props.course.subjectiveEnabled
       ? [{ id: 'subjective', label: '주관식 평가' }]
       : []),
-  ].map((s) => ({ ...s, invalid: props.issues.some((i) => i.kind === s.id) })),
+  ].map((s) => ({
+    ...s,
+    invalid: props.issues.some(
+      (i) => i.kind === s.id || (s.id === 'learning' && i.kind === 'materials'),
+    ),
+  })),
 );
 watch(section, (value) => {
   if (value === 'objective' || value === 'practical') kind.value = value;
@@ -47,18 +49,25 @@ watch(sections, (list) => {
 });
 const root = ref<HTMLElement>();
 async function focusIssue(issue: CourseIssue) {
-  section.value = issue.kind;
+  section.value = issue.kind === 'materials' ? 'learning' : issue.kind;
   await nextTick();
-  if (issue.kind === 'materials') return materials.value?.focusIssue(issue);
-  if (issue.kind === 'learning') return learning.value?.focusIssue(issue);
+  if (issue.kind === 'materials' || issue.kind === 'learning')
+    return learning.value?.focusIssue(issue);
   if (issue.kind === 'objective' || issue.kind === 'practical')
     return assessment.value?.focusIssue(issue);
   root.value?.querySelector<HTMLElement>(`[data-course-field="${issue.field}"]`)?.focus();
 }
 defineExpose({
   focusIssue,
-  commit: () => !materials.value?.pending || materials.value.commit(false),
-  pending: computed(() => materials.value?.pending),
+  commit: () => {
+    const issue = learning.value?.commit();
+    if (issue) {
+      void focusIssue(issue);
+      return false;
+    }
+    return true;
+  },
+  pending: false,
 });
 </script>
 <template>
@@ -84,7 +93,7 @@ defineExpose({
           <p class="muted">
             {{
               course.qualificationType === 'auditor'
-                ? '필수 학습항목을 본인이 모두 확인하면 수료됩니다.'
+                ? '필수 교육을 본인이 모두 확인하면 수료됩니다.'
                 : '인증Set의 이름과 평가 유형을 설정합니다.'
             }}
           </p>
@@ -157,13 +166,7 @@ defineExpose({
         :course="course"
         :disabled="disabled"
       />
-      <CourseMaterialsEditor
-        v-show="section === 'materials'"
-        ref="materials"
-        :course="course"
-        :disabled="disabled"
-      />
-      <CourseLearningEditor
+      <CourseLearningInfo
         v-show="section === 'learning'"
         ref="learning"
         :course="course"

@@ -16,7 +16,8 @@ import { useDemo } from '../stores/demo';
 import { useSavedDraft } from '../composables/useSavedDraft';
 import LearnerNav from '../components/LearnerNav.vue';
 import StatusBadge from '../components/StatusBadge.vue';
-import { ApiError } from '../api';
+import { ApiError, api } from '../api';
+import { releaseVersionLabel } from '@eks/contracts';
 import { useProcessContext } from '../composables/useProcessContext';
 import '../plan-review.css';
 const store = useDemo(),
@@ -64,6 +65,40 @@ const current = computed(() => plans.value.find((p) => p.id === route.params.id)
 const reviewQualification = computed(() =>
   current.value ? store.qualificationFor(current.value) : undefined,
 );
+const criteriaReview = ref<any>();
+async function fetchCriteria() {
+  const id = current.value?.id;
+  if (!id) return;
+  const result = await api<any>(`/plans/${id}/criteria`);
+  if (current.value?.id === id) criteriaReview.value = result;
+  return result;
+}
+watch([() => current.value?.id, step], () => {
+  void fetchCriteria().catch((e) => {
+    error.value = (e as Error).message;
+  });
+});
+async function reviewLatestCriteria() {
+  if (busy.value || !criteriaReview.value?.changed) return;
+  busy.value = true;
+  try {
+    await draft.flush();
+    await store.command(`/plans/${current.value!.id}/review-criteria`, {
+      revision: draft.revision.value,
+      qualificationId: criteriaReview.value.current.id,
+      criteriaToken: criteriaReview.value.criteriaToken,
+    });
+    await load();
+    await fetchCriteria();
+    step.value = 3;
+    error.value = '';
+  } catch (e) {
+    handleError(e);
+    await fetchCriteria();
+  } finally {
+    busy.value = false;
+  }
+}
 const planRequest = computed(() => requests.value.find((r) => r.id === current.value?.requestId));
 const planReadOnly = computed(
   () => current.value?.status === 'completed' || !!planRequest.value?.closed,
@@ -360,7 +395,11 @@ async function complete() {
       throw new Error(errors.join('\n'));
     }
     await draft.flush();
+    const reviewed = await fetchCriteria();
+    if (reviewed?.changed)
+      throw new Error('기준이 변경되었습니다. 변경 내용을 확인하고 최신 기준을 적용해 주세요.');
     const result = await store.command(`/plans/${current.value!.id}/complete`, {
+      criteriaToken: reviewed.criteriaToken,
       revision: draft.revision.value,
     });
     store.notify('계획을 완료했습니다. 학습을 시작할 수 있습니다.');
@@ -447,7 +486,11 @@ onBeforeRouteUpdate(leave);
           {{ store.qualification(current.qualificationId, current.qualificationMetadata).title }}
         </h2>
         <p class="muted">
-          v{{ store.qualification(current.qualificationId, current.qualificationMetadata).version }}
+          {{
+            releaseVersionLabel(
+              store.qualification(current.qualificationId, current.qualificationMetadata),
+            )
+          }}
           · 계획 작성 기한
           {{ requests.find((r) => r.id === current!.requestId)?.dueOn }}
         </p>
@@ -543,7 +586,9 @@ onBeforeRouteUpdate(leave);
               <dt>취득할 자격</dt>
               <dd>
                 <span class="plan-review-name">{{ reviewQualification?.title }}</span
-                ><span class="plan-review-version">v{{ reviewQualification?.version }}</span>
+                ><span class="plan-review-version">{{
+                  releaseVersionLabel(reviewQualification)
+                }}</span>
               </dd>
             </div>
             <div v-for="field in ['startOn', 'endOn'] as const" :key="field">
@@ -576,6 +621,43 @@ onBeforeRouteUpdate(leave);
             학습 목표 수정
           </button>
         </div>
+        <section
+          v-if="criteriaReview?.changed && !planReadOnly"
+          class="panel"
+          aria-label="기준 버전 변경"
+        >
+          <h2>기준 버전이 변경되었습니다</h2>
+          <p>일정과 학습 목표는 유지됩니다. 다음 기준을 확인한 뒤 적용해 주세요.</p>
+          <div
+            v-for="(value, key) in { 이전: criteriaReview.previous, 최신: criteriaReview.current }"
+            :key="key"
+          >
+            <h3>{{ key }} · {{ value.title }} {{ releaseVersionLabel(value) }}</h3>
+            <p>{{ value.description }}</p>
+            <p>
+              인증기간:
+              {{
+                value.validity.type === 'months'
+                  ? value.validity.months + '개월'
+                  : value.validity.type === 'unlimited'
+                    ? '무기한'
+                    : '미정'
+              }}
+            </p>
+            <p>
+              재인증 시작 {{ value.renewalLeadMonths }}개월 전 · 알림
+              {{ value.renewalNoticeDaysBefore }}일 전
+            </p>
+            <ul>
+              <li v-for="c in value.courses" :key="c.id">
+                {{ c.title }} {{ releaseVersionLabel(c) }}
+              </li>
+            </ul>
+          </div>
+          <button class="button primary" :disabled="busy" @click="reviewLatestCriteria">
+            최신 기준 확인·적용
+          </button>
+        </section>
         <aside class="plan-review-completion" aria-labelledby="plan-review-completion-title">
           <h2 id="plan-review-completion-title">
             {{ !planReadOnly && current.status === 'draft' ? '계획 완료 안내' : '확정 계획 안내' }}
@@ -603,9 +685,8 @@ onBeforeRouteUpdate(leave);
         <h2>포함된 인증Set</h2>
         <ul>
           <li v-for="id in reviewQualification?.courseIds || []" :key="id">
-            <CourseCategory :course="store.course(id)" /> {{ store.course(id).title }} · v{{
-              store.course(id).version
-            }}
+            <CourseCategory :course="store.course(id)" /> {{ store.course(id).title }} ·
+            {{ releaseVersionLabel(store.course(id)) }}
           </li>
         </ul>
       </section>
@@ -703,7 +784,7 @@ onBeforeRouteUpdate(leave);
             >
               <option value="">자격 선택</option>
               <option v-for="q in eligible" :key="q.id" :value="q.id">
-                {{ q.title }} · v{{ q.version }}
+                {{ q.title }} · {{ releaseVersionLabel(q) }}
               </option>
             </select></label
           ><button

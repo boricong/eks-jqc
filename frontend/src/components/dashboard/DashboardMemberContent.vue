@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { computed } from 'vue';
 import type { DashboardMemberDetail } from '@eks/contracts';
 import { qualificationVersionLabel } from '@eks/contracts';
@@ -58,7 +59,7 @@ const history = computed(
           }}</span>
           <span>{{
             q.registered
-              ? `현재 팀 기준 ${qualificationVersionLabel(q.currentVersion)}`
+              ? `현재 팀 기준 ${releaseVersionLabel({ version: q.currentVersion, releaseVersion: q.currentReleaseVersion })}`
               : '과거 기록 · 기록 보존'
           }}</span>
           <span v-if="q.progress !== 'none'">{{ progressLabels[q.progress] }}</span>
@@ -70,7 +71,12 @@ const history = computed(
           <div>
             <dt>기록 기준</dt>
             <dd>
-              {{ q.recordTitle || q.title }}{{ q.recordVersion ? ` · v${q.recordVersion}` : '' }}
+              {{ q.recordTitle || q.title
+              }}{{
+                q.recordVersion
+                  ? ` · ${releaseVersionLabel({ version: q.recordVersion, releaseVersion: q.recordReleaseVersion })}`
+                  : ''
+              }}
             </dd>
           </div>
           <div>
@@ -140,7 +146,7 @@ const history = computed(
               </thead>
               <tbody>
                 <tr v-for="c in q.courses" :key="c.courseId">
-                  <td>{{ c.title }} · v{{ c.version }}</td>
+                  <td>{{ c.title }} · {{ releaseVersionLabel(c) }}</td>
                   <td>
                     {{ c.completed ? '수료' : '미수료'
                     }}<small v-if="c.completedOn" class="dashboard-meta">{{
@@ -194,7 +200,7 @@ const history = computed(
       <summary>과거 취득 기록 {{ history.length }}건</summary>
       <ol>
         <li v-for="record in history" :key="record.assignmentId">
-          <strong>{{ record.title }} · v{{ record.version }}</strong>
+          <strong>{{ record.title }} · {{ releaseVersionLabel(record) }}</strong>
           <p>
             {{ efficacyLabels[record.efficacy] }}{{ record.excluded ? ' · 검증 제외' : ''
             }}{{ record.closed ? ' · 취득 종료' : '' }}

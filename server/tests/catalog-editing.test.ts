@@ -11,14 +11,14 @@ import { qualificationUseErrors, type State } from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { migrateCatalogEditing } from "../src/catalog-editing-migration.ts";
 import {
   exportMaster,
   readMaster,
   masterCandidate,
   contentHash,
-} from "../src/master-data.ts";
+} from "./legacy-master-data.ts";
 
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-editing-")),
@@ -238,7 +238,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 25);
+  assert.equal(next.state.schemaVersion, 26);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -399,7 +399,7 @@ test("팀 자격 마이너 선택·기본 호환·순서 무변경과 완료 배
   const current = { ...q, versionMode: "current", renewalLeadMonths: 4 };
   const preview = await f.call(`/qualifications/${q.id}/save-preview`, current);
   assert.equal(preview.versionPolicy.changeKind, "minor");
-  assert.equal(preview.newVersion, false);
+  assert.equal(preview.newVersion, true);
   assert.deepEqual(f.store.snapshot(), before);
   const key = randomUUID();
   const body = {
@@ -423,30 +423,19 @@ test("팀 자격 마이너 선택·기본 호환·순서 무변경과 완료 배
     "admin-1",
     key,
   );
-  assert.equal(saved.id, q.id);
-  assert.equal(saved.version, q.version);
-  assert.equal(saved.revision, q.revision + 1);
+  assert.notEqual(saved.id, q.id);
+  assert.equal(saved.version, q.version! + 1);
+  assert.deepEqual(saved.releaseVersion, { major: 1, minor: 1 });
   assert.deepEqual(
     await f.call(`/qualifications/${q.id}`, body, "PUT", 200, "admin-1", key),
     saved,
   );
   const after = f.store.snapshot();
   assert.deepEqual(after.courses, before.courses);
-  for (const a of after.assignments.filter((a) => a.qualificationId === q.id)) {
-    assert.deepEqual(a.qualificationPolicySnapshot?.validity, q.validity);
-    assert.equal(
-      a.qualificationPolicySnapshot?.renewalLeadMonths,
-      q.renewalLeadMonths ?? 3,
-    );
-    const { qualificationPolicySnapshot: _, ...rest } = a;
-    assert.deepEqual(
-      rest,
-      before.assignments.find((v) => v.id === a.id),
-    );
-  }
-  const latest = after.qualifications.find((v) => v.id === q.id)!;
+  assert.deepEqual(after.assignments, before.assignments);
+  const latest = after.qualifications.find((v) => v.id === saved.id)!;
   const noChange = await f.call(
-    `/qualifications/${q.id}`,
+    `/qualifications/${latest.id}`,
     {
       ...latest,
       courseIds: [...latest.courseIds].reverse(),
@@ -458,7 +447,8 @@ test("팀 자격 마이너 선택·기본 호환·순서 무변경과 완료 배
   assert.equal(noChange.version, latest.version);
   assert.equal(noChange.revision, latest.revision);
   assert.deepEqual(
-    f.store.snapshot().qualifications.find((v) => v.id === q.id)?.courseIds,
+    f.store.snapshot().qualifications.find((v) => v.id === latest.id)
+      ?.courseIds,
     latest.courseIds,
   );
 });
@@ -468,13 +458,15 @@ test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 
   const original = f.store
     .snapshot()
     .qualifications.find((q) => q.id === "demo-qualification")!;
+  let latest = original;
   for (const version of [2, 3]) {
     const result = await f.call(
-      `/qualifications/${original.id}`,
-      { ...original, renewalLeadMonths: version + 3, versionMode: "new" },
+      `/qualifications/${latest.id}`,
+      { ...latest, renewalLeadMonths: version + 3, versionMode: "new" },
       "PUT",
     );
     assert.equal(result.version, version);
+    latest = f.store.snapshot().qualifications.find((q) => q.id === result.id)!;
     assert.notEqual(result.id, original.id);
   }
   assert.deepEqual(
@@ -502,14 +494,6 @@ test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 
   assert.equal(preview.versionPolicy.requiresNewVersion, true);
   assert.equal(preview.versionPolicy.effectiveMode, "new");
   assert.deepEqual(f.store.snapshot(), before);
-  const denied = await f.call(
-    `/qualifications/${q.id}`,
-    { ...body, versionMode: "current" },
-    "PUT",
-    409,
-  );
-  assert.equal(denied.code, "QUALIFICATION_NEW_VERSION_REQUIRED");
-  assert.deepEqual(f.store.snapshot(), before);
   const saved = await f.call(`/qualifications/${q.id}`, body, "PUT");
   assert.equal(saved.version, 2);
   assert.equal(saved.newVersion, true);
@@ -520,7 +504,7 @@ test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 
   );
 });
 
-test("인증Set 삭제·버전 교체는 메이저, 검토 충돌·보존 불가는 원자적 차단", async (t) => {
+test("인증Set 삭제는 메이저·같은 계보 버전 교체는 마이너, 검토 충돌·보존 불가는 원자적 차단", async (t) => {
   const f = await fixture(t),
     initial = f.store.snapshot();
   const q = initial.qualifications.find((q) => q.id === "demo-qualification")!;
@@ -540,6 +524,7 @@ test("인증Set 삭제·버전 교체는 메이저, 검토 충돌·보존 불가
       s.courses.push({
         ...structuredClone(c),
         id: "replacement-v2",
+        releaseVersion: { major: 1, minor: 1 },
         parentId: c.id,
         version: 2,
       });
@@ -552,10 +537,11 @@ test("인증Set 삭제·버전 교체는 메이저, 검토 충돌·보존 불가
     versionMode: "current",
   });
   assert.equal(replacement.versionPolicy.requiresNewVersion, true);
+  assert.equal(replacement.releaseChange.kind, "minor");
   assert.ok(
     replacement.changes
       .find((v: any) => v.label === "인증Set 연결")
-      .after.includes("v2"),
+      .after.includes("v1.1"),
   );
   const before = f.store.snapshot();
   const stale = await f.call(
@@ -592,7 +578,7 @@ test("인증Set 삭제·버전 교체는 메이저, 검토 충돌·보존 불가
         );
       },
     ),
-    /안전하게 보존/,
+    /무결성 오류/,
   );
   assert.deepEqual(f.store.snapshot(), before);
 });

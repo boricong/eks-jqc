@@ -15,6 +15,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   defaultPlanningDueOn,
   courseErrors,
+  courseUseErrors,
   type State,
   assessmentQuestions,
   CourseSchema,
@@ -22,12 +23,12 @@ import {
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import {
   transitionAssessments,
   convertCourseFields,
 } from "../src/assessment-transition.ts";
-import { preparePhotoSetup } from "../src/photo-setup.ts";
+import { preparePhotoSetup } from "./photo-setup-fixture.ts";
 import { migrateState } from "../src/migration.ts";
 const org = seedOrganizations(),
   hash = (v: Buffer | string) => createHash("sha256").update(v).digest("hex");
@@ -354,10 +355,59 @@ test("새 문항 정답·합격 기준은 미정이며 상황 설명 없이는 �
   };
   const saved = await f.call("admin-1", `/courses/${c.id}`, c, 200, "PUT");
   assert.ok(saved.readiness.some((m: string) => m.includes("상황")));
+  c.id = saved.id;
   c.revision = saved.revision;
   c.practicalQuestions[0]!.scenario = "가상 이상 발생";
   await f.call("admin-1", `/courses/${c.id}`, c, undefined, "PUT");
 });
+test("Auditee는 교육·자료 없이 평가 기준을 충족하면 운영하고 수료한다", async (t) => {
+  const f = await fixture(t),
+    enrollmentId = "assignment-1:demo-course-2";
+  await f.store.transact(
+    "admin-1",
+    randomUUID(),
+    "optional-learning-info",
+    () => {},
+    (s) => {
+      const course = s.courses.find((c) => c.id === "demo-course-2")!;
+      course.learningItems = [];
+      course.materials = [];
+      assert.deepEqual(courseUseErrors(course), []);
+      return {};
+    },
+  );
+  for (const kind of ["objective", "practical"] as const) {
+    const attempt = await f.call(
+      "learner-1",
+      `/enrollments/${enrollmentId}/attempts`,
+      { kind },
+    );
+    const course = f.store
+      .snapshot()
+      .courses.find((c) => c.id === "demo-course-2")!;
+    const answers = Object.fromEntries(
+      assessmentQuestions(course, kind).map((q) => [q.id, q.correct]),
+    );
+    await f.call(
+      "learner-1",
+      `/attempts/${attempt.id}/draft`,
+      { revision: 1, answers },
+      200,
+      "PUT",
+    );
+    const result = await f.call("learner-1", `/attempts/${attempt.id}/submit`, {
+      revision: 2,
+    });
+    assert.equal(result.result, "passed");
+  }
+  const completion = f.store
+    .snapshot()
+    .completions.find((c) => c.enrollmentId === enrollmentId)!;
+  assert.equal(completion.method, "assessment");
+  assert.deepEqual(completion.learningEvidence, []);
+  assert.equal(completion.evidence.length, 2);
+});
+
 test("유형별 합격 기준을 독립 적용하고 통과한 유형의 추가 응시는 막는다", async (t) => {
   const f = await fixture(t),
     e = "assignment-1:demo-course-2";

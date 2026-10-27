@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import AuditorProgress from '../components/AuditorProgress.vue';
 import { qualificationVersionLabel } from '@eks/contracts';
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
@@ -487,7 +488,7 @@ function detailPage(page: number) {
                         <td>
                           {{
                             q.registered
-                              ? `현재 ${qualificationVersionLabel(q.currentVersion)}`
+                              ? `현재 ${releaseVersionLabel({ version: q.currentVersion, releaseVersion: q.currentReleaseVersion })}`
                               : '과거 기록'
                           }}<small v-if="q.criterionStatus" class="dashboard-meta">{{
                             q.criterionStatus === 'Ready'
@@ -595,7 +596,7 @@ function detailPage(page: number) {
                       <td>
                         {{
                           q.registered
-                            ? `현재 ${qualificationVersionLabel(q.currentVersion)}`
+                            ? `현재 ${releaseVersionLabel({ version: q.currentVersion, releaseVersion: q.currentReleaseVersion })}`
                             : '과거 기록'
                         }}<small v-if="q.criterionStatus" class="dashboard-meta">{{
                           q.criterionStatus === 'Ready'
@@ -666,7 +667,7 @@ function detailPage(page: number) {
                           {{ q.title
                           }}<small class="dashboard-meta">{{
                             q.registered
-                              ? `현재 팀 기준 ${qualificationVersionLabel(q.currentVersion)}`
+                              ? `현재 팀 기준 ${releaseVersionLabel({ version: q.currentVersion, releaseVersion: q.currentReleaseVersion })}`
                               : '과거 기록'
                           }}</small>
                         </th>
@@ -866,7 +867,15 @@ function detailPage(page: number) {
                       </td>
                       <td class="dashboard-name">
                         {{ row.title
-                        }}<small class="dashboard-meta">기록 v{{ row.recordVersion }}</small>
+                        }}<small class="dashboard-meta"
+                          >기록
+                          {{
+                            releaseVersionLabel({
+                              version: row.recordVersion,
+                              releaseVersion: row.recordReleaseVersion,
+                            })
+                          }}</small
+                        >
                       </td>
                       <td>
                         <span class="dashboard-status" :class="row.efficacy.toLowerCase()">{{

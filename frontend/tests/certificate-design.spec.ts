@@ -61,7 +61,7 @@ test('보유 목록은 이름·취득일·현재 만료일·상태만 표시하�
   await expect(page.locator('.certificate-identifier dd')).toHaveText(uuid);
   await expect(page.locator('.certificate-title')).toHaveText(issuedTitle);
   await expect(page.locator('.certificate-recipient')).toHaveText('발급 당시 취득자');
-  await expect(page.locator('.certificate-identity')).toContainText('v7');
+  await expect(page.locator('.release-footer').first()).toContainText('v7.0');
   await expect(page.locator('.certificate-record')).toContainText('발급 당시 정보');
   await expect(page.locator('.certificate-document')).not.toContainText('최신 관리 자격명');
   await expect(page.getByRole('button', { name: '최신 상태 확인', exact: true })).toHaveCount(0);

@@ -10,14 +10,14 @@ export function migrateCourseTypes(
 ) {
   const raw = input as any;
   if (
-    ![14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25].includes(
+    ![14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].includes(
       raw?.schemaVersion,
     )
   )
     throw new Error("인증Set 유형 이관에는 업무14·조직2가 필요합니다.");
   const next = structuredClone(raw),
     organizations = validateOrganizations(organizationInput);
-  const alreadyApplied = raw.schemaVersion === 25;
+  const alreadyApplied = raw.schemaVersion >= 25;
   const classifications =
     raw.schemaVersion >= 15 ? [] : classifyCourseTypes(next);
   if (raw.schemaVersion === 14) {

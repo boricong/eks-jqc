@@ -5,7 +5,6 @@ import './design-tokens.css';
 import './base.css';
 import './style.css';
 import './home-hero.css';
-import './master-data.css';
 import './course-editor.css';
 import './policies.css';
 import './process-guide.css';

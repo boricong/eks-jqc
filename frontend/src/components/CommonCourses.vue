@@ -3,6 +3,7 @@ import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import {
   CourseContentSchema,
+  releaseVersionLabel,
   courseUseErrors,
   qualificationTypeLabels,
   type CommonCourse,
@@ -32,6 +33,16 @@ const store = useDemo(),
   busy = ref(false),
   loading = ref(false),
   error = ref('');
+const versions = ref<any[]>([]),
+  historyVersion = ref<any>();
+async function showVersions() {
+  if (!draft.value?.id) return;
+  try {
+    versions.value = await api<any[]>(`/system/common-courses/${draft.value.id}/versions`);
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
+}
 const draft = ref<CourseContent & { id?: string; revision?: number }>(),
   baseline = ref(''),
   editor = ref<InstanceType<typeof CourseEditor>>();
@@ -107,6 +118,7 @@ async function load() {
   }
 }
 function edit(c?: Item) {
+  versions.value = [];
   draft.value = c
     ? { ...CourseContentSchema.parse(c), id: c.id, revision: c.revision }
     : {
@@ -175,11 +187,46 @@ async function save() {
   error.value = '';
   try {
     const { id, ...body } = draft.value;
-    await mutate(`/system/common-courses${id ? '/' + id : ''}`, body, id ? 'PUT' : 'POST');
+    const preview = await api<any>('/system/common-courses/save-preview', {
+      method: 'POST',
+      body: JSON.stringify({ id, content: body }),
+    });
+    const propagation = preview.result.propagation;
+    if (
+      !(await confirmAction(
+        [
+          (preview.result.releaseChange?.before || '—') +
+            ' → ' +
+            releaseVersionLabel(preview.result) +
+            ' 저장',
+          ...(preview.result.releaseChange?.reasons || []),
+          ...(propagation?.updated || []).map(
+            (v: any) => '자동 반영: ' + v.title + ' ' + releaseVersionLabel(v),
+          ),
+          ...(propagation?.deferred || []).map(
+            (v: any) => '반영 보류: ' + v.title + ' · ' + v.reason,
+          ),
+        ].join('\n'),
+        '버전 저장',
+        '공통인증Set 저장 확인',
+      ))
+    )
+      return;
+    await mutate(
+      `/system/common-courses${id ? '/' + id : ''}`,
+      {
+        ...body,
+        review: {
+          stateRevision: preview.stateRevision,
+          organizationRevision: preview.organizationRevision,
+        },
+      },
+      id ? 'PUT' : 'POST',
+    );
     if (seq !== generation) return;
     draft.value = undefined;
     await load();
-    store.notify('공통인증Set을 저장했습니다. 기존 팀 사본에는 반영되지 않습니다.');
+    store.notify('공통인증Set 버전을 저장했습니다. 자동 반영과 보류 결과를 확인해 주세요.');
   } catch (e) {
     if (seq === generation) {
       error.value = (e as Error).message;
@@ -340,7 +387,11 @@ watch(
       <details v-if="issues.length">
         <summary>신규 운영 전 보완 {{ issues.length }}건</summary>
         <ul>
-          <li v-for="(i, n) in issues" :key="n">{{ i.message }}</li>
+          <li v-for="(i, n) in issues" :key="n">
+            <button type="button" class="text-link" @click="editor?.focusIssue(i)">
+              {{ i.message }}
+            </button>
+          </li>
         </ul>
       </details>
       <div class="form-actions">
@@ -427,6 +478,38 @@ watch(
       ></AppDialog
     >
   </div>
+  <section v-if="draft?.id" class="panel">
+    <p class="release-footer">{{ releaseVersionLabel(current) }}</p>
+    <button class="text-link" @click="showVersions">버전 이력 조회</button>
+    <ul>
+      <li v-for="v in versions" :key="v.id">
+        <button class="text-link" @click="historyVersion = v">
+          {{ releaseVersionLabel(v) }} · {{ v.releaseInfo.summary }}
+        </button>
+      </li>
+    </ul>
+  </section>
+  <AppDialog
+    :open="!!historyVersion"
+    title="공통인증Set 버전 조회"
+    @update:open="
+      (v) => {
+        if (!v) historyVersion = undefined;
+      }
+    "
+  >
+    <CourseEditor
+      v-if="historyVersion"
+      :course="historyVersion"
+      :issues="[]"
+      :show-errors="false"
+      disabled
+    />
+    <p class="release-footer">{{ releaseVersionLabel(historyVersion) }}</p>
+    <template #footer
+      ><button class="button secondary" @click="historyVersion = undefined">확인</button></template
+    >
+  </AppDialog>
 </template>
 <style scoped>
 .common-courses table {

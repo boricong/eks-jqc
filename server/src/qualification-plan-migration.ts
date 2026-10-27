@@ -1,3 +1,4 @@
+import { migrateReleases } from "./release-migration.ts";
 import { randomUUID } from "node:crypto";
 import { LegacyPersonalPlanSchema, WORKFLOW_VERSION } from "@eks/contracts";
 import { validateState } from "./integrity.ts";
@@ -13,11 +14,11 @@ export function migrateQualificationPlans(
 ) {
   const raw = structuredClone(input) as any;
   const organizations = validateOrganizations(orgInput);
-  if (![24, 25].includes(raw?.schemaVersion))
+  if (![24, 25, 26].includes(raw?.schemaVersion))
     throw Error(
       "자격 단위 계획 이관은 업무24·조직4 또는 현행 파일이 필요합니다.",
     );
-  const alreadyApplied = raw.schemaVersion === 25;
+  const alreadyApplied = raw.schemaVersion >= 25;
   if (!alreadyApplied) {
     const actorId = raw.users.find((u: any) =>
       u.roles.includes("system_operator"),
@@ -104,13 +105,13 @@ export function migrateQualificationPlans(
       details: { fromSchema: 24, changes, progressReset: false },
     });
   }
-  const state = validateState(raw, organizations);
+  const state = migrateReleases(raw, organizations, at).state;
   return {
     state,
     organizations,
     report: {
-      alreadyApplied,
-      schemaVersion: 25,
+      alreadyApplied: alreadyApplied && (input as any).schemaVersion === 26,
+      schemaVersion: 26,
       organizationSchemaVersion: 4,
       revision: state.revision,
       organizationRevision: organizations.revision,

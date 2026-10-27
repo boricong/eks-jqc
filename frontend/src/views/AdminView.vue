@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CommonReleaseUpdates from '../components/CommonReleaseUpdates.vue';
+import { releaseVersionLabel } from '@eks/contracts';
 import type { QualificationTemplate } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import { randomUUID } from '../uuid';
@@ -145,6 +147,7 @@ const courseSaveResult = ref<{
   id: string;
   title: string;
   version: number;
+  releaseVersion?: { major: number; minor: number } | null;
   readiness: string[];
   links: { id: string; title: string; version: number }[];
   newVersion: boolean;
@@ -212,7 +215,13 @@ const relatedVersions = computed(() =>
         .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
     : [],
 );
-const readOnly = computed(() => !!editor.value?.deletedAt);
+const readOnly = computed(
+  () =>
+    !!editor.value?.deletedAt ||
+    relatedVersions.value.some(
+      (v) => !v.deletedAt && (v.version ?? 0) > (editor.value?.version ?? 0),
+    ),
+);
 useProcessContext(() => (editor.value ? (readOnly.value ? 'readonly' : 'editing') : 'list'));
 const selectedAssignment = ref<Assignment | null>(null),
   assignmentAction = ref<'exclude'>('exclude'),
@@ -336,7 +345,7 @@ const selectableCourses = computed(() => {
       (c) =>
         selected.has(c.id) ||
         !term ||
-        `${c.title} v${c.version}`.toLocaleLowerCase().includes(term),
+        `${c.title} ${releaseVersionLabel(c)}`.toLocaleLowerCase().includes(term),
     )
     .slice()
     .sort(
@@ -484,7 +493,7 @@ async function reviewSave(mode: QualificationVersionMode = versionMode.value) {
         body: JSON.stringify({
           ...plain(editor.value),
           ...(section.value === 'qualifications'
-            ? { versionMode: mode, confirmInitialConfiguration: confirmInitial.value }
+            ? { confirmInitialConfiguration: confirmInitial.value }
             : {}),
         }),
       },
@@ -521,9 +530,6 @@ async function saveCatalog(confirm = false) {
       confirmInitialConfiguration: confirmInitial.value,
       stateRevision: savePreview.value.stateRevision,
       organizationRevision: savePreview.value.organizationRevision,
-      ...(savePreview.value.versionPolicy
-        ? { versionMode: savePreview.value.versionPolicy.effectiveMode }
-        : {}),
     });
     if (context !== `${store.actorId}:${store.managementLv1}:${editor.value?.id}`) return;
     savePreview.value = null;
@@ -538,6 +544,7 @@ async function saveCatalog(confirm = false) {
         title: saved.title || '이름 없는 인증Set',
         qualificationType: saved.qualificationType,
         version: saved.version,
+        releaseVersion: saved.releaseVersion,
         readiness: result.readiness || [],
         links: result.linkedQualifications || [],
         newVersion: !!result.newVersion,
@@ -603,6 +610,17 @@ async function changeAssignment() {
   } finally {
     busy.value = false;
   }
+}
+function selectCourseVersion(id: string, selected: boolean) {
+  const q = qualificationDraft.value;
+  if (!q) return;
+  const entity = store.data.courses.find((c) => c.id === id)?.entityId;
+  q.courseIds = q.courseIds.filter(
+    (old) =>
+      old !== id &&
+      (!selected || store.data.courses.find((c) => c.id === old)?.entityId !== entity),
+  );
+  if (selected) q.courseIds.push(id);
 }
 function editNotice(n?: Notice) {
   noticeDraft.value = n
@@ -778,7 +796,6 @@ watch(
                 organizationData.courses.find((c) => c.id === courseDraft?.id) || courseDraft
               "
             /><span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
-            <span class="small-label">{{ qualificationVersionLabel(editor.version) }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
             >
@@ -826,8 +843,7 @@ watch(
             <ul>
               <li v-for="version in relatedVersions" :key="version.id">
                 <RouterLink :to="criteriaLink(`/admin/${section}/${version.id}`)"
-                  >{{ qualificationVersionLabel(version.version) }} ·
-                  {{ version.title || '이름 없는 기준'
+                  >{{ releaseVersionLabel(version) }} · {{ version.title || '이름 없는 기준'
                   }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
                 >
               </li>
@@ -923,7 +939,7 @@ watch(
             {{
               store
                 .retiredCourses(qualificationDraft)
-                .map((c) => `${c.title} v${c.version}`)
+                .map((c) => `${c.title} ${releaseVersionLabel(c)}`)
                 .join(', ')
             }}
             운영 종료.
@@ -999,14 +1015,19 @@ watch(
                 >
                   <label class="qualification-course-choice"
                     ><input
-                      v-model="qualificationDraft.courseIds"
+                      :checked="qualificationDraft.courseIds.includes(c.id)"
+                      @change="
+                        selectCourseVersion(c.id, ($event.target as HTMLInputElement).checked)
+                      "
                       type="checkbox"
                       :value="c.id"
                       :disabled="readOnly || busy"
                     /><span>{{ c.title || '이름 없음' }}</span></label
                   >
                   <div class="qualification-course-meta">
-                    <CourseCategory :course="c" /><span class="muted">v{{ c.version }}</span>
+                    <CourseCategory :course="c" /><span class="muted">{{
+                      releaseVersionLabel(c)
+                    }}</span>
                     <StatusBadge
                       :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
                     />
@@ -1022,7 +1043,7 @@ watch(
                     <button
                       type="button"
                       class="button secondary"
-                      :aria-label="`${c.title || '이름 없는 인증Set'} v${c.version} 내용 조회`"
+                      :aria-label="`${c.title || '이름 없는 인증Set'} ${releaseVersionLabel(c)} 내용 조회`"
                       @click="previewCourseId = c.id"
                     >
                       내용 조회
@@ -1064,14 +1085,15 @@ watch(
             v-for="q in savedLinks"
             :key="q.id"
             :to="criteriaLink(`/admin/qualifications/${q.id}`)"
-            >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
+            >{{ q.title }} {{ releaseVersionLabel(q) }} · 자격 조회</RouterLink
           >
         </div>
+        <p class="release-footer">{{ releaseVersionLabel(editor) }}</p>
         <ActionBar v-if="!readOnly" class="actionbar">
           <span class="muted">{{
             section === 'qualifications'
-              ? '변경 내용을 확인하고 저장 방식을 선택합니다.'
-              : '전체 기준을 저장합니다. 최신 저장 버전을 신규 업무에 사용합니다.'
+              ? '변경 내용과 새 버전을 확인하고 저장합니다.'
+              : '전체 기준을 저장합니다. 완성된 버전을 연결 자격에 자동 반영합니다.'
           }}</span
           ><button
             ref="saveTrigger"
@@ -1095,86 +1117,28 @@ watch(
           <template v-if="savePreview"
             ><h3>
               {{ editor.title || '이름 없는 기준' }} ·
-              {{ qualificationVersionLabel(editor.version) }}
+              {{ releaseVersionLabel(editor) }}
             </h3>
-            <template v-if="savePreview.versionPolicy">
-              <p v-if="savePreview.unchanged">변경 내용이 없습니다.</p>
-              <template v-else>
-                <p v-if="savePreview.initialConfiguration" class="qualification-save-notice">
-                  v1으로 최초 설정 저장 · 저장한 기준을 신규 계획·학습·갱신에 사용합니다.
-                </p>
-                <p
-                  v-else-if="savePreview.versionPolicy.requiresNewVersion"
-                  class="qualification-save-notice"
-                >
-                  인증Set 구성 변경으로 새 버전 생성이 필요합니다. v{{
-                    savePreview.candidate.version
-                  }}
-                  버전을 생성합니다.
-                </p>
-                <fieldset
-                  v-else
-                  class="qualification-save-options"
-                  :disabled="busy"
-                  :aria-busy="previewPending"
-                >
-                  <legend>저장 방식</legend>
-                  <label
-                    ><input
-                      type="radio"
-                      name="qualification-version-mode"
-                      value="current"
-                      :checked="versionMode === 'current'"
-                      @change="reviewSave('current')"
-                    />
-                    <span
-                      >현재 버전에 저장<small>v{{ editor.version }} 유지</small></span
-                    >
-                  </label>
-                  <label
-                    ><input
-                      type="radio"
-                      name="qualification-version-mode"
-                      value="new"
-                      :checked="versionMode === 'new'"
-                      @change="reviewSave('new')"
-                    />
-                    <span
-                      >새 버전 생성<small
-                        >v{{ savePreview.versionPolicy.nextVersion }} 생성</small
-                      ></span
-                    >
-                  </label>
-                </fieldset>
-                <p v-if="previewPending" role="status" class="qualification-save-description">
-                  저장 방식을 확인하고 있습니다.
-                </p>
-                <p
-                  v-else-if="!previewError && !savePreview.initialConfiguration"
-                  class="qualification-save-description"
-                >
-                  {{
-                    savePreview.versionPolicy.effectiveMode === 'current'
-                      ? '해당 버전의 팀 설정을 수정합니다. 이미 완료된 계획과 기존 발급 기간은 유지되며, 이후 이 버전으로 완료하는 계획에는 수정한 설정이 적용됩니다.'
-                      : '새 버전은 신규 계획·학습·갱신에 즉시 사용됩니다. 완료된 계획의 인증Set과 취득 기준은 유지됩니다.'
-                  }}
-                </p>
-              </template>
+            <p v-if="savePreview.unchanged">변경 내용이 없습니다.</p>
+            <template v-else>
+              <p>
+                {{ savePreview.releaseChange?.before }} → {{ savePreview.releaseChange?.after }} ·
+                {{
+                  savePreview.releaseChange?.kind === 'major'
+                    ? '메이저 업데이트'
+                    : savePreview.initialConfiguration
+                      ? '최초 설정'
+                      : '마이너 업데이트'
+                }}
+              </p>
+              <p>새 버전을 저장합니다. 확정된 계획과 기존 인증 기록은 당시 기준을 유지합니다.</p>
+              <p v-for="target in savePreview.propagation?.updated" :key="target.id">
+                자동 반영: {{ target.title }} {{ releaseVersionLabel(target) }}
+              </p>
+              <p v-for="target in savePreview.propagation?.deferred" :key="target.id" class="muted">
+                반영 보류: {{ target.title }} · {{ target.reason }}
+              </p>
             </template>
-            <p v-else>
-              {{
-                savePreview.unchanged
-                  ? '변경 내용이 없습니다.'
-                  : savePreview.newVersion
-                    ? '기존 기록을 보존하고 v' +
-                      savePreview.candidate.version +
-                      ' 버전을 생성합니다.'
-                    : '현재 버전을 수정합니다.'
-              }}
-            </p>
-            <p v-if="!savePreview.versionPolicy">
-              기존 진행은 보존하며 최신 저장 버전을 신규 업무에 사용합니다.
-            </p>
             <details v-if="savePreview.changes?.length" class="criterion-changes">
               <summary>변경 전후 확인 · {{ savePreview.changes.length }}개 항목</summary>
               <section v-for="change in savePreview.changes" :key="change.label">
@@ -1227,11 +1191,11 @@ watch(
               >
                 {{
                   savePreview?.initialConfiguration
-                    ? 'v1으로 최초 설정 저장'
+                    ? 'v1.0으로 최초 설정 저장'
                     : savePreview?.versionPolicy
                       ? savePreview.newVersion
-                        ? '새 버전 생성'
-                        : '현재 버전에 저장'
+                        ? '새 버전 저장'
+                        : '저장 확인'
                       : '저장 확인'
                 }}
               </button></template
@@ -1240,6 +1204,7 @@ watch(
         </AppDialog>
       </template>
       <template v-else>
+        <CommonReleaseUpdates v-if="section === 'courses' || section === 'qualifications'" />
         <PageHeading class="page-heading">
           <h1 ref="listHeading" tabindex="-1">{{ title }}</h1>
           <TemplateImport v-if="section === 'qualifications'" :qualification-type="selectedType" />
@@ -1288,9 +1253,8 @@ watch(
           aria-label="인증Set 저장 결과"
         >
           <p role="status">
-            <strong>저장 완료</strong> · {{ courseSaveResult.title }} · v{{
-              courseSaveResult.version
-            }}
+            <strong>저장 완료</strong> · {{ courseSaveResult.title }} ·
+            {{ releaseVersionLabel(courseSaveResult) }}
           </p>
           <RouterLink
             class="text-link"
@@ -1314,7 +1278,7 @@ watch(
               :key="q.id"
               class="text-link"
               :to="criteriaLink(`/admin/qualifications/${q.id}`)"
-              >{{ q.title }} v{{ q.version }} · 자격 구성에 반영</RouterLink
+              >{{ q.title }} {{ releaseVersionLabel(q) }} · 자격 조회</RouterLink
             >
           </div>
         </section>
@@ -1359,11 +1323,11 @@ watch(
                     <td>{{ store.username(a.learnerId) }}</td>
                     <td>
                       {{ store.qualification(a.qualificationId, a.qualificationMetadata).title
-                      }}<small class="table-subtext"
-                        >v{{
-                          store.qualification(a.qualificationId, a.qualificationMetadata).version
-                        }}</small
-                      >
+                      }}<small class="table-subtext">{{
+                        releaseVersionLabel(
+                          store.qualification(a.qualificationId, a.qualificationMetadata),
+                        )
+                      }}</small>
                     </td>
                     <td>
                       {{ store.completedCount(a) }} / {{ a.enrollments.length }}
@@ -1528,7 +1492,7 @@ watch(
                     {{
                       store
                         .retiredCourses(q)
-                        .map((c) => `${c.title} v${c.version}`)
+                        .map((c) => `${c.title} ${releaseVersionLabel(c)}`)
                         .join(', ')
                     }}
                     운영 종료
@@ -1538,7 +1502,7 @@ watch(
                   >
                 </td>
 
-                <td>{{ qualificationVersionLabel(q.version) }}</td>
+                <td>{{ releaseVersionLabel(q) }}</td>
                 <td>
                   {{
                     store.data.currentQualifications.some((p) => p.qualificationId === q.id)
@@ -1599,7 +1563,7 @@ watch(
                   }}</RouterLink>
                 </td>
                 <td><CourseCategory :course="c" /></td>
-                <td>v{{ c.version }}</td>
+                <td>{{ releaseVersionLabel(c) }}</td>
                 <td class="muted">
                   {{
                     c.qualificationType === 'auditor'
@@ -1646,8 +1610,11 @@ watch(
               <span
                 ><strong>{{ store.username(a.learnerId) }}</strong
                 ><small
-                  >{{ store.qualification(a.qualificationId, a.qualificationMetadata).title }} · v{{
-                    store.qualification(a.qualificationId, a.qualificationMetadata).version
+                  >{{ store.qualification(a.qualificationId, a.qualificationMetadata).title }} ·
+                  {{
+                    releaseVersionLabel(
+                      store.qualification(a.qualificationId, a.qualificationMetadata),
+                    )
                   }}</small
                 ></span
               ><span class="muted"
@@ -1678,7 +1645,9 @@ watch(
                 <div class="section-heading">
                   <h2>
                     {{ store.course(e.courseId).title }}
-                    <span class="small-label">v{{ store.course(e.courseId).version }}</span>
+                    <span class="small-label">{{
+                      releaseVersionLabel(store.course(e.courseId))
+                    }}</span>
                   </h2>
                   <StatusBadge v-if="store.complete(e)" status="complete" /><StatusBadge
                     v-if="store.course(e.courseId).operationalStatus === 'retired'"

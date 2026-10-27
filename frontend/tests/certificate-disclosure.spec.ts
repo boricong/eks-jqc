@@ -53,6 +53,17 @@ for (const count of [1, 15, 30]) {
     await actor(page, 'alice');
     await page.goto(`/certifications/${aid}?from=owned`);
     await expect(page.getByRole('heading', { name: '현재 효력', exact: true })).toBeVisible();
+    const footer = page.locator('.release-footer[aria-label="확정 당시 적용 기준"]');
+    await expect(footer.locator('p')).toHaveCount(count + 1);
+    await page.emulateMedia({ media: 'print' });
+    await expect(footer).toBeVisible();
+    await expect(footer.locator('p').last()).toBeVisible();
+    await page.pdf({
+      path: info.outputPath('certificate-' + count + '.pdf'),
+      format: 'A4',
+      printBackground: true,
+    });
+    await page.emulateMedia({ media: 'screen' });
     const before = backend.store.snapshot();
     const toggles = page.locator('.certificate-disclosure .collapsible-section-toggle');
     await expect(toggles).toHaveCount(3);
@@ -219,7 +230,7 @@ test('긴 영문명과 30개 근거의 네 화면 폭·초기 높이·명확한 
     await page.goto(`/certifications/${aid}?from=owned`);
     const name = page.locator('.certificate-english-name');
     await expect(name).toBeVisible();
-    const evidence = page.getByRole('button', { name: '수료 근거 펼치기', exact: true });
+    const evidence = page.locator('.certificate-evidence .collapsible-section-toggle');
     await expect(evidence).toContainText('인증Set 30개 · 펼쳐 보기');
     const collapsed = await page.evaluate(() => document.documentElement.scrollHeight);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -264,9 +275,15 @@ test('긴 영문명과 30개 근거의 네 화면 폭·초기 높이·명확한 
     expect(values.focused).toBe(true);
     await page.screenshot({ path: info.outputPath(`collapsed-${width}.png`), fullPage: true });
     await page.keyboard.press('Enter');
+    await expect(evidence).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.evidence-course summary').last()).toBeVisible();
     await expect(page.locator('.evidence-course summary')).toHaveCount(30);
     const expanded = await page.evaluate(() => document.documentElement.scrollHeight);
-    expect(expanded - collapsed).toBeGreaterThan(1000);
+    await expect
+      .poll(
+        async () => (await page.evaluate(() => document.documentElement.scrollHeight)) - collapsed,
+      )
+      .toBeGreaterThan(1000);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

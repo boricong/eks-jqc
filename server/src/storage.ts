@@ -1,3 +1,4 @@
+import { migrateState } from "./migration.ts";
 import {
   mkdir,
   readFile,
@@ -9,18 +10,8 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import type {
-  State,
-  OrganizationDocument,
-  MaintenanceReceipt,
-} from "@eks/contracts";
-import {
-  MaintenanceDocumentSchema,
-  contentHash,
-  clearedCounts,
-  masterCounts,
-  masterPayload,
-} from "./master-data.ts";
+import type { State, OrganizationDocument } from "@eks/contracts";
+import { MaintenanceDocumentSchema, contentHash } from "./maintenance.ts";
 import { seedOrganizations, validateOrganizations } from "./organizations.ts";
 import { demand, DomainError } from "./errors.ts";
 export { demand, DomainError } from "./errors.ts";
@@ -181,7 +172,6 @@ export class FileStore<T extends Document> {
       backupPurpose?:
         | "qualification-delete"
         | "course-delete"
-        | "photo-setup"
         | "catalog-import"
         | "catalog-publish"
         | "qualification-lifecycle";
@@ -338,7 +328,9 @@ export class JsonStore extends FileStore<State> {
             typeof source === "string" &&
               path.dirname(path.resolve(source)).toLowerCase() ===
                 path.resolve(dir!).toLowerCase() &&
-              /^before-master-(reset|import)-/.test(path.basename(source)),
+              /^before-(master-(reset|import)|test-(load|reset|reload|delete))-/.test(
+                path.basename(source),
+              ),
             422,
             "중단 표식의 백업 경로를 확인해 주세요.",
           );
@@ -381,18 +373,13 @@ export class JsonStore extends FileStore<State> {
       }),
     );
   }
-  private maintenance = {
-    schemaVersion: 1 as const,
-    generation: randomUUID() as string,
-    receipts: [] as MaintenanceReceipt[],
+  private maintenance: import("zod").infer<typeof MaintenanceDocumentSchema> = {
+    schemaVersion: 1,
+    generation: randomUUID(),
+    receipts: [],
   };
   get generation() {
     return this.maintenance.generation;
-  }
-  maintenanceReceipt(key: string) {
-    return structuredClone(
-      this.maintenance.receipts.find((r) => r.key === key) || null,
-    );
   }
   get maintenanceFile() {
     return `${this.file}.maintenance.json`;
@@ -532,135 +519,6 @@ export class JsonStore extends FileStore<State> {
       Promise.resolve(read(this.snapshot(), this.organizations.snapshot())),
     );
   }
-  async replaceMaster(
-    actorId: string,
-    key: string,
-    fingerprint: string,
-    kind: MaintenanceReceipt["kind"],
-    at: string,
-    authorize: (state: State) => void,
-    prepare: (
-      state: State,
-      organizations: OrganizationDocument,
-    ) => { state: State; organizations: OrganizationDocument },
-  ): Promise<MaintenanceReceipt> {
-    return this.enqueue(async () => {
-      authorize(this.snapshot());
-      const previous = this.maintenance.receipts.find((r) => r.key === key);
-      if (previous) {
-        demand(
-          previous.fingerprint === fingerprint && previous.kind === kind,
-          409,
-          "같은 실행 식별자로 다른 내용을 보냈습니다.",
-          "IDEMPOTENCY_CONFLICT",
-        );
-        return structuredClone(previous);
-      }
-      const org = this.organizations.snapshot(),
-        current = this.snapshot();
-      const candidate = prepare(current, org);
-      demand(
-        candidate.state.revision === current.revision + 1 &&
-          candidate.organizations.revision === org.revision + 1,
-        422,
-        "저장소 revision 증가가 필요합니다.",
-      );
-      validateState(
-        candidate.state,
-        validateOrganizations(candidate.organizations),
-      );
-      const stateBytes = await readFile(this.file),
-        orgBytes = await readFile(this.organizations.file);
-      demand(
-        contentHash(this.validate(JSON.parse(stateBytes.toString("utf8")))) ===
-          contentHash(current) &&
-          contentHash(
-            validateOrganizations(JSON.parse(orgBytes.toString("utf8"))),
-          ) === contentHash(org),
-        409,
-        "저장소 파일이 변경되었습니다. 다시 확인해 주세요.",
-        "REVISION_CONFLICT",
-      );
-      const suffix = randomUUID(),
-        generation = randomUUID();
-      const backups = {
-        state: path.join(
-          this.backupDir,
-          `before-${kind}-${current.revision}-${suffix}.json`,
-        ),
-        organizations: path.join(
-          this.organizations.backupDir,
-          `before-${kind}-${org.revision}-${suffix}.json`,
-        ),
-      };
-      await mkdir(this.backupDir, { recursive: true });
-      await mkdir(this.organizations.backupDir, { recursive: true });
-      await this.writeAtomic(backups.state, stateBytes);
-      await this.writeAtomic(backups.organizations, orgBytes);
-      const before = structuredClone(this.maintenance);
-      const receipt: MaintenanceReceipt = {
-        operationId: suffix,
-        key,
-        fingerprint,
-        actorId,
-        kind,
-        completedAt: at,
-        generation,
-        previousGeneration: this.generation,
-        stateRevision: candidate.state.revision,
-        organizationRevision: candidate.organizations.revision,
-        preserved: masterCounts(
-          masterPayload(candidate.state, candidate.organizations),
-        ),
-        deleted: clearedCounts(current, org),
-        backups,
-      };
-      const next = {
-        schemaVersion: 1 as const,
-        generation,
-        receipts: [...before.receipts, receipt],
-      };
-      try {
-        await this.writeAtomic(this.replacementMarker, {
-          backups,
-          maintenanceBefore: before,
-          receipt,
-        });
-        await this.organizations.beforeReplace?.();
-        await this.writeAtomic(
-          this.organizations.file,
-          candidate.organizations,
-        );
-        await this.beforeReplace?.();
-        await this.writeAtomic(this.file, candidate.state);
-        await this.writeAtomic(this.maintenanceFile, next);
-        await rm(this.replacementMarker);
-      } catch (error) {
-        try {
-          await this.writeAtomic(this.organizations.file, orgBytes);
-          await this.writeAtomic(this.file, stateBytes);
-          await this.writeAtomic(this.maintenanceFile, before);
-          await rm(this.replacementMarker);
-        } catch {
-          this.block();
-          this.organizations.block();
-          throw new DomainError(
-            503,
-            "파일 교체와 복구를 완료하지 못했습니다. 서버를 중지하고 표시 파일의 백업 쌍으로 복구해 주세요.",
-            "MAINTENANCE_RECOVERY_REQUIRED",
-          );
-        }
-        throw error;
-      }
-      // No awaits: readers see either the old pair or the complete new pair.
-      this.organizations.publishSnapshot(candidate.organizations);
-      this.state = candidate.state;
-      this.maintenance = next;
-      this.queue.invalidate();
-      return structuredClone(receipt);
-    });
-  }
-
   async migratePolicies(
     expected: { revision: number; stateHash: string; organizationHash: string },
     transform: (
@@ -878,6 +736,15 @@ export class JsonStore extends FileStore<State> {
     await this.organizations.load();
     let loaded = false;
     try {
+      let rawReleaseState;
+      try {
+        rawReleaseState = JSON.parse(await readFile(this.file, "utf8"));
+      } catch (e) {
+        throw new Error("저장소를 열 수 없습니다. 원본을 확인해 주세요.", {
+          cause: e,
+        });
+      }
+      migrateState(rawReleaseState, this.organizations.snapshot());
       await super.load();
       loaded = true;
       try {
@@ -952,7 +819,7 @@ export class JsonStore extends FileStore<State> {
       await this.organizations.load();
       orgLoaded = true;
       demand(
-        raw.schemaVersion === 25,
+        raw.schemaVersion === 26,
         422,
         "업무 스키마 6·조직 스키마 1은 data:migrate-policies의 명시적 보존 이관을 사용하세요.",
       );

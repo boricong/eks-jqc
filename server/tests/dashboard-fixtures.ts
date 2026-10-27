@@ -16,7 +16,7 @@ import {
   type State,
   type ValidityPolicy,
 } from "@eks/contracts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
 

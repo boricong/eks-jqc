@@ -1,3 +1,4 @@
+import { initializeReleases } from "./release-migration.ts";
 import { initialTemplates, metadata } from "./qualification-templates.ts";
 import {
   convertCourseFields,
@@ -34,6 +35,8 @@ export function seedState(testFixture = false): State {
     organizationQualificationRequirements: [],
     subjectiveResponses: [],
     commonCourses: [],
+    commonCourseReleases: [],
+    commonUpdates: [],
     auditorPrograms: [],
     qualificationTemplates: initialTemplates(),
     renewals: [],
@@ -221,5 +224,8 @@ export function seedState(testFixture = false): State {
       reason: "가상 데이터 초기화",
       details: { fictional: true },
     });
-  return validateState(StateSchema.parse(state), seedOrganizations());
+  return validateState(
+    StateSchema.parse(initializeReleases(state)),
+    seedOrganizations(),
+  );
 }

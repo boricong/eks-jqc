@@ -1,3 +1,4 @@
+import { criteriaFingerprint } from "../src/releases.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import { executeWorkflow } from "../src/workflow.ts";
@@ -11,11 +12,11 @@ import { randomUUID, createHash } from "node:crypto";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "./release-test-app.ts";
 import { courseTypeEditing } from "../src/course-types.ts";
 import { migrateCourseTypes } from "../src/course-type-migration.ts";
 import { validateState } from "../src/integrity.ts";
-import { exportMaster, readMaster, contentHash } from "../src/master-data.ts";
+import { exportMaster, readMaster, contentHash } from "./legacy-master-data.ts";
 import { addQualification } from "./dashboard-fixtures.ts";
 async function fixture(
   t: TestContext,
@@ -142,6 +143,7 @@ async function startPlan(f: Awaited<ReturnType<typeof setupAuditor>>) {
   p = f.store.snapshot().plans.find((p) => p.id === id)!;
   const a = await legacyCommand(f, "learner-2", "plan.complete", id, {
     revision: p.revision,
+    criteriaToken: criteriaFingerprint(f.store.snapshot(), f.q),
   });
   return f.store
     .snapshot()
@@ -485,8 +487,8 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     org = await readFile(f.store.organizations.file),
     hash = (v: Buffer) => createHash("sha256").update(v).digest("hex");
   const preview = migrateAuditorWorkflow(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 25);
-  assert.equal(preview.state.revision, raw.revision + 10);
+  assert.equal(preview.state.schemaVersion, 26);
+  assert.equal(preview.state.revision, raw.revision + 11);
   assert.equal(raw.schemaVersion, 15);
   const disk = new JsonStore(f.file),
     expected = {
@@ -527,7 +529,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     fresh.organizations.snapshot(),
     new Date().toISOString(),
   );
-  assert.equal(master.formatVersion, 14);
+  assert.equal(master.formatVersion, 15);
   assert.deepEqual(readMaster(master).payload, master.payload);
   const legacy: any = structuredClone(master);
   delete legacy.payload.commonCourses;

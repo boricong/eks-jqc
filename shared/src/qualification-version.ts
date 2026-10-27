@@ -6,7 +6,7 @@ export function isVersionedQualification(
   return q.version !== null && q.lifecycleStatus !== "Ready";
 }
 export function qualificationVersionLabel(version: number | null | undefined) {
-  return version == null ? "—" : `v${version}`;
+  return version == null ? "—" : `v${version}.0`;
 }
 /** A registered placeholder becomes v1 only when its operational criteria change. */
 export function configureInitialQualification(

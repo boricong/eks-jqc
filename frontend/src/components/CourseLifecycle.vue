@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { releaseVersionLabel } from '@eks/contracts';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -117,7 +118,7 @@ onBeforeRouteUpdate(canLeave);
       "
     >
       <p>{{ store.managementOrganization?.name }}</p>
-      <h3>{{ course.title || '이름 없는 인증Set' }} · v{{ course.version }}</h3>
+      <h3>{{ course.title || '이름 없는 인증Set' }} · {{ releaseVersionLabel(course) }}</h3>
       <p v-if="action === 'retirement'">
         신규 배정은 중단되며 기존 배정과 취득한 인증은 유지됩니다.
       </p>
@@ -142,7 +143,7 @@ onBeforeRouteUpdate(canLeave);
         <ul v-if="usage.qualifications.length">
           <li v-for="q in usage.qualifications" :key="q.id">
             <RouterLink :to="store.managementLink(`/admin/qualifications/${q.id}`)"
-              >{{ q.title || '이름 없는 자격' }} v{{ q.version }}</RouterLink
+              >{{ q.title || '이름 없는 자격' }} {{ releaseVersionLabel(q) }}</RouterLink
             >
           </li>
         </ul>
