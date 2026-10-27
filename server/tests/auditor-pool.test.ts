@@ -266,12 +266,12 @@ test("23→24 명시 이관·JSON13 호환은 등급을 추정하지 않고 실�
   legacyPlanFixture(raw);
   const old = structuredClone(raw),
     converted = migrateAuditorPool(raw, org);
-  assert.equal(converted.state.schemaVersion, 26);
-  assert.equal(converted.state.revision, old.revision + 3);
+  assert.equal(converted.state.schemaVersion, 28);
+  assert.equal(converted.state.revision, old.revision + 5);
   const stripped: any = structuredClone(converted.state);
   stripped.schemaVersion = 23;
-  stripped.revision -= 3;
-  stripped.audits.splice(-3);
+  stripped.revision -= 5;
+  stripped.audits.splice(-5);
   assert.deepEqual(historicalContent(stripped), historicalContent(old));
   assert.deepEqual(
     migrateAuditorPool(converted.state, org).state,

@@ -1,3 +1,4 @@
+import { validateRenewalActivation } from "./renewal-criteria.ts";
 import {
   courseChange,
   qualificationChange,
@@ -7,7 +8,12 @@ import {
 } from "./releases.ts";
 import { nextReleaseVersion, releaseVersionLabel } from "@eks/contracts";
 import { auditorCriteria } from "./auditor-pool.ts";
-import { validateCommonSelection } from "./common-courses.ts";
+import {
+  validateCommonSelection,
+  availableCommonCourses,
+  validateDefaultCommonCourses,
+  copyCommonCourses,
+} from "./common-courses.ts";
 import {
   latestQualification,
   organizationEntries,
@@ -28,6 +34,7 @@ import { z } from "zod";
 import {
   CourseSchema,
   QualificationSchema,
+  validityErrors,
   courseUseErrors,
   qualificationReadinessErrors,
   qualificationPolicySnapshot,
@@ -254,6 +261,7 @@ export function prepareCatalogSave(
   id: string,
   body: any,
   scope: string,
+  pendingCommonCopies: Course[] = [],
 ): CatalogItemSavePreview {
   const list = s[section];
   const source = list.find((i) => i.id === id);
@@ -317,7 +325,7 @@ export function prepareCatalogSave(
   };
   for (const field of section === "courses"
     ? ["category", "commonCourseSource"]
-    : ["commonCourseEntityIds"]) {
+    : ["commonCourseEntityIds", "purpose"]) {
     demand(
       body[field] === undefined ||
         isDeepStrictEqual(body[field], (source as any)[field]),
@@ -347,6 +355,66 @@ export function prepareCatalogSave(
             : {}),
           templateId: (source as Qualification).templateId,
         });
+  if (
+    section === "qualifications" &&
+    (candidate as Qualification).purpose !== "renewal"
+  ) {
+    const errors = validityErrors((candidate as Qualification).validity);
+    demand(
+      !errors.length,
+      422,
+      errors.join(" "),
+      "QUALIFICATION_VALIDITY_REQUIRED",
+    );
+  }
+  const additions = z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          revision: z.number().int().positive(),
+        })
+        .strict(),
+    )
+    .max(100)
+    .parse(body.commonCourseAdditions ?? []);
+  if (additions.length) {
+    demand(
+      section === "qualifications",
+      422,
+      "팀 자격에서만 공통인증Set을 추가할 수 있습니다.",
+    );
+    const q = candidate as Qualification;
+    const available = new Set(
+      availableCommonCourses(s, source as Qualification).map((c) => c.id),
+    );
+    demand(
+      additions.every((c) => available.has(c.id)),
+      422,
+      "이미 등록했거나 사용할 수 없는 공통인증Set입니다. 목록을 다시 확인해 주세요.",
+      "COMMON_COURSE_UNAVAILABLE",
+    );
+    validateDefaultCommonCourses(
+      s,
+      q.qualificationType,
+      additions.map((c) => c.id),
+      Object.fromEntries(additions.map((c) => [c.id, c.revision])),
+    );
+    // Preview uses a private course list; only a successful save persists the copies.
+    s = { ...s, courses: [...s.courses] };
+    const copies = copyCommonCourses(
+      s,
+      additions.map((c) => c.id),
+      scope,
+    );
+    pendingCommonCopies.push(...copies);
+    q.commonCourseEntityIds = [
+      ...q.commonCourseEntityIds,
+      ...copies.map((c) => c.entityId),
+    ];
+    q.courseIds = [...q.courseIds, ...copies.map((c) => c.id)];
+    QualificationSchema.parse(q);
+  }
   if (section === "courses" && (source as Course).category === "common")
     demand(
       candidate.qualificationType === source.qualificationType,
@@ -407,6 +475,18 @@ export function prepareCatalogSave(
     (candidate as Qualification).lifecycleStatus = "Active";
     unchanged = false;
   }
+  if (
+    section === "qualifications" &&
+    source.version === null &&
+    (candidate as Qualification).purpose === "renewal" &&
+    candidate.version !== null
+  )
+    (candidate as Qualification).lifecycleStatus = "Hold";
+  if (
+    section === "qualifications" &&
+    (candidate as Qualification).lifecycleStatus === "Active"
+  )
+    validateRenewalActivation(s, candidate as Qualification);
   const newVersion =
     !unchanged && !(section === "qualifications" && source.version === null);
   const nextVersion =
@@ -542,7 +622,20 @@ export function saveCatalogItem(
   scope: string,
   actorId = "system",
 ) {
-  const result = prepareCatalogSave(s, org, section, id, body, scope);
+  const pendingCommonCopies: Course[] = [];
+  const result = prepareCatalogSave(
+    s,
+    org,
+    section,
+    id,
+    body,
+    scope,
+    pendingCommonCopies,
+  );
+  for (const copy of pendingCommonCopies) {
+    if (copy.releaseInfo) copy.releaseInfo.createdBy = actorId;
+  }
+  s.courses.push(...pendingCommonCopies);
   if (!result.unchanged && result.candidate.releaseInfo)
     result.candidate.releaseInfo.createdBy = actorId;
   if (!result.unchanged) {
@@ -690,16 +783,22 @@ export function qualificationDeletionImpact(
     references,
     canDelete:
       !q.deletedAt &&
-      !s.organizationQualificationRequirements.some((r) =>
-        r.entityIds.includes(q.entityId),
+      !s.organizationQualificationRequirements.some(
+        (r) =>
+          r.entityIds.includes(q.entityId) ||
+          r.exclusions.some((e) => e.entityId === q.entityId),
       ),
     blockers: [
       ...(q.deletedAt ? ["이미 삭제된 자격입니다."] : []),
       ...s.organizationQualificationRequirements
-        .filter((r) => r.entityIds.includes(q.entityId))
+        .filter(
+          (r) =>
+            r.entityIds.includes(q.entityId) ||
+            r.exclusions.some((e) => e.entityId === q.entityId),
+        )
         .map(
           (r) =>
-            `조직 필요자격 지정 해제 필요: ${organizationEntries(org).find((e) => e.id === r.organizationId)?.name || r.organizationId}`,
+            `조직 필요자격 지정·예외 해제 필요: ${organizationEntries(org).find((e) => e.id === r.organizationId)?.name || r.organizationId}`,
         ),
     ],
     replacement: remaining

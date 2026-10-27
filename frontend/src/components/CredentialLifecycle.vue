@@ -337,7 +337,10 @@ const eventLabels: Record<string, string> = {
               {{
                 certification.auditor
                   ? '본인의 교육·인증기준 확인에 의한 갱신'
-                  : 'MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음'
+                  : data.renewals.find((r) => r.id === p.renewalId)?.method ===
+                      'objective_assessment'
+                    ? '객관식 재인증 평가 합격으로 갱신'
+                    : '이전 MVP 완료 기록 · 실제 평가 점수 없음'
               }}
             </p>
             <details v-if="renewalProof(p.renewalId)">
@@ -435,8 +438,18 @@ const eventLabels: Record<string, string> = {
         <p v-if="!data.renewal.canStart && data.effectiveStatus !== 'Revoke'" class="muted">
           {{ data.renewal.reasons.join(' · ') }}
         </p>
+        <RouterLink
+          v-if="!certification.auditor && data.effectiveStatus !== 'Revoke'"
+          class="button primary"
+          :to="
+            data.renewal.renewal?.batchId
+              ? `/renewals/${data.renewal.renewal.batchId}`
+              : { path: '/renewals', query: { certificationId: certification.id } }
+          "
+          >재인증 대상·평가 확인</RouterLink
+        >
         <button
-          v-if="data.renewal.canStart"
+          v-if="data.renewal.canStart && certification.auditor"
           class="button primary"
           :disabled="busy || loading || !!loadError"
           @click="start"
@@ -521,10 +534,6 @@ const eventLabels: Record<string, string> = {
             </details>
           </article>
         </section>
-        <p v-if="!certification.auditor">
-          이번 MVP는 종합평가 문항 없이 완료 버튼으로 재인증 절차를 검증합니다. 실제 능력 평가를
-          완료했다는 의미가 아니며 처리 방식이 이력에 남습니다.
-        </p>
         <p>인증Set별 수료와 최초 취득일·발급번호는 유지됩니다.</p></template
       >
       <template v-else

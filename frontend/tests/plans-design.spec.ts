@@ -12,7 +12,7 @@ async function start(page: Page) {
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.locator('input[type="date"]')).toHaveCount(2);
 }
 async function singleStyle(page: Page) {
@@ -101,7 +101,7 @@ test('내 계획 삭제·재작성과 다른 탭의 자동 저장 중단', async
   await stale.getByRole('link', { name: '내 계획으로 이동' }).click();
   expect(backend.store.snapshot().plans[0]!.revision).toBe(deletedRevision);
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect
     .poll(() => backend.store.snapshot().plans.filter((v) => !v.deletedAt).length)
     .toBe(1);
@@ -193,7 +193,7 @@ test('5인증Set 일정의 밀도·인증Set 구분·단일 디자인과 반응�
   await start(page);
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('schedule-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.locator('input[type="date"]')).toHaveCount(2);
   await expect(page.getByRole('region', { name: '포함된 인증Set' }).locator('li')).toHaveCount(5);
   await page.getByLabel('종료일').fill('2029-12-01');

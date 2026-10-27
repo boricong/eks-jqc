@@ -360,7 +360,7 @@ export function validateCommonSelection(s: State, q: Qualification) {
     demand(
       !c || c.category !== "common" || allowed.has(c.entityId),
       422,
-      "등록 당시 기본 목록의 공통인증Set만 연결할 수 있습니다.",
+      "이 자격에 등록된 공통인증Set만 연결할 수 있습니다.",
       "COMMON_COURSE_NOT_ALLOWED",
     );
   }
@@ -394,4 +394,29 @@ export function commonCourseOptions(s: State, q: Qualification) {
         : undefined;
     })
     .filter(Boolean);
+}
+
+export function availableCommonCourses(s: State, q: Qualification) {
+  const copied = new Set(
+    s.courses
+      .filter((c) => q.commonCourseEntityIds.includes(c.entityId))
+      .map((c) => c.commonCourseSource?.id),
+  );
+  return s.commonCourses
+    .filter(
+      (c) =>
+        c.qualificationType === q.qualificationType &&
+        c.operationalStatus === "active" &&
+        !copied.has(c.id),
+    )
+    .map((c) => {
+      const released = latestCompleteCommon(s, c.id);
+      return {
+        ...CourseContentSchema.parse(released ?? c),
+        id: c.id,
+        revision: c.revision,
+        releaseVersion: released?.releaseVersion ?? c.releaseVersion,
+        available: !!released,
+      };
+    });
 }

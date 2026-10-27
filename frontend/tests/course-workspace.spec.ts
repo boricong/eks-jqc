@@ -61,6 +61,21 @@ test('자료 목록·상단 탭·연결형 세로 번호의 네 화면 폭과 �
     await page.screenshot({ path: info.outputPath(`materials-${width}.png`), fullPage: true });
     for (const name of ['학습 정보', '지식 평가', '상황 대응 평가']) {
       await courseSection(page, name);
+      await expect(tabs.getByRole('tab', { selected: true })).toHaveCSS(
+        'background-color',
+        'rgb(240, 237, 255)',
+      );
+      await expect(tabs.getByRole('tab', { selected: true })).toHaveCSS('font-weight', '600');
+      if (name !== '학습 정보') {
+        const points = page.getByRole('spinbutton', { name: '배점', exact: true });
+        const inputBox = await points.boundingBox();
+        const labelBox = await points.locator('..').locator('span').first().boundingBox();
+        expect(labelBox!.x + labelBox!.width).toBeLessThan(inputBox!.x);
+        expect(labelBox!.y + labelBox!.height / 2).toBeCloseTo(
+          inputBox!.y + inputBox!.height / 2,
+          0,
+        );
+      }
       const rail = page.locator('.course-editor-content .number-tabs:visible');
       await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
       const selected = rail.locator('[aria-selected="true"]');

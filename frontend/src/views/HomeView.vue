@@ -132,7 +132,8 @@ const stats = computed(() =>
           {
             label: '진행 중인 배정',
             value: store.data.assignments.filter(
-              (a) => !a.certifiedAt && !a.excludedReason && eligibleAssignment(a),
+              (a) =>
+                !a.renewalBatchId && !a.certifiedAt && !a.excludedReason && eligibleAssignment(a),
             ).length,
             icon: 'clipboard',
             to: '/system/overview',

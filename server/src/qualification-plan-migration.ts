@@ -14,7 +14,7 @@ export function migrateQualificationPlans(
 ) {
   const raw = structuredClone(input) as any;
   const organizations = validateOrganizations(orgInput);
-  if (![24, 25, 26].includes(raw?.schemaVersion))
+  if (![24, 25, 26, 27, 28].includes(raw?.schemaVersion))
     throw Error(
       "자격 단위 계획 이관은 업무24·조직4 또는 현행 파일이 필요합니다.",
     );
@@ -110,8 +110,8 @@ export function migrateQualificationPlans(
     state,
     organizations,
     report: {
-      alreadyApplied: alreadyApplied && (input as any).schemaVersion === 26,
-      schemaVersion: 26,
+      alreadyApplied: alreadyApplied && (input as any).schemaVersion === 28,
+      schemaVersion: 28,
       organizationSchemaVersion: 4,
       revision: state.revision,
       organizationRevision: organizations.revision,

@@ -129,7 +129,7 @@ onBeforeRouteUpdate(leave);
       >
     </div>
     <p class="muted">
-      공통인증Set은 기본 목록으로 포함됩니다. 팀 자격 설정에서 내용을 수정하거나 제외할 수 있습니다.
+      지정된 공통인증Set은 함께 등록되며, 팀 자격 설정에서 추가·수정·제외할 수 있습니다.
     </p>
     <div class="template-list">
       <label v-for="t in listed" :key="t.id" class="choice"
@@ -138,9 +138,9 @@ onBeforeRouteUpdate(leave);
           type="checkbox"
           :value="t.id"
           :disabled="t.imported || busy || !!t.auditorReadiness?.length"
-        /><span
-          >{{ t.title
-          }}<small class="muted"
+        /><span class="template-choice-info"
+          ><span>{{ t.title }}</span
+          ><small class="muted"
             >{{ qualificationTypeLabels[t.qualificationType] }} · {{ t.englishName
             }}{{ t.imported ? ' · 등록됨' : '' }}</small
           ><small v-if="t.qualificationType === 'auditor'" class="muted"
@@ -173,3 +173,24 @@ onBeforeRouteUpdate(leave);
     >
   </AppDialog>
 </template>
+<style scoped>
+.template-list {
+  gap: 0;
+}
+.template-list .choice {
+  padding: 10px 12px;
+  min-width: 0;
+}
+.template-choice-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.template-list small {
+  display: inline;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+</style>

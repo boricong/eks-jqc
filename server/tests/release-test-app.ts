@@ -40,6 +40,19 @@ export async function buildApp(...args: Parameters<typeof buildProductionApp>) {
                 organizationRevision: store.organizations.snapshot().revision,
               },
             };
+          if (
+            path.startsWith("/api/organization-qualification-requirements") &&
+            payload.changes
+          )
+            payload = {
+              ...payload,
+              contractVersion: 2,
+              changes: payload.changes.map((c: any) => ({
+                exclusions: [],
+                removalReasons: [],
+                ...c,
+              })),
+            };
           const m = path.match(/^\/api\/plans\/([^/]+)\/complete$/);
           if (m) {
             const p = s.plans.find((p) => p.id === m[1]);

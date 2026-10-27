@@ -458,7 +458,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   delete legacy.auditorPrograms;
   legacy.users.find((u: any) => u.id === "learner-2").roles = ["evaluator"];
   const migrated = migrateAuditorProgram(legacy, org);
-  assert.equal(migrated.state.schemaVersion, 26);
+  assert.equal(migrated.state.schemaVersion, 28);
   assert.equal(
     migrated.state.users.find((u) => u.id === "learner-2")!.auditorDesignation
       ?.source,
@@ -471,7 +471,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   );
   assert.throws(() => validateState(legacy, org));
   const bytes = await readFile(f.file);
-  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 26);
+  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 28);
 });
 
 test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 다시 시작해도 중복 발급하지 않는다", async (t) => {

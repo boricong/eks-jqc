@@ -287,8 +287,8 @@ test("업무21→22는 기존 기록·공통 기준 해시를 보존하며 재�
   const before = structuredClone(raw),
     hashes = raw.courses.map(courseContentHash);
   const result = migrateSubjective(raw, org);
-  assert.equal(result.state.schemaVersion, 26);
-  assert.equal(result.state.revision, raw.revision + 5);
+  assert.equal(result.state.schemaVersion, 28);
+  assert.equal(result.state.revision, raw.revision + 7);
   assert.deepEqual(result.state.courses.map(courseContentHash), hashes);
   for (const key of Object.keys(before))
     if (

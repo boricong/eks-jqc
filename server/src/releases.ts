@@ -4,6 +4,7 @@ import {
   CourseContentSchema,
   comparableCourseContent,
   courseUseErrors,
+  renewalQualificationErrors,
   nextReleaseVersion,
   latestQualification,
   currentTeamQualifications,
@@ -151,7 +152,10 @@ export function propagateCourses(
           c.lv1OrganizationId === q.lv1OrganizationId,
       );
       if (!next || next.id === id) return id;
-      const errors = courseUseErrors(next);
+      const errors = [
+        ...courseUseErrors(next),
+        ...renewalQualificationErrors({ ...q, courseIds: [next.id] }, [next]),
+      ];
       if (errors.length || next.operationalStatus !== "active") {
         result.deferred.push({
           id: q.id,
@@ -205,6 +209,7 @@ export function qualificationHash(q: Qualification) {
     releaseInfo: info,
     ...content
   } = q;
+  if (content.purpose === "acquisition") delete content.purpose;
   return canonicalHash(content);
 }
 export function freezeCriteria(

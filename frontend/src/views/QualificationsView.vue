@@ -43,6 +43,7 @@ const typeOf = (a: Assignment) =>
 const owned = computed(() =>
   store.data.assignments.filter(
     (a) =>
+      !a.renewalBatchId &&
       a.learnerId === store.actorId &&
       !a.acquisitionClosedAt &&
       !a.excludedReason &&
@@ -92,6 +93,7 @@ watch(
 const list = computed(() =>
   store.data.assignments.filter(
     (a) =>
+      !a.renewalBatchId &&
       a.learnerId === store.actorId &&
       !a.acquisitionClosedAt &&
       typeOf(a) === (assessments.value ? 'auditee' : selectedType.value) &&
@@ -110,6 +112,12 @@ const list = computed(() =>
 </script>
 <template>
   <div id="personal-content" class="container page">
+    <RouterLink
+      v-if="store.personalTypes.includes('auditee')"
+      to="/renewals"
+      class="button secondary renewal-entry"
+      >재인증</RouterLink
+    >
     <LearnerNav v-if="filter !== 'certified'" />
     <PersonalTypeTabs panel-id="personal-content" v-if="filter !== 'certified' && !assessments" />
     <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">

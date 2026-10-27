@@ -1,3 +1,4 @@
+import { registerRenewalBatchRoutes } from "./renewal-batches.ts";
 import { registerReleaseRoutes } from "./release-routes.ts";
 import { registerTestDataRoutes } from "./test-data-routes.ts";
 import { auditorTemplateErrors } from "./auditor-pool.ts";
@@ -441,6 +442,7 @@ export async function buildApp(
 
   registerCatalogRoutes(app, store, actor);
   registerLifecycleRoutes(app, store, actor, clock);
+  registerRenewalBatchRoutes(app, store, actor, clock);
   registerDashboardRoutes(app, store, actor, clock);
   registerDocumentRoutes(app, actor, options.documentsRoot);
   const mutation = (

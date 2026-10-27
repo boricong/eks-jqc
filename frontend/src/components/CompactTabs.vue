@@ -7,6 +7,7 @@ const props = defineProps<{
   panelId: string;
   vertical?: boolean;
   numbered?: boolean;
+  numberSuffix?: string;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
 const host = ref<HTMLElement>();
@@ -84,7 +85,7 @@ defineExpose({ tabId });
       :tabindex="modelValue === item.id ? 0 : -1"
       @click="emit('update:modelValue', item.id)"
     >
-      <span>{{ numbered ? index + 1 : item.label }}</span
+      <span>{{ numbered ? `${index + 1}${numberSuffix ?? ''}` : item.label }}</span
       ><span v-if="item.invalid" class="tab-warning" aria-hidden="true">!</span>
     </button>
   </div>

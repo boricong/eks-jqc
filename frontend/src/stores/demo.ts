@@ -91,6 +91,7 @@ export const useDemo = defineStore('workspace', () => {
           ) ||
             data.value.assignments.some(
               (a) =>
+                !a.renewalBatchId &&
                 a.learnerId === actorId.value &&
                 data.value.qualifications.find((q) => q.id === a.qualificationId)
                   ?.qualificationType === type,
@@ -105,7 +106,9 @@ export const useDemo = defineStore('workspace', () => {
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
     fullManagement.value ||
-    (['dashboard', 'organization-settings', 'targets'].includes(section) &&
+    (['dashboard', 'organization-settings', 'organization-requirements', 'targets'].includes(
+      section,
+    ) &&
       hasRole('organization_admin'));
   const managementAccess = computed(
     () =>
@@ -247,6 +250,7 @@ export const useDemo = defineStore('workspace', () => {
   const myAssignments = computed(() =>
     data.value.assignments.filter(
       (a) =>
+        !a.renewalBatchId &&
         a.learnerId === actorId.value &&
         !a.excludedReason &&
         qualification(a.qualificationId, a.qualificationMetadata).qualificationType === 'auditee',

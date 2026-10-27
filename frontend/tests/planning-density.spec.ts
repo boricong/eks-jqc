@@ -29,6 +29,7 @@ async function people(store: JsonStore) {
         {
           organizationId: 'org-photo',
           entityIds: ['demo-qualification'],
+          exclusions: [],
           revision: 1,
           updatedAt: new Date().toISOString(),
           updatedBy: 'admin-1',
@@ -122,7 +123,7 @@ async function enter(page: Page) {
 }
 async function requestDialog(page: Page) {
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
-  return page.getByRole('dialog', { name: 'Auditee 계획 수립 요청', exact: true });
+  return page.getByRole('dialog', { name: '계획 수립 요청', exact: true });
 }
 
 test('대상자 한 줄과 모달 밀도·최신 요청·긴 이름·네 화면 폭·상세 초점 복귀', async ({

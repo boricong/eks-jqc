@@ -51,6 +51,15 @@ test('목록·상세의 학습/평가 주소와 인증Set 유지, 뒤로·앞으
     .getByRole('link', { name: '평가 목록' })
     .click();
   await expect(page).toHaveURL(/qualifications\?stage=assessment$/);
+  // The detail stylesheet remains loaded after returning to the list.
+  await expect(page.locator('.qualification-row .progress-label')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  await expect(page.locator('.qualification-row .progress-label')).toHaveCSS(
+    'color',
+    'rgb(13, 37, 61)',
+  );
   expect(backend.store.snapshot()).toEqual(before);
 });
 

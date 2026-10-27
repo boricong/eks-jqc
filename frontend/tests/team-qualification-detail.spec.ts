@@ -6,7 +6,7 @@ import { saveTemplate } from '../../server/src/qualification-templates';
 test('주요 구역의 독립적인 키보드 접기·펼치기와 입력·선택·저장 보존', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   const sections = page.locator('.team-qualification-detail .collapsible-section');
   await expect(sections).toHaveCount(4);
   await expect(sections.locator('[aria-expanded="true"]')).toHaveCount(4);
@@ -42,7 +42,7 @@ test('주요 구역의 독립적인 키보드 접기·펼치기와 입력·선�
   await saveCriterion(page, 'new');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page).not.toHaveURL(/demo-qualification$/);
-  await expect(sections.locator('[aria-expanded="true"]')).toHaveCount(4);
+  await expect(page.locator('.team-qualification-view')).toBeVisible();
   const saved = backend.store
     .snapshot()
     .qualifications.find((q) => q.parentId === 'demo-qualification')!;
@@ -107,7 +107,7 @@ test('정확한 버전 구성만 조회하고 체크·검색·입력·초점을 
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await page.getByLabel('필수 인증Set 검색').fill('버전별 조회 기준');
   const before = backend.store.snapshot();
@@ -161,6 +161,7 @@ test('빈 구성·삭제 자격의 읽기 전용 조회와 버전 이동 시 초
         id: 'preview-qualification-v2',
         parentId: q.id,
         version: 2,
+        courseIds: ['empty-preview'],
         deletedAt: '2026-10-23T00:00:00.000Z',
         deletedBy: 'admin-1',
         deletionReason: '이전 버전 보존',
@@ -183,17 +184,14 @@ test('빈 구성·삭제 자격의 읽기 전용 조회와 버전 이동 시 초
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   await page.getByRole('button', { name: '팀 설정 접기', exact: true }).click();
   await page.locator('.criterion-versions > summary').click();
   await page.locator('.criterion-versions a[href*="preview-qualification-v2"]').click();
-  await expect(page.getByLabel('인증기간', { exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '팀 설정 접기', exact: true })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
+  await expect(page.locator('.team-qualification-view')).toBeVisible();
+  await expect(page.getByLabel('인증기간', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '저장', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '빈 인증Set v1 내용 조회' }).click();
+  await page.getByRole('button', { name: '빈 인증Set v1.0 내용 조회' }).click();
   const dialog = page.getByRole('dialog', { name: '인증Set 내용 조회' });
   await expect(dialog).toContainText('등록된 학습 정보가 없습니다.');
   await expect(dialog.getByRole('region', { name: '평가 요약' })).toContainText(
@@ -205,7 +203,7 @@ test('빈 구성·삭제 자격의 읽기 전용 조회와 버전 이동 시 초
   await expect(page.locator('.team-qualification-detail [aria-expanded="true"]')).toHaveCount(4);
   await page.getByRole('button', { name: '공통 정보 접기', exact: true }).click();
   await actor(page, 'operator-1');
-  await page.goto('/admin/qualifications/demo-qualification?lv1OrganizationId=org-photo');
+  await page.goto('/admin/qualifications/demo-qualification/edit?lv1OrganizationId=org-photo');
   await expect(page.locator('.team-qualification-detail [aria-expanded="true"]')).toHaveCount(4);
 });
 
@@ -224,7 +222,10 @@ test('긴 정보·네 화면 폭의 구역 정렬·글꼴·모달 본문 스크�
         englishName: 'SharedQualification'.repeat(10),
         description: '공통 기준과 팀별 운영 범위를 확인합니다.\n'.repeat(5),
       });
-      q.validity = { type: 'months', months: 36, reminderDays: [] };
+      const current = s.qualifications
+        .filter((v) => v.entityId === q.entityId)
+        .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
+      current.validity = { type: 'months', months: 36, reminderDays: [] };
       const course = s.courses.find((c) => c.id === 'demo-course-1')!;
       course.title = '긴 인증Set 이름과 학습 범위 '.repeat(8);
       course.materials = [
@@ -253,7 +254,11 @@ test('긴 정보·네 화면 폭의 구역 정렬·글꼴·모달 본문 스크�
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  const current = backend.store
+    .snapshot()
+    .qualifications.filter((q) => q.entityId === 'demo-qualification' && !q.deletedAt)
+    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
+  await page.goto(`/admin/qualifications/${current.id}/edit`);
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(

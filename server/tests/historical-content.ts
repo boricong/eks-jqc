@@ -5,7 +5,8 @@ export function historicalContent(value: any): any {
     return Object.fromEntries(
       Object.entries(value)
         .filter(
-          ([key]) =>
+          ([key, v]) =>
+            !(key === "purpose" && v === "acquisition") &&
             ![
               "frozenCriteria",
               "releaseVersion",

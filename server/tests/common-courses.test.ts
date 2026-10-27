@@ -25,6 +25,172 @@ import {
 } from "./legacy-master-data.ts";
 import { migrateCommonCourses } from "../src/common-course-migration.ts";
 import { validateState } from "../src/integrity.ts";
+
+for (const type of ["auditee", "auditor"] as const) {
+  test(`${type} 빈 기본 목록 등록 후 공통 직접 추가·검토 무변경·중복 방지·버전 보존`, async (t) => {
+    const f = await fixture(t),
+      c = await f.common(type);
+    const base = await f.call("operator-1", "/system/qualification-templates", {
+      title: "공통 직접 선택 " + type,
+      englishName: "",
+      qualificationType: type,
+      ...(type === "auditor" ? { auditorLevel: "general" } : {}),
+      defaultCommonCourseIds: [],
+    });
+    let q = await f.register(base, c);
+    assert.deepEqual(q.commonCourseEntityIds, []);
+    const url = `/qualifications/${q.id}`;
+    const options = await f.call("admin-1", url + "/available-common-courses");
+    assert.ok(options.some((x: any) => x.id === c.id && x.available));
+    const input = {
+      ...q,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      commonCourseAdditions: [{ id: c.id, revision: c.revision }],
+    };
+    const before = f.store.snapshot();
+    const preview = await f.call("admin-1", url + "/save-preview", input);
+    assert.equal(preview.candidate.courseIds.length, 1);
+    assert.deepEqual(f.store.snapshot(), before);
+    const key = randomUUID();
+    const saved = await f.call("admin-1", url, input, 200, "PUT", key);
+    const after = f.store.snapshot();
+    assert.deepEqual(
+      await f.call("admin-1", url, input, 200, "PUT", key),
+      saved,
+    );
+    assert.deepEqual(f.store.snapshot(), after);
+    assert.deepEqual(
+      after.qualificationTemplates.find((t) => t.id === base.id)!
+        .defaultCommonCourseIds,
+      [],
+    );
+    q = after.qualifications.find((x) => x.id === saved.id)!;
+    assert.equal(q.commonCourseEntityIds.length, 1);
+    const copy = after.courses.find((x) => x.id === q.courseIds[0])!;
+    assert.equal(copy.commonCourseSource?.id, c.id);
+    assert.equal(teamCourseModified(copy), false);
+    assert.equal(q.lifecycleStatus, type === "auditor" ? "Hold" : "Active");
+    assert.equal(
+      (
+        await f.call(
+          "admin-1",
+          `/qualifications/${q.id}/available-common-courses`,
+        )
+      ).some((x: any) => x.id === c.id),
+      false,
+    );
+    await f.call(
+      "admin-1",
+      `/qualifications/${q.id}`,
+      { ...q, commonCourseAdditions: input.commonCourseAdditions },
+      422,
+      "PUT",
+    );
+    const c2 = await f.common(type),
+      old = structuredClone(q);
+    const result = await f.call(
+      "admin-1",
+      `/qualifications/${q.id}`,
+      { ...q, commonCourseAdditions: [{ id: c2.id, revision: c2.revision }] },
+      200,
+      "PUT",
+    );
+    assert.notEqual(result.id, q.id);
+    const final = f.store.snapshot();
+    assert.deepEqual(
+      final.qualifications.find((x) => x.id === old.id),
+      old,
+    );
+    assert.equal(
+      final.qualifications.find((x) => x.id === result.id)!
+        .commonCourseEntityIds.length,
+      2,
+    );
+    assert.equal(
+      final.courses.find((x) => x.id === copy.id)!.commonCourseSource?.id,
+      c.id,
+    );
+    await f.call(
+      "admin-1",
+      `/qualifications/${old.id}`,
+      { ...old, commonCourseAdditions: [{ id: c2.id, revision: c2.revision }] },
+      409,
+      "PUT",
+    );
+  });
+}
+
+test("공통 직접 추가는 권한·유형·원본 revision·완성·중복·메타데이터를 검사하고 실패 시 사본을 남기지 않는다", async (t) => {
+  const f = await fixture(t),
+    c = await f.common(),
+    base = await f.template(c),
+    q = await f.register(base, c);
+  const extra = await f.common(),
+    auditor = await f.common("auditor");
+  const valid = {
+    ...q,
+    validity: { type: "unlimited", months: null, reminderDays: [] },
+  };
+  const body = {
+    ...valid,
+    commonCourseAdditions: [{ id: extra.id, revision: extra.revision }],
+  };
+  const url = `/qualifications/${q.id}`;
+  await f.call("learner-1", url + "/available-common-courses", undefined, 403);
+  await f.call(
+    "admin-1",
+    url + "/available-common-courses?lv1OrganizationId=org-etch",
+    undefined,
+    403,
+  );
+  await f.call("learner-1", url, body, 403, "PUT");
+  const before = f.store.snapshot();
+  for (const [additions, status] of [
+    [[{ id: extra.id, revision: extra.revision + 1 }], 409],
+    [[{ id: auditor.id, revision: auditor.revision }], 422],
+    [[...body.commonCourseAdditions, ...body.commonCourseAdditions], 422],
+    [[{ id: "missing", revision: 1 }], 422],
+  ] as const)
+    await f.call(
+      "admin-1",
+      url,
+      { ...valid, commonCourseAdditions: additions },
+      status,
+      "PUT",
+    );
+  await f.call(
+    "admin-1",
+    url,
+    { ...body, commonCourseEntityIds: [] },
+    422,
+    "PUT",
+  );
+  assert.deepEqual(f.store.snapshot(), before);
+  const incomplete = await f.call("operator-1", "/system/common-courses", {
+    ...CourseContentSchema.parse(extra),
+    title: "미완성 원본",
+    questions: [],
+  });
+  await f.call(
+    "admin-1",
+    url,
+    {
+      ...valid,
+      commonCourseAdditions: [
+        { id: incomplete.id, revision: incomplete.revision },
+      ],
+    },
+    422,
+    "PUT",
+  );
+  await f.call("operator-1", `/system/common-courses/${extra.id}/retire`, {
+    revision: extra.revision,
+    reason: "시험",
+  });
+  await f.call("admin-1", url, body, 422, "PUT");
+  assert.equal(f.store.snapshot().courses.length, before.courses.length);
+});
+
 test("학습 정보 없는 공통인증Set 저장·팀 복사와 유형별 운영 준비", async (t) => {
   const f = await fixture(t);
   for (const type of ["auditee", "auditor"] as const) {
@@ -308,18 +474,25 @@ test("등록은 독립 사본·고정 선택 범위를 생성하고 원본 변�
   );
   assert.equal(options.length, 1);
 });
-test("공통 기본값의 Ready 무변경 저장·명시 최초 확정·제외/재포함은 이력을 보존한다", async (t) => {
+test("공통 기본값의 Ready 미정 저장 거부·기간 지정 최초 확정·제외/재포함은 이력을 보존한다", async (t) => {
   const f = await fixture(t),
     c = await f.common(),
     base = await f.template(c);
   let q = await f.register(base, c);
-  const no = await f.call("admin-1", `/qualifications/${q.id}`, q, 200, "PUT");
-  assert.equal(no.unchanged, true);
-  assert.equal(no.version, null);
+  const no = await f.call("admin-1", `/qualifications/${q.id}`, q, 422, "PUT");
+  assert.equal(no.code, "QUALIFICATION_VALIDITY_REQUIRED");
+  assert.equal(
+    f.store.snapshot().qualifications.find((x) => x.id === q.id)!.version,
+    null,
+  );
   const preview = await f.call(
     "admin-1",
     `/qualifications/${q.id}/save-preview`,
-    { ...q, confirmInitialConfiguration: true },
+    {
+      ...q,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      confirmInitialConfiguration: true,
+    },
   );
   assert.equal(preview.initialConfiguration, true);
   const saved = await f.call(
@@ -452,8 +625,8 @@ test("업무19→20 명시 이관은 기존 기준·업무·조직을 보존하�
   const before = structuredClone(old),
     org = f.store.organizations.snapshot(),
     r = migrateCommonCourses(old, org);
-  assert.equal(r.state.schemaVersion, 26);
-  assert.equal(r.state.revision, old.revision + 7);
+  assert.equal(r.state.schemaVersion, 28);
+  assert.equal(r.state.revision, old.revision + 9);
   assert.deepEqual(r.organizations, org);
   for (const key of [
     "users",

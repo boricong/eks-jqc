@@ -76,9 +76,25 @@ for (const type of ['auditee', 'auditor'] as const) {
     await register.getByRole('button', { name: '팀 자격 등록', exact: true }).click();
     await expect(register).not.toBeVisible();
     const q = backend.store.snapshot().qualifications.find((q) => q.title === '공통 연계 ' + type)!;
-    await page.goto(`/admin/qualifications/${q.id}?type=${type}`);
-    await expect(page.getByRole('heading', { name: '공통인증Set', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '특화인증Set', exact: true })).toBeVisible();
+    await page.goto(`/admin/qualifications/${q.id}/edit?type=${type}`);
+    const save = page.getByRole('button', { name: /^(최초 설정 저장|저장)$/, exact: true });
+    await expect(save).toBeDisabled();
+    await expect(page.locator('.actionbar')).toContainText(
+      '인증기간을 기간제 또는 무기한으로 지정해 주세요.',
+    );
+    await page.getByLabel('인증기간', { exact: true }).selectOption('months');
+    await expect(save).toBeDisabled();
+    await expect(page.locator('.actionbar')).toContainText('유효 개월 수를 지정해 주세요.');
+    await page.getByLabel('유효 개월 수', { exact: true }).fill('24');
+    await expect(save).toBeEnabled();
+    await page.getByLabel('인증기간', { exact: true }).selectOption('unlimited');
+    await expect(save).toBeEnabled();
+    await expect(
+      page.getByRole('heading', { name: '추가할 공통인증Set', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: '추가할 특화인증Set', exact: true }),
+    ).toBeVisible();
     for (const width of [1920, 1440, 768, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -101,6 +117,7 @@ for (const type of ['auditee', 'auditor'] as const) {
         .poll(() => backend.store.snapshot().qualifications.find((x) => x.id === q.id)!.version)
         .toBe(1);
     }
+    if (type === 'auditee') await page.getByRole('link', { name: '변경', exact: true }).click();
     const checkbox = page.getByRole('checkbox', { name: title, exact: true });
     await checkbox.uncheck();
     await saveCriterion(page);
@@ -117,9 +134,10 @@ for (const type of ['auditee', 'auditor'] as const) {
       .snapshot()
       .qualifications.filter((x) => x.entityId === q.entityId)
       .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!;
-    await page.goto(`/admin/qualifications/${latest.id}?type=${type}`);
+    await page.goto(`/admin/qualifications/${latest.id}/edit?type=${type}`);
     await page.getByRole('checkbox', { name: title, exact: true }).check();
     await saveCriterion(page);
+    await expect(page.locator('.team-qualification-view')).toBeVisible();
     const copy = backend.store
       .snapshot()
       .courses.find((c) => c.entityId === q.commonCourseEntityIds[0])!;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const TEST_DATA_RECIPE_VERSION = 2 as const;
+export const TEST_DATA_RECIPE_VERSION = 3 as const;
 export const testDataCountLabels = {
   qualificationTemplates: "기본자격",
   qualifications: "팀 자격 버전",
@@ -17,7 +17,8 @@ export const testDataCountLabels = {
   subjectiveResponses: "주관식 답변",
   completions: "인증Set 수료",
   certifications: "자격 인증",
-  renewals: "재인증",
+  renewals: "재인증 대상",
+  renewalBatches: "재인증 평가 회차",
   learningRecords: "과거 학습 기록",
   learningChecklists: "교육 본인 확인",
   comparisons: "과거 수행 비교",
@@ -44,7 +45,11 @@ export const TestDataReceiptSchema = z
     action: TestDataActionSchema,
     completedAt: z.iso.datetime(),
     generation: z.string().uuid(),
-    recipeVersion: z.union([z.literal(1), z.literal(TEST_DATA_RECIPE_VERSION)]),
+    recipeVersion: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(TEST_DATA_RECIPE_VERSION),
+    ]),
     stateRevision: z.number().int().nonnegative(),
     organizationRevision: z.number().int().nonnegative(),
     before: z.record(z.string(), z.number().int().nonnegative()),

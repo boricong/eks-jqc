@@ -1,5 +1,5 @@
 import { requestPlan } from './workflow-helpers';
-import { test, expect, actor } from './fixtures';
+import { test, expect, actor, answerConfirmation } from './fixtures';
 import { saveTemplate } from '../../server/src/qualification-templates';
 import { saveCriterion } from './catalog-helpers';
 import { randomUUID } from 'node:crypto';
@@ -34,13 +34,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
     page.getByText('Ready · 대기 — 최초 기준을 저장하면 v1부터 시작합니다.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '운영 상태 변경', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '저장', exact: true }).click();
-  await expect(page.getByRole('dialog')).toContainText('변경 내용이 없습니다.');
-  await page
-    .getByRole('dialog')
-    .locator('.dialog-footer')
-    .getByRole('button', { name: '닫기', exact: true })
-    .click();
+  await expect(page.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -56,7 +50,7 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await page.getByRole('button', { name: '저장', exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(0);
   await expect(
-    page.getByRole('dialog').getByRole('button', { name: 'v1으로 최초 설정 저장', exact: true }),
+    page.getByRole('dialog').getByRole('button', { name: 'v1.0으로 최초 설정 저장', exact: true }),
   ).toBeVisible();
   await saveCriterion(page);
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -80,9 +74,9 @@ test('공통 기본자격 생성 → 팀 등록·설정 → 자동 기준 사용
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
-  await expect(page.getByRole('option', { name: '공통 설비 운전 · v1', exact: true })).toHaveCount(
-    1,
-  );
+  await expect(
+    page.getByRole('option', { name: '공통 설비 운전 · v1.0', exact: true }),
+  ).toHaveCount(1);
 });
 
 test('기본자격 긴 정보·4해상도·미저장 취소와 키보드 초점', async ({ page, backend }, testInfo) => {
@@ -149,7 +143,7 @@ test('저장 검토 중 공통 정보 변경은 팀 입력을 보존하며 과�
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   const before = backend.store.snapshot(),
     base = before.qualificationTemplates.find(
@@ -169,20 +163,22 @@ test('저장 검토 중 공통 정보 변경은 팀 입력을 보존하며 과�
       }),
   );
   await page.getByRole('button', { name: '저장', exact: true }).click();
-  await expect(page.locator('.editor-errors')).toContainText('기본자격 정보가 변경');
+  await expect(page.locator('.editor-errors')).toContainText('과거 버전은 조회만 가능합니다.');
   await expect(page.getByLabel('인증기간', { exact: true })).toHaveValue('three-years');
-  await page.getByRole('button', { name: '공통 정보 다시 확인' }).click();
-  await expect(
-    page
-      .locator('.editor-panel')
-      .filter({ has: page.getByRole('heading', { name: '공통 정보', exact: true }) }),
-  ).toContainText('최신 공통 이름');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByLabel('인증기간', { exact: true })).toBeDisabled();
+  await page.getByRole('link', { name: '최신 기준 조회', exact: true }).click();
+  await answerConfirmation(page, true);
+  await expect(page.locator('.team-qualification-view')).toContainText('최신 공통 이름');
+  await page.getByRole('link', { name: '변경', exact: true }).click();
+  await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await saveCriterion(page, 'new');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   expect(backend.store.snapshot().assignments).toEqual(before.assignments);
   const latest = backend.store
     .snapshot()
-    .qualifications.find((q) => q.parentId === 'demo-qualification')!;
+    .qualifications.filter((q) => q.entityId === 'demo-qualification')
+    .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
   expect(latest.validity.months).toBe(36);
 
   await expect(page.getByRole('link', { name: '기준 일괄 편집', exact: true })).toHaveCount(0);

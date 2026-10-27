@@ -46,7 +46,9 @@
     "data:migrate-organization-needs": "node --import tsx server/src/cli.ts migrate-organization-needs",
     "data:migrate-qualification-plans": "node --import tsx server/src/cli.ts migrate-qualification-plans",
     "data:migrate-auditor-pool": "node --import tsx server/src/cli.ts migrate-auditor-pool",
-    "data:migrate-releases": "node --import tsx server/src/cli.ts migrate-releases"
+    "data:migrate-requirement-exceptions": "node --import tsx server/src/cli.ts migrate-requirement-exceptions",
+    "data:migrate-releases": "node --import tsx server/src/cli.ts migrate-releases",
+    "data:migrate-objective-renewals": "node --import tsx server/src/cli.ts migrate-objective-renewals"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

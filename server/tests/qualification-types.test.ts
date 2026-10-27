@@ -431,12 +431,12 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     organizationHash: hash(org),
   };
   const preview = migrateQualificationTypes(raw, JSON.parse(org.toString()));
-  assert.equal(preview.state.schemaVersion, 26);
-  assert.equal(preview.state.revision, raw.revision + 13);
+  assert.equal(preview.state.schemaVersion, 28);
+  assert.equal(preview.state.revision, raw.revision + 15);
   const normalized = JSON.parse(JSON.stringify(preview.state));
   normalized.schemaVersion = 13;
-  normalized.revision -= 13;
-  normalized.audits.splice(-13 - raw.planningRequests.length);
+  normalized.revision -= 15;
+  normalized.audits.splice(-15 - raw.planningRequests.length);
   normalized.qualificationTemplates.forEach((t: any) => delete t.scope);
   for (const v of [
     ...normalized.qualificationTemplates,

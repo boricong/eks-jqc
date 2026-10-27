@@ -1,3 +1,7 @@
+import {
+  guardRenewalAttempt,
+  reconcileRenewalBatch,
+} from "./renewal-batches.ts";
 import { releaseInfo, releaseNumber, freezeCriteria } from "./releases.ts";
 import { assignmentPrerequisite } from "./auditor-pool.ts";
 import {
@@ -17,7 +21,11 @@ import {
   metadata,
   checkCommonFields,
 } from "./qualification-templates.ts";
-import { saveCatalogItem, deleteQualification } from "./catalog-editing.ts";
+import {
+  saveCatalogItem,
+  deleteQualification,
+  validateCatalogStructure,
+} from "./catalog-editing.ts";
 import {
   requestProgress,
   planningReadiness,
@@ -27,6 +35,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   CourseSchema,
+  CourseContentSchema,
   QualificationTypeSchema,
   QualificationSchema,
   DraftSchema,
@@ -194,7 +203,8 @@ export function authorize(
               (deprecated.has(key) &&
                 !(
                   (key === "subjectiveQuestions" &&
-                    v === body &&
+                    (v === body ||
+                      (action === "catalog.create" && v === body.content)) &&
                     action.startsWith("catalog.") &&
                     target === "courses") ||
                   (key === "category" &&
@@ -389,6 +399,8 @@ function reconcile(
       evidence: evidence as { kind: Kind; attemptId: string }[],
     });
   }
+  if (a.renewalBatchId)
+    return reconcileRenewalBatch(s, organizations, a.renewalBatchId, at);
   const all = s.enrollments.filter((en) => en.assignmentId === a.id),
     completed = all.map((en) => ({
       enrollmentId: en.id,
@@ -641,6 +653,32 @@ export function execute(
         422,
         "공통 출처는 지정할 수 없습니다.",
       );
+      const content =
+        body.content === undefined
+          ? undefined
+          : CourseContentSchema.strict().parse(body.content);
+      if (content) {
+        demand(
+          !body.qualificationType ||
+            body.qualificationType === content.qualificationType,
+          422,
+          "인증 유형이 일치하지 않습니다.",
+          "COURSE_TYPE_MISMATCH",
+        );
+        demand(!!content.title.trim(), 422, "인증Set명을 입력해 주세요.");
+        demand(
+          content.qualificationType !== "auditor" ||
+            (!content.assessmentKinds.length &&
+              !content.questions.length &&
+              !content.practicalQuestions.length &&
+              content.passScore === null &&
+              content.practicalPassScore === null &&
+              !content.subjectiveEnabled &&
+              !content.subjectiveQuestions.length),
+          422,
+          "Auditor 인증Set은 학습항목과 자료로 구성해 주세요.",
+        );
+      }
       const id = uid(),
         base = {
           id,
@@ -652,28 +690,30 @@ export function execute(
           revision: 1,
           title: "",
         };
-      if (isCourse)
-        s.courses.push(
-          CourseSchema.parse({
-            ...base,
-            qualificationType: QualificationTypeSchema.parse(
-              body.qualificationType ?? "auditee",
-            ),
-            title:
-              body.title === undefined
-                ? ""
-                : z.string().trim().min(1).max(300).parse(body.title),
-            operationalStatus: "active",
-            assessmentKinds:
-              body.qualificationType === "auditor" ? [] : ["objective"],
-            passScore: null,
-            practicalPassScore: null,
-            materials: [],
-            questions: [],
-            practicalQuestions: [],
-          }),
-        );
-      else
+      if (isCourse) {
+        const course = CourseSchema.parse({
+          ...base,
+          qualificationType: QualificationTypeSchema.parse(
+            body.qualificationType ?? "auditee",
+          ),
+          title:
+            body.title === undefined
+              ? ""
+              : z.string().trim().min(1).max(300).parse(body.title),
+          operationalStatus: "active",
+          assessmentKinds:
+            body.qualificationType === "auditor" ? [] : ["objective"],
+          passScore: null,
+          practicalPassScore: null,
+          materials: [],
+          questions: [],
+          practicalQuestions: [],
+          ...content,
+          category: "specialized",
+        });
+        validateCatalogStructure(s, "courses", course);
+        s.courses.push(course);
+      } else
         s.qualifications.push(
           QualificationSchema.parse({
             ...base,
@@ -760,6 +800,8 @@ export function execute(
   if (action === "attempt.start") {
     const { e, a, c } = context(s, target);
     active(a);
+    if (a.renewalBatchId)
+      guardRenewalAttempt(s, organizations, a.renewalBatchId, at);
     demand(
       c.qualificationType === "auditee",
       409,
@@ -818,6 +860,8 @@ export function execute(
     const t = find(s.attempts, target),
       { a, c } = context(s, t.enrollmentId);
     active(a);
+    if (a.renewalBatchId)
+      guardRenewalAttempt(s, organizations, a.renewalBatchId, at);
     demand(
       c.qualificationType === "auditee",
       409,
@@ -1133,6 +1177,13 @@ export function workspace(
       const cert = s.certifications.find((c) => c.assignmentId === a.id);
       return {
         ...a,
+        ...(a.renewalBatchId
+          ? {
+              renewalBatch: s.renewalBatches.find(
+                (b) => b.id === a.renewalBatchId,
+              ),
+            }
+          : {}),
         certifiedAt: cert?.date,
         certification: cert,
         enrollments: s.enrollments

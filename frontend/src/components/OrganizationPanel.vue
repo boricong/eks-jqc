@@ -196,7 +196,6 @@ onBeforeUnmount(() => {
         <div class="organization-tree-tools">
           <button class="text-link" @click="setCollapsed(new Set())">모두 펼치기</button>
           <button class="text-link" @click="collapseAll">모두 접기</button>
-          <button class="text-link" @click="revealSelected">선택 조직으로 이동</button>
         </div>
         <label class="organization-search"
           ><span>조직 검색</span>
@@ -267,11 +266,6 @@ onBeforeUnmount(() => {
         </div>
       </form>
       <div v-if="!creating && selected" class="actions organization-extra-actions">
-        <RouterLink
-          class="button secondary"
-          :to="store.managementLink('/admin/qualifications', selected.lv1OrganizationId)"
-          >이 조직의 인증 업무 관리</RouterLink
-        >
         <RouterLink
           class="button secondary"
           :to="{ path: '/system/users', query: { create: '1', organizationId: selected.id } }"

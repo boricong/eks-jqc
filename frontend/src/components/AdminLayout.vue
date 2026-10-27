@@ -37,7 +37,6 @@ watch(
   >
     <ManagementContext />
     <aside class="admin-sidebar" aria-label="인증 업무 관리 탐색" @keydown="closeMenu">
-      <h2 class="small-heading">인증 업무 관리</h2>
       <button
         ref="menuToggle"
         class="button ghost management-menu-toggle"
@@ -91,10 +90,14 @@ watch(
 .management-nav-group {
   min-width: 0;
 }
+.management-nav-group + .management-nav-group {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
 .management-nav-group h3 {
   margin: 0 0 4px;
   padding: 0 12px;
-  color: var(--ink-muted);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.45;

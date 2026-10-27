@@ -59,6 +59,7 @@ export function currentQualification(
     ...(auditorCriteria(s, q)
       ? { auditorCriteria: auditorCriteria(s, q) }
       : {}),
+    ...(t.purpose ? { purpose: t.purpose } : {}),
     qualificationType: t.qualificationType,
     title: t.title,
     englishName: t.englishName,
@@ -68,6 +69,7 @@ export function currentQualification(
 }
 export function metadata(q: Qualification): QualificationMetadata {
   return {
+    ...(q.purpose ? { purpose: q.purpose } : {}),
     qualificationType: q.qualificationType ?? "auditee",
     templateId: q.templateId,
     templateRevision: q.templateRevision,
@@ -98,6 +100,7 @@ export function checkCommonFields(s: State, q: Qualification, input: any) {
     "AUDITOR_CRITERIA_READ_ONLY",
   );
   for (const field of [
+    "purpose",
     "title",
     "englishName",
     "description",
@@ -119,6 +122,7 @@ export function saveTemplate(
 ) {
   const input = z
     .object({
+      purpose: z.enum(["acquisition", "renewal"]).optional(),
       defaultCommonCourseIds: z
         .array(z.string().min(1).max(160))
         .max(100)
@@ -228,8 +232,26 @@ export function saveTemplate(
       409,
       "메인의 선행 자격으로 연결되어 있습니다.",
     );
+  const purpose = input.purpose ?? old?.purpose ?? "acquisition";
+  demand(
+    !old ||
+      purpose === (old.purpose || "acquisition") ||
+      !s.qualifications.some((q) => q.templateId === old.id),
+    409,
+    "팀 등록 후 자격 용도는 변경할 수 없습니다.",
+  );
+  demand(
+    purpose !== "renewal" ||
+      (qualificationType === "auditee" &&
+        !s.qualificationTemplates.some(
+          (t) => t.id !== old?.id && t.purpose === "renewal",
+        )),
+    422,
+    "재인증용 Auditee 기본자격은 1개만 생성할 수 있습니다.",
+  );
   const at = new Date().toISOString();
   const next = QualificationTemplateSchema.parse({
+    purpose,
     ...input,
     auditorLevel,
     prerequisiteTemplateId,

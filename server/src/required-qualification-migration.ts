@@ -57,7 +57,7 @@ export function migrateRequiredQualifications(
   allowUpgradedOrganization = false,
 ) {
   const raw = structuredClone(input) as any;
-  if (![20, 21, 22, 23, 24, 25, 26].includes(raw?.schemaVersion))
+  if (![20, 21, 22, 23, 24, 25, 26, 27, 28].includes(raw?.schemaVersion))
     throw new Error(
       "필수자격 종료 이관에는 업무20·조직3 또는 현행 파일 쌍이 필요합니다.",
     );
@@ -152,7 +152,7 @@ export function migrateRequiredQualifications(
     organizations,
     report: {
       alreadyApplied: false,
-      schemaVersion: 26,
+      schemaVersion: 28,
       revision: checked.revision,
       organizationSchemaVersion: 4,
       organizationRevision: organizations.revision,

@@ -8,6 +8,7 @@ const props = defineProps<{ course: CourseContent; disabled: boolean }>();
 const selected = ref(''),
   uid = useId(),
   input = ref<HTMLTextAreaElement>();
+const tabs = ref<InstanceType<typeof CompactTabs>>();
 const options = computed(() =>
   props.course.subjectiveQuestions.map((q, i) => ({
     id: q.id,
@@ -44,20 +45,11 @@ async function remove() {
   await nextTick();
   input.value?.focus();
 }
-function move(delta: number) {
-  const list = props.course.subjectiveQuestions,
-    i = index.value;
-  if (props.disabled || i + delta < 0 || i + delta >= list.length) return;
-  [list[i], list[i + delta]] = [list[i + delta]!, list[i]!];
-}
 </script>
 <template>
-  <section class="assessment-editor panel" aria-label="주관식 문항 편집">
+  <section class="assessment-editor subjective-editor panel" aria-label="주관식 문항 편집">
     <header>
       <h2>주관식 평가</h2>
-      <p class="muted">
-        답변 수집 전용입니다. 합격 기준·배점 없이 저장하며 인증Set 수료에 영향을 주지 않습니다.
-      </p>
     </header>
     <p v-if="issues.length" class="muted" role="status">
       {{ issues.join(' ') }} 기존 학습·평가·수료는 계속 사용할 수 있습니다.
@@ -72,18 +64,27 @@ function move(delta: number) {
         주관식 문항 추가
       </button>
     </div>
-    <CompactTabs
-      v-if="options.length"
-      v-model="selected"
-      :items="options"
-      label="주관식 문항"
-      :panel-id="uid + '-question'"
-      class="question-tabs"
-    />
-    <div v-if="current" :id="uid + '-question'">
-      <label class="field"
-        ><span>{{ index + 1 }}번 문제</span
-        ><textarea
+    <div class="number-editor" :class="{ 'is-empty': !current }">
+      <div v-if="options.length" class="question-navigation">
+        <CompactTabs
+          ref="tabs"
+          v-model="selected"
+          :items="options"
+          label="주관식 문항"
+          :panel-id="uid + '-question'"
+          class="question-tabs"
+          vertical
+          numbered
+        />
+      </div>
+      <div
+        v-if="current"
+        :id="uid + '-question'"
+        role="tabpanel"
+        :aria-labelledby="tabs?.tabId(current.id)"
+        class="assessment-item-panel"
+      >
+        <textarea
           ref="input"
           v-model="current.prompt"
           :disabled="disabled"
@@ -91,22 +92,12 @@ function move(delta: number) {
           rows="8"
           aria-label="주관식 문제"
         />
-      </label>
-      <p class="muted">{{ current.prompt.length.toLocaleString() }} / 20,000자</p>
-      <div class="inline-actions">
-        <button class="button secondary" :disabled="disabled || index === 0" @click="move(-1)">
-          문항 위로</button
-        ><button
-          class="button secondary"
-          :disabled="disabled || index === options.length - 1"
-          @click="move(1)"
-        >
-          문항 아래로</button
-        ><button class="button danger" :disabled="disabled" @click="remove">
-          주관식 문항 삭제
-        </button>
+        <div class="subjective-question-footer">
+          <span class="muted">{{ current.prompt.length.toLocaleString() }} / 20,000자</span>
+          <button class="text-link" :disabled="disabled" @click="remove">주관식 문항 삭제</button>
+        </div>
       </div>
+      <p v-else class="editor-empty">주관식 문항을 추가해 주세요.</p>
     </div>
-    <p v-else class="muted">주관식 문항을 추가해 주세요.</p>
   </section>
 </template>

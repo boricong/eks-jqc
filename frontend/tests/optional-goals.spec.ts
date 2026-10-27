@@ -13,7 +13,7 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     await actor(page, 'learner-2');
     await page.goto('/plans');
     await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-    await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+    await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
     await page.getByLabel('종료일', { exact: true }).fill('2029-12-01');
     const plan = backend.store.snapshot().plans[0]!;
     const goals = page.locator('textarea[data-plan-field]');

@@ -274,7 +274,7 @@ test("명시 이관은 vN.0과 스냅샷을 보존하고 JSON 왕복·재실행�
     delete c.releaseInfo;
   }
   const migrated = migrateReleases(s, org);
-  assert.equal(migrated.state.schemaVersion, 26);
+  assert.equal(migrated.state.schemaVersion, 28);
   assert.deepEqual(migrated.state.courses[0]!.releaseVersion, {
     major: 1,
     minor: 0,

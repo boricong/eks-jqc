@@ -64,7 +64,7 @@ test('계획 단계는 날짜·저장을 검사하고 목표 없이 최종 확�
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await page.getByLabel('종료일', { exact: true }).fill('');
   await page.getByRole('button', { name: '3. 최종 확인' }).click();
   await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();

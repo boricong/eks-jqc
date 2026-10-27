@@ -5,7 +5,6 @@ import {
   CommonCourseSchema,
   CommonCourseReleaseSchema,
   CourseSchema,
-  QualificationSchema,
   QualificationTemplateSchema,
   organizationEntries,
   TEST_DATA_RECIPE_VERSION,
@@ -16,7 +15,6 @@ import {
   type TestDataStatus,
 } from "@eks/contracts";
 import { TEST_DATA_TEMPLATES } from "./test-data-templates.ts";
-import { copyCommonCourses } from "./common-courses.ts";
 import { releaseInfo } from "./releases.ts";
 import { auditorTemplateErrors } from "./auditor-pool.ts";
 import { validateState } from "./integrity.ts";
@@ -110,14 +108,6 @@ export function testDataStatus(
     warnings.push(
       "Auditor 지정 계정이 없습니다. 기존 사용자 관리에서 역할을 지정한 뒤 시험해 주세요.",
     );
-  const total = teams.reduce(
-    (n, team) =>
-      n +
-      TEST_DATA_TEMPLATES.filter(
-        (t) => t.scope !== "team" || t.ownerLv1OrganizationId === team.id,
-      ).length,
-    0,
-  );
   const latest = new Map<string, State["qualifications"][number]>();
   for (const q of s.qualifications)
     if (
@@ -140,8 +130,8 @@ export function testDataStatus(
       commonOriginals: 5,
       specializedPerTeam: 10,
       specialized: teams.length * 10,
-      qualifications: total,
-      commonCopies: total,
+      qualifications: 0,
+      commonCopies: 0,
     },
     qualifications: [...latest.values()].map((q) => ({
       id: q.id,
@@ -273,7 +263,7 @@ export function loadTestData(
     ...releaseInfo("initial", actorId, "내장 테스트 데이터 로드"),
     createdAt: at,
   });
-  const commonIds = Array.from({ length: 5 }, (_, i) => {
+  Array.from({ length: 5 }, (_, i) => {
     const id = randomUUID(),
       releaseId = randomUUID(),
       content = testCourseContent(i, true);
@@ -301,10 +291,9 @@ export function loadTestData(
         releaseInfo: info(),
       }),
     );
-    return id;
   });
   for (const team of status.teams) {
-    const specialized = Array.from({ length: 10 }, (_, i) => {
+    Array.from({ length: 10 }, (_, i) => {
       const id = randomUUID(),
         c = CourseSchema.parse({
           ...testCourseContent(i),
@@ -319,87 +308,7 @@ export function loadTestData(
           operationalStatus: "active",
         });
       state.courses.push(c);
-      return c;
     });
-    const activeLevels = new Set<string>();
-    const templates = state.qualificationTemplates.filter(
-      (t) => t.scope !== "team" || t.ownerLv1OrganizationId === team.id,
-    );
-    for (const [i, t] of templates.entries()) {
-      const originals = commonIds.filter(
-        (id) =>
-          state.commonCourses.find((c) => c.id === id)!.qualificationType ===
-          t.qualificationType,
-      );
-      const copies = copyCommonCourses(
-        state,
-        [originals[i % originals.length]!],
-        team.id,
-      );
-      copies.forEach((c) => (c.releaseInfo = info()));
-      const choices = specialized.filter(
-          (c) => c.qualificationType === t.qualificationType,
-        ),
-        id = randomUUID();
-      const active =
-        t.qualificationType === "auditee" ||
-        (!auditorTemplateErrors(state, t).length &&
-          !activeLevels.has(t.auditorLevel!));
-      if (active && t.auditorLevel) activeLevels.add(t.auditorLevel);
-      state.qualifications.push(
-        QualificationSchema.parse({
-          id,
-          entityId: id,
-          lv1OrganizationId: team.id,
-          version: 1,
-          revision: 1,
-          releaseVersion: { major: 1, minor: 0 },
-          releaseInfo: info(),
-          qualificationType: t.qualificationType,
-          templateId: t.id,
-          templateRevision: t.revision,
-          title: t.title,
-          englishName: t.englishName,
-          description: t.description,
-          lifecycleStatus: active ? "Active" : "Hold",
-          ...(t.auditorLevel
-            ? {
-                auditorCriteria: {
-                  level: t.auditorLevel,
-                  ...(t.prerequisiteTemplateId
-                    ? { prerequisiteTemplateId: t.prerequisiteTemplateId }
-                    : {}),
-                },
-              }
-            : {}),
-          commonCourseEntityIds: copies.map((c) => c.entityId),
-          courseIds: [
-            ...copies.map((c) => c.id),
-            choices[i % choices.length]!.id,
-          ],
-          validity:
-            i % 2
-              ? { type: "unlimited", months: null, reminderDays: [] }
-              : { type: "months", months: 12, reminderDays: [30, 7] },
-          renewalLeadMonths: 3,
-          renewalNoticeDaysBefore: 7,
-        }),
-      );
-    }
-    const first = state.qualifications.find(
-      (q) =>
-        q.lv1OrganizationId === team.id &&
-        q.qualificationType === "auditee" &&
-        q.lifecycleStatus === "Active",
-    );
-    if (first)
-      state.organizationQualificationRequirements.push({
-        organizationId: team.id,
-        entityIds: [first.entityId],
-        revision: 1,
-        updatedAt: at,
-        updatedBy: actorId,
-      });
     state.auditorPrograms.push({
       lv1OrganizationId: team.id,
       revision: 1,

@@ -67,7 +67,10 @@ test('유형별 목록·생성 취소·유형 변경 저장과 주소/검색/상
   await expect(page.getByLabel('인증Set 설정 검색')).toHaveValue('자료');
   await expect(page.getByLabel('목록 정렬')).toHaveValue('desc');
   await page.getByTestId('saved-course-link').click();
-  await expect(page.getByLabel('인증 유형', { exact: true })).toHaveValue('auditee');
+  await expect(page.locator('.criteria-type-value')).toHaveText('Auditee');
+  await expect(
+    page.getByText('버전이 분리된 인증Set은 유형을 변경할 수 없습니다.', { exact: true }),
+  ).toBeVisible();
   await page.locator('.back-link').click();
   await tabs.getByRole('tab', { name: 'Auditor(심사자)', exact: true }).click();
   await expect(tabs.getByRole('tab', { name: 'Auditor(심사자)', exact: true })).toHaveAttribute(
@@ -98,7 +101,7 @@ test('팀 기준의 동일 유형 인증Set만 선택·조회하고 Auditor 작�
   const ids = await criteriaFixture(backend);
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto(`/admin/qualifications/${ids.id}?type=auditee`);
+  await page.goto(`/admin/qualifications/${ids.id}/edit?type=auditee`);
   await expect(page).toHaveURL(/type=auditor/);
   await expect(page.getByRole('checkbox', { name: /Auditor 심사 자료/ })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /실무 수행|자료 확인/ })).toHaveCount(0);

@@ -4,24 +4,32 @@ import { configureDashboardFixture, DASHBOARD_NOW } from '../../server/tests/das
 const menuNames = [
   '인증 현황',
   '취득 대상자 상태',
-  '팀 사용자 관리',
-  '조직 정보·필요자격',
   'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
+  '팀 사용자 관리',
+  '조직 정보·관리자',
+  '조직 필요자격',
   '팀 자격 설정',
   '인증Set 설정',
   '팀 공지 관리',
 ];
-const groupNames = ['현황 조회', '인증 운영', '자격 기준 설정', '팀 소통'];
+const groupNames = ['현황 조회', '인증 운영', '조직 관리', '자격 기준 설정', '팀 소통'];
 
-test('네 그룹·11개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
+test('다섯 그룹·12개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/admin\/dashboard/);
   const nav = page.getByRole('navigation', { name: '관리 메뉴', exact: true });
+  await expect(page.locator('.admin-sidebar > .small-heading')).toHaveCount(0);
+  const organization = nav.getByRole('region', { name: '조직 관리', exact: true });
+  await expect(organization.getByRole('link')).toHaveText([
+    '팀 사용자 관리',
+    '조직 정보·관리자',
+    '조직 필요자격',
+  ]);
   await expect(nav.getByRole('heading')).toHaveText(groupNames);
   await expect(nav.getByRole('link')).toHaveText(menuNames);
   for (const name of menuNames) {
@@ -41,7 +49,7 @@ test('네 그룹·11개 메뉴·화면 제목·상세 선택과 기존 URL', asy
   );
 });
 
-test('세부 관리자의 세 메뉴·빈 그룹 제거·직접 URL와 일반 학습자 제한, 운영자의 팀 전환', async ({
+test('세부 관리자의 네 메뉴·빈 그룹 제거·직접 URL와 일반 학습자 제한, 운영자의 팀 전환', async ({
   page,
   backend,
 }) => {
@@ -54,9 +62,10 @@ test('세부 관리자의 세 메뉴·빈 그룹 제거·직접 URL와 일반 �
   await expect(nav.getByRole('link')).toHaveText([
     '인증 현황',
     '취득 대상자 상태',
-    '조직 정보·필요자격',
+    '조직 정보·관리자',
+    '조직 필요자격',
   ]);
-  await expect(nav.getByRole('heading')).toHaveText(groupNames.slice(0, 2));
+  await expect(nav.getByRole('heading')).toHaveText(groupNames.slice(0, 3));
   await page.goto('/admin/assignments');
   await expect(page).toHaveURL(/\/admin\/dashboard/);
   await actor(page, 'operator-1');
@@ -94,6 +103,8 @@ test('네 화면 폭의 그룹·글자·조작 높이·키보드 메뉴와 미�
       expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(width <= 1024 ? 44 : 40);
     }
     await expect(nav.getByRole('heading').first()).toHaveCSS('font-size', '13px');
+    await expect(nav.getByRole('heading').first()).toHaveCSS('color', 'rgb(13, 37, 61)');
+    await expect(nav.locator('.management-nav-group').nth(1)).toHaveCSS('border-top-width', '1px');
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();

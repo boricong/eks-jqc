@@ -49,6 +49,35 @@ async function prepared(page: any, backend: any) {
       const q = s.qualifications.find((q: any) => q.id === 'demo-qualification');
       q.validity = { type: 'months', months: 1, reminderDays: [7] };
       q.renewalLeadMonths = 3;
+      const template = s.qualificationTemplates.find((t: any) => t.id === q.templateId)!,
+        course = s.courses.find((c: any) => c.id === q.courseIds[0])!;
+      s.qualificationTemplates.push({
+        ...structuredClone(template),
+        id: 'renewal-template',
+        purpose: 'renewal',
+        title: '객관식 재인증',
+        scope: 'system',
+      });
+      s.courses.push({
+        ...structuredClone(course),
+        id: 'renewal-course',
+        entityId: 'renewal-course',
+        assessmentKinds: ['objective'],
+        practicalQuestions: [],
+        subjectiveEnabled: false,
+        subjectiveQuestions: [],
+        questions: [{ ...course.questions[0], choices: ['정답', '오답'], correct: 0 }],
+      });
+      s.qualifications.push({
+        ...structuredClone(q),
+        id: 'renewal-q',
+        entityId: 'renewal-q',
+        templateId: 'renewal-template',
+        purpose: 'renewal',
+        lifecycleStatus: 'Active',
+        title: '객관식 재인증',
+        courseIds: ['renewal-course'],
+      });
       return {};
     },
   );
@@ -56,7 +85,7 @@ async function prepared(page: any, backend: any) {
   await actor(page, 'learner-1');
   return finishOwn(page, backend.store);
 }
-test('본인 종합평가 재인증·갱신 이력·원본 근거 유지와 반응형 화면', async ({
+test('객관식 재인증 대상 확인·응시·갱신 결과와 4개 화면 크기', async ({
   page,
   backend,
 }, testInfo) => {
@@ -64,41 +93,49 @@ test('본인 종합평가 재인증·갱신 이력·원본 근거 유지와 반�
     before = backend.store.snapshot(),
     cert = before.certifications[0]!;
   await page.goto(`/certifications/${aid}`);
-  await expect(page.getByRole('button', { name: '재인증 시작', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '재인증 시작', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('실제 능력 평가를 완료했다는 의미가 아니며');
-  await expect(dialog).toContainText('갱신 후 만료일');
-  await dialog.getByRole('button', { name: '종합평가 완료', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '재인증 시작', exact: true })).toHaveCount(0);
-  const after = backend.store.snapshot();
-  expect(after.certifications[0]!.id).toBe(cert.id);
-  expect(after.certifications[0]!.date).toBe(cert.date);
-  expect(after.attempts).toEqual(before.attempts);
-  expect(after.completions).toEqual(before.completions);
-  expect(after.certifications[0]!.periods).toHaveLength(2);
-  await page.getByRole('button', { name: '유효기간·갱신 근거 펼치기', exact: true }).click();
-  await expect(
-    page
-      .locator('.lifecycle-history')
-      .filter({ has: page.getByRole('heading', { name: '유효기간·갱신 근거', exact: true }) })
-      .getByText('MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음', { exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: '취득·변경 이력 펼치기', exact: true }).click();
-  await expect(page.getByText('갱신 완료', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '재인증 대상·평가 확인' }).click();
+  await expect(page.getByRole('checkbox')).toBeChecked();
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('heading', { name: '현재 효력' })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     ).toBeTruthy();
-    await page.screenshot({ path: testInfo.outputPath(`credential-${width}.png`), fullPage: true });
+    await page.screenshot({
+      path: testInfo.outputPath(`renewal-selection-${width}.png`),
+      fullPage: true,
+    });
   }
+  await page.getByRole('button', { name: '1개 대상 확인' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('객관식 평가 합격');
+  await dialog.getByRole('button', { name: '재인증 시작', exact: true }).click();
+  await page.getByRole('link', { name: '객관식 평가 시작·이어하기' }).click();
+  await page.getByRole('radio').first().check();
+  await expect(page.locator('.save-status')).toHaveText('저장됨');
   await page.reload();
-  await expect(
-    page.getByText(credentialCurrent(after.certifications[0]!).expiresOn!, { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByRole('radio').first()).toBeChecked();
+  await page.getByRole('button', { name: /^답안 확인(?:으로 돌아가기)?$/ }).click();
+  await page.getByRole('button', { name: '최종 제출', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '평가 통과', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '재인증 결과 확인', exact: true }).first().click();
+  await expect(page.getByText('갱신 완료', { exact: true })).toBeVisible();
+  const after = backend.store.snapshot();
+  expect(after.certifications).toHaveLength(before.certifications.length);
+  expect(after.certifications[0]!.periods).toHaveLength(2);
+  expect(after.certifications[0]!.evidence).toEqual(cert.evidence);
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+    ).toBeTruthy();
+    await page.screenshot({
+      path: testInfo.outputPath(`renewal-result-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.goto(`/certifications/${aid}`);
+  await page.getByRole('button', { name: '유효기간·갱신 근거 펼치기', exact: true }).click();
+  await expect(page.getByText('객관식 재인증 평가 합격으로 갱신', { exact: true })).toBeVisible();
 });
 test('대상자 Hold 선택·실패 시 입력 보존·홈 차단 안내·개인 자격 상태 관리', async ({
   page,
@@ -166,7 +203,7 @@ test('기준 상태 영향 확인·사유·Revoke 이력과 신규 인증Set 명
   );
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   await expect(page.getByRole('link', { name: '인증Set 설정', exact: true })).toBeVisible();
   await expect(page.getByLabel('재인증 시작 · 만료 전 개월', { exact: true })).toHaveValue('3');
   await page.getByRole('button', { name: '운영 상태 변경', exact: true }).click();

@@ -634,7 +634,12 @@ test("초안 삭제 참조·revision·영구 백업·실패 보존·삭제 후 �
   const linkedQualification = await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
-    { title: "초안 연결", revision: 1, courseIds: [draft.id] },
+    {
+      title: "초안 연결",
+      revision: 1,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      courseIds: [draft.id],
+    },
     200,
     randomUUID(),
     "PUT",

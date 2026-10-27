@@ -9,9 +9,9 @@ export function migratePlanning(
 ) {
   const raw = input as any;
   if (
-    ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].includes(
-      raw?.schemaVersion,
-    )
+    ![
+      12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+    ].includes(raw?.schemaVersion)
   )
     throw new Error("계획 요청 이관에는 업무12·조직2가 필요합니다.");
   const organizations = validateOrganizations(organizationInput),

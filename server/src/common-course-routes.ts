@@ -12,6 +12,7 @@ import {
   saveCommonCourse,
   changeCommonCourseStatus,
   commonCourseOptions,
+  availableCommonCourses,
 } from "./common-courses.ts";
 export function registerCommonCourseRoutes(
   app: FastifyInstance,
@@ -77,21 +78,27 @@ export function registerCommonCourseRoutes(
       },
     });
   }
-  app.get("/api/qualifications/:id/common-course-options", async (r) => {
-    const s = store.snapshot(),
-      scope = managementScope(
-        actor(r),
-        store.organizations.snapshot(),
-        (r.query as { lv1OrganizationId?: string }).lv1OrganizationId,
-      ),
-      q = s.qualifications.find(
-        (q) => q.id === (r.params as { id: string }).id,
+  for (const kind of [
+    "common-course-options",
+    "available-common-courses",
+  ] as const)
+    app.get(`/api/qualifications/:id/${kind}`, async (r) => {
+      const s = store.snapshot(),
+        scope = managementScope(
+          actor(r),
+          store.organizations.snapshot(),
+          (r.query as { lv1OrganizationId?: string }).lv1OrganizationId,
+        ),
+        q = s.qualifications.find(
+          (q) => q.id === (r.params as { id: string }).id,
+        );
+      demand(
+        q && q.lv1OrganizationId === scope,
+        403,
+        "선택한 팀의 자격만 조회할 수 있습니다.",
       );
-    demand(
-      q && q.lv1OrganizationId === scope,
-      403,
-      "선택한 팀의 자격만 조회할 수 있습니다.",
-    );
-    return commonCourseOptions(s, q);
-  });
+      return kind === "common-course-options"
+        ? commonCourseOptions(s, q)
+        : availableCommonCourses(s, q);
+    });
 }

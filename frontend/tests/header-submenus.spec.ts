@@ -9,12 +9,13 @@ const panel = (page: Page, id: string) => main(page).locator(`[data-submenu-pane
 const managementNames = [
   '인증 현황',
   '취득 대상자 상태',
-  '팀 사용자 관리',
-  '조직 정보·필요자격',
   'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
+  '팀 사용자 관리',
+  '조직 정보·관리자',
+  '조직 필요자격',
   '팀 자격 설정',
   '인증Set 설정',
   '팀 공지 관리',
@@ -54,6 +55,7 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
   await expect(panel(page, 'management').getByRole('heading')).toHaveText([
     '현황 조회',
     '인증 운영',
+    '조직 관리',
     '자격 기준 설정',
     '팀 소통',
   ]);
@@ -88,7 +90,8 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
   await expect(panel(page, 'management').getByRole('link')).toHaveText([
     '인증 현황',
     '취득 대상자 상태',
-    '조직 정보·필요자격',
+    '조직 정보·관리자',
+    '조직 필요자격',
   ]);
   await expect(toggle(page, 'system')).toHaveCount(0);
   await actor(page, 'admin-1');

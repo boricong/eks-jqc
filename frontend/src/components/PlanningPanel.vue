@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { releaseVersionLabel } from '@eks/contracts';
 import PreviousPlanSchedule from './PreviousPlanSchedule.vue';
-import { api } from '../api';
+import { api, ApiError } from '../api';
+import StatusBadge from './StatusBadge.vue';
 import type { PlanningRequestPreview, PlanningRequest } from '@eks/contracts';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
@@ -25,7 +26,6 @@ const requestPreview = ref<PlanningRequestPreview>(),
   closeTarget = ref<PlanningRequest>(),
   closeReason = ref('');
 const selectedType = ref<'auditee' | 'auditor'>('auditee');
-const typeItems = [{ id: 'auditee', label: 'Auditee · 학습자' }];
 const form = ref({ learnerIds: [] as string[], dueOn: '', message: '' });
 const context = computed(() => `${store.actorId}:${store.managementLv1}:${store.fullManagement}`);
 let disposed = false;
@@ -89,6 +89,7 @@ const allRows = computed(() =>
     );
     const assignments = store.data.assignments.filter(
       (a) =>
+        !a.renewalBatchId &&
         a.learnerId === user.id &&
         store.qualification(a.qualificationId).qualificationType === selectedType.value &&
         !a.excludedReason,
@@ -222,7 +223,10 @@ async function send() {
     open.value = false;
     store.notify('대상자별 계획 수립 요청을 저장했습니다.');
   } catch (e) {
-    if (!disposed && scope === context.value) error.value = (e as Error).message;
+    if (!disposed && scope === context.value) {
+      error.value = (e as Error).message;
+      if (e instanceof ApiError && e.status === 409) requestPreview.value = undefined;
+    }
   } finally {
     busy.value = false;
   }
@@ -466,7 +470,7 @@ onBeforeRouteUpdate(leave);
   >
   <AppDialog
     :open="open"
-    :title="`${selectedType === 'auditor' ? 'Auditor' : 'Auditee'} 계획 수립 요청`"
+    title="계획 수립 요청"
     class="planning-request-dialog"
     @update:open="
       (value) => {
@@ -475,14 +479,6 @@ onBeforeRouteUpdate(leave);
     "
   >
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-    <fieldset :disabled="busy" class="choice-group">
-      <legend>요청 인증 유형</legend>
-      <label v-for="item in typeItems" :key="item.id" class="choice"
-        ><input v-model="selectedType" type="radio" name="request-type" :value="item.id" />{{
-          item.label
-        }}</label
-      >
-    </fieldset>
     <div class="planning-request-layout">
       <fieldset class="planning-request-targets">
         <legend>{{ selectedType === 'auditor' ? '대상 평가자' : '대상 학습자' }}</legend>
@@ -550,24 +546,37 @@ onBeforeRouteUpdate(leave);
         </p>
       </div>
     </div>
-    <section v-if="requestPreview" class="planning-preview">
-      <h3>조직별 필요자격 확인</h3>
-      <section v-for="r in requestPreview.rows" :key="r.learnerId">
-        <h4>
-          {{ r.name }} ·
-          {{
-            r.status === 'ready' ? '발송 가능' : r.status === 'excluded' ? '대상 제외' : '발송 보류'
-          }}
-        </h4>
-        <p>{{ r.organizationPath.map((o) => o.name).join(' › ') }}</p>
+    <section v-if="requestPreview" class="planning-preview" aria-label="요청 대상 검토 결과">
+      <section v-for="r in requestPreview.rows" :key="r.learnerId" class="planning-preview-person">
+        <header class="planning-preview-heading">
+          <h3>{{ r.name }}</h3>
+          <StatusBadge
+            :status="
+              r.status === 'ready' ? 'active' : r.status === 'excluded' ? 'excluded' : 'draft'
+            "
+            :label="
+              r.status === 'ready'
+                ? '발송 가능'
+                : r.status === 'excluded'
+                  ? '대상 제외'
+                  : '발송 보류'
+            "
+          />
+        </header>
+        <p class="planning-preview-path">{{ r.organizationPath.map((o) => o.name).join(' › ') }}</p>
         <p v-if="r.reasons.length" class="error-message">{{ r.reasons.join(' · ') }}</p>
-        <ul>
+        <ul class="planning-preview-requirements">
           <li v-for="q in r.requirements" :key="q.entityId">
-            {{ q.title }} · {{ q.sourceOrganizations.map((o) => o.name).join(', ') }} 지정 ·
-            {{ r.coveredEntityIds.includes(q.entityId) ? '보유·진행 중' : '계획 필요' }}
+            <span
+              ><strong>{{ q.title }}</strong
+              ><small>{{ q.sourceOrganizations.map((o) => o.name).join(', ') }} 지정</small></span
+            >
+            <span class="planning-preview-state">{{
+              r.coveredEntityIds.includes(q.entityId) ? '보유·진행 중' : '계획 필요'
+            }}</span>
           </li>
         </ul>
-        <label v-for="id in r.existingRequestIds" :key="id" class="planning-meta"
+        <label v-for="id in r.existingRequestIds" :key="id" class="planning-replace-request"
           ><input v-model="replaceIds" type="checkbox" :value="id" :disabled="busy" /> 이전 요청
           교체 종료 · {{ store.data.planningRequests.find((p) => p.id === id)?.dueOn }} ·
           {{
@@ -575,10 +584,6 @@ onBeforeRouteUpdate(leave);
           }}</label
         >
       </section>
-      <p>표시된 필요자격 전체를 요청합니다. 기존 초안·확정 계획·학습 기록은 보존됩니다.</p>
-      <button class="button secondary" :disabled="busy" @click="requestPreview = undefined">
-        대상 다시 검토
-      </button>
     </section>
     <template #footer
       ><button class="button secondary" :disabled="busy" @click="open = false">취소</button

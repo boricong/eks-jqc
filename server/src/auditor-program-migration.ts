@@ -10,7 +10,9 @@ export function migrateAuditorProgram(
 ) {
   const raw = input as any;
   if (
-    ![16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].includes(raw?.schemaVersion)
+    ![16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].includes(
+      raw?.schemaVersion,
+    )
   )
     throw new Error("Auditor 자율 학습 이관에는 업무16·조직2가 필요합니다.");
   const next = structuredClone(raw),

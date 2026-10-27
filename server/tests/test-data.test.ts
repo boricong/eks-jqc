@@ -147,7 +147,132 @@ async function fixture(t: TestContext, legacy = false) {
   };
 }
 
-test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준비 부족을 정확히 생성한다", () => {
+async function registerTestQualification(
+  f: Awaited<ReturnType<typeof fixture>>,
+  type: "auditee" | "auditor",
+) {
+  let template = f.store
+    .snapshot()
+    .qualificationTemplates.find(
+      (t) => t.qualificationType === type && t.scope !== "team",
+    )!;
+  assert(template);
+  if (type === "auditor")
+    await f.call(
+      "admin-1",
+      "/qualification-templates/import",
+      {
+        templateIds: [template.id],
+        templateRevisions: { [template.id]: template.revision },
+      },
+      409,
+    );
+  const common = f.store
+    .snapshot()
+    .commonCourses.find((c) => c.qualificationType === type)!;
+  template = await f.call(
+    "operator-1",
+    `/system/qualification-templates/${template.id}`,
+    {
+      revision: template.revision,
+      review: {
+        stateRevision: f.store.snapshot().revision,
+        organizationRevision: f.store.organizations.snapshot().revision,
+      },
+      title: template.title,
+      englishName: template.englishName,
+      description: template.description,
+      qualificationType: type,
+      ...(type === "auditor" ? { auditorLevel: "general" } : {}),
+      defaultCommonCourseIds: [common.id],
+      commonCourseRevisions: { [common.id]: common.revision },
+    },
+    200,
+    "PUT",
+  );
+  const result = await f.call("admin-1", "/qualification-templates/import", {
+    qualificationType: type,
+    templateIds: [template.id],
+    templateRevisions: { [template.id]: template.revision },
+    commonCourseRevisions: { [common.id]: common.revision },
+  });
+  const registered = f.store
+    .snapshot()
+    .qualifications.find((q) => q.id === result.imported[0])!;
+  assert.equal(
+    registered.lifecycleStatus,
+    type === "auditee" ? "Ready" : "Hold",
+  );
+  assert.equal(registered.version, type === "auditee" ? null : 1);
+  assert.equal(registered.commonCourseEntityIds.length, 1);
+  assert.equal(registered.courseIds.length, 1);
+  const specialized = f.store
+    .snapshot()
+    .courses.find(
+      (c) =>
+        c.lv1OrganizationId === "org-photo" &&
+        c.qualificationType === type &&
+        c.category === "specialized",
+    )!;
+  const saved = await f.call(
+    "admin-1",
+    `/qualifications/${registered.id}`,
+    {
+      ...registered,
+      courseIds: [...registered.courseIds, specialized.id],
+      validity: { type: "months", months: 12, reminderDays: [30, 7] },
+      confirmInitialConfiguration: true,
+    },
+    200,
+    "PUT",
+  );
+  let q = f.store.snapshot().qualifications.find((q) => q.id === saved.id)!;
+  if (type === "auditor") {
+    assert.equal(q.lifecycleStatus, "Hold");
+    await f.call("admin-1", `/qualifications/${q.id}/lifecycle`, {
+      revision: q.revision,
+      stateRevision: f.store.snapshot().revision,
+      organizationRevision: f.store.organizations.snapshot().revision,
+      status: "Active",
+      reason: "등록부터 운영 전환 시험",
+    });
+    q = f.store.snapshot().qualifications.find((x) => x.id === q.id)!;
+  }
+  assert.equal(q.lifecycleStatus, "Active");
+  assert.deepEqual(qualificationUseErrors(q, f.store.snapshot().courses), []);
+  return q;
+}
+
+async function designateTestNeed(
+  f: Awaited<ReturnType<typeof fixture>>,
+  entityId: string,
+) {
+  const view = await f.call(
+    "admin-1",
+    "/organization-qualification-requirements",
+  );
+  await f.call(
+    "admin-1",
+    "/organization-qualification-requirements",
+    {
+      contractVersion: 2,
+      stateRevision: view.stateRevision,
+      organizationRevision: view.organizationRevision,
+      changes: [
+        {
+          organizationId: "org-photo",
+          entityIds: [entityId],
+          exclusions: [],
+          removalReasons: [],
+        },
+      ],
+    },
+    200,
+    "PUT",
+  );
+}
+
+test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준비 부족을 생성하고 팀 자격·공통 사본·필요자격은 비운다", () => {
   const original = seedState(true),
     org = seedOrganizations(),
     empty = resetTestData(original, org),
@@ -175,13 +300,6 @@ test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준�
     teams.length * 10,
   );
   for (const team of teams) {
-    const qs = s.qualifications.filter((q) => q.lv1OrganizationId === team.id);
-    assert.equal(
-      qs.length,
-      TEST_DATA_TEMPLATES.filter(
-        (t) => t.scope !== "team" || t.ownerLv1OrganizationId === team.id,
-      ).length,
-    );
     assert.equal(
       s.courses.filter(
         (c) =>
@@ -191,28 +309,34 @@ test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준�
       ).length,
       6,
     );
-    for (const q of qs) {
-      assert.deepEqual(q.releaseVersion, { major: 1, minor: 0 });
-      assert.equal(q.courseIds.length, 2);
-      assert.equal(q.commonCourseEntityIds.length, 1);
-      const courses = q.courseIds.map((id) =>
-        s.courses.find((c) => c.id === id)!,
-      );
-      assert(courses.every((c) => c.qualificationType === q.qualificationType));
-      assert.equal(courses.filter((c) => c.category === "common").length, 1);
-      if (q.lifecycleStatus === "Active")
-        assert.deepEqual(qualificationUseErrors(q, s.courses), []);
-      else assert.equal(q.qualificationType, "auditor");
-    }
-    const need = s.organizationQualificationRequirements.find(
-      (r) => r.organizationId === team.id,
-    )!;
-    assert.equal(need.entityIds.length, 1);
-    assert.equal(
-      qs.find((q) => q.entityId === need.entityIds[0])!.qualificationType,
-      "auditee",
-    );
   }
+  assert.equal(s.qualifications.length, 0);
+  assert.equal(s.courses.filter((c) => c.category === "common").length, 0);
+  assert.equal(s.organizationQualificationRequirements.length, 0);
+  assert(
+    s.qualificationTemplates.every(
+      (t) => t.defaultCommonCourseIds.length === 0,
+    ),
+  );
+  assert.equal(s.auditorPrograms.length, teams.length);
+  for (const key of [
+    "planningRequests",
+    "plans",
+    "assignments",
+    "enrollments",
+    "attempts",
+    "subjectiveResponses",
+    "completions",
+    "certifications",
+    "renewals",
+    "renewalBatches",
+  ] as const)
+    assert.equal(s[key].length, 0, key);
+  const status = testDataStatus(s, loaded.organizations);
+  assert.equal(status.recipe.version, 3);
+  assert.equal(status.recipe.qualifications, 0);
+  assert.equal(status.recipe.commonCopies, 0);
+  assert.deepEqual(status.qualifications, []);
   for (const c of [...s.commonCourses, ...s.courses]) {
     assert.deepEqual(courseUseErrors(c), []);
     assert.deepEqual(
@@ -256,12 +380,6 @@ test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준�
     );
     assert.deepEqual(c.releaseVersion, { major: 1, minor: 0 });
   }
-  assert(
-    s.qualifications.some(
-      (q) => q.validity.type === "months" && q.validity.months === 12,
-    ),
-  );
-  assert(s.qualifications.some((q) => q.validity.type === "unlimited"));
   assert(
     testDataStatus(s, loaded.organizations).warnings.some((w) =>
       w.includes("메인 Auditor"),
@@ -372,24 +490,50 @@ test("전체 초기화는 계정 전체 필드·조직 구조만 보존하고 �
   );
 });
 
-test("구성1 영수증은 재시작 후 읽고 새 로드와 영수증은 구성2로 생성한다", async (t) => {
+test("구성1·2 영수증은 재시작·재시도 후 보존하고 새 로드는 구성3으로 생성한다", async (t) => {
   const f = await fixture(t),
     reset = await f.apply("reset");
-  assert.equal(reset.result.recipeVersion, 2);
-  await f.app.close();
-  const metadata = JSON.parse(await readFile(f.store.maintenanceFile, "utf8"));
-  metadata.testDataOperations[0].recipeVersion = 1;
-  await writeFile(f.store.maintenanceFile, JSON.stringify(metadata));
-  await f.restart();
-  const status = await f.call(
-    "operator-1",
-    `/system/test-data?operationKey=${reset.key}`,
-  );
-  assert.equal(status.operation.recipeVersion, 1);
-  assert.equal(status.recipe.version, 2);
-  assert.equal((await f.apply("load")).result.recipeVersion, 2);
+  assert.equal(reset.result.recipeVersion, 3);
+  for (const version of [1, 2]) {
+    await f.app.close();
+    const metadata = JSON.parse(
+      await readFile(f.store.maintenanceFile, "utf8"),
+    );
+    metadata.testDataOperations[0].recipeVersion = version;
+    await writeFile(f.store.maintenanceFile, JSON.stringify(metadata));
+    await f.restart();
+    const before = await f.bytes();
+    const status = await f.call(
+      "operator-1",
+      `/system/test-data?operationKey=${reset.key}`,
+    );
+    assert.equal(status.operation.recipeVersion, version);
+    assert.equal(status.recipe.version, 3);
+    assert.deepEqual(
+      await f.call(
+        "operator-1",
+        "/system/test-data/apply",
+        reset.body,
+        200,
+        "POST",
+        reset.key,
+      ),
+      status.operation,
+    );
+    assert.deepEqual(await f.bytes(), before);
+  }
+  const preview = await f.call("operator-1", "/system/test-data/preview", {
+    action: "load",
+  });
+  assert.equal(preview.recipe.qualifications, 0);
+  assert.equal(preview.recipe.commonCopies, 0);
+  assert.equal(preview.after.qualifications, 0);
+  assert.equal(preview.after.organizationQualificationRequirements, 0);
+  const loaded = await f.apply("load");
+  assert.equal(loaded.result.recipeVersion, 3);
+  assert.equal(loaded.result.after.qualifications, 0);
   assert.equal(
-    TestDataReceiptSchema.safeParse({ ...reset.result, recipeVersion: 3 })
+    TestDataReceiptSchema.safeParse({ ...reset.result, recipeVersion: 4 })
       .success,
     false,
   );
@@ -588,10 +732,11 @@ test("교체 중 대기한 업무 쓰기는 새 세대에 반영되지 않으며
   assert.deepEqual(f.store.snapshot().users, seedState(true).users);
 });
 
-test("기존 계정의 Auditor 지정·필수 교육 본인 확인으로 인증하고 미지정 등급 자격은 보류한다", async (t) => {
+test("Auditor 풀 등급 보완·수동 등록·Active 전환 후 지정·본인 확인으로 인증한다", async (t) => {
   const f = await fixture(t);
   await f.apply("reset");
   await f.apply("load");
+  const q = await registerTestQualification(f, "auditor");
   const u = f.store.snapshot().users.find((u) => u.id === "learner-2")!;
   await f.call(
     "operator-1",
@@ -605,19 +750,7 @@ test("기존 계정의 Auditor 지정·필수 교육 본인 확인으로 인증�
     200,
     "PATCH",
   );
-  const s = f.store.snapshot(),
-    q = s.qualifications.find(
-      (q) =>
-        q.lv1OrganizationId === "org-photo" &&
-        q.qualificationType === "auditor" &&
-        q.lifecycleStatus === "Active",
-    )!;
-  assert(q);
-  assert(
-    s.qualifications.some(
-      (q) => q.qualificationType === "auditor" && q.lifecycleStatus === "Hold",
-    ),
-  );
+  const s = f.store.snapshot();
   const start = await f.call("learner-2", "/me/auditor/starts", {
     qualificationId: q.id,
     qualificationRevision: q.revision,
@@ -649,19 +782,15 @@ test("기존 계정의 Auditor 지정·필수 교육 본인 확인으로 인증�
       .completions.every((c) => c.method === "self_confirmation"),
   );
   assert.equal(f.store.snapshot().attempts.length, 0);
-  const held = s.qualifications.find(
-    (q) =>
-      q.lv1OrganizationId === "org-photo" &&
-      q.qualificationType === "auditor" &&
-      q.lifecycleStatus === "Hold",
+  const missing = s.qualificationTemplates.find(
+    (t) => t.scope === "team" && t.qualificationType === "auditor",
   )!;
   await f.call(
-    "learner-2",
-    "/me/auditor/starts",
+    "admin-1",
+    "/qualification-templates/import",
     {
-      qualificationId: held.id,
-      qualificationRevision: held.revision,
-      templateRevision: held.templateRevision,
+      templateIds: [missing.id],
+      templateRevisions: { [missing.id]: missing.revision },
     },
     409,
   );
@@ -670,10 +799,12 @@ test("기존 계정의 Auditor 지정·필수 교육 본인 확인으로 인증�
   assert.deepEqual(f.store.snapshot().users, accounts);
 });
 
-test("내장 Auditee 자격은 요청·최종 기준 고정·두 평가·주관식·수료·인증서까지 실제 API로 진행된다", async (t) => {
+test("로드 후 Auditee 풀 등록·공통 기본 사본·팀 기준·필요 조직 지정부터 실제 인증까지 진행된다", async (t) => {
   const f = await fixture(t);
   await f.apply("reset");
   await f.apply("load");
+  const q = await registerTestQualification(f, "auditee");
+  await designateTestNeed(f, q.entityId);
   const requestPreview = await f.call("admin-1", "/planning-requests/preview", {
     learnerIds: ["learner-2"],
   });
@@ -684,17 +815,6 @@ test("내장 Auditee 자격은 요청·최종 기준 고정·두 평가·주관�
     organizationRevision: requestPreview.organizationRevision,
     replaceRequestIds: [],
   });
-  const q = f.store
-    .snapshot()
-    .qualifications.find(
-      (q) =>
-        q.entityId ===
-        f.store
-          .snapshot()
-          .organizationQualificationRequirements.find(
-            (r) => r.organizationId === "org-photo",
-          )!.entityIds[0],
-    )!;
   const plan = await f.call("learner-2", "/plans", {
     requestId: request.ids[0],
     requestRevision: 1,
@@ -842,8 +962,9 @@ test("내장 Auditee 자격은 요청·최종 기준 고정·두 평가·주관�
     "learner-2",
     `/certifications/${s.certifications[0]!.id}/renewals`,
     { certificationRevision: s.certifications[0]!.revision || 1 },
+    410,
   );
-  assert.equal(f.store.snapshot().renewals.length, 1);
+  assert.equal(f.store.snapshot().renewals.length, 0);
   const users = s.users;
   await f.apply("reset");
   assert.deepEqual(f.store.snapshot().users, users);

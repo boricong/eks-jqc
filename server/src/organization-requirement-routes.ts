@@ -7,6 +7,7 @@ import { policyScope } from "./organization-administrators.ts";
 import { managementScope } from "./management.ts";
 import {
   requirementsView,
+  checkRequirementContract,
   previewRequirements,
   saveRequirements,
   previewPlanningRequest,
@@ -47,6 +48,7 @@ export function registerOrganizationRequirementRoutes(
       fingerprint = createHash("sha256")
         .update(JSON.stringify({ team, body: r.body }))
         .digest("hex");
+    checkRequirementContract(r.body);
     return store.transact(
       u.id,
       key,

@@ -1,4 +1,5 @@
 import { reconcilePendingAuditor } from "./domain.ts";
+import { demand } from "./errors.ts";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -86,6 +87,24 @@ export function registerLifecycleRoutes(
           r.body,
           requested,
         );
+        if (action.startsWith("renewal.")) {
+          const state = store.snapshot(),
+            certId =
+              action === "renewal.start"
+                ? id
+                : state.renewals.find((v) => v.id === id)?.certificationId;
+          demand(
+            state.qualifications.find(
+              (q) =>
+                q.id ===
+                state.certifications.find((c) => c.id === certId)
+                  ?.qualificationId,
+            )?.qualificationType !== "auditee",
+            410,
+            "객관식 재인증 화면에서 진행해 주세요.",
+            "FEATURE_REMOVED",
+          );
+        }
         if (action.startsWith("renewal.") || action.startsWith("credential."))
           await store.refreshNotifications(clock());
         const key = z

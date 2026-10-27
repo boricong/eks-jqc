@@ -272,6 +272,7 @@ export function executeWorkflow(
       demand(
         (expected === undefined &&
           template.qualificationType !== "auditor" &&
+          template.purpose !== "renewal" &&
           template.defaultCommonCourseIds.length === 0) ||
           expected === template.revision,
         409,
@@ -316,6 +317,7 @@ export function executeWorkflow(
           releaseInfo: releaseInfo("initial", u.id, "팀 자격 등록"),
           revision: 1,
           lv1OrganizationId: scope,
+          purpose: template.purpose || "acquisition",
           qualificationType: template.qualificationType,
           title: template.title,
           englishName: template.englishName,
@@ -432,6 +434,18 @@ export function executeWorkflow(
         })),
         mode: "organization_required",
         requirementSnapshot: {
+          ruleVersion: 2,
+          rules: (row.organizationPath || []).map((org) => {
+            const rule = s.organizationQualificationRequirements.find(
+              (r) => r.organizationId === org.id,
+            );
+            return {
+              organizationId: org.id,
+              revision: rule?.revision || 0,
+              entityIds: rule?.entityIds || [],
+              excludedEntityIds: rule?.exclusions.map((e) => e.entityId) || [],
+            };
+          }),
           stateRevision: s.revision,
           organizationRevision: organizations.revision,
           sources: row.requirements.map((q) => ({

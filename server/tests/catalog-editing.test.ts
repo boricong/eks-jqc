@@ -7,7 +7,11 @@ import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
-import { qualificationUseErrors, type State } from "@eks/contracts";
+import {
+  qualificationUseErrors,
+  CourseContentSchema,
+  type State,
+} from "@eks/contracts";
 import { seedState } from "../src/seed.ts";
 import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
@@ -61,6 +65,82 @@ async function fixture(t: TestContext) {
   }
   return { store, call, file, app };
 }
+test("전체 내용 신규 인증Set은 v1.0 원자 생성·독립 보존·영수증 재시도와 기존 생성 호환을 지킨다", async (t) => {
+  const f = await fixture(t),
+    before = f.store.snapshot();
+  const content = CourseContentSchema.parse(before.courses[0]);
+  content.title = "변경 화면에서 작성한 신규 기준";
+  const body = { content },
+    key = randomUUID();
+  f.store.beforeReplace = () => {
+    throw new Error("new course failure");
+  };
+  await f.call("/courses", body, "POST", 503, "admin-1", key);
+  assert.deepEqual(f.store.snapshot(), before);
+  f.store.beforeReplace = undefined;
+  const saved = await f.call("/courses", body, "POST", 200, "admin-1", key);
+  const after = f.store.snapshot(),
+    c = after.courses.find((c) => c.id === saved.id)!;
+  assert.equal(c.version, 1);
+  assert.deepEqual(c.releaseVersion, { major: 1, minor: 0 });
+  assert.equal(c.category, "specialized");
+  assert.deepEqual(CourseContentSchema.parse(c), content);
+  assert.deepEqual(after.qualifications, before.qualifications);
+  assert.deepEqual(after.assignments, before.assignments);
+  assert.deepEqual(
+    await f.call("/courses", body, "POST", 200, "admin-1", key),
+    saved,
+  );
+  assert.deepEqual(f.store.snapshot(), after);
+  const legacy = await f.call("/courses", {
+    title: "이름만 생성",
+    qualificationType: "auditee",
+  });
+  assert.deepEqual(
+    f.store.snapshot().courses.find((c) => c.id === legacy.id)!.questions,
+    [],
+  );
+});
+test("전체 내용 신규 생성은 권한·분류/범위 위조·유형·중복 문항·정답 구조를 검증한다", async (t) => {
+  const f = await fixture(t),
+    before = f.store.snapshot(),
+    content = CourseContentSchema.parse(before.courses[0]);
+  await f.call("/courses", { content }, "POST", 403, "learner-1");
+  await f.call("/courses?lv1OrganizationId=org-etch", { content }, "POST", 403);
+  for (const body of [
+    { content: { ...content, lv1OrganizationId: "org-etch" } },
+    { content, category: "common" },
+    { content: { ...content, title: "   " } },
+    { content, qualificationType: "auditor" },
+    {
+      content: {
+        ...content,
+        questions: [content.questions[0], content.questions[0]],
+      },
+    },
+    { content: { ...content, qualificationType: "auditor" } },
+  ])
+    await f.call("/courses", body, "POST", 422);
+  assert.deepEqual(f.store.snapshot(), before);
+  const auditor = await f.call("/courses", {
+    content: {
+      ...content,
+      qualificationType: "auditor",
+      assessmentKinds: [],
+      passScore: null,
+      practicalPassScore: null,
+      questions: [],
+      practicalQuestions: [],
+      subjectiveEnabled: false,
+      subjectiveQuestions: [],
+    },
+  });
+  assert.equal(
+    f.store.snapshot().courses.find((c) => c.id === auditor.id)!
+      .qualificationType,
+    "auditor",
+  );
+});
 test("직접 저장은 미완성을 허용하고 참조된 기준만 새 버전으로 보존하며 재시도는 한 번이다", async (t) => {
   const f = await fixture(t),
     original = f.store.snapshot();
@@ -68,7 +148,11 @@ test("직접 저장은 미완성을 허용하고 참조된 기준만 새 버전�
   const q = f.store.snapshot().qualifications.find((q) => q.id === created.id)!;
   const incomplete = await f.call(
     `/qualifications/${q.id}`,
-    { ...q, renewalLeadMonths: 4 },
+    {
+      ...q,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      renewalLeadMonths: 4,
+    },
     "PUT",
   );
   assert.equal(incomplete.id, q.id);
@@ -238,7 +322,7 @@ test("10→11 명시적 이관과 새 이전 파일은 내용·진행·삭제 �
     x.publishedAt = "2026-10-15T00:00:00.000Z";
   }
   const next = migrateCatalogEditing(source, org, "2026-10-22T00:00:00.000Z");
-  assert.equal(next.state.schemaVersion, 26);
+  assert.equal(next.state.schemaVersion, 28);
   assert.deepEqual(next.state.assignments, source.assignments);
   assert.deepEqual(next.organizations, org);
   assert.ok(next.state.qualifications.every((q) => !("status" in q)));
@@ -479,7 +563,11 @@ test("마이너 새 버전은 최대 번호 다음을 생성하고 메이저는 
     .qualifications.find((q) => q.id === registered.id)!;
   await f.call(
     `/qualifications/${ready.id}`,
-    { ...ready, renewalLeadMonths: 4 },
+    {
+      ...ready,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      renewalLeadMonths: 4,
+    },
     "PUT",
   );
   const q = f.store

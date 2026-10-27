@@ -170,7 +170,8 @@ export function dashboardReader(
       .filter(
         (p) =>
           p.lv1OrganizationId === scope.lv1OrganizationId &&
-          qualifications.get(p.qualificationId)?.qualificationType === type,
+          qualifications.get(p.qualificationId)?.qualificationType === type &&
+          qualifications.get(p.qualificationId)?.purpose !== "renewal",
       )
       .map((p) => [p.entityId, p]),
   );
@@ -179,6 +180,7 @@ export function dashboardReader(
   const entityOf = (qid: string) => qualifications.get(qid)?.entityId || "";
   const assignments = s.assignments.filter(
     (a) =>
+      !a.renewalBatchId &&
       qualifications.get(a.qualificationId)?.qualificationType === type &&
       a.lv1OrganizationId === scope.lv1OrganizationId &&
       personById.has(a.learnerId),

@@ -19,10 +19,10 @@ async function configure(backend: any) {
     },
   );
 }
-test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존과 미완성 저장을 지원한다', async ({
+test('공통·특화 편집에서 주관식 문항·번호 탐색·사용 해제 보존과 미완성 저장을 지원한다', async ({
   page,
   backend,
-}) => {
+}, info) => {
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/common-courses');
@@ -32,6 +32,22 @@ test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존
   await courseSection(page, '주관식 평가');
   await page.getByRole('button', { name: '주관식 문항 추가', exact: true }).click();
   await page.getByLabel('주관식 문제', { exact: true }).fill('공통 문제');
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const rail = page.getByRole('tablist', { name: '주관식 문항', exact: true });
+    await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
+    const tab = await rail.getByRole('tab', { selected: true }).boundingBox();
+    const panel = await page.locator('.subjective-editor [role="tabpanel"]').boundingBox();
+    expect(tab!.x + tab!.width).toBeCloseTo(panel!.x, 0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: info.outputPath(`subjective-editor-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 1920, height: 900 });
   await page.getByRole('button', { name: '공통인증Set 저장', exact: true }).click();
   await answerConfirmation(page, true);
   await expect(page.getByRole('heading', { name: '공통인증Set 관리', exact: true })).toBeVisible();
@@ -47,7 +63,14 @@ test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존
   await page.getByLabel('주관식 문제', { exact: true }).fill('첫 문제');
   await page.getByRole('button', { name: '주관식 문항 추가', exact: true }).click();
   await page.getByLabel('주관식 문제', { exact: true }).fill('둘째 문제');
-  await page.getByRole('button', { name: '문항 위로', exact: true }).click();
+  await expect(page.getByRole('button', { name: '문항 위로', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '문항 아래로', exact: true })).toHaveCount(0);
+  const questionTabs = page.getByRole('tablist', { name: '주관식 문항', exact: true });
+  await questionTabs.getByRole('tab').nth(1).focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByLabel('주관식 문제', { exact: true })).toHaveValue('첫 문제');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByLabel('주관식 문제', { exact: true })).toHaveValue('둘째 문제');
   await courseSection(page, '기본정보');
   await page.getByRole('checkbox', { name: /주관식 평가/ }).uncheck();
   await saveCriterion(page);
@@ -57,7 +80,7 @@ test('공통·특화 편집에서 주관식 문항·순서·사용 해제 보존
     .courses.filter((c) => c.title === '주관식 특화')
     .sort((a, b) => b.version - a.version)[0]!;
   expect(c.subjectiveEnabled).toBe(false);
-  expect(c.subjectiveQuestions.map((q) => q.prompt)).toEqual(['둘째 문제', '첫 문제']);
+  expect(c.subjectiveQuestions.map((q) => q.prompt)).toEqual(['첫 문제', '둘째 문제']);
 });
 test('주관식 자동 저장·전 문항 제출·관리자 제출 조회와 네 화면 폭', async ({
   page,

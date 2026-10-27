@@ -436,6 +436,16 @@ defineExpose({ focusIssue, commit });
 .info-item-actions {
   flex-wrap: wrap;
 }
+.info-add-actions .button.secondary {
+  background: var(--tint);
+  color: var(--primary-hover);
+  border-color: var(--primary);
+  font-weight: var(--weight-title);
+}
+.info-add-actions .button.secondary:hover:not(:disabled) {
+  background: var(--primary);
+  color: var(--on-primary);
+}
 .info-item-actions {
   gap: 12px;
 }

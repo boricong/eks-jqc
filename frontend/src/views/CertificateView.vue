@@ -102,9 +102,7 @@ const back = computed(() =>
 <template>
   <div v-if="a" class="container page certificate-page">
     <RouterLink :to="back" class="back-link"><AppIcon name="back" :size="16" />목록으로</RouterLink>
-    <PageHeading class="page-heading"
-      ><h1>{{ qualificationTypeLabels[qualificationType] }} 자격 인증서</h1></PageHeading
-    >
+    <PageHeading class="page-heading"><h1>자격 인증서</h1></PageHeading>
     <article class="certificate-document" aria-label="자격 발급 기록과 인증서">
       <section class="certificate-record" aria-label="발급 기록">
         <div class="certificate-record-heading">

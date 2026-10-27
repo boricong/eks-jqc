@@ -102,13 +102,13 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.qualification-progress {
+.qualification-summary .qualification-progress {
   height: 6px;
   border-radius: var(--radius-input);
   background: var(--surface-tint);
   overflow: hidden;
 }
-.qualification-progress > span {
+.qualification-summary .qualification-progress > span {
   height: 100%;
   display: block;
   background: var(--link);

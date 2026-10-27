@@ -72,7 +72,8 @@ const validityChoice = computed({
           max="1200"
           :aria-describedby="`${id}-renewal-help`"
         /><span :id="`${id}-renewal-help`" class="qualification-field-help">
-          기본 3개월 전부터 별도 종합평가로 갱신합니다. 이미 발급한 자격에는 당시 정책이 유지됩니다.
+          기본 3개월 전부터 객관식 재인증으로 갱신합니다. 이미 발급한 자격에는 당시 정책이
+          유지됩니다.
         </span></label
       >
       <label class="field"

@@ -2,9 +2,13 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch, useId } from 'vue';
 import type { OrganizationSettingsView } from '@eks/contracts';
 const props = defineProps<{
-  entries: OrganizationSettingsView['entries'];
+  entries: Pick<
+    OrganizationSettingsView['entries'][number],
+    'id' | 'name' | 'path' | 'parentId' | 'level'
+  >[];
   selected: string;
   disabled?: boolean;
+  searchable?: boolean;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const query = ref(''),
@@ -39,7 +43,7 @@ const ids = computed(() => new Set(props.entries.map((e) => e.id)));
 const baseLevel = computed(() => Math.min(...props.entries.map((e) => e.level)));
 const children = (id: string) => props.entries.filter((e) => e.parentId === id);
 const visible = computed(() => {
-  const term = query.value.trim().toLocaleLowerCase();
+  const term = props.searchable === false ? '' : query.value.trim().toLocaleLowerCase();
   const matches = props.entries.filter((e) =>
     e.path
       .map((p) => p.name)
@@ -105,45 +109,60 @@ function key(event: KeyboardEvent, id: string) {
       ><span>조직 선택 {{ open ? '접기' : '열기' }}</span>
     </button>
     <div v-show="browserVisible" :id="browserId" class="policy-tree-browser">
-      <label class="field"
+      <label v-if="searchable !== false" class="field"
         >조직 검색<input v-model="query" placeholder="조직 이름 또는 경로"
       /></label>
       <div ref="tree" class="policy-org-list" role="tree" aria-label="설정 가능한 조직">
-        <button
-          v-for="e in visible"
-          :key="e.id"
-          role="treeitem"
-          class="policy-org-row"
-          :data-id="e.id"
-          :aria-level="e.level - baseLevel + 1"
-          :aria-expanded="children(e.id).length ? !closed.has(e.id) || !!query : undefined"
-          :aria-selected="selected === e.id"
-          :tabindex="
-            selected === e.id ||
-            (!visible.some((v) => v.id === selected) && visible[0]?.id === e.id)
-              ? 0
-              : -1
-          "
-          :aria-label="e.name"
-          :title="e.path.map((p) => p.name).join(' › ')"
-          :style="{ paddingLeft: `${8 + Math.min(e.level - baseLevel, 5) * 12}px` }"
-          :disabled="disabled"
-          @click="emit('select', e.id)"
-          @keydown="key($event, e.id)"
-        >
-          <span class="policy-tree-name"
-            ><span
-              v-if="children(e.id).length"
-              aria-hidden="true"
-              class="policy-tree-expander"
-              @click.stop="toggle(e.id)"
-              >{{ closed.has(e.id) && !query ? '▸' : '▾' }}</span
-            ><span v-else aria-hidden="true" class="policy-tree-expander"></span
-            ><span>{{ e.name }}</span></span
+        <div v-for="e in visible" :key="e.id" role="none" class="policy-tree-item">
+          <button
+            role="treeitem"
+            class="policy-org-row"
+            :data-id="e.id"
+            :aria-level="e.level - baseLevel + 1"
+            :aria-expanded="children(e.id).length ? !closed.has(e.id) || !!query : undefined"
+            :aria-selected="selected === e.id"
+            :tabindex="
+              selected === e.id ||
+              (!visible.some((v) => v.id === selected) && visible[0]?.id === e.id)
+                ? 0
+                : -1
+            "
+            :aria-label="e.name"
+            :title="e.path.map((p) => p.name).join(' › ')"
+            :style="{ paddingLeft: `${8 + Math.min(e.level - baseLevel, 5) * 12}px` }"
+            :disabled="disabled"
+            @click="emit('select', e.id)"
+            @keydown="key($event, e.id)"
           >
-        </button>
+            <span class="policy-tree-name"
+              ><span
+                v-if="children(e.id).length"
+                aria-hidden="true"
+                class="policy-tree-expander"
+                @click.stop="toggle(e.id)"
+                >{{ closed.has(e.id) && !query ? '▸' : '▾' }}</span
+              ><span v-else aria-hidden="true" class="policy-tree-expander"></span
+              ><span>{{ e.name }}</span></span
+            >
+            <slot name="status" :entry="e" />
+          </button>
+          <slot name="action" :entry="e" />
+        </div>
         <p v-if="!visible.length" class="empty-state">검색에 맞는 관리 가능 조직이 없습니다.</p>
       </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.policy-tree-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.policy-org-row {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+</style>

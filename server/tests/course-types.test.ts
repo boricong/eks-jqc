@@ -192,7 +192,11 @@ test("같은 유형만 자격에 연결하며 연결·삭제·버전 이력 이�
   await f.call(
     "admin-1",
     `/qualifications/${q.id}`,
-    { ...q, courseIds: [c.id] },
+    {
+      ...q,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      courseIds: [c.id],
+    },
     200,
     "PUT",
   );
@@ -308,7 +312,7 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   const before = structuredClone(raw),
     result = migrateCourseTypes(raw, org);
   assert.deepEqual(raw, before);
-  assert.equal(result.state.schemaVersion, 26);
+  assert.equal(result.state.schemaVersion, 28);
   for (const id of [c.id, "future-version"])
     assert.equal(
       result.state.courses.find((c) => c.id === id)!.qualificationType,
@@ -320,8 +324,8 @@ test("14→15은 모든 버전·삭제 자격·과거 계획 근거로 계보를
   );
   const stripped: any = structuredClone(result.state);
   stripped.schemaVersion = 14;
-  stripped.revision -= 12;
-  stripped.audits.splice(-12 - raw.planningRequests.length);
+  stripped.revision -= 14;
+  stripped.audits.splice(-14 - raw.planningRequests.length);
   stripped.qualificationTemplates.forEach((t: any) => delete t.scope);
   stripped.courses.forEach((c: any) => delete c.qualificationType);
   assert.deepEqual(historicalContent(stripped), historicalContent(raw));

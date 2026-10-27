@@ -92,6 +92,9 @@
   padding: 0;
   max-height: 400px;
 }
+.team-qualification-detail .course-selection-list + .course-selection-list {
+  margin-top: 24px;
+}
 .qualification-course-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -355,6 +358,11 @@
   gap: 12px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+.qualification-management-actions > a {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
 }
 @media (max-width: 768px) {
   .qualification-course-meta {

@@ -46,7 +46,7 @@ test('Auditor 풀 등록·기준 편집·Hold 유지와 안내문 전용 화면'
   expect(q.lifecycleStatus).toBe('Hold');
   await page.goto('/admin/courses?type=auditor');
   await createCourse(page, 'Auditor', '심사 준비 자료');
-  await page.goto(`/admin/qualifications/${representative.entityId}`);
+  await page.goto(`/admin/qualifications/${representative.entityId}/edit`);
   await expect(
     page
       .getByText('Auditor는 필수 학습항목을 본인이 모두 확인하면 수료됩니다.', { exact: false })
@@ -146,9 +146,7 @@ test('보유 인증 유형 분리·건수·검색 유지·URL/키보드·인증�
   }
   await writeFile(testInfo.outputPath('types-layout.json'), JSON.stringify(measurements, null, 2));
   await page.locator('.owned-qualification-row').click();
-  await expect(
-    page.getByRole('heading', { name: 'Auditor 자격 인증서', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 인증서', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '수료 근거 펼치기', exact: true }).click();
   await expect(
     page.getByText('이전 Auditor 인증·등급 미지정 기록입니다.', { exact: true }),
@@ -158,9 +156,7 @@ test('보유 인증 유형 분리·건수·검색 유지·URL/키보드·인증�
   await page.locator('.evidence-course summary').first().click();
   await page.getByRole('link', { name: '인증Set 수료증 보기 →', exact: true }).first().click();
   await page.locator('.back-link').click();
-  await expect(
-    page.getByRole('heading', { name: 'Auditor 자격 인증서', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 인증서', exact: true })).toBeVisible();
   await page.locator('.back-link').click();
   await expect(page).toHaveURL(/filter=certified&type=auditor/);
   await page.reload();
@@ -178,9 +174,7 @@ test('보유 인증 유형 분리·건수·검색 유지·URL/키보드·인증�
   await page.goto('/qualifications?filter=certified&type=unknown');
   await expect(page).toHaveURL(/filter=certified$/);
   await page.goto('/certifications/assignment-active-cert?from=owned&type=auditor');
-  await expect(
-    page.getByRole('heading', { name: 'Auditee 자격 인증서', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 인증서', exact: true })).toBeVisible();
   await page.locator('.back-link').click();
   await expect(page).toHaveURL(/filter=certified$/);
   expect(backend.store.snapshot()).toEqual(before);

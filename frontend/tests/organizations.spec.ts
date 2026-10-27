@@ -19,6 +19,9 @@ test('조직 트리 초기 접힘·전체 펼침·검색과 이력/수동 재조
   await expect(page.getByRole('button', { name: '다시 불러오기', exact: true })).toHaveCount(0);
   await expect(page.locator('.organization-history')).toHaveCount(0);
   await expect(
+    page.getByRole('link', { name: '이 조직의 인증 업무 관리', exact: true }),
+  ).toHaveCount(0);
+  await expect(
     page.getByText('Lv1 단위로 자격 인증 업무를 관리합니다.', { exact: false }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '모두 펼치기', exact: true }).click();
@@ -75,7 +78,10 @@ test('독립된 검색 접힘·숨겨진 선택/미저장 입력 보존·키보�
   await page.getByLabel('조직 검색').clear();
   await expect(page.locator('.tree-node')).toHaveCount(generalCount);
   await expect(page.locator('.tree-node.selected')).toHaveCount(0);
-  await page.getByRole('button', { name: '선택 조직으로 이동', exact: true }).click();
+  await expect(page.getByRole('button', { name: '선택 조직으로 이동', exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: '모두 펼치기', exact: true }).click();
   await expect(page.locator('.tree-node.selected')).toContainText('RE A조');
   await expect(page.locator('.tree-node.selected')).toBeInViewport();
   await expect(page.getByLabel('조직명', { exact: true })).toHaveValue('미저장 이름');
@@ -84,6 +90,8 @@ test('독립된 검색 접힘·숨겨진 선택/미저장 입력 보존·키보�
   const collapse = page.getByRole('button', { name: `${rootName} 접기`, exact: true });
   await collapse.focus();
   await page.keyboard.press('Space');
+  await expect(photo).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: '모두 접기', exact: true }).click();
   await expect(page.locator('.tree-node')).toHaveCount(roots);
   await page.goto('/system/users');
   await page.goto('/system/organizations');

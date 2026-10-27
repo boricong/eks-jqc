@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import OrganizationRequirements from './OrganizationRequirements.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import { computed, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
@@ -16,8 +15,6 @@ const store = useDemo(),
   busy = ref(false),
   error = ref(''),
   orgId = ref('');
-const requirementsDirty = ref(false),
-  requirementsBusy = ref(false);
 const administratorSummary = ref('불러오는 중'),
   administratorsDirty = ref(false),
   administratorsBusy = ref(false),
@@ -52,10 +49,9 @@ function readMeta() {
   baselineMeta.value = JSON.stringify(metadata.value);
 }
 async function select(id: string) {
-  if (id === orgId.value || busy.value || administratorsBusy.value || requirementsBusy.value)
-    return;
+  if (id === orgId.value || busy.value || administratorsBusy.value) return;
   if (
-    (metaDirty.value || administratorsDirty.value || requirementsDirty.value) &&
+    (metaDirty.value || administratorsDirty.value) &&
     !(await confirmAction(
       '조직 입력을 저장하지 않았습니다. 변경을 취소하고 이동할까요?',
       '변경 버리고 이동',
@@ -85,14 +81,7 @@ async function load() {
   }
 }
 async function save() {
-  if (
-    !doc.value ||
-    busy.value ||
-    administratorsBusy.value ||
-    requirementsBusy.value ||
-    !canSave.value
-  )
-    return;
+  if (!doc.value || busy.value || administratorsBusy.value || !canSave.value) return;
   busy.value = true;
   error.value = '';
   const key = `${store.actorId}:${store.managementLv1}`;
@@ -125,8 +114,7 @@ async function leave() {
   return (
     !busy.value &&
     !administratorsBusy.value &&
-    !requirementsBusy.value &&
-    (!(metaDirty.value || administratorsDirty.value || requirementsDirty.value) ||
+    (!(metaDirty.value || administratorsDirty.value) ||
       (await confirmAction(
         '저장하지 않은 조직 설정이 있습니다. 변경을 취소하고 이동할까요?',
         '변경 버리고 이동',
@@ -161,7 +149,7 @@ watch(
           doc.entries.filter((e) => store.data.management.editableOrganizationIds.includes(e.id))
         "
         :selected="orgId"
-        :disabled="busy || administratorsBusy || requirementsBusy"
+        :disabled="busy || administratorsBusy"
         @select="select"
       />
       <div class="policy-detail-stack">
@@ -209,12 +197,18 @@ watch(
           >
             조직 설정 변경 확인
           </button>
-          <OrganizationRequirements
-            :organization-id="orgId"
-            :disabled="!canSave"
-            @dirty="requirementsDirty = $event"
-            @busy="requirementsBusy = $event"
-          />
+          <RouterLink
+            class="text-link organization-needs-link"
+            :to="{
+              path: '/admin/organization-requirements',
+              query: {
+                ...store.managementLink('/admin/organization-requirements').query,
+                organizationId: orgId,
+                view: 'organization',
+              },
+            }"
+            >조직 필요자격 설정</RouterLink
+          >
           <CollapsibleSection
             v-if="canSave"
             v-model:open="administratorsOpen"
@@ -240,7 +234,7 @@ watch(
     <AppDialog
       v-model:open="review"
       :title="`${managementTitle('organization-settings')} 변경 확인`"
-      ><p>{{ store.managementOrganization?.name }} · 조직 정보·필요자격</p>
+      ><p>{{ store.managementOrganization?.name }} · 조직 정보·관리자</p>
       <p>
         영향 조직 {{ affected.length }}개 · 직속 구성원
         {{ affected.reduce((n, e) => n + e.userCount, 0) }}명
@@ -261,6 +255,10 @@ watch(
 </template>
 
 <style scoped>
+.organization-needs-link {
+  display: inline-flex;
+  margin: 24px 0;
+}
 .organization-confirm {
   display: block;
   margin-left: auto;

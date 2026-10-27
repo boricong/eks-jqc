@@ -10,7 +10,7 @@ export function migrateCommonCourses(
 ) {
   const state = structuredClone(input) as any,
     organizations = validateOrganizations(orgInput);
-  if (![19, 20, 21, 22, 23, 24, 25, 26].includes(state?.schemaVersion))
+  if (![19, 20, 21, 22, 23, 24, 25, 26, 27, 28].includes(state?.schemaVersion))
     throw new Error("공통인증Set 이관에는 업무19·조직3이 필요합니다.");
   const alreadyApplied = state.schemaVersion >= 20;
   if (!alreadyApplied) {

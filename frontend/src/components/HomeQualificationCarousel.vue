@@ -199,14 +199,13 @@ onBeforeUnmount(() => {
           :data-request-id="card.kind === 'planning' ? card.request.id : undefined"
         >
           <template v-if="card.kind === 'planning'">
-            <span class="small-label">계획 수립 요청</span>
-            <h3>자격 계획 수립</h3>
+            <h3 class="home-planning-title">계획 수립 요청</h3>
             <p class="home-qualification-description">
               {{ card.request.message || '요청 내용을 확인하고 자격 취득 계획을 수립해 주세요.' }}
             </p>
             <dl class="home-qualification-facts">
               <div>
-                <dt>가장 빠른 작성 기한</dt>
+                <dt>작성 기한</dt>
                 <dd>
                   <time :datetime="card.request.dueOn">{{ card.request.dueOn }}</time>
                   <span v-if="card.request.dueOn < kstDate()"> · 기한 경과</span>
@@ -424,6 +423,13 @@ onBeforeUnmount(() => {
 }
 .home-qualification-slide .small-label {
   color: var(--ink-secondary);
+}
+.home-qualification-slide .home-planning-title {
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: var(--weight-heading);
+  line-height: 1.4;
 }
 .home-qualification-description {
   display: -webkit-box;

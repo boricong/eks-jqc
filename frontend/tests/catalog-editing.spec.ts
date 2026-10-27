@@ -6,7 +6,7 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
   const original = backend.store.snapshot();
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/qualifications/demo-qualification');
+  await page.goto('/admin/qualifications/demo-qualification/edit');
   await expect(page.getByRole('heading', { name: '팀 설정', exact: true })).toBeVisible();
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await saveCriterion(page, 'new');
@@ -20,7 +20,10 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
   expect(
     backend.store.snapshot().qualifications.find((q) => q.id === 'demo-qualification'),
   ).toEqual(original.qualifications.find((q) => q.id === 'demo-qualification'));
-  await page.goto('/admin/qualifications/demo-qualification');
+  const latest = backend.store
+    .snapshot()
+    .qualifications.find((q) => q.parentId === 'demo-qualification')!;
+  await page.goto(`/admin/qualifications/${latest.id}/edit`);
   await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('기존 기록의 기준은 보존');
@@ -31,8 +34,8 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
   await page.getByLabel('상태 필터').selectOption('deleted');
   await expect(page.getByRole('link', { name: '평가 흐름 체험', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '평가 흐름 체험', exact: true }).click();
-  await expect(page.getByLabel('인증기간', { exact: true })).toBeDisabled();
-  await expect(page.getByText('삭제된 항목 · 이전 자격 기준 목록 정리')).toBeVisible();
+  await expect(page.getByLabel('인증기간', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('삭제된 자격 · 이전 자격 기준 목록 정리')).toBeVisible();
   expect(backend.store.snapshot().courses).toEqual(original.courses);
   expect(backend.store.snapshot().assignments).toEqual(original.assignments);
 });

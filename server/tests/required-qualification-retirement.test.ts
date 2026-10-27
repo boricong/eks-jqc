@@ -131,7 +131,7 @@ test("20/3→21/4는 필수 설정·원래 요청을 감사에 보존하고 선�
     before = structuredClone(old),
     result = migrateRequiredQualifications(old.state, old.organizations, at);
   assert.deepEqual(old, before, "미리보기는 입력을 변경하지 않음");
-  assert.equal(result.state.schemaVersion, 26);
+  assert.equal(result.state.schemaVersion, 28);
   assert.equal(result.organizations.schemaVersion, 4);
   assert.ok(
     organizationEntries(result.organizations).every(
@@ -440,9 +440,9 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
     expected,
     migrateRequiredQualifications,
   );
-  assert.equal((result as { schemaVersion: number }).schemaVersion, 26);
+  assert.equal((result as { schemaVersion: number }).schemaVersion, 28);
   const loaded = await new JsonStore(file).load();
-  assert.equal(loaded.snapshot().schemaVersion, 26);
+  assert.equal(loaded.snapshot().schemaVersion, 28);
   const after = loaded.snapshot();
   const organizations = loaded.organizations.snapshot();
   await loaded.close();

@@ -357,8 +357,8 @@ test("필요 지정 참조 자격은 삭제 차단, JSON13 왕복과 구형12·�
   delete raw.organizationQualificationRequirements;
   const before = structuredClone(raw),
     m = migrateOrganizationNeeds(raw, org);
-  assert.equal(m.state.schemaVersion, 26);
-  assert.equal(m.state.revision, raw.revision + 4);
+  assert.equal(m.state.schemaVersion, 28);
+  assert.equal(m.state.revision, raw.revision + 6);
   assert.deepEqual(m.state.planningRequests, before.planningRequests);
   assert.deepEqual(migrateOrganizationNeeds(m.state, org).state, m.state);
   assert.deepEqual(raw, before);
@@ -522,4 +522,116 @@ test("시스템 운영자 지정은 선택 팀을 검사하고 미리보기 이�
     409,
     "PUT",
   );
+});
+
+test("매핑 미리보기는 출처만 바뀐 조직과 구성원 영향·감사를 구분하고 조회는 저장하지 않는다", async (t) => {
+  const f = await fixture(t);
+  await f.set(root);
+  await f.set(child);
+  const before = f.store.snapshot();
+  const view = await f.call(
+    "admin-1",
+    "/organization-qualification-requirements",
+  );
+  assert.equal(view.entries.find((e: any) => e.id === child).parentId, root);
+  assert.equal(view.entries.find((e: any) => e.id === child).level, 2);
+  const body = {
+    stateRevision: before.revision,
+    organizationRevision: f.store.organizations.snapshot().revision,
+    changes: [{ organizationId: child, entityIds: [] }],
+  };
+  const result = await f.call(
+    "admin-1",
+    "/organization-qualification-requirements/preview",
+    body,
+  );
+  assert.ok(result.affected.length > 1);
+  assert.equal(result.summary.membershipChangedOrganizations, 0);
+  assert.equal(result.summary.affectedMembers, 0);
+  assert.equal(result.summary.sourceOnlyOrganizations, result.affected.length);
+  for (const change of result.affected) {
+    assert.deepEqual(change.added, []);
+    assert.deepEqual(change.removed, []);
+    assert.equal(change.sourceChanged[0].entityId, qid);
+    assert.deepEqual(
+      change.sourceChanged[0].before.map((s: any) => s.id),
+      [root, child],
+    );
+    assert.deepEqual(
+      change.sourceChanged[0].after.map((s: any) => s.id),
+      [root],
+    );
+  }
+  assert.deepEqual(f.store.snapshot(), before);
+  await f.call(
+    "admin-1",
+    "/organization-qualification-requirements",
+    body,
+    200,
+    "PUT",
+  );
+  assert.deepEqual(
+    f.store.snapshot().audits.at(-1)!.details.affected,
+    result.affected,
+  );
+  const latest = f.store.snapshot();
+  const removing = await f.call(
+    "admin-1",
+    "/organization-qualification-requirements/preview",
+    {
+      stateRevision: latest.revision,
+      organizationRevision: view.organizationRevision,
+      changes: [{ organizationId: root, entityIds: [] }],
+    },
+  );
+  assert.equal(removing.summary.sourceOnlyOrganizations, 0);
+  assert.equal(
+    removing.summary.membershipChangedOrganizations,
+    removing.affected.length,
+  );
+  const ids = new Set(removing.affected.map((e: any) => e.organizationId));
+  assert.equal(
+    removing.summary.affectedMembers,
+    latest.users.filter((u) => ids.has(u.organizationId)).length,
+  );
+});
+
+test("세부 관리자 미리보기의 출처 변경과 집계는 자신의 조직만 노출한다", async (t) => {
+  const f = await fixture(t);
+  await f.set(root);
+  await f.set(child);
+  await f.change((s) => {
+    const u = s.users.find((u) => u.id === "learner-2")!;
+    u.organizationId = child;
+    u.organizationAdministration = {
+      organizationId: child,
+      grantedBy: "admin-1",
+      grantedAt: new Date().toISOString(),
+    };
+  });
+  const view = await f.call(
+    "learner-2",
+    "/organization-qualification-requirements",
+  );
+  const result = await f.call(
+    "learner-2",
+    "/organization-qualification-requirements/preview",
+    {
+      stateRevision: view.stateRevision,
+      organizationRevision: view.organizationRevision,
+      changes: [{ organizationId: child, entityIds: [] }],
+    },
+  );
+  assert.deepEqual(
+    result.affected.map((e: any) => e.organizationId),
+    [child],
+  );
+  assert.deepEqual(result.summary, {
+    affectedOrganizations: 1,
+    membershipChangedOrganizations: 0,
+    sourceOnlyOrganizations: 1,
+    exceptionOnlyOrganizations: 0,
+    affectedMembers: 0,
+  });
+  assert.equal(view.entries.length, 1);
 });

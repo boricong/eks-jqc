@@ -35,6 +35,12 @@ export const router = createRouter({
       component: () => import('./views/AuditorView.vue'),
       meta: { role: 'learner' },
     },
+    {
+      path: '/renewals/:id?',
+      name: 'renewals',
+      component: () => import('./views/RenewalsView.vue'),
+      meta: { role: 'learner' },
+    },
     { path: '/plans/:id?', name: 'plans', component: PlansView, meta: { role: 'learner' } },
     { path: '/notifications', name: 'notifications', component: NotificationsView },
     { path: '/completions/:id', name: 'completion', component: CompletionView },
@@ -88,6 +94,16 @@ export const router = createRouter({
       meta: { management: true },
       children: [
         {
+          path: 'organization-requirements',
+          name: 'organization-requirements',
+          component: () => import('./views/OrganizationRequirementsView.vue'),
+          meta: {
+            management: true,
+            managementSection: 'organization-requirements',
+            title: '조직 필요자격',
+          },
+        },
+        {
           path: 'auditor',
           name: 'auditor-admin',
           component: () => import('./views/AuditorAdminView.vue'),
@@ -112,6 +128,18 @@ export const router = createRouter({
           name: 'team-users',
           component: () => import('./views/TeamUsersView.vue'),
           meta: { management: true, managementSection: 'users', title: '팀 사용자 관리' },
+        },
+        {
+          path: ':section(qualifications)/:id/edit',
+          name: 'team-qualification-edit',
+          component: AdminView,
+          meta: { management: true, managementSection: 'qualifications' },
+        },
+        {
+          path: 'qualifications/:id',
+          name: 'team-qualification-view',
+          component: () => import('./views/TeamQualificationView.vue'),
+          meta: { management: true, managementSection: 'qualifications' },
         },
         {
           path: ':section(organization-settings|targets|credentials|qualifications|courses|assignments|results|notices)/:id?',
@@ -221,6 +249,25 @@ router.beforeResolve(async (to) => {
   if (store.signedIn)
     try {
       await store.refresh();
+      if (['team-qualification-view', 'team-qualification-edit'].includes(String(to.name))) {
+        const q = store.data.qualifications.find(
+          (q) => q.id === to.params.id && q.lv1OrganizationId === lv1,
+        );
+        if (q && !q.deletedAt && q.version === null && to.name === 'team-qualification-view')
+          return { path: `/admin/qualifications/${q.id}/edit`, query: to.query, replace: true };
+        if (
+          q &&
+          to.name === 'team-qualification-edit' &&
+          (q.deletedAt ||
+            store.data.qualifications.some(
+              (other) =>
+                other.entityId === q.entityId &&
+                !other.deletedAt &&
+                (other.version ?? 0) > (q.version ?? 0),
+            ))
+        )
+          return { path: `/admin/qualifications/${q.id}`, query: to.query, replace: true };
+      }
       if (to.name === 'plans') {
         const plan = store.data.plans.find(
           (p) => p.id === to.params.id && p.learnerId === store.actorId,

@@ -45,11 +45,17 @@ export async function configureNeeds(page: Page) {
   const response = await page.request.put(url, {
     headers,
     data: {
+      contractVersion: 2,
       stateRevision: view.stateRevision,
       organizationRevision: view.organizationRevision,
       changes: [
         {
           organizationId: scope,
+          exclusions:
+            view.entries
+              .find((e: any) => e.id === scope)
+              ?.exclusions.map((e: any) => ({ entityId: e.entityId, reason: e.reason })) || [],
+          removalReasons: [],
           entityIds: view.qualifications
             .filter((q: any) => !q.issues.length)
             .map((q: any) => q.entityId),
@@ -90,7 +96,7 @@ export async function completePlan(page: Page, title: string, recordLearning = t
     .filter({ hasText: `${title} · v` })
     .first();
   await select.selectOption((await option.getAttribute('value')) as string);
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   await page.getByLabel('종료일', { exact: true }).fill('2027-02-01');
   for (const el of await page.getByLabel('시작일', { exact: true }).all())

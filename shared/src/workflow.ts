@@ -121,6 +121,17 @@ export const PlanningRequestSchema = z.object({
   selections: z.array(PlanningTargetSchema).default([]),
   requirementSnapshot: z
     .object({
+      ruleVersion: z.literal(2).optional(),
+      rules: z
+        .array(
+          z.object({
+            organizationId: id,
+            revision: z.number().int().nonnegative(),
+            entityIds: z.array(id),
+            excludedEntityIds: z.array(id),
+          }),
+        )
+        .optional(),
       stateRevision: z.number().int().nonnegative(),
       organizationRevision: z.number().int().nonnegative(),
       sources: z.array(

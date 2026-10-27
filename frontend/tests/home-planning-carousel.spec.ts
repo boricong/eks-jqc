@@ -303,8 +303,8 @@ test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 
   await expect(page).toHaveURL(new RegExp(`/plans\\?request=${id}$`));
   await expect(page.getByRole('heading', { name: '새 자격 계획' })).toBeVisible();
   expect(backend.store.snapshot()).toEqual(beforeNavigation);
-  await page.getByLabel('취득할 자격').selectOption({ label: '평가 흐름 체험 · v1' });
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByLabel('취득할 자격').selectOption({ label: '평가 흐름 체험 · v1.0' });
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   await expect
     .poll(() => backend.store.snapshot().plans[0]?.scheduleDefaultsAppliedAt)
@@ -380,7 +380,7 @@ test('4해상도 긴 안내문·빈 상태·평면 글자/44px·키보드/초점
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
     const slide = current(page);
-    await expect(slide.locator('h3')).toHaveCSS('font-size', '16px');
+    await expect(slide.locator('h3')).toHaveCSS('font-size', '18px');
     await expect(slide).toHaveCSS('font-family', /Pretendard/);
     await checkCarouselVisuals(page);
     const desc = slide.locator('.home-qualification-description');

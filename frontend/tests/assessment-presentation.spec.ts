@@ -80,7 +80,7 @@ test('번호 탭과 문항의 연결·상황/문항/보기 위계·답안 번호
   await page.goto('/qualifications/assignment-1/courses/demo-course-2/practical');
   const tabs = page.getByRole('tablist', { name: '응시 문항', exact: true });
   await expect(tabs.getByRole('tab')).toHaveCount(30);
-  await expect(tabs.getByRole('tab').first()).toHaveText('1');
+  await expect(tabs.getByRole('tab').first()).toHaveText('1번');
   await expect(tabs.getByRole('tab').first()).toHaveAccessibleName(/1번 .*미응답/);
   const firstChoice = page.getByRole('radio').first();
   await expect(firstChoice).toBeEnabled();

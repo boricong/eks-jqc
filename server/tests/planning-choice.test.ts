@@ -335,7 +335,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     delete r.selections;
   }
   const next = migratePlanning(raw, f.store.organizations.snapshot());
-  assert.equal(next.state.schemaVersion, 26);
+  assert.equal(next.state.schemaVersion, 28);
   assert.deepEqual(
     next.state.plans.map((p) => p.previousSchedule!.schedules),
     raw.plans.map((p: any) => p.schedules),

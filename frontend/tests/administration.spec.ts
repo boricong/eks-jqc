@@ -40,16 +40,16 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await expect(
     page
       .getByRole('navigation', { name: '업무 바로가기' })
-      .getByRole('link', { name: '조직 정보·필요자격', exact: true }),
+      .getByRole('link', { name: '조직 정보·관리자', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: '인증 업무 관리', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/);
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
-    3,
+    4,
   );
   await page
     .getByRole('navigation', { name: '관리 메뉴' })
-    .getByRole('link', { name: '조직 정보·필요자격', exact: true })
+    .getByRole('link', { name: '조직 정보·관리자', exact: true })
     .click();
   await expect(page.getByRole('treeitem')).toHaveCount(1);
   await expect(page.locator('.policy-pool-management')).toHaveCount(0);

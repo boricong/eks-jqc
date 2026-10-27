@@ -408,8 +408,9 @@
   background: transparent;
 }
 .course-editor-navigation .compact-tabs [aria-selected='true'] {
-  background: transparent;
+  background: var(--tint);
   color: var(--primary-hover);
+  font-weight: var(--weight-heading);
   border-bottom-color: var(--primary);
 }
 .course-editor-content {
@@ -558,23 +559,49 @@
   min-height: 44px;
 }
 .course-editor-content .question-toolbar:has(.field) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px auto;
-  align-items: end;
+  align-items: center;
 }
-.course-editor-content .question-toolbar:has(.field) h3,
 .course-editor-content .question-toolbar .question-delete {
-  align-self: end;
   display: flex;
   align-items: center;
   min-height: 44px;
 }
+.course-editor-content .question-toolbar .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+}
+.course-editor-content .question-toolbar .field > span:first-child {
+  white-space: nowrap;
+}
 .course-editor-content .question-toolbar input {
   min-height: 44px;
+  width: 80px;
 }
 .course-editor-content .question-toolbar .field-error {
-  grid-column: 2/-1;
+  flex-basis: 100%;
   margin: 0;
+}
+.subjective-editor > .section-heading {
+  margin-top: 24px;
+  padding-bottom: 16px;
+}
+.subjective-editor .assessment-item-panel > textarea {
+  display: block;
+  width: 100%;
+}
+.subjective-question-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.subjective-question-footer .text-link {
+  min-height: 44px;
 }
 .course-editor-content .learning-editor > .muted {
   margin-bottom: 24px;
@@ -781,21 +808,8 @@
   .course-editor-content .question-toolbar {
     gap: 8px;
   }
-  .course-editor-content .question-toolbar:has(.field) {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .course-editor-content .question-toolbar:has(.field) h3 {
-    grid-column: 1/-1;
-    min-height: 0;
-  }
   .course-editor-content .question-toolbar .question-delete {
     min-height: 44px;
-  }
-  .course-editor-content .question-toolbar .field-error {
-    grid-column: 1/-1;
-  }
-  .course-editor-content .question-toolbar .field {
-    flex: 0 1 112px;
   }
   .course-editor-content .assessment-settings .field {
     width: 100%;

@@ -76,6 +76,13 @@ export function candidate(
     ...(previous ? { previousCertificationId: previous.id } : {}),
     ...(plan ? { planId: plan.id } : {}),
   };
+  if (q?.purpose === "renewal")
+    return {
+      ...row,
+      status: "blocked",
+      reason: "재인증용 자격은 보유 자격의 재인증에서 시작해 주세요.",
+      canStart: false,
+    };
   if (valid)
     Object.assign(row, {
       status: "valid",
@@ -221,7 +228,8 @@ export function planningView(
       s.qualifications.some(
         (q) =>
           q.entityId === id &&
-          q.qualificationType === request.qualificationType,
+          q.qualificationType === request.qualificationType &&
+          q.purpose !== "renewal",
       ),
     )
     .map((id) => candidate(s, doc, u, id, at, request));

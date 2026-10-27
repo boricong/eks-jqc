@@ -1,3 +1,4 @@
+import { validateRenewalActivation } from "./renewal-criteria.ts";
 import { releaseNumber, freezeCriteria } from "./releases.ts";
 import { validateAuditorActivation } from "./auditor-pool.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
@@ -60,7 +61,8 @@ export function requireEligible(u: { certificationEligibility?: string }) {
   );
 }
 export function openAssignment(s: State, a: StoredAssignment, at: string) {
-  if (a.excludedReason || a.acquisitionClosedAt) return false;
+  if (a.renewalBatchId || a.excludedReason || a.acquisitionClosedAt)
+    return false;
   const c = s.certifications.find((c) => c.assignmentId === a.id);
   return !c || effectiveCredentialStatus(c, at) !== "Revoke";
 }
@@ -341,8 +343,10 @@ export function qualificationImpact(
     revision: s.revision,
     organizationRevision: doc.revision,
     counts: {
-      organizations: s.organizationQualificationRequirements.filter((r) =>
-        r.entityIds.includes(q.entityId),
+      organizations: s.organizationQualificationRequirements.filter(
+        (r) =>
+          r.entityIds.includes(q.entityId) ||
+          r.exclusions.some((e) => e.entityId === q.entityId),
       ).length,
       planningRequests: s.planningRequests.filter(
         (r) =>
@@ -566,6 +570,7 @@ export function executeLifecycle(
   body: any,
   scope: string,
   at: string,
+  verifiedBatchId?: string,
 ): any {
   const event = (
     subject: LifecycleEvent["subject"],
@@ -630,7 +635,10 @@ export function executeLifecycle(
     );
     const before = q.lifecycleStatus || "Active";
     demand(before !== input.status, 409, "이미 같은 상태입니다.");
-    if (input.status === "Active") validateAuditorActivation(s, q);
+    if (input.status === "Active") {
+      validateAuditorActivation(s, q);
+      validateRenewalActivation(s, q);
+    }
     q.lifecycleStatus = input.status;
     q.revision++;
     event(
@@ -789,6 +797,45 @@ export function executeLifecycle(
   const r = action === "renewal.complete" ? find(s.renewals, id) : undefined;
   const c = find(s.certifications, r?.certificationId || id),
     a = find(s.assignments, c.assignmentId);
+  if (
+    find(s.qualifications, c.qualificationId).qualificationType === "auditee"
+  ) {
+    const batch = s.renewalBatches.find((b) => b.id === verifiedBatchId);
+    demand(
+      action === "renewal.complete" &&
+        r?.method === "objective_assessment" &&
+        r.batchId === batch?.id &&
+        batch?.status === "passed" &&
+        s.attempts.some(
+          (t) =>
+            t.id === batch.attemptId &&
+            t.result === "passed" &&
+            t.kind === "objective" &&
+            t.status === "graded" &&
+            s.enrollments.some(
+              (e) =>
+                e.id === t.enrollmentId &&
+                e.assignmentId === batch.assignmentId,
+            ),
+        ) &&
+        s.completions.some(
+          (co) =>
+            co.id === batch.completionId &&
+            co.evidence.some(
+              (ev) =>
+                ev.kind === "objective" && ev.attemptId === batch.attemptId,
+            ) &&
+            s.enrollments.some(
+              (e) =>
+                e.id === co.enrollmentId &&
+                e.assignmentId === batch.assignmentId,
+            ),
+        ),
+      410,
+      "객관식 재인증 화면에서 진행해 주세요.",
+      "FEATURE_REMOVED",
+    );
+  }
   requireQualificationProcess(find(s.qualifications, c.qualificationId));
   requireEligible(find(s.users, c.learnerId));
   checkRevision(c.revision || 1, body.certificationRevision);
@@ -935,7 +982,7 @@ export function executeLifecycle(
     "renewal.completed",
     c.auditor
       ? "본인의 교육·인증기준 확인에 의한 갱신"
-      : "MVP 완료 버튼으로 처리 · 실제 종합평가 점수 없음",
+      : "객관식 평가 합격 근거로 갱신",
     p,
     next,
     a.id,
@@ -945,7 +992,7 @@ export function executeLifecycle(
     c,
     at,
     "renewal.completed",
-    `${c.auditor ? "본인의 교육·인증기준 확인에 의한 갱신" : "MVP 완료 버튼으로 처리"} · 새 만료일 ${next.expiresOn || "무기한"}`,
+    `${c.auditor ? "본인의 교육·인증기준 확인에 의한 갱신" : "객관식 평가 합격으로 갱신"} · 새 만료일 ${next.expiresOn || "무기한"}`,
     `renewal:completed:${r!.id}`,
   );
   return {

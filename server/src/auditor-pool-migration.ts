@@ -8,7 +8,7 @@ export function migrateAuditorPool(
 ) {
   const raw = structuredClone(input) as any,
     organizations = validateOrganizations(orgInput);
-  if (![23, 24, 25, 26].includes(raw?.schemaVersion))
+  if (![23, 24, 25, 26, 27, 28].includes(raw?.schemaVersion))
     throw Error("Auditor 풀 이관은 업무23·조직4 또는 현행 파일이 필요합니다.");
   if (raw.schemaVersion >= 24)
     return migrateQualificationPlans(raw, organizations, at);
@@ -45,7 +45,7 @@ export function migrateAuditorPool(
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 26,
+      schemaVersion: 28,
       organizationSchemaVersion: 4,
       revision: state.revision,
       organizationRevision: organizations.revision,

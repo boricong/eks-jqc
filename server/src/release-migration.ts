@@ -1,3 +1,4 @@
+import { migrateRequirementExceptions } from "./requirement-exception-migration.ts";
 import { randomUUID } from "node:crypto";
 import {
   CourseContentSchema,
@@ -106,9 +107,9 @@ export function migrateReleases(
 ) {
   const raw = structuredClone(input) as any,
     organizations = validateOrganizations(orgInput);
-  if (![25, 26].includes(raw?.schemaVersion))
-    throw Error("버전 이관은 업무25 또는 현행26 파일이 필요합니다.");
-  const alreadyApplied = raw.schemaVersion === 26;
+  if (![25, 26, 27, 28].includes(raw?.schemaVersion))
+    throw Error("버전 이관은 업무25·26 또는 현행27 파일이 필요합니다.");
+  const alreadyApplied = raw.schemaVersion >= 26;
   if (!alreadyApplied) {
     // Validate historical relationships before adding any metadata.
     validateState(raw, organizations);
@@ -125,13 +126,13 @@ export function migrateReleases(
       details: { fromSchema: 25, progressReset: false },
     });
   }
-  const state = validateState(raw, organizations);
+  const state = migrateRequirementExceptions(raw, organizations, at).state;
   return {
     state,
     organizations,
     report: {
-      alreadyApplied,
-      schemaVersion: 26,
+      alreadyApplied: alreadyApplied && (input as any).schemaVersion === 28,
+      schemaVersion: 28,
       revision: state.revision,
       organizationRevision: organizations.revision,
       progressReset: false,

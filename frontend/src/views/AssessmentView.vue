@@ -99,7 +99,11 @@ const options = computed(() =>
     invalid: !!error.value && missingSet.value.has(q.id),
   })),
 );
-const returnPath = computed(() => qualificationLocation('assessment', a.value?.id, c.value?.id));
+const returnPath = computed(() =>
+  a.value?.renewalBatchId
+    ? `/renewals/${a.value.renewalBatchId}`
+    : qualificationLocation('assessment', a.value?.id, c.value?.id),
+);
 const learningPath = computed(() => qualificationLocation('learning', a.value?.id, c.value?.id));
 const qualificationTitle = computed(
   () =>
@@ -465,13 +469,15 @@ onBeforeRouteUpdate(leave);
         <p class="outcome-description">
           {{
             result === 'passed'
-              ? a.certifiedAt
-                ? '모든 필수 인증Set을 수료하여 자격을 취득했습니다.'
-                : store.complete(e)
-                  ? '인증Set을 수료했습니다. 남은 인증Set의 평가를 확인해 주세요.'
-                  : practicalNext
-                    ? '지식 평가를 통과했습니다. 상황 대응 평가를 이어서 진행해 주세요.'
-                    : '통과한 평가를 확인하고 남은 평가를 진행해 주세요.'
+              ? a.renewalBatchId
+                ? '객관식 재인증 평가를 통과했습니다. 대상별 갱신 결과를 확인해 주세요.'
+                : a.certifiedAt
+                  ? '모든 필수 인증Set을 수료하여 자격을 취득했습니다.'
+                  : store.complete(e)
+                    ? '인증Set을 수료했습니다. 남은 인증Set의 평가를 확인해 주세요.'
+                    : practicalNext
+                      ? '지식 평가를 통과했습니다. 상황 대응 평가를 이어서 진행해 주세요.'
+                      : '통과한 평가를 확인하고 남은 평가를 진행해 주세요.'
               : '합격 기준에 도달하지 못했습니다. 학습자료를 확인하거나 다시 응시해 주세요.'
           }}
         </p>
@@ -505,7 +511,9 @@ onBeforeRouteUpdate(leave);
             class="button primary"
             >인증서 보기</RouterLink
           >
-          <RouterLink v-else :to="returnPath" class="button primary">평가 선택으로</RouterLink>
+          <RouterLink v-else :to="returnPath" class="button primary">{{
+            a.renewalBatchId ? '재인증 결과 확인' : '평가 선택으로'
+          }}</RouterLink>
           <RouterLink :to="learningPath" class="button secondary">{{
             result === 'failed' ? '학습자료 확인' : '학습으로 이동'
           }}</RouterLink>
@@ -559,6 +567,7 @@ onBeforeRouteUpdate(leave);
           :items="options"
           vertical
           numbered
+          number-suffix="번"
           label="응시 문항"
           :panel-id="uid + '-answer'"
         />
@@ -571,14 +580,15 @@ onBeforeRouteUpdate(leave);
           :disabled="busy || !attempt || conflict || !!prerequisite || held"
         >
           <legend class="sr-only">{{ position + 1 }}번 문항</legend>
-          <h2>{{ position + 1 }}번</h2>
           <section v-if="'scenario' in current" class="scenario-context">
             <h3>상황</h3>
             <p>{{ current.scenario }}</p>
           </section>
           <p class="assessment-content-label">문항</p>
           <h3 class="assessment-question-prompt">{{ current.prompt }}</h3>
-          <p :id="uid + '-choices-label'" class="assessment-content-label">보기</p>
+          <p :id="uid + '-choices-label'" class="assessment-content-label assessment-choices-label">
+            보기
+          </p>
           <div class="choices" role="group" :aria-labelledby="uid + '-choices-label'">
             <label
               v-for="(option, i) in current.choices"

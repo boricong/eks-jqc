@@ -215,7 +215,7 @@ test('다른 화면에서 완료한 계획을 재조회하면 대기 자동 저�
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await page.getByLabel('종료일', { exact: true }).fill('2030-12-01');
   await expect.poll(() => backend.store.snapshot().plans[0]!.endOn).toBe('2030-12-01');
   await page.clock.install();

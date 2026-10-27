@@ -51,7 +51,7 @@ async function startReview(page: Page, store: JsonStore, count = 2, long = false
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('review-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await page.getByLabel('종료일', { exact: true }).fill('2029-12-01');
   await expect(page.locator('textarea[data-plan-field]')).toHaveCount(1);
   for (const input of await page.locator('textarea[data-plan-field]').all())

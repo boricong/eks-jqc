@@ -82,7 +82,38 @@ async function fixture(t: TestContext) {
   return { store, app, file, call, register, q };
 }
 
-test("Ready 등록·중복·무변경·공통 정보 수정은 버전 없이 유지하고 업무 대상·상태 우회를 차단한다", async (t) => {
+test("미정·개월 누락은 검토/저장 모두 원자 거부하며 기간 지정 후에만 최초 저장한다", async (t) => {
+  const f = await fixture(t),
+    { id } = await f.register();
+  const original = f.q(id),
+    before = f.store.snapshot();
+  for (const validity of [
+    { type: "unknown", months: null, reminderDays: [] },
+    { type: "months", months: null, reminderDays: [] },
+  ]) {
+    const body = { ...original, validity, courseIds: ["demo-course-1"] };
+    for (const [path, method] of [
+      [`/qualifications/${id}/save-preview`, "POST"],
+      [`/qualifications/${id}`, "PUT"],
+    ]) {
+      const rejected = await f.call(path, body, method, 422);
+      assert.equal(rejected.code, "QUALIFICATION_VALIDITY_REQUIRED");
+      assert.deepEqual(f.store.snapshot(), before);
+    }
+  }
+  const saved = await f.call(
+    `/qualifications/${id}`,
+    {
+      ...original,
+      validity: { type: "months", months: 12, reminderDays: [] },
+    },
+    "PUT",
+  );
+  assert.equal(saved.version, 1);
+  assert.equal(f.q(id).validity.months, 12);
+});
+
+test("Ready 등록·중복·미정 저장 거부·공통 정보 수정은 버전 없이 유지하고 업무 대상·상태 우회를 차단한다", async (t) => {
   const f = await fixture(t),
     { base, id } = await f.register();
   assert.equal(f.q(id).version, null);
@@ -97,12 +128,13 @@ test("Ready 등록·중복·무변경·공통 정보 수정은 버전 없이 유
     1,
   );
   const before = f.q(id);
-  const unchanged = await f.call(
+  const rejected = await f.call(
     `/qualifications/${id}`,
     { ...before, version: 99, lifecycleStatus: "Active", versionMode: "new" },
     "PUT",
+    422,
   );
-  assert.equal(unchanged.unchanged, true);
+  assert.equal(rejected.code, "QUALIFICATION_VALIDITY_REQUIRED");
   assert.deepEqual(f.q(id), before);
   await f.call(
     `/system/qualification-templates/${base.id}`,
@@ -117,16 +149,16 @@ test("Ready 등록·중복·무변경·공통 정보 수정은 버전 없이 유
     "operator-1",
   );
   const current = currentQualification(f.store.snapshot(), f.q(id));
-  await f.call(`/qualifications/${id}`, current, "PUT");
+  await f.call(`/qualifications/${id}`, current, "PUT", 422);
   assert.equal(f.q(id).version, null);
   assert.equal(f.q(id).lifecycleStatus, "Ready");
   const metadataOnly = await f.call(
     `/qualifications/${id}`,
     { ...current, catalogCode: "READY-METADATA", versionMode: "new" },
     "PUT",
+    422,
   );
-  assert.equal(metadataOnly.version, null);
-  assert.equal(metadataOnly.newVersion, false);
+  assert.equal(metadataOnly.code, "QUALIFICATION_VALIDITY_REQUIRED");
   assert.equal(f.q(id).lifecycleStatus, "Ready");
   assert.ok(
     qualificationUseErrors(current, f.store.snapshot().courses).some((e) =>
@@ -184,7 +216,8 @@ test("미완성 첫 저장은 같은 ID v1이며 동시 저장·응답 재시도
     ready = f.q(id);
   const body = {
     ...ready,
-    courseIds: ["demo-course-1"],
+    validity: { type: "unlimited", months: null, reminderDays: [] },
+    courseIds: [],
     versionMode: "new",
     version: 25,
     lifecycleStatus: "Ready",
@@ -244,7 +277,11 @@ test("미완성 첫 저장은 같은 ID v1이며 동시 저장·응답 재시도
     [1, 2].map(() =>
       f.call(
         `/qualifications/${source.id}`,
-        { ...source, renewalLeadMonths: 4 },
+        {
+          ...source,
+          validity: { type: "unlimited", months: null, reminderDays: [] },
+          renewalLeadMonths: 4,
+        },
         "PUT",
         [200, 409],
       ),
@@ -260,11 +297,11 @@ test("미완성 첫 저장은 같은 ID v1이며 동시 저장·응답 재시도
   validateState(f.store.snapshot(), f.store.organizations.snapshot());
 });
 
-test("개별 무변경 저장은 Ready를 유지하며 삭제 재등록과 최초 기준 저장은 번호를 한 번만 부여한다", async (t) => {
+test("미정 저장 거부는 Ready를 유지하며 삭제 재등록과 최초 기준 저장은 번호를 한 번만 부여한다", async (t) => {
   const f = await fixture(t),
     { id, base } = await f.register();
-  const unchanged = await f.call(`/qualifications/${id}`, f.q(id), "PUT");
-  assert.equal(unchanged.unchanged, true);
+  const rejected = await f.call(`/qualifications/${id}`, f.q(id), "PUT", 422);
+  assert.equal(rejected.code, "QUALIFICATION_VALIDITY_REQUIRED");
   assert.equal(f.q(id).version, null);
   for (let n = 0; n < 2; n++) {
     const current = f.store
@@ -287,13 +324,18 @@ test("개별 무변경 저장은 Ready를 유지하며 삭제 재등록과 최�
   assert.equal(current.version, null);
   const preview = await f.call(`/qualifications/${current.id}/save-preview`, {
     ...current,
+    validity: { type: "unlimited", months: null, reminderDays: [] },
     renewalLeadMonths: 4,
   });
   assert.equal(preview.initialConfiguration, true);
   assert.equal(preview.candidate.id, current.id);
   await f.call(
     `/qualifications/${current.id}`,
-    { ...current, renewalLeadMonths: 4 },
+    {
+      ...current,
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      renewalLeadMonths: 4,
+    },
     "PUT",
   );
   assert.equal(f.q(current.id).version, 1);
@@ -386,8 +428,8 @@ test("18→19 명시 이관은 기존 번호·내용과 세 파일을 보존하�
   });
   const org = f.store.organizations.snapshot(),
     migrated = migrateReadyQualifications(raw, org);
-  assert.equal(migrated.state.schemaVersion, 26);
-  assert.equal(migrated.state.revision, raw.revision + 8);
+  assert.equal(migrated.state.schemaVersion, 28);
+  assert.equal(migrated.state.revision, raw.revision + 10);
   for (const field of [
     "qualifications",
     "courses",

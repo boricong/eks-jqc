@@ -37,7 +37,7 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByLabel('종료일')).toBeVisible();
   const plan = backend.store.snapshot().plans[0]!;
   let once = true;

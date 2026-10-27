@@ -467,6 +467,7 @@ test("계획 작성 기한은 요청 시 KST +28일이며 수동값·빈 값·�
         {
           organizationId: "org-photo",
           entityIds: ["demo-qualification"],
+          exclusions: [],
           revision: 1,
           updatedAt: "2026-10-21T00:00:00Z",
           updatedBy: "admin-1",

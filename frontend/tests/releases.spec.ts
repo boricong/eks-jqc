@@ -44,7 +44,7 @@ test('계획 초안은 최신 기준을 재확인하고 확정 후 변경에도 
   await actor(page, 'learner-2');
   await page.goto('/plans');
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await page.getByLabel('학습 목표(선택)', { exact: true }).fill('계속 보존할 목표');
   await page.getByRole('button', { name: '최종 확인', exact: true }).click();
   await backend.store.transact(

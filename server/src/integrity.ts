@@ -1,3 +1,5 @@
+import { validateRenewalBatches } from "./renewal-integrity.ts";
+import { validateRenewalStructure } from "./renewal-criteria.ts";
 import { validateReleases } from "./release-integrity.ts";
 import { validateAuditorPool } from "./auditor-pool.ts";
 import { validateRequirements } from "./organization-requirements.ts";
@@ -28,7 +30,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && [25, 26].includes((input as any)?.schemaVersion)) {
+  if (!legacy && [25, 26, 27, 28].includes((input as any)?.schemaVersion)) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -60,12 +62,29 @@ export function validateState(
         !Object.hasOwn(p, "schedules") && !Object.hasOwn(p, "targetOn"),
         "인증Set별 계획은 명시적으로 이관해 주세요.",
       );
+  if (!legacy && (input as any)?.schemaVersion >= 27)
+    check(
+      ((input as any).organizationQualificationRequirements || []).every(
+        (r: any) => Array.isArray(r.exclusions),
+      ),
+      "업무27 상속 예외 필드 누락",
+    );
+  if (!legacy && (input as any)?.schemaVersion === 28) {
+    const raw = input as any;
+    check(Array.isArray(raw.renewalBatches), "업무28 재인증 회차 필드 누락");
+    // Older fixtures and imported archived criteria may omit the ordinary purpose;
+    // explicit migration materializes it. Unknown values are rejected by the schema.
+  }
   const s = (legacy
     ? LegacyStateSchema.parse(input)
     : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
     validateSubjective(s);
-    if (s.schemaVersion === 26) validateReleases(s);
+    if (s.schemaVersion >= 28) {
+      validateRenewalStructure(s);
+      validateRenewalBatches(s);
+    }
+    if (s.schemaVersion >= 26) validateReleases(s);
     if (organizations) validateRequirements(s, organizations);
     check(
       new Set(s.commonCourses.map((c) => c.id)).size === s.commonCourses.length,
@@ -166,10 +185,12 @@ export function validateState(
           .filter((other) => other.entityId === q.entityId)
           .every(
             (other) =>
-              JSON.stringify(other.commonCourseEntityIds) ===
-              JSON.stringify(q.commonCourseEntityIds),
+              (other.version ?? 0) > (q.version ?? 0) ||
+              other.commonCourseEntityIds.every((id) =>
+                q.commonCourseEntityIds.includes(id),
+              ),
           ),
-        "자격 계보의 공통 선택 범위 변경",
+        "자격 계보의 기존 공통 선택 범위 누락",
       );
       validateCommonSelection(s, q);
     }
@@ -324,7 +345,7 @@ export function validateState(
         (v) => v.entityId === c.entityId && v.version === 2,
       );
       if (
-        s.schemaVersion === 26 &&
+        s.schemaVersion >= 26 &&
         c.version === 1 &&
         second?.releaseInfo?.kind === "minor" &&
         !s.qualifications.some((q) => q.courseIds.includes(c.id)) &&
@@ -792,7 +813,8 @@ export function validateState(
       es.every((e) => s.completions.some((c) => c.enrollmentId === e.id))
     )
       check(
-        certs.length === 1 ||
+        !!a.renewalBatchId ||
+          certs.length === 1 ||
           (a.auditor?.level === "main" &&
             a.auditor.kind === "initial" &&
             a.auditor.pendingGeneralCertification),

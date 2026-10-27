@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import type { PlanningRequest, PlanningRequestView, PlanningCandidate } from '@eks/contracts';
 import { useDemo } from '../stores/demo';
 import { ApiError } from '../api';
+import StatusBadge from './StatusBadge.vue';
 import { confirmAction } from '../composables/useConfirmation';
 const props = defineProps<{
   request: PlanningRequest;
@@ -120,12 +121,12 @@ onBeforeRouteUpdate(() => !busy.value);
 </script>
 <template>
   <section class="request-planning" aria-label="이번 요청의 계획 현황">
-    <p v-if="request.mode === 'organization_required'" class="muted">
-      이번 요청의 필요자격 전체를 계획해야 합니다. 임의 제외·목록 밖 추가는 할 수 없습니다.
-    </p>
-    <p v-if="request.closed" class="muted">요청 종료 · {{ request.closed.reason }}</p>
     <div class="section-heading">
-      <h3>이번 요청 · {{ view.stage }}</h3>
+      <h3>이번 요청의 계획 현황</h3>
+      <StatusBadge
+        :status="request.completion ? 'complete' : request.closed ? 'excluded' : 'draft'"
+        :label="view.stage"
+      />
       <span v-if="request.completion" class="muted"
         >완료
         {{
@@ -133,6 +134,10 @@ onBeforeRouteUpdate(() => !busy.value);
         }}</span
       >
     </div>
+    <p v-if="request.mode === 'organization_required'" class="muted request-planning-intro">
+      요청된 필요자격 전체의 계획을 수립해 주세요.
+    </p>
+    <p v-if="request.closed" class="muted">요청 종료 · {{ request.closed.reason }}</p>
 
     <p v-if="!rows.length" class="muted">
       {{
@@ -145,8 +150,7 @@ onBeforeRouteUpdate(() => !busy.value);
         <div class="planning-choice-title">
           <span>
             <strong>{{ c.title }}</strong
-            ><span v-if="request.requirementSnapshot" class="muted">
-              ·
+            ><span v-if="request.requirementSnapshot" class="muted planning-choice-source">
               {{
                 request.requirementSnapshot.sources
                   .find((s) => s.entityId === c.entityId)
@@ -155,16 +159,30 @@ onBeforeRouteUpdate(() => !busy.value);
               }}
               지정</span
             >
-            <small>{{ releaseVersionLabel(c) }} · {{ labels[c.status] }}</small>
+            <small>{{ releaseVersionLabel(c) }}</small>
           </span>
         </div>
-        <p>
-          {{ c.status === 'available' ? '취득할 자격에서 선택해 계획을 시작하세요.' : c.reason }}
-        </p>
+        <div class="planning-choice-state">
+          <StatusBadge
+            :status="
+              c.status === 'valid'
+                ? 'certified'
+                : c.status === 'planned'
+                  ? 'complete'
+                  : c.status === 'blocked'
+                    ? 'excluded'
+                    : 'draft'
+            "
+            :label="labels[c.status]"
+          />
+          <p>
+            {{ c.status === 'available' ? '취득할 자격에서 선택해 계획을 시작하세요.' : c.reason }}
+          </p>
+        </div>
         <RouterLink
           v-if="c.planId && (c.selected || c.status === 'planned')"
           :to="{ path: `/plans/${c.planId}`, query: { request: request.id } }"
-          class="button ghost small"
+          class="button secondary small"
           >{{
             ['planned', 'valid'].includes(c.status) ? '계획 보기' : '계획 이어 쓰기'
           }}</RouterLink
@@ -172,13 +190,13 @@ onBeforeRouteUpdate(() => !busy.value);
         <RouterLink
           v-else-if="c.assignmentId && !c.certificationId"
           :to="`/qualifications/${c.assignmentId}`"
-          class="button ghost small"
+          class="button secondary small"
           >이어서 진행</RouterLink
         >
         <RouterLink
           v-else-if="c.certificationId"
           :to="`/certifications/${c.assignmentId || store.data.assignments.find((a) => a.certification?.id === c.certificationId)?.id}`"
-          class="button ghost small"
+          class="button secondary small"
           >인증서 보기</RouterLink
         >
         <button
@@ -227,6 +245,31 @@ onBeforeRouteUpdate(() => !busy.value);
 .request-planning {
   margin: 24px 0;
   min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.request-planning .section-heading {
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.request-planning .section-heading h3 {
+  margin: 0 auto 0 0;
+}
+.request-planning-intro {
+  font-size: var(--text-caption);
+  margin: 0 0 16px;
+}
+.planning-choice-source {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--text-caption);
+}
+.planning-choice-state {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
 }
 h3 {
   font-size: 18px;
@@ -241,8 +284,11 @@ h4 {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  border-bottom: 1px solid var(--hairline, #e3e8ee);
-  padding: 12px 0;
+  border-block: 1px solid var(--line);
+  padding: 16px 0;
+}
+.planning-choice-row + .planning-choice-row {
+  border-top: 0;
 }
 .planning-choice-title {
   display: flex;
@@ -262,6 +308,8 @@ strong {
 small {
   display: block;
   font-size: 13px;
+  color: var(--ink-secondary);
+  margin-top: 6px;
 }
 .planning-choice-row p {
   font-size: 13px;
@@ -274,6 +322,7 @@ small {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
+  justify-content: flex-end;
 }
 .request-planning-help {
   font-size: 13px;

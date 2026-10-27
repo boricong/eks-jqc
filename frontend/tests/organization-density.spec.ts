@@ -159,8 +159,8 @@ test('182개 조직의 조밀한 행·독립 스크롤·검색 오른쪽/테두�
   await page.locator('.tree-node').filter({ hasText: '깊은 조직 6' }).click();
   await expect(page.locator('.organization-path')).toContainText('깊은 조직 0');
   await page.getByRole('button', { name: '모두 접기', exact: true }).click();
-  await page.getByRole('button', { name: '선택 조직으로 이동', exact: true }).click();
-  await expect(page.getByLabel('조직 검색')).toHaveValue('');
+  await page.getByRole('button', { name: '모두 펼치기', exact: true }).click();
+  await expect(page.getByLabel('조직 검색')).toHaveValue('깊은 조직 6');
   await expect(page.locator('.tree-node.selected')).toBeInViewport();
   expect(await readFile(backend.store.organizations.file, 'utf8')).toBe(before);
   await writeFile(

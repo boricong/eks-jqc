@@ -1,6 +1,8 @@
+import { QualificationPurposeSchema } from "./renewal-batches.ts";
 import { z } from "zod";
 import { QualificationTypeSchema } from "./qualification-types.ts";
 export const QualificationMetadataSchema = z.object({
+  purpose: QualificationPurposeSchema.optional(),
   qualificationType: QualificationTypeSchema.default("auditee"),
   templateId: z.string().min(1).max(160),
   templateRevision: z.number().int().positive(),
@@ -10,6 +12,7 @@ export const QualificationMetadataSchema = z.object({
 });
 export type QualificationMetadata = z.infer<typeof QualificationMetadataSchema>;
 export const QualificationTemplateSchema = z.object({
+  purpose: QualificationPurposeSchema.optional(),
   defaultCommonCourseIds: z
     .array(z.string().min(1).max(160))
     .max(100)

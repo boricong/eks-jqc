@@ -758,7 +758,14 @@ onBeforeRouteUpdate(leave);
           <h2>새 자격 계획</h2>
           <span>작성 기한 {{ request.dueOn }}</span>
         </div>
-        <p>{{ request.message }}</p>
+        <section
+          v-if="request.message"
+          class="plan-manager-message"
+          aria-label="조직 관리자 안내문"
+        >
+          <h3>조직 관리자 안내문</h3>
+          <p class="preserve-lines">{{ request.message }}</p>
+        </section>
         <label v-if="requests.length > 1" class="field"
           ><span>계획 수립 요청</span
           ><select
@@ -774,7 +781,7 @@ onBeforeRouteUpdate(leave);
             </option>
           </select></label
         >
-        <div v-if="!request.completion && !request.closed" class="inline-form">
+        <div v-if="!request.completion && !request.closed" class="plan-start-form">
           <label class="field"
             ><span>취득할 자격</span
             ><select
@@ -797,7 +804,7 @@ onBeforeRouteUpdate(leave);
             "
             @click="create"
           >
-            {{ pendingStart ? '계획 시작 재시도' : '계획 시작' }}
+            {{ pendingStart ? '계획 수립 시작 재시도' : '계획 수립 시작' }}
           </button>
           <button
             v-if="error || pendingStart"
@@ -918,6 +925,54 @@ onBeforeRouteUpdate(leave);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  margin-top: 24px;
+}
+.plan-manager-message {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border-left: 3px solid var(--primary);
+  background: var(--surface-tint);
+  overflow-wrap: anywhere;
+}
+.plan-manager-message h3 {
+  margin: 0 0 8px;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-heading);
+}
+.plan-manager-message p {
+  margin: 0;
+}
+.plan-start-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 24px 0;
+}
+.plan-start-form .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+}
+.plan-start-form .field > span {
+  flex-shrink: 0;
+}
+.plan-start-form select {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.plan-start-form > .button {
+  flex-shrink: 0;
+}
+.plan-steps button.active {
+  background: var(--tint);
+  color: var(--primary-press);
+  font-weight: var(--weight-heading);
 }
 .plan-course-reference li {
   padding: 12px 0;

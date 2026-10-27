@@ -44,6 +44,7 @@ const store = useDemo(),
   error = ref(''),
   busy = ref(false);
 const draft = ref<{
+  purpose: 'acquisition' | 'renewal';
   defaultCommonCourseIds: string[];
   auditorLevel: 'general' | 'main' | null;
   prerequisiteTemplateId: string | null;
@@ -85,6 +86,7 @@ async function load() {
 function edit(item?: QualificationTemplate) {
   draft.value = item
     ? {
+        purpose: item.purpose || 'acquisition',
         defaultCommonCourseIds: [...item.defaultCommonCourseIds],
         id: item.id,
         auditorLevel: item.auditorLevel || null,
@@ -96,6 +98,7 @@ function edit(item?: QualificationTemplate) {
         description: item.description,
       }
     : {
+        purpose: 'acquisition',
         defaultCommonCourseIds: [],
         qualificationType: 'auditee',
         auditorLevel: null,
@@ -126,6 +129,7 @@ async function save() {
   try {
     const content = {
       ...body,
+      purpose: body.qualificationType === 'auditor' ? 'acquisition' : body.purpose,
       auditorLevel: body.qualificationType === 'auditor' ? body.auditorLevel : null,
       prerequisiteTemplateId:
         body.qualificationType === 'auditor' && body.auditorLevel === 'main'
@@ -178,6 +182,7 @@ function historyChanges(a: AuditEvent) {
       'englishName',
       'description',
       'qualificationType',
+      'purpose',
       'defaultCommonCourseIds',
       'auditorLevel',
       'prerequisiteTemplateId',
@@ -193,6 +198,7 @@ function historyChanges(a: AuditEvent) {
         englishName: '영문명',
         description: '설명',
         qualificationType: '인증 유형',
+        purpose: '용도',
       }[k],
       before:
         k === 'defaultCommonCourseIds'
@@ -268,7 +274,10 @@ watch(
               <button class="text-button" @click="edit(t)">{{ t.title }}</button>
             </td>
             <td>{{ t.englishName || '—' }}</td>
-            <td>{{ qualificationTypeLabels[t.qualificationType] }}</td>
+            <td>
+              {{ qualificationTypeLabels[t.qualificationType]
+              }}<span v-if="t.purpose === 'renewal'" class="badge">재인증</span>
+            </td>
             <td>{{ t.description ? '설명 등록됨' : '—' }}</td>
             <td>{{ t.defaultCommonCourseIds.length }}개</td>
             <td>{{ t.revision }}</td>
@@ -295,6 +304,16 @@ watch(
           >
             <option value="auditee">Auditee(피심사자)</option>
             <option value="auditor">Auditor(심사자)</option>
+          </select></label
+        >
+        <label v-if="draft.qualificationType === 'auditee'" class="field"
+          >용도<select
+            aria-label="용도"
+            v-model="draft.purpose"
+            :disabled="busy || (!!draft.id && !typeEditing?.canChangeType)"
+          >
+            <option value="acquisition">일반 취득</option>
+            <option value="renewal">재인증 · 객관식 전용</option>
           </select></label
         >
         <p id="template-type-reason" class="muted">

@@ -36,7 +36,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   const deep =
     backend.store.organizations.snapshot().roots[0]!.children[0]!.children[0]!.children[0]!
       .children[0]!;
-  await page.getByRole('button', { name: '선택 조직으로 이동' }).click();
+  await expect(page.locator('.tree-node.selected')).toBeInViewport();
   await page.goto('/system/users');
   await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
   for (const [level, id] of [
@@ -72,7 +72,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await expect(
     page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
-  ).toHaveText('평가 흐름 체험 · v1');
+  ).toHaveText('평가 흐름 체험 · v1.0');
   await completePlan(page, '평가 흐름 체험', false);
   const a = backend.store.snapshot().assignments.find((a) => a.learnerId === 'learner-2')!;
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
@@ -189,7 +189,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/admin/dashboard': '평가 또는 Auditor 학습 확인',
     '/admin/targets': '학습 확인',
     '/admin/credentials': 'Auditor는 교육·인증기준 확인',
-    '/admin/organization-settings': '상위 조직의 지정은 하위 조직으로 계속 상속',
+    '/admin/organization-settings': '필요자격은 조직 필요자격 화면에서 지정',
     '/admin/qualifications/demo-qualification': '현재 버전 저장 또는 새 버전',
     '/admin/qualifications?type=auditor': '팀 자격 설정 · Auditor',
     '/admin/courses?type=auditor': '필수 항목을 하나 이상',

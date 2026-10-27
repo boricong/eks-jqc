@@ -22,7 +22,7 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
   await actor(page, 'learner-2');
   await page.goto('/plans');
   const region = page.getByRole('region', { name: '이번 요청의 계획 현황' });
-  await expect(region).toContainText('이번 요청 · 미착수');
+  await expect(region).toContainText('미착수');
   await expect(
     page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
   ).toHaveCount(1);
@@ -49,7 +49,7 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
   await select.selectOption('demo-qualification');
   await select.focus();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: '계획 시작', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: '계획 수립 시작', exact: true })).toBeFocused();
   await expect(select).toHaveValue('demo-qualification');
   expect(backend.store.snapshot()).toEqual(before);
   let starts = 0,
@@ -67,7 +67,8 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
     await expect(select).toHaveCSS('font-size', width <= 768 ? '16px' : '14px');
     if (width === 390)
       expect(
-        (await page.getByRole('button', { name: '계획 시작', exact: true }).boundingBox())!.height,
+        (await page.getByRole('button', { name: '계획 수립 시작', exact: true }).boundingBox())!
+          .height,
       ).toBeGreaterThanOrEqual(44);
     if (width === 390 && (await page.locator('.toast').count()))
       expect((await page.locator('.toast').boundingBox())!.height).toBeLessThan(100);
@@ -92,7 +93,7 @@ test('필수 0개 요청에서 Backup 자격 직접 시작·전체 완료와 네
   await region.getByRole('button', { name: '계획 수립 완료', exact: true }).click();
   await answerConfirmation(page, true);
   await expect(
-    region.getByRole('heading', { name: '이번 요청 · 계획 완료', exact: true }),
+    region.getByRole('heading', { name: '이번 요청의 계획 현황', exact: true }),
   ).toBeVisible();
   expect(backend.store.snapshot().planningRequests[0]!.completion?.evidence).toHaveLength(1);
   await backend.restart();
@@ -163,7 +164,7 @@ test('계획 시작 저장 실패·revision 충돌은 선택 유지, 재시도·
       body: JSON.stringify({ message: '저장 실패 시험' }),
     }),
   );
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('저장 실패 시험');
   await expect(select).toHaveValue('demo-qualification');
   expect(backend.store.snapshot().plans).toHaveLength(0);
@@ -179,14 +180,14 @@ test('계획 시작 저장 실패·revision 충돌은 선택 유지, 재시도·
       return {};
     },
   );
-  await page.getByRole('button', { name: '계획 시작 재시도', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작 재시도', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('다른 창');
   await expect(select).toHaveValue('demo-qualification');
-  await expect(page.getByRole('button', { name: '계획 시작', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '계획 수립 시작', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-  await expect(page.getByRole('button', { name: '계획 시작', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '계획 수립 시작', exact: true })).toBeEnabled();
   await expect(select).toHaveValue('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
 });
 test('저장 응답 유실 후 조회가 바뀌어도 최초 revision·키로 재시도하며 초안을 중복 생성하지 않는다', async ({
@@ -212,12 +213,12 @@ test('저장 응답 유실 후 조회가 바뀌어도 최초 revision·키로 �
       await route.abort();
     } else await route.continue();
   });
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('서버에 연결');
   expect(backend.store.snapshot().plans).toHaveLength(1);
   await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await page.getByRole('button', { name: '계획 시작 재시도', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작 재시도', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   expect(bodies).toHaveLength(2);
   expect(bodies[0]).toEqual(bodies[1]);
@@ -252,7 +253,7 @@ test('선택만 남은 항목은 계획 미작성으로 제외할 수 있고 비
   await answerConfirmation(page, true);
   await expect(region.getByRole('button', { name: '요청에서 제외', exact: true })).toHaveCount(0);
   await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '내 계획으로', exact: true }).click();
   await expect(region).toContainText('작성 중');
@@ -298,7 +299,7 @@ test('시작 중 요청·계정 전환을 막고 저장 후 재조회 실패를 
       });
     else await route.continue();
   });
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page.getByLabel('접속 계정')).toBeDisabled();
   await expect(page.getByLabel('계획 수립 요청')).toBeDisabled();
   await expect(page.getByLabel('취득할 자격')).toBeDisabled();
@@ -306,7 +307,7 @@ test('시작 중 요청·계정 전환을 막고 저장 후 재조회 실패를 
   await expect(page.getByRole('alert')).toContainText('재조회 실패 시험');
   expect(backend.store.snapshot().plans).toHaveLength(1);
   failRefresh = false;
-  await page.getByRole('button', { name: '계획 시작 재시도', exact: true }).focus();
+  await page.getByRole('button', { name: '계획 수립 시작 재시도', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
   expect(posts).toBe(1);
@@ -357,10 +358,11 @@ test('상단 영역 없이 드롭다운의 요청 당시 필수를 유지하며 
     await select.selectOption('demo-qualification');
     await select.focus();
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('button', { name: '계획 시작', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: '계획 수립 시작', exact: true })).toBeFocused();
     if (width === 390)
       expect(
-        (await page.getByRole('button', { name: '계획 시작', exact: true }).boundingBox())!.height,
+        (await page.getByRole('button', { name: '계획 수립 시작', exact: true }).boundingBox())!
+          .height,
       ).toBeGreaterThanOrEqual(44);
     await page.screenshot({ path: info.outputPath(`plans-required-${width}.png`), fullPage: true });
   }

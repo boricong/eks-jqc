@@ -740,7 +740,7 @@ test("15종 선택 가져오기·조직별 독립·중복·미정 기준 공개 
   const q = f.store
     .snapshot()
     .qualifications.find((q) => q.id === imported.imported[0])!;
-  await f.call("admin-1", `/qualifications/${q.id}`, q, 200, "PUT");
+  await f.call("admin-1", `/qualifications/${q.id}`, q, 422, "PUT");
   const etch = await f.call(
     "operator-1",
     scope("/qualification-templates/import", "org-etch"),

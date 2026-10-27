@@ -12,6 +12,7 @@ const props = defineProps<{
   disabled: boolean;
   issues: CourseIssue[];
   showErrors: boolean;
+  objectiveOnly?: boolean;
 }>();
 const uid = useId(),
   section = ref('basic');
@@ -130,10 +131,10 @@ defineExpose({
                 type="checkbox"
                 value="objective"
                 data-course-field="assessmentKinds"
-                :disabled="disabled"
+                :disabled="disabled || objectiveOnly"
               />객관식 · 지식 평가 <small>수료 필수</small></label
             >
-            <label class="checkbox-label"
+            <label v-if="!objectiveOnly" class="checkbox-label"
               ><input
                 v-model="course.assessmentKinds"
                 type="checkbox"
@@ -141,7 +142,7 @@ defineExpose({
                 :disabled="disabled"
               />실기 · 상황 대응 평가 <small>수료 필수</small></label
             >
-            <label class="checkbox-label"
+            <label v-if="!objectiveOnly" class="checkbox-label"
               ><input
                 v-model="course.subjectiveEnabled"
                 type="checkbox"
@@ -150,9 +151,6 @@ defineExpose({
             >
           </div>
         </fieldset>
-        <p v-if="course.qualificationType !== 'auditor'" class="muted">
-          상황 대응 평가에는 지식 평가가 필요합니다. 유형을 해제해도 작성한 문항은 보존됩니다.
-        </p>
         <p
           v-if="course.qualificationType !== 'auditor' && !course.assessmentKinds.length"
           class="muted"
@@ -179,7 +177,6 @@ defineExpose({
       >
         <header class="course-evaluation-heading">
           <h2>{{ kind === 'objective' ? '지식 평가' : '상황 대응 평가' }}</h2>
-          <p class="muted">번호를 선택해 문항을 편집합니다. 정답은 관리자에게만 공개됩니다.</p>
         </header>
         <CourseAssessmentEditor
           ref="assessment"

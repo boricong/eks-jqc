@@ -43,6 +43,7 @@ export const CertificationPeriodSchema = z.object({
 });
 export type CertificationPeriod = z.infer<typeof CertificationPeriodSchema>;
 export const RenewalSchema = z.object({
+  batchId: z.string().optional(),
   frozenCriteria: FrozenCriteriaSchema.optional(),
   id: z.string(),
   certificationId: z.string(),
@@ -60,7 +61,11 @@ export const RenewalSchema = z.object({
   completedAt: z.iso.datetime().optional(),
   closedAt: z.iso.datetime().optional(),
   closeReason: z.string().optional(),
-  method: z.enum(["mvp_completion", "auditor_self_confirmation"]),
+  method: z.enum([
+    "mvp_completion",
+    "auditor_self_confirmation",
+    "objective_assessment",
+  ]),
   criteriaFingerprint: z
     .string()
     .regex(/^[a-f0-9]{64}$/)

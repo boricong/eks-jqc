@@ -1,3 +1,5 @@
+import { initializeObjectiveRenewals } from "./objective-renewal-migration.ts";
+import { initializeRequirementExceptions } from "./requirement-exception-migration.ts";
 import { initializeReleases } from "./release-migration.ts";
 import { initialTemplates, metadata } from "./qualification-templates.ts";
 import {
@@ -39,6 +41,7 @@ export function seedState(testFixture = false): State {
     commonUpdates: [],
     auditorPrograms: [],
     qualificationTemplates: initialTemplates(),
+    renewalBatches: [],
     renewals: [],
     lifecycleEvents: [],
     catalogBatches: [],
@@ -225,7 +228,11 @@ export function seedState(testFixture = false): State {
       details: { fictional: true },
     });
   return validateState(
-    StateSchema.parse(initializeReleases(state)),
+    StateSchema.parse(
+      initializeObjectiveRenewals(
+        initializeRequirementExceptions(initializeReleases(state)),
+      ),
+    ),
     seedOrganizations(),
   );
 }

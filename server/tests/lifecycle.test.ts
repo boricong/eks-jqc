@@ -44,6 +44,35 @@ async function fixture(t: TestContext, months = 12) {
     organizationId: "org-etch",
     revision: 1,
   });
+  const template = seed.qualificationTemplates.find(
+      (t) => t.id === q.templateId,
+    )!,
+    course = seed.courses.find((c) => c.id === q.courseIds[0])!;
+  seed.qualificationTemplates.push({
+    ...structuredClone(template),
+    id: "renewal-template",
+    purpose: "renewal",
+    title: "재인증",
+    scope: "system",
+  });
+  seed.courses.push({
+    ...structuredClone(course),
+    id: "renewal-course",
+    entityId: "renewal-course",
+    assessmentKinds: ["objective"],
+    practicalQuestions: [],
+    subjectiveEnabled: false,
+    subjectiveQuestions: [],
+  });
+  seed.qualifications.push({
+    ...structuredClone(q),
+    id: "renewal-q",
+    entityId: "renewal-q",
+    templateId: "renewal-template",
+    purpose: "renewal",
+    title: "재인증",
+    courseIds: ["renewal-course"],
+  });
   await new JsonStore(file).initialize(seed);
   let store = await new JsonStore(file).load(),
     now = at;
@@ -228,10 +257,45 @@ async function history(f: F, id: string) {
   return f.call(learner, `/certifications/${id}/history`);
 }
 async function start(f: F, id: string) {
-  const h = await history(f, id);
-  return f.call(learner, `/certifications/${id}/renewals`, {
-    certificationRevision: h.certification.revision,
+  const v = await f.call(learner, "/me/renewal-candidates");
+  const b = await f.call(learner, "/renewal-batches", {
+    stateRevision: v.stateRevision,
+    organizationRevision: v.organizationRevision,
+    qualificationId: v.qualification.id,
+    qualificationRevision: v.qualification.revision,
+    certificationIds: [id],
   });
+  const batch = f.store
+      .snapshot()
+      .renewalBatches.find((bat) => bat.id === b.id)!,
+    e = f.store
+      .snapshot()
+      .enrollments.find((e) => e.assignmentId === batch.assignmentId)!,
+    course = f.store.snapshot().courses.find((c) => c.id === e.courseId)!;
+  const attempt = await f.call(learner, `/enrollments/${e.id}/attempts`, {
+    kind: "objective",
+  });
+  await f.call(
+    learner,
+    `/attempts/${attempt.id}/draft`,
+    {
+      revision: attempt.revision,
+      answers: Object.fromEntries(
+        course.questions.map((q) => [q.id, q.correct]),
+      ),
+    },
+    200,
+    "PUT",
+  );
+  const r = f.store.snapshot().renewals.find((r) => r.batchId === batch.id)!;
+  return {
+    ...r,
+    attemptId: attempt.id,
+    attemptRevision: attempt.revision + 1,
+    certificationRevision: f.store
+      .snapshot()
+      .certifications.find((c) => c.id === id)!.revision,
+  };
 }
 async function complete(
   f: F,
@@ -242,12 +306,8 @@ async function complete(
 ) {
   return f.call(
     learner,
-    `/renewals/${r.id}/complete`,
-    {
-      certificationRevision: r.certificationRevision,
-      revision: r.revision,
-      confirmation: "종합평가 완료",
-    },
+    `/attempts/${r.attemptId}/submit`,
+    { revision: r.attemptRevision },
     status,
     "POST",
     key,
@@ -426,19 +486,24 @@ test("조기 재인증·유효기간 연속성·최초 근거 보존·재시도�
     learner,
     `/certifications/${c.id}/renewals`,
     { certificationRevision: c.revision },
-    409,
+    410,
   );
   f.setTime("2026-10-31T00:00:00.000Z");
   const r = await start(f, c.id),
     key = randomUUID(),
     body = {
-      certificationRevision: r.certificationRevision,
-      revision: r.revision,
-      confirmation: "종합평가 완료",
+      revision: r.attemptRevision,
     };
   const done = await complete(f, c.id, r, 200, key);
   assert.deepEqual(
-    await f.call(learner, `/renewals/${r.id}/complete`, body, 200, "POST", key),
+    await f.call(
+      learner,
+      `/attempts/${r.attemptId}/submit`,
+      body,
+      200,
+      "POST",
+      key,
+    ),
     done,
   );
   const h = await history(f, c.id),
@@ -456,8 +521,16 @@ test("조기 재인증·유효기간 연속성·최초 근거 보존·재시도�
     "expiresOn",
   ] as const)
     assert.deepEqual((h.certification as any)[field], (c as any)[field]);
-  assert.deepEqual(after.attempts, before.attempts);
-  assert.deepEqual(after.completions, before.completions);
+  assert.deepEqual(
+    after.attempts.filter((t) => before.attempts.some((x) => x.id === t.id)),
+    before.attempts,
+  );
+  assert.deepEqual(
+    after.completions.filter((c) =>
+      before.completions.some((x) => x.id === c.id),
+    ),
+    before.completions,
+  );
   assert.equal(after.certifications.length, 1);
   assert.equal(
     after.renewals.filter((r) => r.status === "completed").length,
@@ -478,7 +551,7 @@ test("짧은 인증기간 갱신은 다음 유효기간 시작 전 반복할 수
     learner,
     `/certifications/${c.id}/renewals`,
     { certificationRevision: f.store.snapshot().certifications[0]!.revision },
-    409,
+    410,
   );
   f.setTime("2026-02-28T15:00:00.000Z");
   assert.equal((await history(f, c.id)).renewal.canStart, true);
@@ -626,6 +699,13 @@ test("스키마 9 보존 이관·기간 미정 Hold와 근거 정정·반복 이
   raw.schemaVersion = 8;
   legacyPlanFixture(raw);
   delete raw.renewals;
+  raw.qualifications = raw.qualifications.filter(
+    (q: any) => q.purpose !== "renewal",
+  );
+  raw.qualificationTemplates = raw.qualificationTemplates.filter(
+    (q: any) => q.purpose !== "renewal",
+  );
+  raw.renewalBatches = [];
   delete raw.lifecycleEvents;
   for (const x of raw.certifications) {
     delete x.periods;
@@ -683,6 +763,13 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   raw.schemaVersion = 8;
   legacyPlanFixture(raw);
   delete raw.renewals;
+  raw.qualifications = raw.qualifications.filter(
+    (q: any) => q.purpose !== "renewal",
+  );
+  raw.qualificationTemplates = raw.qualificationTemplates.filter(
+    (q: any) => q.purpose !== "renewal",
+  );
+  raw.renewalBatches = [];
   delete raw.lifecycleEvents;
   for (const c of raw.certifications) {
     delete c.periods;
@@ -722,7 +809,7 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   const after = await readFile(file),
     candidate = JSON.parse(after.toString()),
     count = (await readdir(store.backupDir)).length;
-  assert.equal(candidate.schemaVersion, 26);
+  assert.equal(candidate.schemaVersion, 28);
   assert.deepEqual(candidate.attempts, raw.attempts);
   await store.migratePolicies(
     { ...expected, revision: candidate.revision, stateHash: hash(after) },

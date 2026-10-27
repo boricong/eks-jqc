@@ -1,4 +1,9 @@
 import {
+  QualificationPurposeSchema,
+  RenewalBatchSchema,
+} from "./renewal-batches.ts";
+export * from "./renewal-batches.ts";
+import {
   releaseVersionLabel,
   ReleaseVersionSchema,
   ReleaseInfoSchema,
@@ -268,6 +273,7 @@ export const CourseSchema = CourseContentSchema.extend({
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
+  purpose: QualificationPurposeSchema.optional(),
   auditorCriteria: AuditorCriteriaSchema.optional(),
   qualificationType: QualificationTypeSchema.default("auditee"),
   ...revision,
@@ -369,6 +375,7 @@ export const EnrollmentSchema = z.object({
   courseId: id,
 });
 export const AssignmentSchema = z.object({
+  renewalBatchId: z.string().optional(),
   frozenCriteria: FrozenCriteriaSchema.optional(),
   auditor: AuditorAssignmentSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
@@ -501,7 +508,12 @@ export const ComparisonSchema = z.object({
 });
 export type Comparison = z.infer<typeof ComparisonSchema>;
 export const StateSchema = z.object({
-  schemaVersion: z.union([z.literal(25), z.literal(26)]),
+  schemaVersion: z.union([
+    z.literal(25),
+    z.literal(26),
+    z.literal(27),
+    z.literal(28),
+  ]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
     .default([]),
@@ -530,6 +542,7 @@ export const StateSchema = z.object({
   learningChecklists: z.array(LearningChecklistSchema).default([]),
   notifications: z.array(NotificationSchema),
   catalogBatches: z.array(CatalogBatchSchema).default([]),
+  renewalBatches: z.array(RenewalBatchSchema).default([]),
   renewals: z.array(RenewalSchema).default([]),
   lifecycleEvents: z.array(LifecycleEventSchema).default([]),
 });
@@ -569,6 +582,7 @@ export interface Enrollment {
   checklist?: LearningChecklist;
 }
 export interface Assignment extends StoredAssignment {
+  renewalBatch?: z.infer<typeof RenewalBatchSchema>;
   enrollments: Enrollment[];
   certifiedAt?: string;
   certification?: Certification;
@@ -745,7 +759,9 @@ export function qualificationReadinessErrors(
 ): string[] {
   return [
     ...qualificationErrors(q, courses),
-    ...validityErrors(q.validity),
+    ...(q.purpose === "renewal"
+      ? renewalQualificationErrors(q, courses)
+      : validityErrors(q.validity)),
     ...courses
       .filter((c) => q.courseIds.includes(c.id))
       .flatMap((c) =>
@@ -827,4 +843,24 @@ export function subjectiveIssues(course: CourseContent): string[] {
   return course.subjectiveQuestions.flatMap((q, i) =>
     q.prompt.trim() ? [] : [`주관식 ${i + 1}번 문제를 입력해 주세요.`],
   );
+}
+
+export function renewalQualificationErrors(
+  q: Qualification,
+  courses: Course[],
+): string[] {
+  if (q.purpose !== "renewal") return [];
+  const c = courses.find((c) => c.id === q.courseIds[0]);
+  return [
+    q.qualificationType !== "auditee" && "재인증은 Auditee만 지원합니다.",
+    q.courseIds.length !== 1 &&
+      "재인증에는 객관식 인증Set 1개를 연결해 주세요.",
+    c &&
+      (c.assessmentKinds.length !== 1 ||
+        c.assessmentKinds[0] !== "objective" ||
+        c.practicalQuestions.length ||
+        c.subjectiveEnabled ||
+        c.subjectiveQuestions.length) &&
+      "재인증 인증Set은 객관식 문항만 사용할 수 있습니다. 상황·주관식 문항을 제거해 주세요.",
+  ].filter(Boolean) as string[];
 }

@@ -9,9 +9,7 @@ test('이전 조직 주소는 새 정보·관리자 화면으로 이동하며 �
   await actor(page, 'admin-1');
   await page.goto('/admin/policies?lv1OrganizationId=org-photo');
   await expect(page).toHaveURL(/\/admin\/organization-settings\?lv1OrganizationId=org-photo$/);
-  await expect(
-    page.getByRole('heading', { name: '조직 정보·필요자격', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '조직 정보·관리자', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: '조직 필수 자격 설정', exact: true })).toHaveCount(0);
   await expect(page.getByText('필수 자격 · 선택 사항', { exact: true })).toHaveCount(0);
   await page.getByLabel('조직 설명', { exact: true }).fill('팀 운영 설명');
@@ -117,7 +115,7 @@ test('선택 상태로 전환된 이전 대상에는 필수 표시·강제가 �
     .toBe(0);
   await expect(page.getByRole('button', { name: '계획 수립 완료', exact: true })).toBeDisabled();
   await page.getByLabel('취득할 자격', { exact: true }).selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 시작', exact: true }).click();
+  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[^/?]+/);
   expect(
     backend.store.snapshot().planningRequests.find((r) => r.id === 'converted-request')!.selections,

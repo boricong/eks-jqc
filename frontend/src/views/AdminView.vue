@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import CommonReleaseUpdates from '../components/CommonReleaseUpdates.vue';
+import QualificationCommonCourses from '../components/QualificationCommonCourses.vue';
+import QualificationCourseCreate from '../components/QualificationCourseCreate.vue';
 import { releaseVersionLabel } from '@eks/contracts';
 import type { QualificationTemplate } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
@@ -8,14 +10,13 @@ import PageHeading from '../components/PageHeading.vue';
 import CompactTabs from '../components/CompactTabs.vue';
 import { withCriteriaType, managementTitle } from '../management-navigation';
 import ActionBar from '../components/ActionBar.vue';
-import OrganizationRequirements from '../components/OrganizationRequirements.vue';
 import { confirmAction } from '../composables/useConfirmation';
 import CourseEditor from '../components/CourseEditor.vue';
 import QualificationDelete from '../components/QualificationDelete.vue';
 import { api } from '../api';
 import CredentialManagement from '../components/CredentialManagement.vue';
 import { useProcessContext } from '../composables/useProcessContext';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
@@ -41,6 +42,7 @@ import {
   criterionLifecycleLabels,
   qualificationTypeLabels,
   qualificationReadinessErrors,
+  validityErrors,
   type QualificationType,
   AUDITOR_PREPARATION_MESSAGE,
   certificationStatus,
@@ -132,6 +134,8 @@ const query = ref(''),
   errors = ref<string[]>([]);
 const validationShown = ref(false);
 const courseEditor = ref<InstanceType<typeof CourseEditor>>();
+const courseCreator = ref<InstanceType<typeof QualificationCourseCreate>>();
+const courseCreateOpen = ref(false);
 const savePreview = ref<CatalogItemSavePreview | null>(null);
 const versionMode = ref<QualificationVersionMode>('current');
 const previewPending = ref(false),
@@ -156,17 +160,10 @@ const courseSaveResult = ref<{
 const locatedIssues = computed(() =>
   validationShown.value && courseDraft.value ? courseIssues(courseDraft.value) : [],
 );
-const needsOpen = ref(false),
-  needsEditor = ref<InstanceType<typeof OrganizationRequirements>>();
-async function closeNeeds(value: boolean) {
-  if (value) {
-    needsOpen.value = true;
-    return;
-  }
-  if (await needsEditor.value?.canLeave()) needsOpen.value = false;
-}
 const courseDraft = ref<Course | null>(null),
-  qualificationDraft = ref<Qualification | null>(null);
+  qualificationDraft = ref<
+    (Qualification & { commonCourseAdditions?: { id: string; revision: number }[] }) | null
+  >(null);
 watch(
   () => [courseDraft.value?.id, courseDraft.value?.qualificationType],
   async ([id, type], [previousId, previousType]) => {
@@ -208,6 +205,11 @@ watch(locatedIssues, (issues) => {
     ];
 });
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
+const qualificationValidityErrors = computed(() =>
+  qualificationDraft.value && qualificationDraft.value.purpose !== 'renewal'
+    ? validityErrors(qualificationDraft.value.validity)
+    : [],
+);
 const relatedVersions = computed(() =>
   editor.value
     ? (courseDraft.value ? organizationData.value.courses : organizationData.value.qualifications)
@@ -272,6 +274,7 @@ watch(
     )
       return;
     createOpen.value = false;
+    courseCreateOpen.value = false;
     editingContext.value = `${store.actorId}:${store.managementLv1}`;
     courseSearch.value = '';
     savePreview.value = null;
@@ -327,6 +330,7 @@ const selectableCourses = computed(() => {
   const selected = new Set(qualificationDraft.value?.courseIds || []);
   const term = courseSearch.value.trim().toLocaleLowerCase();
   return organizationData.value.courses
+    .filter((c) => selected.has(c.id) || !c.deletedAt)
     .filter((c) => c.qualificationType === qualificationDraft.value?.qualificationType)
     .filter(
       (c) =>
@@ -354,38 +358,53 @@ const selectableCourses = computed(() => {
         a.title.localeCompare(b.title, 'ko'),
     );
 });
-const groupedCourses = computed(() =>
-  [
-    { title: '공통인증Set', category: 'common' },
-    { title: '특화인증Set', category: 'specialized' },
-  ].map((g) => ({ ...g, items: selectableCourses.value.filter((c) => c.category === g.category) })),
-);
+const groupedCourses = computed(() => [
+  {
+    title: '적용 인증Set',
+    category: 'applied',
+    items: selectableCourses.value.filter((c) =>
+      qualificationDraft.value?.courseIds.includes(c.id),
+    ),
+  },
+  ...[
+    { title: '추가할 공통인증Set', category: 'common' },
+    { title: '추가할 특화인증Set', category: 'specialized' },
+  ].map((g) => ({
+    ...g,
+    items: selectableCourses.value.filter(
+      (c) => c.category === g.category && !qualificationDraft.value?.courseIds.includes(c.id),
+    ),
+  })),
+]);
 const confirmInitial = computed(
   () =>
     qualificationDraft.value?.version === null &&
-    !!qualificationDraft.value.commonCourseEntityIds.length,
+    (!!qualificationDraft.value.commonCourseEntityIds.length ||
+      !!qualificationDraft.value.commonCourseAdditions?.length),
 );
 const resultAssignmentId = computed(() =>
   section.value === 'results' ? String(route.params.id || route.query.assignmentId || '') : '',
 );
 const assignments = computed(() =>
-  organizationData.value.assignments.filter((a) =>
-    resultAssignmentId.value
-      ? a.id === resultAssignmentId.value
-      : matches(
-          store.qualification(a.qualificationId, a.qualificationMetadata).title +
-            ' ' +
-            store.username(a.learnerId),
-        ) &&
-        (filter.value === 'all' ||
-          (filter.value === 'excluded' && !!a.excludedReason) ||
-          (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
-          (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt) ||
-          (!a.excludedReason &&
-            a.certification &&
-            (filter.value === 'valid'
-              ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
-              : filter.value === certificationStatus(a.certification)))),
+  organizationData.value.assignments.filter(
+    (a) =>
+      (section.value !== 'assignments' || !a.renewalBatchId) &&
+      (resultAssignmentId.value
+        ? a.id === resultAssignmentId.value
+        : matches(
+            store.qualification(a.qualificationId, a.qualificationMetadata).title +
+              ' ' +
+              store.username(a.learnerId),
+          ) &&
+          (filter.value === 'all' ||
+            (filter.value === 'excluded' && !!a.excludedReason) ||
+            (filter.value === 'active' && !a.excludedReason && !a.certifiedAt) ||
+            (filter.value === 'certified' && !a.excludedReason && !!a.certifiedAt) ||
+            (!a.excludedReason &&
+              a.certification &&
+              (filter.value === 'valid'
+                ? ['valid', 'expiring'].includes(certificationStatus(a.certification))
+                : filter.value === certificationStatus(a.certification))))),
   ),
 );
 const notices = computed(() => organizationData.value.notices.filter((n) => matches(n.title)));
@@ -478,7 +497,8 @@ function restoreSaveFocus() {
   saveReturnTarget = null;
 }
 async function reviewSave(mode: QualificationVersionMode = versionMode.value) {
-  if (!editor.value || readOnly.value || busy.value) return;
+  if (!editor.value || readOnly.value || busy.value || qualificationValidityErrors.value.length)
+    return;
   const sequence = ++previewGeneration;
   const context = `${store.actorId}:${store.managementLv1}:${editor.value.id}`;
   versionMode.value = mode;
@@ -515,7 +535,14 @@ async function reviewSave(mode: QualificationVersionMode = versionMode.value) {
   }
 }
 async function saveCatalog(confirm = false) {
-  if (!editor.value || readOnly.value || busy.value || previewPending.value) return;
+  if (
+    !editor.value ||
+    readOnly.value ||
+    busy.value ||
+    previewPending.value ||
+    qualificationValidityErrors.value.length
+  )
+    return;
   if (courseEditor.value && !courseEditor.value.commit()) return;
   if (!confirm) {
     await reviewSave('current');
@@ -621,7 +648,34 @@ function selectCourseVersion(id: string, selected: boolean) {
       (!selected || store.data.courses.find((c) => c.id === old)?.entityId !== entity),
   );
   if (selected) q.courseIds.push(id);
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>(`[data-course-id="${id}"] input`)?.focus(),
+  );
 }
+function addCreatedCourse(id: string) {
+  if (qualificationDraft.value && !qualificationDraft.value.courseIds.includes(id))
+    qualificationDraft.value.courseIds.push(id);
+}
+function finishUnchanged() {
+  closeSavePreview();
+  if (!qualificationDraft.value) return;
+  qualificationDraft.value = plain(store.qualification(qualificationDraft.value.id));
+  void router.push(criteriaLink(`/admin/qualifications/${qualificationDraft.value.id}`));
+}
+const qualificationDirty = computed(
+  () =>
+    !!qualificationDraft.value &&
+    JSON.stringify(qualificationDraft.value) !==
+      JSON.stringify(plain(store.qualification(qualificationDraft.value.id))),
+);
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!qualificationDirty.value && !courseCreator.value?.dirty && !courseCreator.value?.pending)
+    return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+window.addEventListener('beforeunload', beforeUnload);
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 function editNotice(n?: Notice) {
   noticeDraft.value = n
     ? plain(n)
@@ -700,7 +754,7 @@ async function canLeave() {
     : qualificationDraft.value
       ? organizationData.value.qualifications.find((q) => q.id === qualificationDraft.value!.id)
       : null;
-  if (store.writing) {
+  if (store.writing || courseCreator.value?.pending) {
     store.notify('저장이 끝난 뒤 이동해 주세요.');
     return false;
   }
@@ -717,8 +771,9 @@ async function canLeave() {
   return (
     !store.canEnterManagement ||
     !editor.value ||
-    readOnly.value ||
+    (readOnly.value && !qualificationDirty.value && !courseCreator.value?.dirty) ||
     (!courseEditor.value?.pending &&
+      !courseCreator.value?.dirty &&
       JSON.stringify(plain(source)) === JSON.stringify(editor.value)) ||
     (await confirmAction(
       '저장하지 않은 변경 사항이 있습니다. 저장하려면 취소를 누르세요. 변경을 버리고 나갈까요?',
@@ -790,6 +845,12 @@ watch(
         <PageHeading class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
           <div class="actions">
+            <RouterLink
+              v-if="qualificationDraft && qualificationDraft.version !== null"
+              class="button secondary"
+              :to="criteriaLink(`/admin/qualifications/${qualificationDraft.id}`)"
+              >조회</RouterLink
+            >
             <CourseCategory
               v-if="courseDraft"
               :course="
@@ -800,7 +861,7 @@ watch(
               >삭제된 항목 · {{ editor.deletionReason }}</span
             >
             <QualificationDelete
-              v-if="qualificationDraft"
+              v-if="qualificationDraft && !readOnly"
               :qualification="qualificationDraft"
               :disabled="
                 busy ||
@@ -814,6 +875,17 @@ watch(
             />
           </div>
         </PageHeading>
+        <p v-if="qualificationDraft && readOnly" class="qualification-save-notice" role="status">
+          저장된 기준이 변경되어 이 초안은 저장할 수 없습니다. 작성 중인 값은 화면에 유지됩니다.
+          <RouterLink
+            v-if="relatedVersions.find((v) => !v.deletedAt)"
+            class="text-link"
+            :to="
+              criteriaLink(`/admin/qualifications/${relatedVersions.find((v) => !v.deletedAt)!.id}`)
+            "
+            >최신 기준 조회</RouterLink
+          >
+        </p>
         <div v-if="errors.length" class="error-message editor-errors" role="alert" tabindex="-1">
           <AppIcon name="alert" :size="18" />
           <ul>
@@ -872,7 +944,9 @@ watch(
         >
           <button
             v-if="
-              qualificationDraft.qualificationType === 'auditee' && !qualificationDraft.deletedAt
+              qualificationDraft.qualificationType === 'auditee' &&
+              qualificationDraft.purpose !== 'renewal' &&
+              !qualificationDraft.deletedAt
             "
             class="button secondary"
             :disabled="
@@ -880,16 +954,19 @@ watch(
               JSON.stringify(qualificationDraft) !==
                 JSON.stringify(plain(store.qualification(qualificationDraft.id)))
             "
-            @click="needsOpen = true"
+            @click="
+              router.push({
+                path: '/admin/organization-requirements',
+                query: {
+                  ...store.managementLink('/admin/organization-requirements').query,
+                  view: 'qualification',
+                  entityId: qualificationDraft.entityId,
+                },
+              })
+            "
           >
             필요 조직 설정
           </button>
-          <AppDialog :open="needsOpen" title="필요 조직 설정" @update:open="closeNeeds"
-            ><OrganizationRequirements
-              v-if="needsOpen"
-              ref="needsEditor"
-              :entity-id="qualificationDraft.entityId"
-          /></AppDialog>
           <p
             v-if="qualificationDraft.qualificationType === 'auditor'"
             class="qualification-save-notice"
@@ -984,16 +1061,45 @@ watch(
               공통 정보 다시 확인
             </button>
           </CollapsibleSection>
-          <CollapsibleSection title="팀 설정">
+          <CollapsibleSection v-if="qualificationDraft.purpose !== 'renewal'" title="팀 설정">
             <template #summary>{{ validitySummary }}</template>
             <QualificationFields :qualification="qualificationDraft" :disabled="readOnly || busy" />
           </CollapsibleSection>
+          <p v-if="qualificationDraft.purpose === 'renewal'" class="muted">
+            재인증 · 객관식 전용 인증Set 1개
+          </p>
           <CollapsibleSection title="필수 인증Set">
-            <template #summary>{{ qualificationDraft.courseIds.length }}개 선택</template>
+            <template #summary
+              >{{
+                qualificationDraft.courseIds.length +
+                (qualificationDraft.commonCourseAdditions?.length ?? 0)
+              }}개 선택</template
+            >
+            <div class="actions qualification-add-actions">
+              <button
+                class="button secondary"
+                :disabled="
+                  readOnly ||
+                  busy ||
+                  qualificationDraft.courseIds.length +
+                    (qualificationDraft.commonCourseAdditions?.length ?? 0) >=
+                    100
+                "
+                @click="courseCreateOpen = true"
+              >
+                새 특화인증Set 등록
+              </button>
+            </div>
             <fieldset class="course-selection">
               <legend class="sr-only">필수 인증Set 선택</legend>
               <label class="field course-selection-search"
-                ><span>인증Set 검색 · {{ qualificationDraft.courseIds.length }}개 선택</span>
+                ><span
+                  >인증Set 검색 ·
+                  {{
+                    qualificationDraft.courseIds.length +
+                    (qualificationDraft.commonCourseAdditions?.length ?? 0)
+                  }}개 선택</span
+                >
                 <input
                   v-model="courseSearch"
                   type="search"
@@ -1034,6 +1140,16 @@ watch(
                     <span v-if="c.deletedAt" class="muted">삭제됨</span>
                   </div>
                   <div class="qualification-course-actions">
+                    <button
+                      v-if="group.category === 'applied' && !readOnly"
+                      type="button"
+                      class="text-link"
+                      :disabled="busy"
+                      :aria-label="`${c.title} 자격에서 제거`"
+                      @click="selectCourseVersion(c.id, false)"
+                    >
+                      자격에서 제거
+                    </button>
                     <RouterLink
                       v-if="!readOnly"
                       class="text-link"
@@ -1050,17 +1166,51 @@ watch(
                     </button>
                   </div>
                 </div>
-                <p v-if="!group.items.length" class="muted">
+                <p
+                  v-if="
+                    !group.items.length &&
+                    !(
+                      group.category === 'applied' &&
+                      qualificationDraft.commonCourseAdditions?.length
+                    )
+                  "
+                  class="muted"
+                >
                   {{
-                    group.category === 'common'
-                      ? '등록 당시 공통 목록에 항목이 없거나 검색 결과가 없습니다.'
-                      : '검색 결과가 없습니다.'
+                    group.category === 'applied'
+                      ? '적용된 인증Set이 없습니다.'
+                      : group.category === 'common'
+                        ? '추가할 팀 사본이 없거나 검색 결과가 없습니다.'
+                        : '검색 결과가 없습니다.'
                   }}
                 </p>
+                <QualificationCommonCourses
+                  v-if="group.category === 'common' || group.category === 'applied'"
+                  :qualification-id="qualificationDraft.id"
+                  :revision="qualificationDraft.revision"
+                  :disabled="readOnly || busy"
+                  :search="courseSearch"
+                  :additions="qualificationDraft.commonCourseAdditions"
+                  :selection-group="group.category === 'applied' ? 'selected' : 'unselected'"
+                  @change="
+                    (items) => {
+                      if (!qualificationDraft) return;
+                      if (items.length) qualificationDraft.commonCourseAdditions = items;
+                      else delete qualificationDraft.commonCourseAdditions;
+                    }
+                  "
+                />
               </div>
             </fieldset>
           </CollapsibleSection>
         </div>
+        <QualificationCourseCreate
+          v-if="qualificationDraft"
+          ref="courseCreator"
+          v-model:open="courseCreateOpen"
+          :qualification="qualificationDraft"
+          @created="addCreatedCourse"
+        />
         <CoursePreviewDialog
           :open="!!previewCourseId"
           :course="previewCourse"
@@ -1090,15 +1240,28 @@ watch(
         </div>
         <p class="release-footer">{{ releaseVersionLabel(editor) }}</p>
         <ActionBar v-if="!readOnly" class="actionbar">
+          <RouterLink
+            v-if="qualificationDraft"
+            class="button secondary"
+            :to="
+              criteriaLink(
+                qualificationDraft.version === null
+                  ? '/admin/qualifications'
+                  : `/admin/qualifications/${qualificationDraft.id}`,
+              )
+            "
+            >변경 취소</RouterLink
+          >
           <span class="muted">{{
-            section === 'qualifications'
+            qualificationValidityErrors[0] ||
+            (section === 'qualifications'
               ? '변경 내용과 새 버전을 확인하고 저장합니다.'
-              : '전체 기준을 저장합니다. 완성된 버전을 연결 자격에 자동 반영합니다.'
+              : '전체 기준을 저장합니다. 완성된 버전을 연결 자격에 자동 반영합니다.')
           }}</span
           ><button
             ref="saveTrigger"
             class="button primary"
-            :disabled="busy || previewPending"
+            :disabled="busy || previewPending || !!qualificationValidityErrors.length"
             @click="saveCatalog()"
           >
             {{ confirmInitial ? '최초 설정 저장' : '저장' }}
@@ -1177,7 +1340,7 @@ watch(
             ><button
               v-if="savePreview?.versionPolicy && savePreview.unchanged"
               class="button primary"
-              @click="closeSavePreview()"
+              @click="finishUnchanged"
             >
               닫기
             </button>
@@ -1517,14 +1680,30 @@ watch(
                       : q.lifecycleStatus || 'Active'
                   }}</span>
                 </td>
-                <td>
+                <td class="qualification-management-actions">
                   <QualificationDelete :qualification="q" :disabled="busy" compact />
                   <RouterLink
+                    v-if="q.version !== null"
                     :to="criteriaLink(`/admin/qualifications/${q.id}`)"
-                    class="icon-button"
-                    :aria-label="`${q.title} 상세`"
-                    ><AppIcon name="chevron" :size="18"
-                  /></RouterLink>
+                    class="text-link"
+                    :aria-label="`${q.title} ${releaseVersionLabel(q)} 조회`"
+                    >조회</RouterLink
+                  >
+                  <RouterLink
+                    v-if="
+                      !q.deletedAt &&
+                      !organizationData.qualifications.some(
+                        (other) =>
+                          other.entityId === q.entityId &&
+                          !other.deletedAt &&
+                          (other.version ?? 0) > (q.version ?? 0),
+                      )
+                    "
+                    :to="criteriaLink(`/admin/qualifications/${q.id}/edit`)"
+                    class="text-link"
+                    :aria-label="`${q.title} ${releaseVersionLabel(q)} ${q.version === null ? '최초 설정' : '변경'}`"
+                    >{{ q.version === null ? '최초 설정' : '변경' }}</RouterLink
+                  >
                 </td>
               </tr>
             </tbody>
@@ -1621,7 +1800,13 @@ watch(
                 >{{ store.completedCount(a) }} / {{ a.enrollments.length }} 수료</span
               ><StatusBadge
                 :status="a.excludedReason ? 'excluded' : a.certifiedAt ? 'certified' : 'draft'"
-                :label="!a.certifiedAt && !a.excludedReason ? '진행 중' : undefined"
+                :label="
+                  a.renewalBatch
+                    ? `재인증 · ${{ evaluating: '평가 진행', passed: '합격 · 보류', completed: '갱신 처리 완료', closed: '종료' }[a.renewalBatch.status]}`
+                    : !a.certifiedAt && !a.excludedReason
+                      ? '진행 중'
+                      : undefined
+                "
               /><ValidityBadge v-if="a.certification" :certification="a.certification" /><AppIcon
                 name="down"
                 :size="18"

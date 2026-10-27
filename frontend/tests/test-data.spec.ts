@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { test, expect, actor } from './fixtures';
+import { test, expect, actor, answerConfirmation } from './fixtures';
 import { completePlan } from './workflow-helpers';
 
 async function open(page: Page) {
@@ -48,6 +48,11 @@ test('운영자 메뉴·초기화 취소·계정 보존·반복 로드와 네 �
   expect(backend.store.snapshot().users).toEqual(users);
   await execute(page, 'load');
   expect(backend.store.snapshot().qualificationTemplates).toHaveLength(19);
+  expect(backend.store.snapshot().qualifications).toHaveLength(0);
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  expect(backend.store.snapshot().organizationQualificationRequirements).toHaveLength(0);
+  await expect(page.getByText('팀 자격은 로드 후 직접 등록합니다.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^현재 팀 자격 보기/)).toHaveCount(0);
   expect(backend.store.snapshot().commonCourses).toHaveLength(5);
   expect(backend.store.snapshot().courses.filter((c) => c.category === 'specialized')).toHaveLength(
     30,
@@ -137,10 +142,10 @@ test('저장 실패·동시 변경에 확인 입력 보존, 응답 유실 후 �
   await expect(page.getByRole('button', { name: '테스트 데이터 로드', exact: true })).toBeEnabled();
 });
 
-test('내장 데이터의 계획 요청부터 실제 학습·평가·주관식·인증서 조회까지 진행한다', async ({
+test('로드 후 자격 풀 등록·공통 복사·팀 설정·필요 조직 지정부터 실제 인증서까지 진행한다', async ({
   page,
   backend,
-}) => {
+}, info) => {
   test.setTimeout(90000);
   backend.setClock('2026-10-27T01:00:00.000Z');
   await page.goto('/');
@@ -148,17 +153,115 @@ test('내장 데이터의 계획 요청부터 실제 학습·평가·주관식·
   await open(page);
   await execute(page, 'reset');
   await execute(page, 'load');
-  const q = backend.store
+  expect(backend.store.snapshot().qualifications).toHaveLength(0);
+  expect(backend.store.snapshot().organizationQualificationRequirements).toHaveLength(0);
+  const base = backend.store.snapshot().qualificationTemplates.find((t) => t.id === 'eqp-backup')!;
+  const common = backend.store
     .snapshot()
-    .qualifications.find(
-      (q) =>
-        q.entityId ===
-        backend.store
-          .snapshot()
-          .organizationQualificationRequirements.find((r) => r.organizationId === 'org-photo')!
-          .entityIds[0],
+    .commonCourses.find((c) => c.qualificationType === 'auditee')!;
+  const specialized = backend.store
+    .snapshot()
+    .courses.find(
+      (c) =>
+        c.category === 'specialized' &&
+        c.qualificationType === 'auditee' &&
+        c.lv1OrganizationId === 'org-photo',
     )!;
   await actor(page, 'admin-1');
+  await page.goto('/admin/qualifications?type=auditee');
+  await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();
+  const register = page.getByRole('dialog', { name: 'Auditee 자격 등록', exact: true });
+  await register.locator(`input[type="checkbox"][value="${base.id}"]`).check();
+  const firstRow = register.locator('.template-list .choice').first();
+  const nameBox = await firstRow.locator('.template-choice-info > span').boundingBox();
+  const metaBox = await firstRow.locator('small').first().boundingBox();
+  expect(Math.abs(nameBox!.y - metaBox!.y)).toBeLessThan(8);
+  expect((await firstRow.boundingBox())!.height).toBeLessThanOrEqual(56);
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: info.outputPath(`registration-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await register.getByRole('button', { name: '팀 자격 등록', exact: true }).click();
+  await expect(register).not.toBeVisible();
+  let q = backend.store.snapshot().qualifications.find((q) => q.templateId === base.id)!;
+  expect(q.lifecycleStatus).toBe('Ready');
+  expect(q.version).toBe(null);
+  expect(q.commonCourseEntityIds).toHaveLength(0);
+  await page.goto(`/admin/qualifications/${q.id}?type=auditee`);
+  const commonChoice = page.getByRole('checkbox', { name: common.title, exact: true });
+  await commonChoice.focus();
+  await page.keyboard.press('Space');
+  await expect(commonChoice).toBeChecked();
+  await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
+  await answerConfirmation(page, false);
+  await expect(commonChoice).toBeChecked();
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: info.outputPath(`common-selection-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  await page.getByLabel('인증기간', { exact: true }).selectOption('months');
+  await page.getByLabel('유효 개월 수', { exact: true }).fill('12');
+  await page.locator(`[data-course-id="${specialized.id}"]`).getByRole('checkbox').check();
+  await page.getByRole('button', { name: '최초 설정 저장', exact: true }).click();
+  const saveDialog = page.getByRole('dialog', { name: '기준 저장 확인', exact: true });
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  await page.route(`**/api/qualifications/${q.id}?*`, async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    return route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: '공통 추가 저장 실패 시험' }),
+    });
+  });
+  await saveDialog
+    .locator('.dialog-footer')
+    .getByRole('button', { name: 'v1.0으로 최초 설정 저장', exact: true })
+    .click();
+  await expect(page.locator('.editor-errors')).toContainText('공통 추가 저장 실패 시험');
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  await expect(commonChoice).toBeChecked();
+  await page.unroute(`**/api/qualifications/${q.id}?*`);
+  await saveDialog
+    .locator('.dialog-footer')
+    .getByRole('button', { name: 'v1.0으로 최초 설정 저장', exact: true })
+    .click();
+  await expect(saveDialog).not.toBeVisible();
+  q = backend.store.snapshot().qualifications.find((x) => x.id === q.id)!;
+  expect(q.lifecycleStatus).toBe('Active');
+  expect(q.commonCourseEntityIds).toHaveLength(1);
+  expect(
+    backend.store.snapshot().qualificationTemplates.find((t) => t.id === base.id)!
+      .defaultCommonCourseIds,
+  ).toEqual([]);
+  expect(q.courseIds).toHaveLength(2);
+  await page.goto('/admin/organization-requirements?organizationId=org-photo');
+  await page.getByRole('button', { name: '자격 추가', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('checkbox', { name: `${q.title} · v1.0`, exact: true })
+    .check();
+  await page.getByRole('button', { name: '선택 추가 (1)', exact: true }).click();
+  await page.getByRole('button', { name: '변경 확인', exact: true }).click();
+  await page.getByRole('button', { name: '전체 변경 저장', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(
+    backend.store
+      .snapshot()
+      .organizationQualificationRequirements.find((r) => r.organizationId === 'org-photo')!
+      .entityIds,
+  ).toEqual([q.entityId]);
   await page.goto('/admin/assignments');
   await page.getByRole('button', { name: '계획 수립 요청', exact: true }).click();
   const dialog = page.getByRole('dialog');

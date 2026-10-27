@@ -80,7 +80,7 @@ test('보유 목록은 이름·취득일·현재 만료일·상태만 표시하�
       el.lastElementChild?.classList.contains('certificate-renewal'),
     ),
   ).toBe(true);
-  const action = page.getByRole('button', { name: '재인증 시작', exact: true });
+  const action = page.getByRole('link', { name: '재인증 대상·평가 확인', exact: true });
   await expect(action).toBeEnabled();
   expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(48);
   await page.getByRole('link', { name: '인증Set 수료증 보기 →', exact: true }).first().click();
@@ -219,7 +219,7 @@ test('긴 인증서·UUID와 보유 목록의 네 화면 폭·타이포그래피
     await expect(page.locator('.certificate-recipient')).toHaveCSS('font-size', '18px');
     await expect(page.locator('.certificate-identifier dd')).toHaveCSS('font-size', '13px');
     await expect(page.locator('.certificate-identifier dd')).toHaveText(uuid);
-    const action = page.getByRole('button', { name: '재인증 시작', exact: true });
+    const action = page.getByRole('link', { name: '재인증 대상·평가 확인', exact: true });
     expect((await action.boundingBox())!.height).toBeGreaterThanOrEqual(48);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

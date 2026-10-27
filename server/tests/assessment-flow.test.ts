@@ -327,8 +327,8 @@ test("9→10은 원본 근거·조직을 보존하고 영구 백업·반복 이�
   const before = structuredClone(raw),
     next = migrateAssessmentFlow(raw, org, clock);
   assert.deepEqual(raw, before);
-  assert.equal(next.state.schemaVersion, 26);
-  assert.equal(next.state.revision, raw.revision + 17);
+  assert.equal(next.state.schemaVersion, 28);
+  assert.equal(next.state.revision, raw.revision + 19);
   for (const key of [
     "attempts",
     "completions",

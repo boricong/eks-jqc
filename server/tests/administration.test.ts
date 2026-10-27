@@ -449,8 +449,8 @@ test("7→8 이관은 기존 기록·조직 바이트 보존, 백업 쌍·재실
     "administration",
   );
   const after = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(after.schemaVersion, 26);
-  assert.equal(after.revision, raw.revision + 19);
+  assert.equal(after.schemaVersion, 28);
+  assert.equal(after.revision, raw.revision + 21);
   for (const key of [
     "users",
     "plans",
