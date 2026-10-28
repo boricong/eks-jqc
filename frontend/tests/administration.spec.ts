@@ -21,7 +21,6 @@ test('팀 관리자의 복수 지정 → 세부 관리자 전용 메뉴·트리�
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/organization-settings');
-  await page.getByLabel('조직 검색').fill('RE A조');
   await page.getByRole('treeitem', { name: 'RE A조', exact: true }).click();
   await page.getByRole('button', { name: '세부 조직 관리자 펼치기', exact: true }).click();
   const admins = page.getByRole('region', { name: '세부 조직 관리자 지정' });

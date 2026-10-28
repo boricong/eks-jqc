@@ -42,9 +42,7 @@ async function change(event: Event) {
           : store.hasRole('admin')
             ? '팀 조직 관리자'
             : store.hasRole('organization_admin')
-              ? route.name === 'dashboard'
-                ? '세부 조직 관리자 · 실제 소속 조직의 직접 소속 인원만 조회'
-                : '세부 조직 관리자 · 실제 소속 조직만 설정'
+              ? '세부 조직 관리자 · 본인 조직 및 모든 하위 조직'
               : '관리 권한이 변경되었습니다'
       }}
       <span v-if="store.managementOrganization && !store.managementOrganization.effectiveActive">

@@ -40,7 +40,7 @@ async function expectedSummary(page: Page, direct: boolean) {
   const query = new URLSearchParams({
     lv1OrganizationId: TEAM,
     organizationId: direct ? ORG_A : TEAM,
-    includeDescendants: direct ? 'false' : 'true',
+    includeDescendants: 'true',
     view: 'summary',
   });
   const response = await page.request.get(`/api/dashboard?${query}`, {
@@ -161,14 +161,14 @@ test('전체 역할의 순서·팀/직속 집계·이동 범위·학습 개인 �
       String(data.summary.overdueRequests),
     ]);
     await expect(page.locator('.home-scope')).toContainText(
-      direct ? '직속 인원 기준' : '팀 전체 기준',
+      direct ? '본인 조직 및 모든 하위 조직 기준' : '팀 전체 기준',
     );
     const target = new URL(
       (await page.locator('.home-hero a').first().getAttribute('href'))!,
       page.url(),
     );
     expect(target.searchParams.get('organizationId')).toBe(direct ? ORG_A : TEAM);
-    expect(target.searchParams.get('includeDescendants')).toBe(direct ? 'false' : 'true');
+    expect(target.searchParams.get('includeDescendants')).toBe('true');
     await page.locator('.home-hero a').first().click();
     await expect(page.getByRole('heading', { name: '인증 현황', exact: true })).toBeVisible();
     await page

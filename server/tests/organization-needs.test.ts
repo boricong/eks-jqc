@@ -111,7 +111,7 @@ test("조직 필요자격은 상위 합집합·중복 출처를 유지하고 세
     "learner-2",
     "/organization-qualification-requirements",
   );
-  assert.equal(v.entries.length, 1);
+  assert.equal(v.entries.length, 9);
   assert.equal(v.entries[0].effective.length, 1);
   assert.equal(v.entries[0].effective[0].sourceOrganizations.length, 2);
   await f.call(
@@ -596,7 +596,7 @@ test("매핑 미리보기는 출처만 바뀐 조직과 구성원 영향·감사
   );
 });
 
-test("세부 관리자 미리보기의 출처 변경과 집계는 자신의 조직만 노출한다", async (t) => {
+test("세부 관리자 미리보기의 출처 변경과 집계는 본인과 하위 조직을 모두 포함한다", async (t) => {
   const f = await fixture(t);
   await f.set(root);
   await f.set(child);
@@ -624,14 +624,14 @@ test("세부 관리자 미리보기의 출처 변경과 집계는 자신의 조�
   );
   assert.deepEqual(
     result.affected.map((e: any) => e.organizationId),
-    [child],
+    view.entries.map((e: any) => e.id),
   );
   assert.deepEqual(result.summary, {
-    affectedOrganizations: 1,
+    affectedOrganizations: 9,
     membershipChangedOrganizations: 0,
-    sourceOnlyOrganizations: 1,
+    sourceOnlyOrganizations: 9,
     exceptionOnlyOrganizations: 0,
     affectedMembers: 0,
   });
-  assert.equal(view.entries.length, 1);
+  assert.equal(view.entries.length, 9);
 });

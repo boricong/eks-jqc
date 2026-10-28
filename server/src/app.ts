@@ -47,6 +47,8 @@ import { courseUsage } from "./course-lifecycle.ts";
 import {
   saveTemplate,
   templateTypeEditing,
+  templateDeletion,
+  deleteTemplate,
 } from "./qualification-templates.ts";
 import { registerCatalogRoutes } from "./catalog-routes.ts";
 import { registerLifecycleRoutes } from "./lifecycle-routes.ts";
@@ -734,6 +736,7 @@ export async function buildApp(
         .map((t) => ({
           ...t,
           ...templateTypeEditing(s, t.id),
+          deletion: templateDeletion(s, t.id),
         })),
       audits: s.audits.filter((a) =>
         a.action.startsWith("qualification-template."),
@@ -778,6 +781,33 @@ export async function buildApp(
         );
       },
     });
+  app.delete("/api/system/qualification-templates/:id", async (request) => {
+    const u = actor(request);
+    systemOperator(u);
+    const id = (request.params as { id: string }).id;
+    const body = z
+      .object({ revision: z.number().int().positive() })
+      .strict()
+      .parse(request.body);
+    const key = z
+      .string()
+      .min(1)
+      .max(160)
+      .parse(request.headers["idempotency-key"]);
+    const fingerprint = createHash("sha256")
+      .update(
+        JSON.stringify({ action: "qualification-template.delete", id, body }),
+      )
+      .digest("hex");
+    return store.transact(
+      u.id,
+      key,
+      fingerprint,
+      (s) => systemOperator(actor(request, s)),
+      (s) => deleteTemplate(s, u.id, id, body, clock()),
+      { action: "qualification-template.delete", preserveBackup: true },
+    );
+  });
   app.get("/api/system/notices", async (request) => {
     systemOperator(actor(request));
     return store.snapshot().notices.filter((n) => n.scope === "system");

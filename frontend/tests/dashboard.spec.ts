@@ -74,22 +74,22 @@ test('팀 요약 → 단위별 명세 → 구성원 근거, 닫기·초점과 �
   await expect(page.locator('.result-details')).toHaveAttribute('open', '');
 });
 
-test('세부 관리자는 직접 소속만 조회하고 기존 결과 권한은 확대되지 않는다', async ({
+test('세부 관리자는 하위 조직도 조회하고 기존 결과 권한은 확대되지 않는다', async ({
   page,
   backend,
 }) => {
   backend.setClock(DASHBOARD_NOW);
   await configureDashboardFixture(backend.store);
   await dashboard(page, 'learner-2');
-  await expect(page.getByRole('tab', { name: '조직별', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: '조직별', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
     4,
   );
   await page.getByRole('tab', { name: '구성원별', exact: true }).click();
   await expect(page.getByRole('button', { name: '가 직원 상세 보기', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '하위 직원 상세 보기', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: '하위 직원 상세 보기', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: '나 직원 상세 보기', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '가 직원 상세 보기', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('통과');

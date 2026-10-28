@@ -364,16 +364,16 @@ test('신규·미완성·무변경 저장도 목록으로 이동하고 필터·�
   await expect(page.getByLabel('목록 정렬')).toHaveValue('desc');
   await expect(page.getByLabel('페이지 크기')).toHaveValue('50');
   const receipt = page.getByRole('region', { name: '인증Set 저장 결과' });
-  await expect(receipt).toContainText('새 인증Set 저장 확인 · v1');
+  await expect(receipt).toContainText('새 인증Set 저장 확인 · v0.2');
   await expect(receipt.locator('details')).not.toHaveAttribute('open', '');
   await receipt.locator('summary').click();
   await expect(receipt.locator('li').first()).toBeVisible();
-  expect(backend.store.snapshot().courses).toHaveLength(count + 1);
+  expect(backend.store.snapshot().courses).toHaveLength(count + 2);
   await openSavedCourse(page);
   await expect(receipt).toHaveCount(0);
   await saveCriterion(page);
-  await expect(receipt).toContainText('새 인증Set 저장 확인 · v1');
-  expect(backend.store.snapshot().courses).toHaveLength(count + 1);
+  await expect(receipt).toContainText('새 인증Set 저장 확인 · v0.2');
+  expect(backend.store.snapshot().courses).toHaveLength(count + 2);
   await page
     .locator('.admin-sidebar')
     .getByRole('link', { name: '팀 자격 설정', exact: true })
@@ -409,9 +409,9 @@ test('새 버전 저장 뒤 최신 조회 실패는 입력을 유지하고 재�
   await page.unroute('**/api/workspace*');
   await dialog.getByRole('button', { name: '저장 확인', exact: true }).click();
   const receipt = page.getByRole('region', { name: '인증Set 저장 결과' });
-  await expect(receipt).toContainText('조회 실패 후 복구 · v2');
+  await expect(receipt).toContainText('조회 실패 후 복구 · v1.1');
   await expect(receipt).toContainText('기존 자격 구성에 자동 반영되지 않습니다');
-  await expect(receipt.getByRole('link', { name: /자격 구성에 반영/ })).toBeVisible();
+  await expect(receipt.getByRole('link', { name: /자격 조회/ })).toBeVisible();
   expect(
     backend.store.snapshot().courses.filter((c) => c.entityId === 'demo-course-1' && c.version > 1),
   ).toHaveLength(1);

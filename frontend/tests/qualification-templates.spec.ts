@@ -107,7 +107,9 @@ test('기본자격 긴 정보·4해상도·미저장 취소와 키보드 초점'
       'font-size',
       '24px',
     );
-    const name = page.getByRole('button', { name: /긴 기본자격 이름/ });
+    const name = page
+      .locator('.template-table .text-button')
+      .filter({ hasText: /긴 기본자격 이름/ });
     const buttonBox = (await name.boundingBox())!,
       cellBox = (await name.locator('..').boundingBox())!;
     expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(cellBox.x + cellBox.width);

@@ -421,9 +421,14 @@ const oldDirect = (id: string) => entries.value.find((e) => e.id === id)?.direct
               {{ mode === 'organization' ? '필요자격 없음' : '등록된 자격 없음' }}
             </p>
             <ul class="mapping-list">
-              <li v-for="id in shown" :key="id" class="mapping-row">
+              <li
+                v-for="id in shown"
+                :key="id"
+                class="mapping-row"
+                :aria-labelledby="`mapping-title-${id}`"
+              >
                 <div class="mapping-row-main">
-                  <strong>{{ title(id) }}</strong
+                  <strong :id="`mapping-title-${id}`" class="mapping-title">{{ title(id) }}</strong
                   ><small class="muted">{{ releaseVersionLabel(qualified(id)) }}</small>
                   <div class="mapping-badges">
                     <span v-if="direct(selectedId, id)" class="mapping-badge">직접</span>
@@ -457,32 +462,34 @@ const oldDirect = (id: string) => entries.value.find((e) => e.id === id)?.direct
                     </ul>
                   </details>
                 </div>
-                <button
-                  v-if="direct(selectedId, id)"
-                  class="text-link"
-                  :disabled="locked"
-                  :aria-label="`${title(id)} 직접 지정 해제`"
-                  @click="toggle(selectedId, id, false)"
-                >
-                  직접 지정 해제
-                </button>
-                <button
-                  v-else
-                  class="text-link"
-                  :disabled="locked || !canAdd(selectedId, id)"
-                  @click="toggle(selectedId, id, true)"
-                >
-                  {{ inherited(selectedId, id) ? '이 조직에도 직접 지정' : '직접 지정' }}
-                </button>
-                <button
-                  v-if="canExclude(selectedId, id)"
-                  class="text-link"
-                  :disabled="locked"
-                  :aria-label="`${title(id)} 상속 제외`"
-                  @click="changeRule(selectedId, id, 'exclude')"
-                >
-                  상속 제외
-                </button>
+                <div class="mapping-row-actions">
+                  <button
+                    v-if="direct(selectedId, id)"
+                    class="text-link"
+                    :disabled="locked"
+                    :aria-label="`${title(id)} 직접 지정 해제`"
+                    @click="toggle(selectedId, id, false)"
+                  >
+                    직접 지정 해제
+                  </button>
+                  <button
+                    v-else
+                    class="text-link"
+                    :disabled="locked || !canAdd(selectedId, id)"
+                    @click="toggle(selectedId, id, true)"
+                  >
+                    {{ inherited(selectedId, id) ? '이 조직에도 직접 지정' : '직접 지정' }}
+                  </button>
+                  <button
+                    v-if="canExclude(selectedId, id)"
+                    class="text-link"
+                    :disabled="locked"
+                    :aria-label="`${title(id)} 상속 제외`"
+                    @click="changeRule(selectedId, id, 'exclude')"
+                  >
+                    상속 제외
+                  </button>
+                </div>
               </li>
             </ul>
           </section>
@@ -491,7 +498,7 @@ const oldDirect = (id: string) => entries.value.find((e) => e.id === id)?.direct
             <ul class="mapping-list">
               <li v-for="e in excludedRows" :key="e.entityId" class="mapping-row">
                 <div class="mapping-row-main">
-                  <strong>{{ title(e.entityId) }}</strong>
+                  <strong class="mapping-title">{{ title(e.entityId) }}</strong>
                   <div class="mapping-badges">
                     <span class="mapping-badge">{{
                       e.organization.id === selectedId ? '이 조직에서 제외' : '상위 조직에서 제외'
@@ -754,8 +761,9 @@ const oldDirect = (id: string) => entries.value.find((e) => e.id === id)?.direct
 }
 .requirement-layout :deep(.policy-tree-panel) {
   min-width: 0;
-  padding: 0;
-  border: 0;
+  padding: 16px;
+  border: 1px solid var(--control-border);
+  align-self: start;
 }
 .requirement-layout :deep(.policy-org-row) {
   display: flex;
@@ -806,17 +814,38 @@ const oldDirect = (id: string) => entries.value.find((e) => e.id === id)?.direct
   min-width: 44px;
 }
 .mapping-list {
+  display: grid;
+  gap: 16px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .mapping-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 16px;
+  border: 1px solid var(--control-border);
+  background: var(--surface);
+}
+.mapping-title {
+  display: block;
+  font-size: var(--text-title);
+  font-weight: var(--weight-heading);
+  line-height: 1.5;
+}
+.mapping-row-actions,
+.mapping-row > .mapping-exception-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.mapping-row-actions > button {
+  min-height: 40px;
 }
 .mapping-row-main {
   min-width: 0;

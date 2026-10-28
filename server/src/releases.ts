@@ -67,6 +67,51 @@ export function courseChange(
     ? "minor"
     : "major";
 }
+// Drafts use v0.x. Readiness, rather than question edits, controls their promotion.
+export function courseRelease(
+  before:
+    | (CourseContent & {
+        releaseVersion?: ReleaseVersion | null;
+        version?: number | null;
+      })
+    | undefined,
+  after: CourseContent,
+): {
+  kind: "none" | "initial" | "minor" | "major";
+  releaseVersion: ReleaseVersion;
+  reasons: string[];
+} {
+  const ready = !courseUseErrors(after).length;
+  if (!before)
+    return {
+      kind: "initial",
+      releaseVersion: ready ? { major: 1, minor: 0 } : { major: 0, minor: 1 },
+      reasons: [ready ? "최초 준비 완료" : "보완 필요 · 최초 초안 저장"],
+    };
+  const change = courseChange(before, after),
+    previous = releaseNumber(before);
+  if (change === "none")
+    return { kind: "none", releaseVersion: previous, reasons: [] };
+  if (previous.major === 0 && ready)
+    return {
+      kind: "major",
+      releaseVersion: { major: 1, minor: 0 },
+      reasons: ["최초 준비 완료 · v1.0 시작"],
+    };
+  const incomplete = !ready || !!courseUseErrors(before).length;
+  const kind = incomplete ? "minor" : change;
+  return {
+    kind,
+    releaseVersion: nextReleaseVersion(previous, kind),
+    reasons: [
+      incomplete
+        ? "보완 필요 단계의 변경 · 마이너 업데이트"
+        : kind === "major"
+          ? "채점 문항 변경"
+          : "이름·학습 정보·평가 설정 변경",
+    ],
+  };
+}
 export function qualificationChange(
   s: State,
   before: Qualification,
@@ -254,7 +299,8 @@ export function applyCommonRelease(
   source: State["commonCourseReleases"][number],
   actorId: string,
 ): Course {
-  const kind = courseChange(old, source);
+  const decision = courseRelease(old, source);
+  const kind = decision.kind;
   // IDs are local to the team. Old releases retain their original IDs and all progress.
   const fresh = <T extends { id: string }>(values: T[]) =>
     values.map((v) => ({ ...structuredClone(v), id: randomUUID() }));
@@ -266,10 +312,7 @@ export function applyCommonRelease(
     parentId: old.id,
     version: old.version + 1,
     revision: 1,
-    releaseVersion: nextReleaseVersion(
-      releaseNumber(old),
-      kind === "major" ? "major" : "minor",
-    ),
+    releaseVersion: decision.releaseVersion,
     releaseInfo: releaseInfo(
       kind === "major" ? "major" : "minor",
       actorId,

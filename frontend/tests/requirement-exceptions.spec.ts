@@ -187,7 +187,7 @@ test('같은 예외의 동시 사유 수정은 선택 후 재검토하며 세부
   await page.goto('/');
   await actor(page, 'learner-2');
   await page.goto('/admin/organization-requirements');
-  await expect(page.getByRole('treeitem')).toHaveCount(1);
+  await expect(page.getByRole('treeitem')).toHaveCount(9);
   await expect(page.getByRole('button', { name: '자격별', exact: true })).toHaveCount(0);
   const detail = page.getByRole('region', { name: '선택 조직 필요자격' });
   await detail.getByRole('button', { name: '사유 수정', exact: true }).click();

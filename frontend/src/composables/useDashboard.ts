@@ -99,7 +99,7 @@ export function useDashboard() {
       dashboardTabs.map((t) => t.id),
       'summary',
     );
-    return selected === 'organizations' && !store.fullManagement ? 'summary' : selected;
+    return selected;
   });
   const matrix = computed(() => tab.value === 'members' && one(route.query.mode) === 'matrix');
   const detailMetric = computed(() => one(route.query.metric) as DashboardMetric);
@@ -134,7 +134,7 @@ export function useDashboard() {
       organizationId:
         one(q.organizationId) ||
         (store.fullManagement ? store.managementLv1 : store.actor.organizationId),
-      includeDescendants: store.fullManagement && one(q.includeDescendants) !== 'false',
+      includeDescendants: one(q.includeDescendants) !== 'false',
       view: matrix.value ? 'matrix' : tab.value,
       page: positive(one(q.page)),
       pageSize: pageSize.value,

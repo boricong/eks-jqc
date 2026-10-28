@@ -60,9 +60,7 @@ const {
   closeDetail,
   restoreFocus,
 } = useDashboard();
-const tabs = computed(() =>
-  dashboardTabs.filter((t) => t.id !== 'organizations' || store.fullManagement),
-);
+const tabs = [...dashboardTabs];
 const tabControl = ref<InstanceType<typeof CompactTabs>>();
 const search = ref('');
 watch(
@@ -221,42 +219,41 @@ function detailPage(page: number) {
           <option value="auditor">Auditor · 평가자</option>
         </select></label
       >
+      <div v-if="options" class="dashboard-scope">
+        <template v-if="!options.snapshot.scope.directOnly">
+          <label class="field"
+            ><span>조회 조직</span
+            ><select
+              aria-label="조회 조직"
+              :value="query.organizationId"
+              @change="update({ organizationId: valueOf($event) })"
+            >
+              <option v-for="org in options.organizations" :key="org.id" :value="org.id">
+                {{ org.path.map((p) => p.name).join(' / ') }}{{ org.active ? '' : ' · 사용 중지' }}
+              </option>
+            </select></label
+          >
+          <label class="field"
+            ><span>조회 범위</span
+            ><select
+              aria-label="하위 조직 포함"
+              :value="String(query.includeDescendants)"
+              @change="update({ includeDescendants: valueOf($event) })"
+            >
+              <option value="true">하위 조직 포함</option>
+              <option value="false">직접 소속만</option>
+            </select></label
+          >
+        </template>
+        <p v-else class="dashboard-scope-fixed">
+          <strong>{{
+            options.snapshot.scope.organizationPath.map((p) => p.name).join(' / ')
+          }}</strong
+          ><span class="dashboard-meta">직접 소속만</span>
+        </p>
+      </div>
       <AuditorProgress v-if="query.qualificationType === 'auditor'" />
       <template v-else>
-        <div v-if="options" class="dashboard-scope">
-          <template v-if="!options.snapshot.scope.directOnly">
-            <label class="field"
-              ><span>조회 조직</span
-              ><select
-                aria-label="조회 조직"
-                :value="query.organizationId"
-                @change="update({ organizationId: valueOf($event) })"
-              >
-                <option v-for="org in options.organizations" :key="org.id" :value="org.id">
-                  {{ org.path.map((p) => p.name).join(' / ')
-                  }}{{ org.active ? '' : ' · 사용 중지' }}
-                </option>
-              </select></label
-            >
-            <label class="field"
-              ><span>조회 범위</span
-              ><select
-                aria-label="하위 조직 포함"
-                :value="String(query.includeDescendants)"
-                @change="update({ includeDescendants: valueOf($event) })"
-              >
-                <option value="true">하위 조직 포함</option>
-                <option value="false">직접 소속만</option>
-              </select></label
-            >
-          </template>
-          <p v-else class="dashboard-scope-fixed">
-            <strong>{{
-              options.snapshot.scope.organizationPath.map((p) => p.name).join(' / ')
-            }}</strong
-            ><span class="dashboard-meta">직접 소속만</span>
-          </p>
-        </div>
         <CompactTabs
           ref="tabControl"
           :items="tabs"

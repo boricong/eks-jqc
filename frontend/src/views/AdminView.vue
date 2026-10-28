@@ -17,7 +17,13 @@ import { api } from '../api';
 import CredentialManagement from '../components/CredentialManagement.vue';
 import { useProcessContext } from '../composables/useProcessContext';
 import { computed, nextTick, ref, watch, onBeforeUnmount } from 'vue';
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
+import {
+  onBeforeRouteLeave,
+  onBeforeRouteUpdate,
+  useRoute,
+  useRouter,
+  type RouteLocationNormalized,
+} from 'vue-router';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -224,6 +230,93 @@ const readOnly = computed(
       (v) => !v.deletedAt && (v.version ?? 0) > (editor.value?.version ?? 0),
     ),
 );
+const courseVersionSelect = ref<HTMLSelectElement>();
+const selectingCourseVersion = ref(false);
+const latestRelatedVersion = computed(() => relatedVersions.value.find((v) => !v.deletedAt));
+const versionContext = () => `${store.actorId}:${store.managementLv1}:${route.fullPath}`;
+const courseDraftFingerprint = () =>
+  JSON.stringify([courseDraft.value, !!courseEditor.value?.pending]);
+let confirmedVersionNavigation: {
+  from: string;
+  to: string;
+  context: string;
+  fingerprint: string;
+} | null = null;
+function courseVersionLabel(version: Course | Qualification) {
+  return `${releaseVersionLabel(version)} · ${version.title || '이름 없는 인증Set'} · ${version.deletedAt ? '삭제됨 · 읽기 전용' : version.id === latestRelatedVersion.value?.id ? '최신' : '과거 · 읽기 전용'}`;
+}
+async function viewCourseVersion(event: Event) {
+  const input = event.target as HTMLSelectElement,
+    id = input.value;
+  input.value = courseDraft.value?.id || '';
+  if (
+    !courseDraft.value ||
+    id === courseDraft.value.id ||
+    selectingCourseVersion.value ||
+    busy.value ||
+    store.writing ||
+    previewPending.value ||
+    savePreview.value
+  )
+    return;
+  const target = relatedVersions.value.find((v) => v.id === id);
+  if (!target) return;
+  const actor = store.actorId,
+    scope = store.managementLv1;
+  const context = versionContext(),
+    fingerprint = courseDraftFingerprint(),
+    from = route.fullPath;
+  const historical = target.deletedAt || target.id !== latestRelatedVersion.value?.id;
+  const source = organizationData.value.courses.find((c) => c.id === courseDraft.value!.id);
+  if (!source) return;
+  const dirty =
+    !!courseEditor.value?.pending ||
+    JSON.stringify(plain(source)) !== JSON.stringify(courseDraft.value);
+  selectingCourseVersion.value = true;
+  try {
+    if (
+      historical &&
+      !(await confirmAction(
+        [
+          `${target.title || '이름 없는 인증Set'} ${releaseVersionLabel(target)}을 읽기 전용으로 조회할까요?`,
+          ...(dirty
+            ? ['저장하지 않은 변경 사항은 버리고 이동합니다. 취소하면 입력을 유지합니다.']
+            : []),
+        ].join('\n'),
+        '조회',
+        '과거 버전 조회 확인',
+      ))
+    )
+      return;
+    if (
+      versionContext() !== context ||
+      courseDraftFingerprint() !== fingerprint ||
+      !relatedVersions.value.some((v) => v.id === id)
+    )
+      return;
+    const destination = criteriaLink(`/admin/courses/${id}`, target.qualificationType);
+    if (historical)
+      confirmedVersionNavigation = {
+        from,
+        to: router.resolve(destination).fullPath,
+        context,
+        fingerprint,
+      };
+    await router.push(destination);
+  } catch (error) {
+    if (versionContext() === context) errors.value = [(error as Error).message];
+  } finally {
+    confirmedVersionNavigation = null;
+    selectingCourseVersion.value = false;
+    await nextTick();
+    if (
+      store.actorId === actor &&
+      store.managementLv1 === scope &&
+      (versionContext() === context || route.params.id === id)
+    )
+      courseVersionSelect.value?.focus();
+  }
+}
 useProcessContext(() => (editor.value ? (readOnly.value ? 'readonly' : 'editing') : 'list'));
 const selectedAssignment = ref<Assignment | null>(null),
   assignmentAction = ref<'exclude'>('exclude'),
@@ -315,8 +408,17 @@ const qualifications = computed(() =>
           (filter.value === 'all' || (q.lifecycleStatus || 'Active') === filter.value)),
   ),
 );
+const latestCourses = computed(() => {
+  const byEntity = new Map<string, Course>();
+  for (const course of organizationData.value.courses) {
+    if (course.deletedAt) continue;
+    const previous = byEntity.get(course.entityId);
+    if (!previous || course.version > previous.version) byEntity.set(course.entityId, course);
+  }
+  return [...byEntity.values()];
+});
 const courses = computed(() =>
-  organizationData.value.courses.filter(
+  latestCourses.value.filter(
     (c) =>
       c.qualificationType === selectedType.value &&
       (categoryFilter.value === 'all' || c.category === categoryFilter.value) &&
@@ -590,7 +692,13 @@ async function saveCatalog(confirm = false) {
       return;
     }
     qualificationDraft.value = plain(store.qualification(result.id));
-    await router.replace(criteriaLink(`/admin/${section.value}/${result.id}`));
+    await router.replace(
+      criteriaLink('/admin/qualifications', qualificationDraft.value.qualificationType),
+    );
+    await nextTick();
+    requestAnimationFrame(() => {
+      if (section.value === 'qualifications' && !route.params.id) listHeading.value?.focus();
+    });
     validationShown.value = true;
     errors.value = result.readiness || [];
   } catch (error) {
@@ -660,7 +768,12 @@ function finishUnchanged() {
   closeSavePreview();
   if (!qualificationDraft.value) return;
   qualificationDraft.value = plain(store.qualification(qualificationDraft.value.id));
-  void router.push(criteriaLink(`/admin/qualifications/${qualificationDraft.value.id}`));
+  void router
+    .push(criteriaLink('/admin/qualifications', qualificationDraft.value.qualificationType))
+    .then(async () => {
+      await nextTick();
+      requestAnimationFrame(() => listHeading.value?.focus());
+    });
 }
 const qualificationDirty = computed(
   () =>
@@ -747,7 +860,7 @@ async function refreshCommon() {
     errors.value = [(e as Error).message];
   }
 }
-async function canLeave() {
+async function canLeave(to: RouteLocationNormalized, from: RouteLocationNormalized) {
   if (!store.managementAccess) return true;
   const source = courseDraft.value
     ? organizationData.value.courses.find((c) => c.id === courseDraft.value!.id)
@@ -758,6 +871,16 @@ async function canLeave() {
     store.notify('저장이 끝난 뒤 이동해 주세요.');
     return false;
   }
+  const confirmed = confirmedVersionNavigation;
+  confirmedVersionNavigation = null;
+  if (
+    confirmed &&
+    confirmed.from === from.fullPath &&
+    confirmed.to === to.fullPath &&
+    confirmed.context === versionContext() &&
+    confirmed.fingerprint === courseDraftFingerprint()
+  )
+    return true;
   if (
     (noticeDraft.value ||
       selectedAssignment.value ||
@@ -907,7 +1030,24 @@ watch(
           {{ AUDITOR_PREPARATION_MESSAGE }}
         </p>
         <div :class="{ 'course-editor-meta': !!courseDraft }">
-          <details class="criterion-versions">
+          <label v-if="courseDraft" class="field course-version-control">
+            <span>조회 버전</span>
+            <select
+              ref="courseVersionSelect"
+              aria-label="조회 버전"
+              :value="courseDraft.id"
+              :title="courseVersionLabel(courseDraft)"
+              :disabled="
+                busy || previewPending || !!savePreview || !!store.writing || selectingCourseVersion
+              "
+              @change="viewCourseVersion"
+            >
+              <option v-for="version in relatedVersions" :key="version.id" :value="version.id">
+                {{ courseVersionLabel(version) }}
+              </option>
+            </select>
+          </label>
+          <details v-else class="criterion-versions">
             <summary>
               {{ editor.version === null ? '등록 이력' : '버전 이력' }} ·
               {{ relatedVersions.length }}개
@@ -922,7 +1062,7 @@ watch(
             </ul>
           </details>
           <CourseLifecycle
-            v-if="courseDraft"
+            v-if="courseDraft && !readOnly"
             :key="courseDraft.id"
             :course="store.course(courseDraft.id) || courseDraft"
             :disabled="
@@ -937,6 +1077,9 @@ watch(
             "
           />
         </div>
+        <p v-if="courseDraft && readOnly" class="qualification-save-notice" role="status">
+          {{ courseDraft.deletedAt ? '삭제된 버전' : '과거 버전' }}을 읽기 전용으로 조회 중입니다.
+        </p>
         <div
           v-if="qualificationDraft"
           :key="qualificationContext"
@@ -2066,6 +2209,16 @@ watch(
 .criterion-versions {
   margin: 16px 0;
   font-size: 14px;
+}
+.course-version-control {
+  min-width: 0;
+  width: min(100%, 640px);
+  margin: 16px 0;
+}
+.course-version-control select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
 }
 .criterion-versions ul {
   display: flex;

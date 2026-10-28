@@ -224,7 +224,7 @@ test("사유·범위·상호 배타·새 상속 여부를 검증하고 Hold 제�
   await f.save([rule(root)]);
   await f.save([rule(group, [], true)], "admin-1", 409);
 });
-test("세부 관리자는 자기 조직만 예외 설정하고 구형 요청은 영수증 전에 거부한다", async (t) => {
+test("세부 관리자는 본인과 하위 조직에 예외 설정하고 구형 요청은 영수증 전에 거부한다", async (t) => {
   const f = await fixture(t);
   await f.save([rule(root, [q])]);
   await f.change((s) => {
@@ -241,9 +241,10 @@ test("세부 관리자는 자기 조직만 예외 설정하고 구형 요청은 
     "learner-2",
     "/organization-qualification-requirements",
   );
-  assert.equal(v.entries.length, 1);
+  assert.equal(v.entries.length, 9);
   assert.equal(v.ancestorRules[0].organization.id, root);
-  await f.save([rule(part, [q])], "learner-2", 403);
+  await f.save([rule(part, [q])], "learner-2");
+  await f.save([rule(root, [q])], "learner-2", 403);
   await f.save([rule(group, [], false, true)], "learner-1", 403);
   const body = f.body([rule(root, [q])]),
     key = randomUUID();

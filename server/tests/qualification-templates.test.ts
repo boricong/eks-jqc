@@ -11,7 +11,10 @@ import { seedOrganizations } from "../src/organizations.ts";
 import { JsonStore } from "../src/storage.ts";
 import { buildApp } from "./release-test-app.ts";
 import { migrateTemplates } from "../src/template-migration.ts";
-import { currentQualification } from "../src/qualification-templates.ts";
+import {
+  currentQualification,
+  templateDeletion,
+} from "../src/qualification-templates.ts";
 import { exportMaster, readMaster } from "./legacy-master-data.ts";
 async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-template-")),
@@ -64,6 +67,142 @@ async function fixture(t: TestContext) {
   }
   return { store, app, call, file };
 }
+test("미등록 기본자격 삭제는 운영자만 가능하며 백업·감사·재시도와 저장 실패를 보호한다", async (t) => {
+  const f = await fixture(t);
+  const created = await f.call(
+    "operator-1",
+    "/system/qualification-templates",
+    { title: "삭제할 기본자격", englishName: "Delete" },
+  );
+  const body = { revision: created.revision },
+    url = `/system/qualification-templates/${created.id}`;
+  for (const user of ["admin-1", "detail", "learner-1"])
+    await f.call(user, url, body, 403, "DELETE");
+  const status = await f.call("operator-1", "/system/qualification-templates");
+  assert.equal(
+    status.items.find((i: any) => i.id === created.id).deletion.canDelete,
+    true,
+  );
+  await f.call("operator-1", url, { revision: 999 }, 409, "DELETE");
+  await f.call("operator-1", url, { ...body, force: true }, 422, "DELETE");
+  const before = await readFile(f.file),
+    snapshot = f.store.snapshot(),
+    key = randomUUID();
+  f.store.beforeReplace = () => {
+    throw new Error("injected failure");
+  };
+  await f.call("operator-1", url, body, 503, "DELETE", key);
+  assert.deepEqual(await readFile(f.file), before);
+  assert.deepEqual(f.store.snapshot(), snapshot);
+  f.store.beforeReplace = undefined;
+  const result = await f.call("operator-1", url, body, 200, "DELETE", key),
+    after = await readFile(f.file);
+  assert.equal(result.deleted, true);
+  assert(
+    !f.store.snapshot().qualificationTemplates.some((t) => t.id === created.id),
+  );
+  assert.deepEqual(f.store.snapshot().qualifications, snapshot.qualifications);
+  assert.equal(
+    f.store
+      .snapshot()
+      .audits.filter((a) => a.action === "qualification-template.delete")
+      .length,
+    1,
+  );
+  assert.deepEqual(
+    await f.call("operator-1", url, body, 200, "DELETE", key),
+    result,
+  );
+  assert.deepEqual(await readFile(f.file), after);
+});
+
+test("기본자격 삭제는 과거·삭제 팀 자격과 선행 기본자격 연결을 보존한다", async (t) => {
+  const f = await fixture(t),
+    s = f.store.snapshot(),
+    q = s.qualifications[0]!;
+  const before = await readFile(f.file),
+    template = s.qualificationTemplates.find((t) => t.id === q.templateId)!;
+  assert.equal(
+    (
+      await f.call(
+        "operator-1",
+        `/system/qualification-templates/${template.id}`,
+        { revision: template.revision },
+        409,
+        "DELETE",
+      )
+    ).code,
+    "TEMPLATE_IN_USE",
+  );
+  assert.deepEqual(await readFile(f.file), before);
+  const copy = structuredClone(s);
+  copy.qualifications = copy.qualifications.map((q) => ({
+    ...q,
+    deletedAt: new Date().toISOString(),
+  }));
+  assert.equal(templateDeletion(copy, template.id).canDelete, false);
+  const general = await f.call(
+    "operator-1",
+    "/system/qualification-templates",
+    {
+      title: "선행 일반",
+      englishName: "",
+      qualificationType: "auditor",
+      auditorLevel: "general",
+    },
+  );
+  const main = await f.call("operator-1", "/system/qualification-templates", {
+    title: "후행 메인",
+    englishName: "",
+    qualificationType: "auditor",
+    auditorLevel: "main",
+    prerequisiteTemplateId: general.id,
+  });
+  const registering = await f.call(
+    "operator-1",
+    "/system/qualification-templates",
+    { title: "확인 후 팀 등록", englishName: "" },
+  );
+  assert.equal(
+    (await f.call("operator-1", "/system/qualification-templates")).items.find(
+      (t: any) => t.id === registering.id,
+    ).deletion.canDelete,
+    true,
+  );
+  await f.call("admin-1", "/qualification-templates/import", {
+    templateIds: [registering.id],
+    templateRevisions: { [registering.id]: registering.revision },
+  });
+  await f.call(
+    "operator-1",
+    `/system/qualification-templates/${registering.id}`,
+    { revision: registering.revision },
+    409,
+    "DELETE",
+  );
+  await f.call(
+    "operator-1",
+    `/system/qualification-templates/${general.id}`,
+    { revision: general.revision },
+    409,
+    "DELETE",
+  );
+  await f.call(
+    "operator-1",
+    `/system/qualification-templates/${main.id}`,
+    { revision: main.revision },
+    200,
+    "DELETE",
+  );
+  await f.call(
+    "operator-1",
+    `/system/qualification-templates/${general.id}`,
+    { revision: general.revision },
+    200,
+    "DELETE",
+  );
+});
+
 test("기본자격 생성 권한·팀 등록 중복·공통 필드 위조와 개별 신규 우회를 차단한다", async (t) => {
   const { store, call } = await fixture(t),
     body = {

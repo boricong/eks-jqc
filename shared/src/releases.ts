@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const ReleaseVersionSchema = z
   .object({
-    major: z.number().int().positive(),
+    major: z.number().int().nonnegative(),
     minor: z.number().int().nonnegative(),
   })
   .strict();

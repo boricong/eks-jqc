@@ -14,7 +14,11 @@ import {
   type RequirementsPreview,
   type PlanningRequestPreview,
 } from "@eks/contracts";
-import { policyScope, fullManager } from "./organization-administrators.ts";
+import {
+  policyScope,
+  fullManager,
+  administersSubtree,
+} from "./organization-administrators.ts";
 import { userView } from "./organizations.ts";
 import { candidate } from "./planning.ts";
 import { demand } from "./errors.ts";
@@ -100,7 +104,7 @@ export function requirementsView(
   const entries = organizationEntries(doc).filter(
     (e) =>
       e.lv1OrganizationId === scope &&
-      (fullManager(u) || e.id === u.organizationId),
+      (fullManager(u) || administersSubtree(u, e)),
   );
   return {
     stateRevision: s.revision,
@@ -119,7 +123,7 @@ export function requirementsView(
       parentId: e.parentId,
       level: e.level,
       effectiveActive: e.effectiveActive,
-      editable: fullManager(u) || e.id === u.organizationId,
+      editable: fullManager(u) || administersSubtree(u, e),
       directEntityIds:
         s.organizationQualificationRequirements.find(
           (r) => r.organizationId === e.id,
@@ -361,7 +365,7 @@ export function previewRequirements(
     .filter(
       (e) =>
         e.lv1OrganizationId === scope &&
-        (fullManager(u) || e.id === u.organizationId),
+        (fullManager(u) || administersSubtree(u, e)),
     )
     .flatMap((e) => {
       const before = effectiveRequirements(s, doc, e.id),

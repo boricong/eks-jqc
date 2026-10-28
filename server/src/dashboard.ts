@@ -41,6 +41,7 @@ import {
 } from "@eks/contracts";
 import { demand, DomainError } from "./errors.ts";
 import { dashboardCharts } from "./dashboard-charts.ts";
+import { administersSubtree } from "./organization-administrators.ts";
 import { currentQualification } from "./qualification-templates.ts";
 
 const pairKey = (userId: string, entityId: string) =>
@@ -71,7 +72,7 @@ export function dashboardScope(
     byId = new Map(entries.map((e) => [e.id, e]));
   const operator = user.roles.includes("system_operator");
   const fullManager = operator || user.roles.includes("admin");
-  const directOnly = !fullManager;
+  const directOnly = false;
   demand(
     fullManager ||
       (user.roles.includes("organization_admin") &&
@@ -95,7 +96,7 @@ export function dashboardScope(
     "DASHBOARD_FORBIDDEN",
   );
   demand(byId.get(lv1)?.level === 1, 422, "Lv1 조직을 선택해 주세요.");
-  const id = query.organizationId || (directOnly ? user.organizationId : lv1),
+  const id = query.organizationId || (fullManager ? lv1 : user.organizationId),
     org = byId.get(id);
   demand(
     org && org.lv1OrganizationId === lv1,
@@ -104,15 +105,9 @@ export function dashboardScope(
     "DASHBOARD_FORBIDDEN",
   );
   demand(
-    !directOnly || id === user.organizationId,
+    fullManager || administersSubtree(user, org),
     403,
-    "직접 소속된 조직만 조회할 수 있습니다.",
-    "DASHBOARD_FORBIDDEN",
-  );
-  demand(
-    !directOnly || query.includeDescendants !== true,
-    403,
-    "세부 조직 관리자는 직접 소속 인원만 조회할 수 있습니다.",
+    "본인 조직 및 모든 하위 조직만 조회할 수 있습니다.",
     "DASHBOARD_FORBIDDEN",
   );
   return {
@@ -120,7 +115,7 @@ export function dashboardScope(
     organizationId: id,
     organizationName: org.name,
     organizationPath: org.path,
-    includeDescendants: directOnly ? false : query.includeDescendants !== false,
+    includeDescendants: query.includeDescendants !== false,
     directOnly,
     fullManager,
   };
@@ -821,7 +816,7 @@ export function dashboardReader(
         .filter(
           (e) =>
             e.lv1OrganizationId === scope.lv1OrganizationId &&
-            (!scope.directOnly || e.id === scope.organizationId),
+            (scope.fullManager || administersSubtree(user, e)),
         )
         .map((e) => ({
           id: e.id,

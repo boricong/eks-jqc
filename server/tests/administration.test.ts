@@ -93,7 +93,7 @@ async function fixture(t: TestContext) {
   return { store, app, call, grant, grantBody, policy, file, dir };
 }
 
-test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 및 다른 관리 API 차단", async (t) => {
+test("복수 세부 관리자 지정·말단 조직 설정·팀 후보 및 다른 관리 API 차단", async (t) => {
   const { store, call, grant, policy } = await fixture(t);
   const before = store.snapshot().users.find((u) => u.id === "learner-2")!;
   await grant(["learner-2", "ft-1"]);
@@ -178,6 +178,233 @@ test("복수 세부 관리자 지정·소속 조직 한 곳 설정·팀 후보 �
     403,
     "PUT",
   );
+});
+
+test("본인·자식·손자 설정과 필요자격·대상자 권한 및 이동·회수 후 재시도 차단", async (t) => {
+  const { store, call, grant, policy } = await fixture(t);
+  const addOrg = async (parentId: string, name: string) =>
+    (
+      await call("operator-1", "/system/organizations", {
+        revision: store.organizations.snapshot().revision,
+        parentId,
+        name,
+      })
+    ).id as string;
+  const child = await addOrg(own, "하위 부서"),
+    grandchild = await addOrg(child, "하위 부서");
+  const member = (
+    await call("operator-1", "/system/users", {
+      name: "손자 조직 인원",
+      roles: ["learner"],
+      organizationId: grandchild,
+    })
+  ).id;
+  await grant(["learner-2"]);
+  await grant([member], 200, "admin-1", grandchild);
+  const manager = "learner-2";
+  const ids = [own, child, grandchild];
+  assert.deepEqual(
+    (await call(manager, "/organization-settings")).entries.map(
+      (e: any) => e.id,
+    ),
+    ids,
+  );
+  const ws = await call(manager, "/workspace");
+  assert.deepEqual(ws.management.editableOrganizationIds, ids);
+  assert.equal(ws.management.canManage, false);
+  assert(ws.organizations.some((e: any) => e.id === grandchild));
+  assert(!ws.organizations.some((e: any) => e.id === "org-photo-pyeongtaek-2"));
+  for (const id of ids)
+    await call(manager, `/organization-settings/${id}`, policy(), 200, "PUT");
+  assert.equal(
+    (await call(manager, `/organization-settings/${grandchild}/administrators`))
+      .candidates[0].id,
+    member,
+  );
+  await grant([], 403, manager, grandchild);
+  // Nested managers retain their own narrower scope.
+  await call(member, `/organization-settings/${child}`, policy(), 403, "PUT");
+  const reqPath = "/organization-qualification-requirements";
+  const rule = (
+    organizationId: string,
+    entityIds: string[] = [],
+    exclude = false,
+    restore = false,
+  ) => ({
+    organizationId,
+    entityIds,
+    exclusions: exclude
+      ? [{ entityId: "demo-qualification", reason: "업무 제외" }]
+      : [],
+    removalReasons: restore
+      ? [{ entityId: "demo-qualification", reason: "업무 복원" }]
+      : [],
+  });
+  const request = (changes: ReturnType<typeof rule>[]) => ({
+    contractVersion: 2,
+    stateRevision: store.snapshot().revision,
+    organizationRevision: store.organizations.snapshot().revision,
+    changes,
+  });
+  const initial = request([rule(own, ["demo-qualification"])]);
+  const preview = await call(manager, reqPath + "/preview", initial);
+  assert.deepEqual(
+    preview.affected.map((e: any) => e.organizationId),
+    ids,
+  );
+  assert.equal(preview.summary.affectedMembers, 3);
+  await call(manager, reqPath, initial, 200, "PUT");
+  await call(manager, reqPath, request([rule(child, [], true)]), 200, "PUT");
+  assert.equal(
+    (await call(manager, reqPath)).entries.find((e: any) => e.id === grandchild)
+      .effective.length,
+    0,
+  );
+  await call(
+    manager,
+    reqPath,
+    request([rule(child, [], false, true)]),
+    200,
+    "PUT",
+  );
+  assert.equal(
+    (await call(manager, reqPath)).entries.find((e: any) => e.id === grandchild)
+      .effective.length,
+    1,
+  );
+  const hold = (userIds: string[], eligibility = "hold") => ({
+    userIds,
+    eligibility,
+    reason: "하위 조직 검증",
+    revision: store.snapshot().revision,
+  });
+  const targetUrl = "/certification-targets/eligibility";
+  const before = store.snapshot();
+  await call(manager, targetUrl, hold([member, "learner-1"]), 403, "PUT");
+  await call(
+    manager,
+    reqPath,
+    request([
+      rule(child, [], true),
+      rule("org-photo-pyeongtaek-2", ["demo-qualification"]),
+    ]),
+    403,
+    "PUT",
+  );
+  assert.deepEqual(store.snapshot(), before);
+  await call(manager, targetUrl, hold([member]), 200, "PUT");
+  await call(manager, targetUrl, hold([member], "eligible"), 200, "PUT");
+  await call(
+    "operator-1",
+    `/system/organizations/${grandchild}`,
+    { revision: store.organizations.snapshot().revision, active: false },
+    200,
+    "PATCH",
+  );
+  await call(
+    manager,
+    reqPath,
+    request([rule(grandchild, ["demo-qualification"])]),
+    409,
+    "PUT",
+  );
+  await call(
+    manager,
+    `/organization-settings/${grandchild}`,
+    policy(),
+    200,
+    "PUT",
+  );
+  await call(
+    "operator-1",
+    `/system/organizations/${grandchild}`,
+    { revision: store.organizations.snapshot().revision, active: true },
+    200,
+    "PATCH",
+  );
+  const key = randomUUID(),
+    savedBody = policy();
+  await call(
+    manager,
+    `/organization-settings/${grandchild}`,
+    savedBody,
+    200,
+    "PUT",
+    key,
+  );
+  // Move the whole child subtree to a same-level sibling parent.
+  await call(
+    "operator-1",
+    `/system/organizations/${child}`,
+    {
+      revision: store.organizations.snapshot().revision,
+      parentId: "org-photo-pyeongtaek-2",
+    },
+    200,
+    "PATCH",
+  );
+  await call(
+    manager,
+    `/organization-settings/${grandchild}`,
+    savedBody,
+    403,
+    "PUT",
+    key,
+  );
+  await call(manager, targetUrl, hold([member]), 403, "PUT");
+  await call(
+    manager,
+    reqPath,
+    request([rule(grandchild, ["demo-qualification"])]),
+    403,
+    "PUT",
+  );
+  assert.deepEqual(
+    (await call(manager, "/organization-settings")).entries.map(
+      (e: any) => e.id,
+    ),
+    [own],
+  );
+  // Return the subtree; old previews remain stale, and new requests work.
+  await call(
+    "operator-1",
+    `/system/organizations/${child}`,
+    { revision: store.organizations.snapshot().revision, parentId: own },
+    200,
+    "PATCH",
+  );
+  await call(manager, reqPath, initial, 409, "PUT");
+  await call(
+    manager,
+    `/organization-settings/${grandchild}`,
+    policy(),
+    200,
+    "PUT",
+  );
+  const movedUser = store.snapshot().users.find((u) => u.id === member)!;
+  await call(
+    "operator-1",
+    `/system/users/${member}`,
+    {
+      revision: movedUser.revision,
+      name: movedUser.name,
+      roles: movedUser.roles,
+      organizationId: "org-photo-pyeongtaek-2",
+    },
+    200,
+    "PATCH",
+  );
+  await call(manager, targetUrl, hold([member]), 403, "PUT");
+  await grant([]);
+  await call(
+    manager,
+    `/organization-settings/${grandchild}`,
+    policy(),
+    403,
+    "PUT",
+  );
+  await call(manager, targetUrl, hold([member]), 403, "PUT");
+  await call(manager, reqPath, request([rule(child, [], true)]), 403, "PUT");
 });
 
 test("관리자 후보와 저장은 정확한 소속만 사용하고 부모·자식·형제 구성원을 제외", async (t) => {
@@ -285,14 +512,16 @@ test("관리자 지정의 사전 백업 경로가 실패하면 역할·파일·�
   assert.deepEqual(await readFile(file), bytes);
 });
 
-test("Lv1 직속 세부 관리자도 팀 전체 권한을 갖지 않으며 복수 역할 순서와 운영자 대상 검사를 유지", async (t) => {
+test("Lv1 소속 세부 관리자도 기능 권한은 승격하지 않으며 복수 역할 순서와 운영자 대상 검사를 유지", async (t) => {
   const { store, call, grantBody, grant } = await fixture(t);
   await grant(["learner-1"], 200, "admin-1", root);
   assert.deepEqual(
     (await call("learner-1", "/organization-settings")).entries.map(
       (e: any) => e.id,
     ),
-    [root],
+    (await call("admin-1", "/organization-settings")).entries.map(
+      (e: any) => e.id,
+    ),
   );
   await call(
     "admin-1",

@@ -85,7 +85,7 @@ async function fixture(t: TestContext) {
     "2026-01-01T00:00:00.000Z",
   );
   delete second.qualificationMetadata;
-  const file = path.join(dir, "state.json");
+  const file = path.join(dir, "runtime", "state.json");
   await new JsonStore(file).initialize(s);
   const store = await new JsonStore(file).load();
   let now = "2026-01-31T01:00:00.000Z";

@@ -1,6 +1,6 @@
 import { validateRenewalActivation } from "./renewal-criteria.ts";
 import {
-  courseChange,
+  courseRelease,
   qualificationChange,
   releaseNumber,
   releaseInfo,
@@ -447,9 +447,13 @@ export function prepareCatalogSave(
     catalogContent(source),
   );
   const references = catalogReferences(s, section, id, org);
+  const courseDecision =
+    section === "courses"
+      ? courseRelease(source as Course, candidate as Course)
+      : undefined;
   const changeKind =
     section === "courses"
-      ? courseChange(source as Course, candidate as Course)
+      ? courseDecision!.kind
       : qualificationChange(
           s,
           source as Qualification,
@@ -504,8 +508,9 @@ export function prepareCatalogSave(
     } else candidate.revision++;
   }
   if (!unchanged) {
-    candidate.releaseVersion =
-      candidate.version === null
+    candidate.releaseVersion = courseDecision
+      ? courseDecision.releaseVersion
+      : candidate.version === null
         ? null
         : source.version === null
           ? { major: 1, minor: 0 }
@@ -558,7 +563,10 @@ export function prepareCatalogSave(
             : "minor",
       before: releaseVersionLabel(source),
       after: releaseVersionLabel(candidate),
-      reasons: changes.map((c) => c.label),
+      reasons: [
+        ...(courseDecision?.reasons || []),
+        ...changes.map((c) => c.label),
+      ],
     },
     ...(section === "courses" && !unchanged
       ? {
@@ -669,7 +677,7 @@ export function saveCatalogItem(
             entityId: copyId,
             parentId: undefined,
             version: 1,
-            releaseVersion: { major: 1, minor: 0 },
+            releaseVersion: courseRelease(undefined, source).releaseVersion,
             revision: 1,
           }),
         );

@@ -68,6 +68,7 @@ test('차트·확대 → 구간 명세 → 개인 → 뒤로·Escape·원래 초
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await button.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(button).toBeFocused();
 });
@@ -200,13 +201,14 @@ test('구성원 필터·기존 목록 페이지 유지와 확대 명세의 실�
   await expect(page.getByLabel('구성원 검색', { exact: true })).toHaveValue('정하린');
 });
 
-test('세부 관리자 차트에는 조직비교가 없으며 직접 소속 밖의 명세를 노출하지 않는다', async ({
+test('세부 관리자 차트는 하위 조직을 비교하고 범위 밖 명세를 노출하지 않는다', async ({
   page,
   backend,
 }) => {
   backend.setClock(DASHBOARD_NOW);
   await start(page, backend.store, 'learner-2');
-  await expect(page.locator('[data-chart="organization-people"]')).toHaveCount(0);
+  await page.getByRole('tab', { name: '조직별', exact: true }).click();
+  await expect(page.locator('[data-chart="organization-people"]')).toHaveCount(1);
   await page.getByRole('tab', { name: '구성원별', exact: true }).click();
   await page.getByRole('button', { name: '계획·취득 단계 크게 보기', exact: true }).click();
   await page

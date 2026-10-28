@@ -15,7 +15,7 @@ export function useHomeSummary(role: Ref<Role>) {
       role.value === 'organization_admin'
         ? store.actor.organizationId
         : store.actor.lv1OrganizationId,
-    includeDescendants: role.value === 'admin' ? 'true' : 'false',
+    includeDescendants: 'true',
   }));
   let sequence = 0;
   let controller: AbortController | undefined;

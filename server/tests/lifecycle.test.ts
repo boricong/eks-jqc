@@ -429,7 +429,7 @@ test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 �
   await eligibility(f, "hold");
   assert.equal((await history(f, c.id)).effectiveStatus, "Active");
 });
-test("세부 관리자는 정확한 직접 소속 인원만 Hold하고 기준·개인 상태·재인증 대리는 거부", async (t) => {
+test("세부 관리자는 하위 조직 인원도 Hold하고 기준·개인 상태·재인증 대리는 거부", async (t) => {
   const f = await fixture(t);
   const entries = f.store.organizations.snapshot().roots[0]!.children;
   const child = entries[0]!.id,
@@ -448,10 +448,12 @@ test("세부 관리자는 정확한 직접 소속 인원만 Hold하고 기준·�
   const view = await f.call("ft-1", "/certification-targets");
   assert.deepEqual(
     view.users.map((u: any) => u.id).sort(),
-    ["ft-1", learner].sort(),
+    ["ft-1", "ft-2", learner].sort(),
   );
-  for (const other of ["learner-1", "ft-2", "other-team"])
+  for (const other of ["learner-1", "other-team"])
     await eligibility(f, "hold", "ft-1", [other], 403);
+  await eligibility(f, "hold", "ft-1", ["ft-2"]);
+  await eligibility(f, "eligible", "ft-1", ["ft-2"]);
   await eligibility(f, "hold", "ft-1");
   await eligibility(f, "eligible", "ft-1");
   const c = await earn(f);

@@ -1,11 +1,10 @@
 import {
-  courseChange,
-  releaseNumber,
+  courseRelease,
   releaseInfo,
   propagateCommon,
   latestCompleteCommon,
 } from "./releases.ts";
-import { nextReleaseVersion, releaseVersionLabel } from "@eks/contracts";
+import { releaseVersionLabel } from "@eks/contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -183,7 +182,8 @@ export function saveCommonCourse(
     updatedAt: at,
     updatedBy: actorId,
   });
-  if (old && courseChange(old, next) === "none")
+  const decision = courseRelease(old, next);
+  if (old && decision.kind === "none")
     return {
       ...commonCourseView(s, old),
       releaseChange: {
@@ -193,7 +193,7 @@ export function saveCommonCourse(
         reasons: [],
       },
     };
-  const kind = old ? courseChange(old, next) : "none";
+  const kind = decision.kind;
   const released = {
     ...CourseContentSchema.parse(next),
     id: randomUUID(),
@@ -205,12 +205,7 @@ export function saveCommonCourse(
           .filter((r) => r.commonCourseId === next.id)
           .map((r) => r.sequence),
       ) + 1,
-    releaseVersion: old
-      ? nextReleaseVersion(
-          releaseNumber(old),
-          kind === "major" ? "major" : "minor",
-        )
-      : { major: 1, minor: 0 },
+    releaseVersion: decision.releaseVersion,
     releaseInfo: releaseInfo(
       old ? (kind === "major" ? "major" : "minor") : "initial",
       actorId,
@@ -240,13 +235,7 @@ export function saveCommonCourse(
       kind: old ? kind : "initial",
       before: releaseVersionLabel(old),
       after: releaseVersionLabel(next),
-      reasons: [
-        old
-          ? kind === "major"
-            ? "채점 문항 변경"
-            : "이름·학습 정보·평가 설정 변경"
-          : "최초 저장",
-      ],
+      reasons: decision.reasons,
     },
   };
 }

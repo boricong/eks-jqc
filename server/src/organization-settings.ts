@@ -17,7 +17,11 @@ import { candidate, planningView, planRequestErrors } from "./planning.ts";
 import { requireQualificationProcess } from "./qualification-templates.ts";
 import { nodeFor, userView } from "./organizations.ts";
 import { demand } from "./errors.ts";
-import { fullManager, policyScope } from "./organization-administrators.ts";
+import {
+  fullManager,
+  policyScope,
+  administersSubtree,
+} from "./organization-administrators.ts";
 
 export function validatePolicies(s: State, doc: OrganizationDocument) {
   const entries = organizationEntries(doc);
@@ -182,7 +186,7 @@ export function organizationSettingsView(
       .filter(
         (e) =>
           e.lv1OrganizationId === scope &&
-          (fullManager(u) || e.id === u.organizationId),
+          (fullManager(u) || administersSubtree(u, e)),
       )
       .map((e) => ({
         ...e,

@@ -125,7 +125,7 @@ test("구성원/매트릭스의 현재25행·10열 밖 진행도 차트에 포�
   assert.ok(detail.rows.items.every((r) => r.userId === "extra-39"));
 });
 
-test("세부 조직 차트는 직접 소속만 포함하고 위조 구간·상위/형제/타팀과 오래된 명세를 차단한다", async (t) => {
+test("세부 조직 차트는 하위 조직도 포함하고 위조 구간·상위/형제/타팀과 오래된 명세를 차단한다", async (t) => {
   const seed = dashboardSeed();
   const user = seed.state.users.find((u) => u.id === "alice")!;
   user.organizationAdministration = {
@@ -146,6 +146,22 @@ test("세부 조직 차트는 직접 소속만 포함하고 위조 구간·상�
     "/dashboard?view=members",
   );
   assert.ok(!value.charts.some((c) => c.id.startsWith("organization")));
+  const comparison: DashboardResponse = await f.call(
+    "alice",
+    "/dashboard?view=organizations",
+  );
+  assert.deepEqual(
+    comparison.organizations.items.map((o) => o.organizationId).sort(),
+    [ORG_A, ORG_CHILD].sort(),
+  );
+  const childDetails = await f.call(
+    "alice",
+    `/dashboard/chart-details?view=organizations&chartId=organization-people&groupKey=${ORG_CHILD}:subtree&seriesKey=eligible`,
+  );
+  assert.deepEqual(
+    childDetails.rows.items.map((r: any) => r.userId),
+    ["child"],
+  );
   await f.call(
     "alice",
     "/dashboard/chart-details?chartId=organization-people&groupKey=" +

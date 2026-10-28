@@ -14,6 +14,7 @@ import {
   type TeamUserView,
 } from '@eks/contracts';
 import OrganizationSelect from './OrganizationSelect.vue';
+import PolicyOrganizationTree from './PolicyOrganizationTree.vue';
 import AppDialog from './AppDialog.vue';
 import ListControls from './ListControls.vue';
 import { useListView } from '../composables/useListView';
@@ -47,6 +48,26 @@ const comparison = ref<ListedUser | null>(null),
 const form = ref({ name: '', organizationId: '', roles: ['learner'] as Role[] });
 const baseline = ref('');
 const dirty = computed(() => editing.value && JSON.stringify(form.value) !== baseline.value);
+const teamOrganizations = computed(() =>
+  (doc.value?.entries || []).filter((e) => e.lv1OrganizationId === store.managementLv1),
+);
+const selectableOrganizations = computed(() =>
+  teamOrganizations.value
+    .filter((e) => e.effectiveActive || e.id === selected.value?.organizationId)
+    .map((e) => e.id),
+);
+const organizationIssue = computed(() => {
+  if (!isTeam.value || !editing.value || !doc.value) return '';
+  const entry = teamOrganizations.value.find((e) => e.id === form.value.organizationId);
+  if (!entry)
+    return '선택한 조직을 더 이상 사용할 수 없습니다. 관리 가능한 조직을 다시 선택해 주세요.';
+  if (!selectableOrganizations.value.includes(entry.id))
+    return '선택한 조직이 사용 중지되었습니다. 사용할 소속 조직을 다시 선택해 주세요.';
+  return '';
+});
+function selectOrganization(id: string) {
+  if (!busy.value && selectableOrganizations.value.includes(id)) form.value.organizationId = id;
+}
 const preferencesKey = [props.mode, store.actorId, isTeam.value ? store.managementLv1 : 'all'].join(
   ':',
 );
@@ -213,7 +234,7 @@ function rebase() {
   error.value = '';
 }
 async function save() {
-  if (busy.value || !canAccess.value) return;
+  if (busy.value || !canAccess.value || organizationIssue.value) return;
   const seq = generation;
   busy.value = true;
   error.value = '';
@@ -324,7 +345,33 @@ onBeforeUnmount(() => {
         <label class="field"
           ><span>이름</span><input v-model="form.name" required maxlength="100" :disabled="busy"
         /></label>
+        <PolicyOrganizationTree
+          v-if="isTeam"
+          :entries="teamOrganizations"
+          :selected="form.organizationId"
+          :selectable-ids="selectableOrganizations"
+          :disabled="busy"
+          embedded
+          searchable
+          label="변경할 소속 조직"
+          @select="selectOrganization"
+        >
+          <template #status="{ entry }">
+            <span
+              v-if="!teamOrganizations.find((e) => e.id === entry.id)?.effectiveActive"
+              class="muted"
+            >
+              {{
+                entry.id === selected?.organizationId
+                  ? '사용 중지 · 현재 소속 유지 가능'
+                  : '사용 중지'
+              }}
+            </span>
+          </template>
+        </PolicyOrganizationTree>
+        <p v-if="organizationIssue" role="alert" class="error-message">{{ organizationIssue }}</p>
         <OrganizationSelect
+          v-if="!isTeam"
           v-model="form.organizationId"
           :entries="doc.entries"
           :fixed-lv1="isTeam ? store.managementLv1 : selected?.lv1OrganizationId"
@@ -380,6 +427,7 @@ onBeforeUnmount(() => {
               !canAccess ||
               !form.name.trim() ||
               !form.organizationId ||
+              !!organizationIssue ||
               (!form.roles.length && !(isTeam && selected?.roles.includes('admin'))) ||
               (isTeam && addingAuditor && (!auditorPreview?.readiness.ready || !!auditorError))
             "

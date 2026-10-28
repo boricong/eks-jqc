@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { qualificationTypeLabels, type QualificationType } from '@eks/contracts';
-import type { QualificationTemplate, AuditEvent } from '@eks/contracts';
+import type { QualificationTemplate, AuditEvent, TemplateDeletion } from '@eks/contracts';
 import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import { confirmAction } from '../composables/useConfirmation';
@@ -10,6 +10,7 @@ import AppDialog from './AppDialog.vue';
 import CoursePreviewDialog from './CoursePreviewDialog.vue';
 import type { CommonCourse } from '@eks/contracts';
 type TemplateItem = QualificationTemplate & {
+  deletion: TemplateDeletion;
   canChangeType: boolean;
   typeChangeReason: string;
   auditorCriteriaEditable: boolean;
@@ -56,6 +57,7 @@ const draft = ref<{
   description: string;
 }>();
 const baseline = ref('');
+const createTrigger = ref<HTMLButtonElement>();
 const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== baseline.value);
 const listed = computed(() =>
   items.value.filter(
@@ -210,6 +212,44 @@ function historyChanges(a: AuditEvent) {
           : d?.after?.[k] || '없음',
     }));
 }
+async function remove(item: TemplateItem) {
+  if (busy.value || !item.deletion.canDelete) return;
+  const actor = store.actorId;
+  let removed = false;
+  busy.value = true;
+  error.value = '';
+  try {
+    if (
+      !(await confirmAction(
+        `‘${item.title}’ 기본자격을 삭제할까요? 삭제 후 팀 등록 목록에서 제외됩니다.`,
+        '삭제',
+        '기본자격 삭제 확인',
+      ))
+    )
+      return;
+    await store.command(
+      `/system/qualification-templates/${item.id}`,
+      { revision: item.revision },
+      'DELETE',
+    );
+    if (actor !== store.actorId) return;
+    removed = true;
+    items.value = items.value.filter((t) => t.id !== item.id);
+    await load();
+    store.notify('기본자격을 삭제했습니다.');
+  } catch (e) {
+    if (actor === store.actorId) {
+      error.value = (e as Error).message;
+      await load();
+    }
+  } finally {
+    busy.value = false;
+    if (removed && actor === store.actorId) {
+      await nextTick();
+      createTrigger.value?.focus();
+    }
+  }
+}
 async function reloadDraft() {
   const id = draft.value?.id;
   if (!id || !(await leave())) return;
@@ -242,7 +282,9 @@ watch(
   <div class="text-stack">
     <div class="section-heading">
       <h1>기본자격 관리</h1>
-      <button class="button primary" @click="edit()">새 기본자격 만들기</button>
+      <button ref="createTrigger" class="button primary" :disabled="busy" @click="edit()">
+        새 기본자격 만들기
+      </button>
     </div>
     <div class="list-toolbar">
       <label class="field">기본자격 검색<input v-model="query" type="search" /></label>
@@ -271,7 +313,7 @@ watch(
         <tbody>
           <tr v-for="t in listed" :key="t.id">
             <td>
-              <button class="text-button" @click="edit(t)">{{ t.title }}</button>
+              <button class="text-button" :disabled="busy" @click="edit(t)">{{ t.title }}</button>
             </td>
             <td>{{ t.englishName || '—' }}</td>
             <td>
@@ -281,7 +323,23 @@ watch(
             <td>{{ t.description ? '설명 등록됨' : '—' }}</td>
             <td>{{ t.defaultCommonCourseIds.length }}개</td>
             <td>{{ t.revision }}</td>
-            <td><button class="button ghost" @click="edit(t)">수정</button></td>
+            <td class="template-actions-cell">
+              <div class="template-row-actions">
+                <button class="button ghost" :disabled="busy" @click="edit(t)">수정</button
+                ><button
+                  class="button ghost"
+                  :aria-label="`${t.title} 삭제`"
+                  :aria-describedby="!t.deletion.canDelete ? `template-delete-${t.id}` : undefined"
+                  :disabled="busy || !t.deletion.canDelete"
+                  @click="remove(t)"
+                >
+                  삭제
+                </button>
+              </div>
+              <small v-if="!t.deletion.canDelete" :id="`template-delete-${t.id}`" class="muted">{{
+                t.deletion.reason
+              }}</small>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -446,6 +504,22 @@ watch(
   />
 </template>
 <style scoped>
+.template-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.template-actions-cell {
+  min-width: 0;
+  white-space: normal;
+}
+.template-actions-cell small {
+  display: block;
+  white-space: normal;
+  margin-top: 4px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .common-defaults {
   border: 0;
   border-top: 1px solid var(--border, #e3e8ee);
@@ -475,13 +549,16 @@ watch(
   overflow-wrap: anywhere;
 }
 .template-table table {
-  min-width: 760px;
+  min-width: 980px;
   table-layout: fixed;
 }
 .template-table th:first-child {
-  width: 30%;
+  width: 24%;
 }
 .template-table th:nth-child(2) {
+  width: 20%;
+}
+.template-table th:last-child {
   width: 24%;
 }
 .template-table td:nth-child(-n + 2) {

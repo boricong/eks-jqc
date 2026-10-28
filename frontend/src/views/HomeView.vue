@@ -198,7 +198,9 @@ const stats = computed(() =>
       >
         <p v-if="summary.managed.value" class="home-scope">
           <strong>{{ managementName }}</strong> ·
-          {{ homeRole === 'organization_admin' ? '직속 인원 기준' : '팀 전체 기준' }}
+          {{
+            homeRole === 'organization_admin' ? '본인 조직 및 모든 하위 조직 기준' : '팀 전체 기준'
+          }}
           <span v-if="summary.data.value">
             · Hold 제외 {{ summary.data.value.snapshot.exclusions.heldPeople }}명</span
           >

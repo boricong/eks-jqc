@@ -34,7 +34,11 @@ import {
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
 import { managementScope } from "./management.ts";
-import { fullManager, policyScope } from "./organization-administrators.ts";
+import {
+  fullManager,
+  policyScope,
+  administersSubtree,
+} from "./organization-administrators.ts";
 import { userView } from "./organizations.ts";
 import { notify } from "./notifications.ts";
 
@@ -277,6 +281,7 @@ function eligibilityUsers(
   requested?: string,
 ) {
   const scope = policyScope(u, doc, requested);
+  const entries = new Map(organizationEntries(doc).map((e) => [e.id, e]));
   const users = s.users.filter(
     (x) =>
       (x.roles.includes("learner") ||
@@ -288,7 +293,7 @@ function eligibilityUsers(
               ?.qualificationType === "auditor",
         )) &&
       userView(x, doc).lv1OrganizationId === scope &&
-      (fullManager(u) || x.organizationId === u.organizationId),
+      (fullManager(u) || administersSubtree(u, entries.get(x.organizationId))),
   );
   return { scope, users };
 }
@@ -551,7 +556,7 @@ export function authorizeLifecycle(
     demand(
       ids.every((id) => users.some((x) => x.id === id)),
       403,
-      "관리 가능한 직접 소속 대상자만 선택해 주세요.",
+      "관리 가능한 본인 조직 및 하위 조직의 대상자만 선택해 주세요.",
     );
     return scope;
   }

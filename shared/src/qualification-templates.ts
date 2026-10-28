@@ -31,3 +31,10 @@ export const QualificationTemplateSchema = z.object({
   updatedBy: z.string().min(1),
 });
 export type QualificationTemplate = z.infer<typeof QualificationTemplateSchema>;
+
+export interface TemplateDeletion {
+  canDelete: boolean;
+  reason: string;
+  qualificationVersions: number;
+  dependentTemplates: number;
+}

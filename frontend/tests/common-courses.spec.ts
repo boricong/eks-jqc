@@ -117,7 +117,10 @@ for (const type of ['auditee', 'auditor'] as const) {
         .poll(() => backend.store.snapshot().qualifications.find((x) => x.id === q.id)!.version)
         .toBe(1);
     }
-    if (type === 'auditee') await page.getByRole('link', { name: '변경', exact: true }).click();
+    if (type === 'auditee') {
+      await expect(page).toHaveURL(/\/admin\/qualifications\?/);
+      await page.goto(`/admin/qualifications/${q.id}/edit?type=${type}`);
+    }
     const checkbox = page.getByRole('checkbox', { name: title, exact: true });
     await checkbox.uncheck();
     await saveCriterion(page);
@@ -137,7 +140,7 @@ for (const type of ['auditee', 'auditor'] as const) {
     await page.goto(`/admin/qualifications/${latest.id}/edit?type=${type}`);
     await page.getByRole('checkbox', { name: title, exact: true }).check();
     await saveCriterion(page);
-    await expect(page.locator('.team-qualification-view')).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/qualifications\?/);
     const copy = backend.store
       .snapshot()
       .courses.find((c) => c.entityId === q.commonCourseEntityIds[0])!;

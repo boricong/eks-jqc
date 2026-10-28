@@ -16,7 +16,9 @@ test('일괄 편집 메뉴·엑셀 조작을 제거하고 예전 주소는 조�
   for (const type of ['auditee', 'auditor']) {
     await page.goto(`/admin/catalog?lv1OrganizationId=org-photo&type=${type}`);
     await expect(page).toHaveURL(
-      new RegExp(`/admin/qualifications\\?lv1OrganizationId=org-photo&type=${type}$`),
+      type === 'auditor'
+        ? /\/admin\/qualifications\?lv1OrganizationId=org-photo&type=auditor$/
+        : /\/admin\/qualifications\?lv1OrganizationId=org-photo$/,
     );
     await expect(page.getByRole('heading', { name: '팀 자격 설정', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '기준 일괄 편집', exact: true })).toHaveCount(0);

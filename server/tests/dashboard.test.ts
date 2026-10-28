@@ -55,7 +55,7 @@ const query = (values: Record<string, string | number | boolean>) =>
     Object.entries(values).map(([k, v]) => [k, String(v)]),
   ).toString();
 
-test("권한은 팀/직접 소속으로 제한하고 하위 조직·타팀·위조 식별자는 조회하지 못한다", async (t) => {
+test("세부 관리자는 하위 조직까지 조회하고 상위·형제·타팀·위조 식별자를 차단한다", async (t) => {
   const seed = dashboardSeed();
   seed.state.users.push(
     {
@@ -73,14 +73,14 @@ test("권한은 팀/직접 소속으로 제한하고 하위 조직·타팀·위�
     {
       id: "child",
       name: "하위 직원",
-      roles: ["learner"],
+      roles: ["learner", "evaluator"],
       organizationId: ORG_CHILD,
       revision: 1,
     },
     {
       id: "other",
       name: "다른 팀 직원",
-      roles: ["learner"],
+      roles: ["learner", "evaluator"],
       organizationId: "org-etch",
       revision: 1,
     },
@@ -100,25 +100,45 @@ test("권한은 팀/직접 소속으로 제한하고 하위 조직·타팀·위�
   );
   assert.deepEqual(
     new Set(own.members.items.map((m) => m.userId)),
-    new Set(["alice", "dept-admin"]),
+    new Set(["alice", "dept-admin", "child"]),
   );
-  assert.equal(own.snapshot.scope.directOnly, true);
-  assert.equal(own.snapshot.scope.includeDescendants, false);
+  assert.equal(own.snapshot.scope.directOnly, false);
+  assert.equal(own.snapshot.scope.includeDescendants, true);
+  assert.equal(own.snapshot.scope.fullManager, false);
   const options = await f.call("dept-admin", "/dashboard/options");
   assert.deepEqual(
     options.organizations.map((o: any) => o.id),
-    [ORG_A],
+    [ORG_A, ORG_CHILD],
   );
   for (const url of [
-    `/dashboard?organizationId=${ORG_CHILD}`,
+    `/dashboard?organizationId=${TEAM}`,
     `/dashboard?organizationId=${ORG_B}`,
-    `/dashboard?includeDescendants=true`,
-    "/dashboard/members/child",
     "/dashboard/members/bob",
     "/dashboard?lv1OrganizationId=org-etch",
     "/dashboard?entityId=not-in-team",
   ])
     await f.call("dept-admin", url, 403);
+  await f.call("dept-admin", `/dashboard?organizationId=${ORG_CHILD}`);
+  await f.call("dept-admin", "/dashboard/members/child");
+  const auditor = await f.call("dept-admin", "/dashboard/auditor");
+  assert.deepEqual(
+    auditor.members.map((m: any) => m.id),
+    ["child"],
+  );
+  assert.equal(
+    (await f.call("dept-admin", "/dashboard/auditor?includeDescendants=false"))
+      .members.length,
+    0,
+  );
+  await f.call("dept-admin", `/dashboard/auditor?organizationId=${TEAM}`, 403);
+  const direct = await f.call(
+    "dept-admin",
+    "/dashboard?view=members&includeDescendants=false",
+  );
+  assert.deepEqual(
+    new Set(direct.members.items.map((m: any) => m.userId)),
+    new Set(["alice", "dept-admin"]),
+  );
   await f.call("admin-1", "/dashboard?lv1OrganizationId=org-etch", 403);
   await f.call("admin-1", "/dashboard/members/other", 403);
   await f.call("alice", "/dashboard", 403);

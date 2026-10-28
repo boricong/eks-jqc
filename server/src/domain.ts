@@ -2,7 +2,12 @@ import {
   guardRenewalAttempt,
   reconcileRenewalBatch,
 } from "./renewal-batches.ts";
-import { releaseInfo, releaseNumber, freezeCriteria } from "./releases.ts";
+import {
+  releaseInfo,
+  releaseNumber,
+  freezeCriteria,
+  courseRelease,
+} from "./releases.ts";
 import { assignmentPrerequisite } from "./auditor-pool.ts";
 import {
   authorizeSubjective,
@@ -71,7 +76,10 @@ import {
   executeWorkflow,
 } from "./workflow.ts";
 import { notify } from "./notifications.ts";
-import { editableOrganizations } from "./organization-administrators.ts";
+import {
+  editableOrganizations,
+  administersSubtree,
+} from "./organization-administrators.ts";
 import { authorizeNotice, saveNotice } from "./notices.ts";
 import {
   initializeCertification,
@@ -712,6 +720,7 @@ export function execute(
           category: "specialized",
         });
         validateCatalogStructure(s, "courses", course);
+        course.releaseVersion = courseRelease(undefined, course).releaseVersion;
         s.courses.push(course);
       } else
         s.qualifications.push(
@@ -1116,10 +1125,11 @@ export function workspace(
           operator ||
           (admin
             ? e.lv1OrganizationId === u.lv1OrganizationId
-            : u.organizationPath.some((p) => p.id === e.id)),
+            : u.organizationPath.some((p) => p.id === e.id) ||
+              administersSubtree(u, e)),
       )
       .map((e) =>
-        !admin && e.id !== u.organizationId
+        !admin && e.id !== u.organizationId && !administersSubtree(u, e)
           ? { ...e, description: "", duties: "" }
           : e,
       ),

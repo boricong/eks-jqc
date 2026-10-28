@@ -5,7 +5,6 @@ import {
   CourseContentSchema,
   releaseVersionLabel,
   courseUseErrors,
-  qualificationTypeLabels,
   type CommonCourse,
   type CourseContent,
   type AuditEvent,
@@ -16,6 +15,7 @@ import { confirmAction } from '../composables/useConfirmation';
 import { courseIssues } from '../course-editor';
 import CourseEditor from './CourseEditor.vue';
 import AppDialog from './AppDialog.vue';
+import StatusBadge from './StatusBadge.vue';
 import '../course-editor.css';
 type Item = CommonCourse & {
   readiness: string[];
@@ -333,7 +333,7 @@ watch(
           <thead>
             <tr>
               <th>공통인증Set명</th>
-              <th>유형</th>
+              <th>버전</th>
               <th>운영 상태</th>
               <th>준비 상태</th>
               <th>기본자격</th>
@@ -345,9 +345,14 @@ watch(
               <td>
                 <button class="text-button" @click="edit(c)">{{ c.title || '이름 없음' }}</button>
               </td>
-              <td>{{ qualificationTypeLabels[c.qualificationType] }}</td>
-              <td>{{ c.operationalStatus === 'active' ? '운영 중' : '운영 종료' }}</td>
-              <td>{{ c.readiness.length ? '보완 필요' : '준비 완료' }}</td>
+              <td>{{ releaseVersionLabel(c) }}</td>
+              <td><StatusBadge :status="c.operationalStatus" /></td>
+              <td>
+                <StatusBadge
+                  :status="c.readiness.length ? 'catalogDraft' : 'complete'"
+                  :label="c.readiness.length ? '보완 필요' : '준비 완료'"
+                />
+              </td>
               <td>{{ c.templateCount }}개</td>
               <td>
                 <button class="button ghost" @click="edit(c)">내용 보기·수정</button
@@ -526,5 +531,10 @@ watch(
 }
 .common-courses td .button {
   white-space: nowrap;
+}
+.common-courses td :deep(.status) {
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-height: 24px;
 }
 </style>

@@ -10,6 +10,7 @@ import { seedOrganizations } from "../src/organizations.ts";
 import { prepareCatalogSave, saveCatalogItem } from "../src/catalog-editing.ts";
 import {
   courseChange,
+  courseRelease,
   latestCourse,
   resolveCommonUpdate,
   freezeCriteria,
@@ -22,6 +23,150 @@ import {
   readMaster,
   masterCandidate,
 } from "./legacy-master-data.ts";
+
+test("인증Set 초안은 v0.x이며 최초 준비 완료만 v1.0, 보완 전후는 문항 변경도 마이너다", () => {
+  const s = seedState(true),
+    complete = s.courses[0]!;
+  const draft: typeof complete = {
+    ...structuredClone(complete),
+    questions: [],
+    releaseVersion: { major: 0, minor: 1 },
+  };
+  assert.deepEqual(courseRelease(undefined, draft).releaseVersion, {
+    major: 0,
+    minor: 1,
+  });
+  const changed = { ...draft, title: "초안 변경" };
+  assert.deepEqual(courseRelease(draft, changed).releaseVersion, {
+    major: 0,
+    minor: 2,
+  });
+  const partial = structuredClone(draft);
+  partial.questions = structuredClone(complete.questions);
+  partial.questions[0]!.correct = null;
+  assert.equal(courseRelease(draft, partial).kind, "minor");
+  assert.deepEqual(courseRelease(partial, complete).releaseVersion, {
+    major: 1,
+    minor: 0,
+  });
+  const v2 = { ...complete, releaseVersion: { major: 2, minor: 4 } };
+  const incomplete = { ...structuredClone(v2), passScore: null };
+  assert.deepEqual(courseRelease(v2, incomplete).releaseVersion, {
+    major: 2,
+    minor: 5,
+  });
+  incomplete.releaseVersion = { major: 2, minor: 5 };
+  const recovered = structuredClone(v2);
+  recovered.questions[0]!.prompt += " 수정";
+  assert.deepEqual(courseRelease(incomplete, recovered).releaseVersion, {
+    major: 2,
+    minor: 6,
+  });
+  assert.deepEqual(courseRelease(v2, recovered).releaseVersion, {
+    major: 3,
+    minor: 0,
+  });
+  assert.equal(courseRelease(v2, structuredClone(v2)).kind, "none");
+  const auditor = CourseContentSchema.parse({
+    ...complete,
+    qualificationType: "auditor",
+    learningItems: [],
+    assessmentKinds: [],
+    questions: [],
+    practicalQuestions: [],
+    passScore: null,
+    practicalPassScore: null,
+    subjectiveEnabled: false,
+    subjectiveQuestions: [],
+  });
+  assert.deepEqual(courseRelease(undefined, auditor).releaseVersion, {
+    major: 0,
+    minor: 1,
+  });
+  assert.deepEqual(
+    courseRelease(
+      { ...auditor, releaseVersion: { major: 0, minor: 3 } },
+      {
+        ...auditor,
+        learningItems: [
+          { id: "training", type: "mtc", title: "필수 교육", required: true },
+        ],
+      },
+    ).releaseVersion,
+    { major: 1, minor: 0 },
+  );
+});
+
+test("공통 원본의 초안·최초 완성·보완과 팀 사본 전파는 버전과 과거 내용을 보존한다", () => {
+  const s = seedState(true),
+    complete = CourseContentSchema.parse(s.courses[0]);
+  const first = saveCommonCourse(s, "operator-1", undefined, {
+    ...complete,
+    questions: [],
+  });
+  assert.deepEqual(first.releaseVersion, { major: 0, minor: 1 });
+  assert.throws(() => copyCommonCourses(s, [first.id], "org-photo"), /완성된/);
+  let head = saveCommonCourse(s, "operator-1", first.id, {
+    ...complete,
+    questions: [],
+    title: "초안 변경",
+    revision: first.revision,
+  });
+  assert.deepEqual(head.releaseVersion, { major: 0, minor: 2 });
+  head = saveCommonCourse(s, "operator-1", first.id, {
+    ...complete,
+    revision: head.revision,
+  });
+  assert.deepEqual(head.releaseVersion, { major: 1, minor: 0 });
+  const copy = structuredClone(
+    copyCommonCourses(s, [head.id], "org-photo")[0]!,
+  );
+  assert.deepEqual(copy.releaseVersion, { major: 1, minor: 0 });
+  const questions = structuredClone(complete.questions);
+  questions[0]!.prompt += "미완성 개정";
+  head = saveCommonCourse(s, "operator-1", first.id, {
+    ...complete,
+    questions,
+    passScore: null,
+    revision: head.revision,
+  });
+  assert.deepEqual(head.releaseVersion, { major: 1, minor: 1 });
+  assert.equal(latestCourse(s, copy.entityId)!.id, copy.id);
+  head = saveCommonCourse(s, "operator-1", first.id, {
+    ...complete,
+    questions,
+    revision: head.revision,
+  });
+  assert.deepEqual(head.releaseVersion, { major: 1, minor: 2 });
+  // A complete team copy compares against its own complete baseline.
+  assert.deepEqual(latestCourse(s, copy.entityId)!.releaseVersion, {
+    major: 2,
+    minor: 0,
+  });
+  assert.deepEqual(
+    s.courses.find((c) => c.id === copy.id),
+    copy,
+  );
+  const count = s.commonCourseReleases.length;
+  saveCommonCourse(s, "operator-1", first.id, {
+    ...complete,
+    questions,
+    revision: head.revision,
+  });
+  assert.equal(s.commonCourseReleases.length, count);
+  assert.deepEqual(
+    s.commonCourseReleases
+      .filter((r) => r.commonCourseId === first.id)
+      .map((r) => r.releaseVersion),
+    [
+      { major: 0, minor: 1 },
+      { major: 0, minor: 2 },
+      { major: 1, minor: 0 },
+      { major: 1, minor: 1 },
+      { major: 1, minor: 2 },
+    ],
+  );
+});
 
 test("문항 비교는 ID를 제외하고 채점 문항의 모든 변화만 메이저로 판정한다", () => {
   const c = seedState(true).courses[0]!;
@@ -153,7 +298,7 @@ test("모든 변경 저장은 불변 버전이며 완성 인증Set만 자격 마
     current.id,
   );
   const unfinished = structuredClone(latestCourse(s, old.entityId)!);
-  assert.deepEqual(unfinished.releaseVersion, { major: 2, minor: 0 });
+  assert.deepEqual(unfinished.releaseVersion, { major: 1, minor: 2 });
   unfinished.questions[0]!.prompt = "완성 문항";
   save(unfinished);
   current = latestQualification(s, q.lv1OrganizationId, q.entityId)!;

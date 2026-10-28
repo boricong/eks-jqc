@@ -12,6 +12,7 @@ import {
   type State,
   type Qualification,
   type QualificationMetadata,
+  type TemplateDeletion,
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
 export function numberedQualificationVersion(q: Qualification): number {
@@ -113,6 +114,69 @@ export function checkCommonFields(s: State, q: Qualification, input: any) {
       "COMMON_METADATA_READ_ONLY",
     );
   return current;
+}
+export function templateDeletion(s: State, id: string): TemplateDeletion {
+  const t = s.qualificationTemplates.find((t) => t.id === id);
+  demand(t, 404, "기본자격을 찾을 수 없습니다.");
+  const qualificationVersions = s.qualifications.filter(
+    (q) =>
+      q.templateId === id || q.auditorCriteria?.prerequisiteTemplateId === id,
+  ).length;
+  const dependentTemplates = s.qualificationTemplates.filter(
+    (t) => t.prerequisiteTemplateId === id,
+  ).length;
+  const reasons = [
+    ...(t.scope === "team" ? ["이전 팀 전용 기본자격은 보존됩니다."] : []),
+    ...(qualificationVersions
+      ? [
+          `팀 자격 ${qualificationVersions}개 버전에서 사용 중입니다. 과거·삭제 버전의 연결도 보존합니다.`,
+        ]
+      : []),
+    ...(dependentTemplates
+      ? [`다른 기본자격 ${dependentTemplates}개의 선행 자격으로 사용 중입니다.`]
+      : []),
+  ];
+  return {
+    canDelete: !reasons.length,
+    reason: reasons.join(" "),
+    qualificationVersions,
+    dependentTemplates,
+  };
+}
+export function deleteTemplate(
+  s: State,
+  actorId: string,
+  id: string,
+  body: unknown,
+  at = new Date().toISOString(),
+) {
+  const input = z
+    .object({ revision: z.number().int().positive() })
+    .strict()
+    .parse(body);
+  const t = s.qualificationTemplates.find((t) => t.id === id);
+  demand(t, 404, "기본자격을 찾을 수 없습니다.");
+  demand(
+    t.revision === input.revision,
+    409,
+    "기본자격이 변경되었습니다. 최신 목록을 확인한 뒤 다시 삭제해 주세요.",
+    "REVISION_CONFLICT",
+  );
+  const impact = templateDeletion(s, id);
+  demand(impact.canDelete, 409, impact.reason, "TEMPLATE_IN_USE");
+  s.qualificationTemplates = s.qualificationTemplates.filter(
+    (t) => t.id !== id,
+  );
+  s.audits.push({
+    id: randomUUID(),
+    actorId,
+    date: at,
+    action: "qualification-template.delete",
+    targetId: id,
+    reason: "미등록 기본자격 삭제",
+    details: { before: JSON.parse(JSON.stringify(t)), after: null },
+  });
+  return { id, revision: t.revision, deleted: true };
 }
 export function saveTemplate(
   s: State,

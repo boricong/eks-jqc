@@ -36,6 +36,15 @@ test('Ready는 최초 설정으로 이동하고 Hold는 조회·변경을 분리
   expect(course.questions).toEqual([]);
   await page.getByLabel('인증기간', { exact: true }).selectOption('unlimited');
   await saveCriterion(page);
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
+  await page.goto(
+    `/admin/qualifications/${
+      backend.store
+        .snapshot()
+        .qualifications.filter((q) => q.entityId === hold.entityId)
+        .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!.id
+    }`,
+  );
   await expect(page.locator('.team-qualification-view')).toBeVisible();
   await expect(page.locator('.qualification-view-meta')).toContainText('Hold');
   await actor(page, 'learner-1');
@@ -43,7 +52,7 @@ test('Ready는 최초 설정으로 이동하고 Hold는 조회·변경을 분리
   await expect(page.locator('.team-qualification-detail')).toHaveCount(0);
 });
 
-test('재인증 신규 기준은 객관식으로 고정하고 무변경 저장은 조회로 복귀한다', async ({
+test('재인증 신규 기준은 객관식으로 고정하고 무변경 저장은 목록으로 복귀한다', async ({
   page,
   backend,
 }) => {
@@ -87,7 +96,7 @@ test('재인증 신규 기준은 객관식으로 고정하고 무변경 저장�
   await check.uncheck();
   await check.check();
   await saveCriterion(page);
-  await expect(page.locator('.team-qualification-view')).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
   expect(backend.store.snapshot()).toEqual(before);
 });
 
@@ -157,6 +166,11 @@ test('조회는 저장된 선택만 표시하고 변경 저장은 마이너·메
   await page.getByLabel('인증기간', { exact: true }).selectOption('months');
   await page.getByLabel('유효 개월 수', { exact: true }).fill('24');
   await saveCriterion(page);
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
+  const savedMinor = backend.store
+    .snapshot()
+    .qualifications.find((q) => q.parentId === original.id)!;
+  await page.goto(`/admin/qualifications/${savedMinor.id}`);
   await expect(page.locator('.team-qualification-view')).toBeVisible();
   await expect(page.locator('.qualification-view-meta')).toContainText('v1.1');
   await expect(page.getByRole('region', { name: '저장된 팀 운영 기준' })).toContainText(
@@ -172,6 +186,12 @@ test('조회는 저장된 선택만 표시하고 변경 저장은 마이너·메
   await expect(row.getByRole('checkbox')).toBeChecked();
   await row.getByRole('checkbox').uncheck();
   await saveCriterion(page);
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
+  const latest = backend.store
+    .snapshot()
+    .qualifications.filter((q) => q.entityId === original.entityId)
+    .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!;
+  await page.goto(`/admin/qualifications/${latest.id}`);
   await expect(page.locator('.qualification-view-meta')).toContainText('v2.0');
   await expect(page.locator('.qualification-course-row')).toHaveCount(
     original.courseIds.length - 1,
@@ -225,7 +245,7 @@ test('새 인증Set은 응답 유실 재시도 시 한 번 저장되고 자격 �
   expect(keys[0]).toBe(keys[1]);
   const added = backend.store.snapshot().courses.filter((c) => c.title === '신규 독립 기준');
   expect(added).toHaveLength(1);
-  expect(added[0]!.releaseVersion).toEqual({ major: 1, minor: 0 });
+  expect(added[0]!.releaseVersion).toEqual({ major: 0, minor: 1 });
   await expect(
     page.locator(`[data-course-id="${added[0]!.id}"]`).getByRole('checkbox'),
   ).toBeChecked();
@@ -325,6 +345,12 @@ test('신규 인증Set 저장 후 자격에 적용하고 조회·편집·대화�
   await dialog.getByRole('button', { name: '인증Set 저장 후 추가', exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await saveCriterion(page);
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
+  const saved = backend.store
+    .snapshot()
+    .qualifications.filter((q) => q.entityId === 'demo-qualification')
+    .sort((a, b) => (b.version || 0) - (a.version || 0))[0]!;
+  await page.goto(`/admin/qualifications/${saved.id}`);
   await expect(page.locator('.team-qualification-view')).toBeVisible();
   await expect(page.locator('.qualification-view-meta')).toContainText('v2.0');
   await expect(

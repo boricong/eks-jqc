@@ -100,6 +100,58 @@ test("전체 내용 신규 인증Set은 v1.0 원자 생성·독립 보존·영�
     f.store.snapshot().courses.find((c) => c.id === legacy.id)!.questions,
     [],
   );
+  assert.deepEqual(
+    f.store.snapshot().courses.find((c) => c.id === legacy.id)!.releaseVersion,
+    { major: 0, minor: 1 },
+  );
+});
+
+test("신규 팀 초안의 v0.x 저장·최초 v1.0·문항 메이저·보완 마이너와 실패 재시도를 지킨다", async (t) => {
+  const f = await fixture(t);
+  const created = await f.call("/courses", { title: "초안 인증Set" });
+  let head = f.store.snapshot().courses.find((c) => c.id === created.id)!;
+  const changes = async (
+    content: any,
+    expected: { major: number; minor: number },
+  ) => {
+    const body = { ...head, ...content };
+    const preview = await f.call(`/courses/${head.id}/save-preview`, body);
+    assert.deepEqual(preview.candidate.releaseVersion, expected);
+    const key = randomUUID(),
+      before = f.store.snapshot();
+    f.store.beforeReplace = () => {
+      throw new Error("draft save failed");
+    };
+    await f.call(`/courses/${head.id}`, body, "PUT", 503, "admin-1", key);
+    assert.deepEqual(f.store.snapshot(), before);
+    f.store.beforeReplace = undefined;
+    const saved = await f.call(
+      `/courses/${head.id}`,
+      body,
+      "PUT",
+      200,
+      "admin-1",
+      key,
+    );
+    const snapshot = f.store.snapshot();
+    assert.deepEqual(
+      await f.call(`/courses/${head.id}`, body, "PUT", 200, "admin-1", key),
+      saved,
+    );
+    assert.deepEqual(f.store.snapshot(), snapshot);
+    head = snapshot.courses.find((c) => c.id === saved.id)!;
+    assert.deepEqual(head.releaseVersion, expected);
+  };
+  await changes({ title: "초안 개정" }, { major: 0, minor: 2 });
+  const complete = CourseContentSchema.parse(f.store.snapshot().courses[0]);
+  await changes(complete, { major: 1, minor: 0 });
+  const questions = structuredClone(head.questions);
+  questions[0]!.prompt += "완성 개정";
+  await changes({ questions }, { major: 2, minor: 0 });
+  await changes({ questions: [] }, { major: 2, minor: 1 });
+  await changes({ questions }, { major: 2, minor: 2 });
+  const versions = await f.call(`/courses/${head.id}/versions`);
+  assert.equal(versions.length, 6);
 });
 test("전체 내용 신규 생성은 권한·분류/범위 위조·유형·중복 문항·정답 구조를 검증한다", async (t) => {
   const f = await fixture(t),

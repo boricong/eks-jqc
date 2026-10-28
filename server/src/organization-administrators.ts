@@ -5,6 +5,7 @@ import {
   type State,
   type UserView,
   type OrganizationDocument,
+  type OrganizationEntry,
   type OrganizationAdministratorsView,
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
@@ -13,6 +14,19 @@ import { managementScope } from "./management.ts";
 
 export const fullManager = (u: UserView) =>
   u.roles.includes("admin") || u.roles.includes("system_operator");
+// Use entries from the current organization document, never a client-supplied path.
+export function administersSubtree(
+  u: UserView,
+  entry: OrganizationEntry | undefined,
+) {
+  return (
+    !!entry &&
+    u.roles.includes("organization_admin") &&
+    u.organizationAdministration?.organizationId === u.organizationId &&
+    entry.lv1OrganizationId === u.lv1OrganizationId &&
+    entry.path.some((p) => p.id === u.organizationId)
+  );
+}
 export function policyScope(
   u: UserView,
   doc: OrganizationDocument,
@@ -48,9 +62,13 @@ export function policyScope(
     "팀 자격 후보 목록은 팀 조직 관리자만 변경할 수 있습니다.",
   );
   demand(
-    !target || target === u.organizationId,
+    !target ||
+      administersSubtree(
+        u,
+        organizationEntries(doc).find((e) => e.id === target),
+      ),
     403,
-    "실제 소속 조직 한 곳만 설정할 수 있습니다.",
+    "본인 조직 및 모든 하위 조직만 설정할 수 있습니다.",
   );
   return u.lv1OrganizationId;
 }
@@ -63,7 +81,9 @@ export function editableOrganizations(
     return organizationEntries(doc)
       .filter((e) => e.lv1OrganizationId === scope)
       .map((e) => e.id);
-  return u.roles.includes("organization_admin") ? [u.organizationId] : [];
+  return organizationEntries(doc)
+    .filter((e) => administersSubtree(u, e))
+    .map((e) => e.id);
 }
 export function administratorsView(
   s: State,
