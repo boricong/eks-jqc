@@ -1,5 +1,5 @@
 import { test, expect, actor } from './fixtures';
-import { saveCriterion } from './catalog-helpers';
+import { saveCriterion, reviewQualificationDeletion } from './catalog-helpers';
 
 test('최신 기준 삭제의 이전 버전 안내와 마지막 기준 삭제의 필수 해제를 확인한다', async ({
   page,
@@ -29,14 +29,14 @@ test('최신 기준 삭제의 이전 버전 안내와 마지막 기준 삭제의
     .snapshot()
     .qualifications.find((q) => q.parentId === 'demo-qualification')!;
   await page.goto(`/admin/qualifications/${latest.id}/edit`);
-  await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
+  await reviewQualificationDeletion(page, latest.id);
   let dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('삭제 후 현재 기준: 평가 흐름 체험 · v1');
   await dialog.getByLabel('삭제 사유').fill('최신 기준 정리');
   await dialog.getByRole('button', { name: '선택 버전 삭제', exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.goto('/admin/qualifications/demo-qualification/edit');
-  await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
+  await reviewQualificationDeletion(page, 'demo-qualification');
   dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('남은 기준이 없어 신규 계획·학습·갱신 시작을 제한합니다.');
   await expect(dialog).not.toContainText('필수 지정 함께 해제:');

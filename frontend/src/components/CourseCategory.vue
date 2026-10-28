@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { courseCategoryLabels } from '@eks/contracts';
 defineProps<{ course: { category?: 'common' | 'specialized'; teamModified?: boolean } }>();
 </script>
 <template>
   <span class="course-category" :class="{ 'is-common': course.category === 'common' }"
-    >{{ courseCategoryLabels[course.category || 'specialized']
+    >{{ course.category === 'common' ? '공통' : '특화'
     }}<span v-if="course.category === 'common' && course.teamModified"> · 팀 수정</span></span
   >
 </template>

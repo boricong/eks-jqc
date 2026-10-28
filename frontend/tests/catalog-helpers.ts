@@ -40,3 +40,14 @@ export async function createCourse(page: Page, type = 'Auditee', name = '새 인
   await expect(dialog).not.toBeVisible();
   await expect(page.getByLabel('인증Set명', { exact: true })).toBeVisible();
 }
+
+export async function reviewQualificationDeletion(page: Page, id: string) {
+  await page.locator('.back-link').click();
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
+  const row = page.getByRole('row').filter({
+    has: page.locator(`a[href*="/admin/qualifications/${id}"]`),
+  });
+  await row.getByRole('button', { name: /더보기$/ }).click();
+  await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '자격 삭제 확인', exact: true })).toBeVisible();
+}

@@ -135,7 +135,6 @@ const title = computed(() => managementTitle(section.value));
 const busy = ref(false);
 const editingContext = ref('');
 const query = ref(''),
-  courseSearch = ref(''),
   filter = ref('all'),
   errors = ref<string[]>([]);
 const validationShown = ref(false);
@@ -369,7 +368,6 @@ watch(
     createOpen.value = false;
     courseCreateOpen.value = false;
     editingContext.value = `${store.actorId}:${store.managementLv1}`;
-    courseSearch.value = '';
     savePreview.value = null;
     previewGeneration++;
     previewPending.value = false;
@@ -430,7 +428,6 @@ const courses = computed(() =>
 );
 const selectableCourses = computed(() => {
   const selected = new Set(qualificationDraft.value?.courseIds || []);
-  const term = courseSearch.value.trim().toLocaleLowerCase();
   return organizationData.value.courses
     .filter((c) => selected.has(c.id) || !c.deletedAt)
     .filter((c) => c.qualificationType === qualificationDraft.value?.qualificationType)
@@ -447,12 +444,6 @@ const selectableCourses = computed(() => {
           (other) => other.entityId === c.entityId && other.version > c.version && !other.deletedAt,
         ),
     )
-    .filter(
-      (c) =>
-        selected.has(c.id) ||
-        !term ||
-        `${c.title} ${releaseVersionLabel(c)}`.toLocaleLowerCase().includes(term),
-    )
     .slice()
     .sort(
       (a, b) =>
@@ -461,15 +452,28 @@ const selectableCourses = computed(() => {
     );
 });
 const groupedCourses = computed(() => [
+  ...(!store.hasRole('system_operator')
+    ? [
+        {
+          title: '공통인증Set',
+          category: 'common',
+          items: selectableCourses.value.filter((c) => c.category === 'common'),
+        },
+      ]
+    : []),
   {
-    title: '적용 인증Set',
+    title: store.hasRole('system_operator') ? '적용 인증Set' : '적용 특화인증Set',
     category: 'applied',
-    items: selectableCourses.value.filter((c) =>
-      qualificationDraft.value?.courseIds.includes(c.id),
+    items: selectableCourses.value.filter(
+      (c) =>
+        qualificationDraft.value?.courseIds.includes(c.id) &&
+        (store.hasRole('system_operator') || c.category === 'specialized'),
     ),
   },
   ...[
-    { title: '추가할 공통인증Set', category: 'common' },
+    ...(store.hasRole('system_operator')
+      ? [{ title: '추가할 공통인증Set', category: 'common' }]
+      : []),
     { title: '추가할 특화인증Set', category: 'specialized' },
   ].map((g) => ({
     ...g,
@@ -749,7 +753,9 @@ async function changeAssignment() {
 function selectCourseVersion(id: string, selected: boolean) {
   const q = qualificationDraft.value;
   if (!q) return;
-  const entity = store.data.courses.find((c) => c.id === id)?.entityId;
+  const course = store.data.courses.find((c) => c.id === id);
+  if (course?.category === 'common' && !store.hasRole('system_operator')) return;
+  const entity = course?.entityId;
   q.courseIds = q.courseIds.filter(
     (old) =>
       old !== id &&
@@ -967,7 +973,7 @@ watch(
         >
         <PageHeading class="page-heading">
           <h1>{{ editor.title || (courseDraft ? '새 인증Set' : '새 자격') }}</h1>
-          <div class="actions">
+          <div v-if="courseDraft || qualificationDraft?.version !== null" class="actions">
             <RouterLink
               v-if="qualificationDraft && qualificationDraft.version !== null"
               class="button secondary"
@@ -979,23 +985,12 @@ watch(
               :course="
                 organizationData.courses.find((c) => c.id === courseDraft?.id) || courseDraft
               "
-            /><span class="small-label">{{ qualificationTypeLabels[selectedType] }}</span>
+            /><span v-if="courseDraft" class="small-label">{{
+              qualificationTypeLabels[selectedType]
+            }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
             >
-            <QualificationDelete
-              v-if="qualificationDraft && !readOnly"
-              :qualification="qualificationDraft"
-              :disabled="
-                busy ||
-                JSON.stringify(qualificationDraft) !==
-                  JSON.stringify(store.qualification(qualificationDraft.id))
-              "
-              @deleted="
-                qualificationDraft = null;
-                router.push(criteriaLink('/admin/qualifications'));
-              "
-            />
           </div>
         </PageHeading>
         <p v-if="qualificationDraft && readOnly" class="qualification-save-notice" role="status">
@@ -1029,7 +1024,7 @@ watch(
         <p v-if="courseDraft?.qualificationType === 'auditor'" class="qualification-save-notice">
           {{ AUDITOR_PREPARATION_MESSAGE }}
         </p>
-        <div :class="{ 'course-editor-meta': !!courseDraft }">
+        <div v-if="courseDraft" class="course-editor-meta">
           <label v-if="courseDraft" class="field course-version-control">
             <span>조회 버전</span>
             <select
@@ -1047,20 +1042,6 @@ watch(
               </option>
             </select>
           </label>
-          <details v-else class="criterion-versions">
-            <summary>
-              {{ editor.version === null ? '등록 이력' : '버전 이력' }} ·
-              {{ relatedVersions.length }}개
-            </summary>
-            <ul>
-              <li v-for="version in relatedVersions" :key="version.id">
-                <RouterLink :to="criteriaLink(`/admin/${section}/${version.id}`)"
-                  >{{ releaseVersionLabel(version) }} · {{ version.title || '이름 없는 기준'
-                  }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
-                >
-              </li>
-            </ul>
-          </details>
           <CourseLifecycle
             v-if="courseDraft && !readOnly"
             :key="courseDraft.id"
@@ -1164,29 +1145,24 @@ watch(
             }}
             운영 종료.
             {{
-              readOnly
-                ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
-                : '신규 운영 전에 종료 인증Set을 제거하거나 대체해 주세요.'
+              !store.hasRole('system_operator') &&
+              store.retiredCourses(qualificationDraft).some((c) => c.category === 'common')
+                ? '공통인증Set의 운영 구성을 시스템 운영자에게 확인해 주세요. 종료된 특화인증Set은 제거하거나 대체할 수 있습니다.'
+                : readOnly
+                  ? '새 버전에서 종료 인증Set을 제거하거나 대체해 주세요.'
+                  : '신규 운영 전에 종료 인증Set을 제거하거나 대체해 주세요.'
             }}
           </p>
           <CollapsibleSection title="공통 정보" class="editor-panel">
-            <template #summary>수정 번호 {{ qualificationDraft.templateRevision }}</template>
             <dl class="property-list team-qualification-facts">
-              <div>
-                <dt>인증 유형</dt>
-                <dd>{{ qualificationTypeLabels[qualificationDraft.qualificationType] }}</dd>
-              </div>
-              <div>
+              <div class="team-qualification-title">
                 <dt>자격명</dt>
-                <dd>{{ qualificationDraft.title }}</dd>
-              </div>
-              <div>
-                <dt>영문명</dt>
-                <dd>{{ qualificationDraft.englishName || '—' }}</dd>
-              </div>
-              <div>
-                <dt>공통 정보 수정 번호</dt>
-                <dd>{{ qualificationDraft.templateRevision }}</dd>
+                <dd>
+                  {{ qualificationDraft.title
+                  }}<span v-if="qualificationDraft.englishName" class="muted">
+                    · {{ qualificationDraft.englishName }}</span
+                  >
+                </dd>
               </div>
               <div v-if="qualificationDraft.description" class="team-qualification-description">
                 <dt>공통 설명</dt>
@@ -1218,44 +1194,38 @@ watch(
                 (qualificationDraft.commonCourseAdditions?.length ?? 0)
               }}개 선택</template
             >
-            <div class="actions qualification-add-actions">
-              <button
-                class="button secondary"
-                :disabled="
-                  readOnly ||
-                  busy ||
-                  qualificationDraft.courseIds.length +
-                    (qualificationDraft.commonCourseAdditions?.length ?? 0) >=
-                    100
-                "
-                @click="courseCreateOpen = true"
-              >
-                새 특화인증Set 등록
-              </button>
-            </div>
+            <p
+              v-if="!store.hasRole('system_operator')"
+              id="qualification-common-policy"
+              class="muted qualification-common-policy"
+            >
+              사전 적용된 공통인증Set은 사용 해제할 수 없습니다. 특화인증Set만 추가·제거할 수
+              있습니다.
+            </p>
             <fieldset class="course-selection">
               <legend class="sr-only">필수 인증Set 선택</legend>
-              <label class="field course-selection-search"
-                ><span
-                  >인증Set 검색 ·
-                  {{
-                    qualificationDraft.courseIds.length +
-                    (qualificationDraft.commonCourseAdditions?.length ?? 0)
-                  }}개 선택</span
-                >
-                <input
-                  v-model="courseSearch"
-                  type="search"
-                  placeholder="인증Set명 또는 버전 검색"
-                  aria-label="필수 인증Set 검색"
-                />
-              </label>
               <div
                 v-for="group in groupedCourses"
                 :key="group.category"
                 class="course-selection-list"
               >
-                <h3>{{ group.title }}</h3>
+                <div class="team-qualification-course-heading">
+                  <h3>{{ group.title }}</h3>
+                  <button
+                    v-if="group.category === 'applied'"
+                    class="button secondary"
+                    :disabled="
+                      readOnly ||
+                      busy ||
+                      qualificationDraft.courseIds.length +
+                        (qualificationDraft.commonCourseAdditions?.length ?? 0) >=
+                        100
+                    "
+                    @click="courseCreateOpen = true"
+                  >
+                    새 특화인증Set 등록
+                  </button>
+                </div>
                 <div
                   v-for="c in group.items"
                   :key="c.id"
@@ -1270,7 +1240,16 @@ watch(
                       "
                       type="checkbox"
                       :value="c.id"
-                      :disabled="readOnly || busy"
+                      :disabled="
+                        readOnly ||
+                        busy ||
+                        (c.category === 'common' && !store.hasRole('system_operator'))
+                      "
+                      :aria-describedby="
+                        c.category === 'common' && !store.hasRole('system_operator')
+                          ? 'qualification-common-policy'
+                          : undefined
+                      "
                     /><span>{{ c.title || '이름 없음' }}</span></label
                   >
                   <div class="qualification-course-meta">
@@ -1281,10 +1260,23 @@ watch(
                       :status="c.operationalStatus === 'retired' ? 'retired' : 'active'"
                     />
                     <span v-if="c.deletedAt" class="muted">삭제됨</span>
+                    <span
+                      v-if="c.category === 'common' && !store.hasRole('system_operator')"
+                      class="muted"
+                      >{{
+                        qualificationDraft.courseIds.includes(c.id)
+                          ? '필수 적용'
+                          : '미적용 · 조회 전용'
+                      }}</span
+                    >
                   </div>
                   <div class="qualification-course-actions">
                     <button
-                      v-if="group.category === 'applied' && !readOnly"
+                      v-if="
+                        group.category === 'applied' &&
+                        !readOnly &&
+                        (c.category === 'specialized' || store.hasRole('system_operator'))
+                      "
                       type="button"
                       class="text-link"
                       :disabled="busy"
@@ -1323,21 +1315,26 @@ watch(
                     group.category === 'applied'
                       ? '적용된 인증Set이 없습니다.'
                       : group.category === 'common'
-                        ? '추가할 팀 사본이 없거나 검색 결과가 없습니다.'
-                        : '검색 결과가 없습니다.'
+                        ? store.hasRole('system_operator')
+                          ? '추가할 팀 공통 사본이 없습니다.'
+                          : '적용된 공통인증Set이 없습니다.'
+                        : '추가할 특화인증Set이 없습니다.'
                   }}
                 </p>
                 <QualificationCommonCourses
-                  v-if="group.category === 'common' || group.category === 'applied'"
+                  v-if="
+                    group.category === 'common' ||
+                    (store.hasRole('system_operator') && group.category === 'applied')
+                  "
                   :qualification-id="qualificationDraft.id"
                   :revision="qualificationDraft.revision"
                   :disabled="readOnly || busy"
-                  :search="courseSearch"
+                  :read-only="!store.hasRole('system_operator')"
                   :additions="qualificationDraft.commonCourseAdditions"
                   :selection-group="group.category === 'applied' ? 'selected' : 'unselected'"
                   @change="
                     (items) => {
-                      if (!qualificationDraft) return;
+                      if (!qualificationDraft || !store.hasRole('system_operator')) return;
                       if (items.length) qualificationDraft.commonCourseAdditions = items;
                       else delete qualificationDraft.commonCourseAdditions;
                     }
@@ -1381,7 +1378,44 @@ watch(
             >{{ q.title }} {{ releaseVersionLabel(q) }} · 자격 조회</RouterLink
           >
         </div>
-        <p class="release-footer">{{ releaseVersionLabel(editor) }}</p>
+        <section
+          v-if="qualificationDraft"
+          class="qualification-version-info"
+          aria-label="버전 정보"
+        >
+          <h2>버전 정보</h2>
+          <dl class="property-list team-qualification-facts">
+            <div>
+              <dt>자격 버전</dt>
+              <dd>
+                {{
+                  qualificationDraft.version === null
+                    ? '최초 설정 전'
+                    : releaseVersionLabel(qualificationDraft)
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>기본자격 수정 번호</dt>
+              <dd>{{ qualificationDraft.templateRevision }}</dd>
+            </div>
+          </dl>
+          <details class="criterion-versions">
+            <summary>
+              {{ qualificationDraft.version === null ? '등록 이력' : '버전 이력' }} ·
+              {{ relatedVersions.length }}개
+            </summary>
+            <ul>
+              <li v-for="version in relatedVersions" :key="version.id">
+                <RouterLink :to="criteriaLink(`/admin/${section}/${version.id}`)"
+                  >{{ releaseVersionLabel(version) }} · {{ version.title || '이름 없는 기준'
+                  }}{{ version.deletedAt ? ' · 삭제된 항목' : '' }}</RouterLink
+                >
+              </li>
+            </ul>
+          </details>
+        </section>
+        <p v-else class="release-footer">{{ releaseVersionLabel(editor) }}</p>
         <ActionBar v-if="!readOnly" class="actionbar">
           <RouterLink
             v-if="qualificationDraft"
@@ -1395,14 +1429,20 @@ watch(
             "
             >변경 취소</RouterLink
           >
-          <span class="muted">{{
-            qualificationValidityErrors[0] ||
-            (section === 'qualifications'
-              ? '변경 내용과 새 버전을 확인하고 저장합니다.'
-              : '전체 기준을 저장합니다. 완성된 버전을 연결 자격에 자동 반영합니다.')
-          }}</span
-          ><button
+          <span v-if="courseDraft" class="muted"
+            >전체 기준을 저장합니다. 완성된 버전을 연결 자격에 자동 반영합니다.</span
+          >
+          <span
+            v-if="qualificationValidityErrors.length"
+            id="qualification-save-reason"
+            class="sr-only"
+            >{{ qualificationValidityErrors[0] }}</span
+          >
+          <button
             ref="saveTrigger"
+            :aria-describedby="
+              qualificationValidityErrors.length ? 'qualification-save-reason' : undefined
+            "
             class="button primary"
             :disabled="busy || previewPending || !!qualificationValidityErrors.length"
             @click="saveCatalog()"

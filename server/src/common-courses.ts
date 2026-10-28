@@ -362,6 +362,38 @@ export function validateCommonSelection(s: State, q: Qualification) {
     "같은 공통인증Set의 여러 버전을 함께 선택할 수 없습니다.",
   );
 }
+
+/** Registration always applies the current defaults, including deleted-lineage re-registration. */
+export function registrationCommonSelection(
+  s: State,
+  ids: string[],
+  team: string,
+  previous?: Qualification,
+) {
+  const allowed = new Set(previous?.commonCourseEntityIds ?? []);
+  const courses = ids.map((id) => {
+    const existing = s.courses
+      .filter(
+        (c) =>
+          c.lv1OrganizationId === team &&
+          allowed.has(c.entityId) &&
+          c.commonCourseSource?.id === id &&
+          !c.deletedAt,
+      )
+      .reverse()
+      .sort((a, b) => b.version - a.version)[0];
+    const course =
+      existing && existing.operationalStatus !== "retired"
+        ? existing
+        : copyCommonCourses(s, [id], team)[0]!;
+    allowed.add(course.entityId);
+    return course;
+  });
+  return {
+    courseIds: courses.map((c) => c.id),
+    commonCourseEntityIds: [...allowed],
+  };
+}
 export function commonCourseOptions(s: State, q: Qualification) {
   return q.commonCourseEntityIds
     .map((entityId) => {

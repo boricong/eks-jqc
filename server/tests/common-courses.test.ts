@@ -40,7 +40,10 @@ for (const type of ["auditee", "auditor"] as const) {
     let q = await f.register(base, c);
     assert.deepEqual(q.commonCourseEntityIds, []);
     const url = `/qualifications/${q.id}`;
-    const options = await f.call("admin-1", url + "/available-common-courses");
+    const options = await f.call(
+      "operator-1",
+      url + "/available-common-courses",
+    );
     assert.ok(options.some((x: any) => x.id === c.id && x.available));
     const input = {
       ...q,
@@ -48,14 +51,14 @@ for (const type of ["auditee", "auditor"] as const) {
       commonCourseAdditions: [{ id: c.id, revision: c.revision }],
     };
     const before = f.store.snapshot();
-    const preview = await f.call("admin-1", url + "/save-preview", input);
+    const preview = await f.call("operator-1", url + "/save-preview", input);
     assert.equal(preview.candidate.courseIds.length, 1);
     assert.deepEqual(f.store.snapshot(), before);
     const key = randomUUID();
-    const saved = await f.call("admin-1", url, input, 200, "PUT", key);
+    const saved = await f.call("operator-1", url, input, 200, "PUT", key);
     const after = f.store.snapshot();
     assert.deepEqual(
-      await f.call("admin-1", url, input, 200, "PUT", key),
+      await f.call("operator-1", url, input, 200, "PUT", key),
       saved,
     );
     assert.deepEqual(f.store.snapshot(), after);
@@ -73,14 +76,14 @@ for (const type of ["auditee", "auditor"] as const) {
     assert.equal(
       (
         await f.call(
-          "admin-1",
+          "operator-1",
           `/qualifications/${q.id}/available-common-courses`,
         )
       ).some((x: any) => x.id === c.id),
       false,
     );
     await f.call(
-      "admin-1",
+      "operator-1",
       `/qualifications/${q.id}`,
       { ...q, commonCourseAdditions: input.commonCourseAdditions },
       422,
@@ -89,7 +92,7 @@ for (const type of ["auditee", "auditor"] as const) {
     const c2 = await f.common(type),
       old = structuredClone(q);
     const result = await f.call(
-      "admin-1",
+      "operator-1",
       `/qualifications/${q.id}`,
       { ...q, commonCourseAdditions: [{ id: c2.id, revision: c2.revision }] },
       200,
@@ -111,7 +114,7 @@ for (const type of ["auditee", "auditor"] as const) {
       c.id,
     );
     await f.call(
-      "admin-1",
+      "operator-1",
       `/qualifications/${old.id}`,
       { ...old, commonCourseAdditions: [{ id: c2.id, revision: c2.revision }] },
       409,
@@ -152,14 +155,14 @@ test("공통 직접 추가는 권한·유형·원본 revision·완성·중복·�
     [[{ id: "missing", revision: 1 }], 422],
   ] as const)
     await f.call(
-      "admin-1",
+      "operator-1",
       url,
       { ...valid, commonCourseAdditions: additions },
       status,
       "PUT",
     );
   await f.call(
-    "admin-1",
+    "operator-1",
     url,
     { ...body, commonCourseEntityIds: [] },
     422,
@@ -172,7 +175,7 @@ test("공통 직접 추가는 권한·유형·원본 revision·완성·중복·�
     questions: [],
   });
   await f.call(
-    "admin-1",
+    "operator-1",
     url,
     {
       ...valid,
@@ -187,7 +190,7 @@ test("공통 직접 추가는 권한·유형·원본 revision·완성·중복·�
     revision: extra.revision,
     reason: "시험",
   });
-  await f.call("admin-1", url, body, 422, "PUT");
+  await f.call("operator-1", url, body, 422, "PUT");
   assert.equal(f.store.snapshot().courses.length, before.courses.length);
 });
 
@@ -290,6 +293,12 @@ async function fixture(t: TestContext) {
       });
       cookies.set(actor, `${r.cookies[0]!.name}=${r.cookies[0]!.value}`);
     }
+    if (
+      actor === "operator-1" &&
+      /^\/(?:qualifications|courses)(?:\/|\?|$)/.test(url) &&
+      !url.includes("lv1OrganizationId=")
+    )
+      url += (url.includes("?") ? "&" : "?") + "lv1OrganizationId=org-photo";
     const r = await app.inject({
       method: method as any,
       url: "/api" + url,
@@ -338,6 +347,136 @@ async function fixture(t: TestContext) {
       .qualifications.find((q) => q.id === result.imported[0])!;
   }
   return { call, common, template, register, store, file };
+}
+for (const type of ["auditee", "auditor"] as const) {
+  test(`${type} 팀 관리자는 사전 공통을 해제·추가할 수 없고 특화 구성과 같은 공통 계보 버전은 변경한다`, async (t) => {
+    const f = await fixture(t),
+      common = await f.common(type),
+      base = await f.template(common);
+    let q = await f.register(base, common);
+    const original = structuredClone(q),
+      extra = await f.common(type);
+    const url = `/qualifications/${q.id}`;
+    const before = f.store.snapshot();
+    const readable = await f.call("admin-1", url + "/available-common-courses");
+    assert.ok(readable.some((c: any) => c.id === extra.id));
+    for (const body of [
+      { ...q, courseIds: [] },
+      {
+        ...q,
+        commonCourseAdditions: [{ id: extra.id, revision: extra.revision }],
+      },
+      {
+        ...q,
+        courseIds: [],
+        actorId: "operator-1",
+        canManageCommonCourses: true,
+      },
+    ]) {
+      for (const [suffix, method] of [
+        ["/save-preview", "POST"],
+        ["", "PUT"],
+      ]) {
+        const denied = await f.call("admin-1", url + suffix, body, 403, method);
+        assert.equal(denied.code, "COMMON_COURSE_SELECTION_LOCKED");
+        assert.deepEqual(f.store.snapshot(), before);
+      }
+    }
+    const c = before.courses.find((c) => c.id === q.courseIds[0])!;
+    const created = await f.call("admin-1", "/courses", {
+      title: "팀 특화",
+      qualificationType: type,
+    });
+    const initialBody = {
+      ...q,
+      courseIds: [...q.courseIds, created.id],
+      validity: { type: "unlimited", months: null, reminderDays: [] },
+      confirmInitialConfiguration: true,
+    };
+    await f.call("admin-1", url + "/save-preview", initialBody);
+    const key = randomUUID();
+    const first = await f.call("admin-1", url, initialBody, 200, "PUT", key);
+    const configured = f.store.snapshot();
+    assert.deepEqual(
+      await f.call("admin-1", url, initialBody, 200, "PUT", key),
+      first,
+    );
+    assert.deepEqual(f.store.snapshot(), configured);
+    q = configured.qualifications.find((q) => q.id === first.id)!;
+    assert.ok(q.courseIds.includes(c.id));
+    assert.ok(q.courseIds.includes(created.id));
+    for (const status of [
+      "Hold",
+      "Revoke",
+      ...(type === "auditee" ? ["Active" as const] : []),
+    ] as const) {
+      await f.store.transact(
+        "operator-1",
+        randomUUID(),
+        randomUUID(),
+        () => {},
+        (s) => {
+          s.qualifications.find((x) => x.id === q.id)!.lifecycleStatus = status;
+          return {};
+        },
+      );
+      q = f.store.snapshot().qualifications.find((x) => x.id === q.id)!;
+      const current = f.store.snapshot();
+      const denied = await f.call(
+        "admin-1",
+        `/qualifications/${q.id}`,
+        { ...q, courseIds: [created.id] },
+        403,
+        "PUT",
+      );
+      assert.equal(denied.code, "COMMON_COURSE_SELECTION_LOCKED");
+      assert.deepEqual(f.store.snapshot(), current);
+    }
+    const removed = await f.call(
+      "admin-1",
+      `/qualifications/${q.id}`,
+      { ...q, courseIds: [c.id] },
+      200,
+      "PUT",
+    );
+    const next = f.store
+      .snapshot()
+      .qualifications.find((x) => x.id === removed.id)!;
+    assert.deepEqual(next.courseIds, [c.id]);
+    assert.ok(f.store.snapshot().courses.some((x) => x.id === created.id));
+    assert.deepEqual(f.store.snapshot().assignments, before.assignments);
+    assert.deepEqual(f.store.snapshot().certifications, before.certifications);
+    if (original.version === null) assert.equal(q.entityId, original.entityId);
+    // Replacing a version in the same required common lineage remains supported.
+    await f.store.transact(
+      "operator-1",
+      randomUUID(),
+      randomUUID(),
+      () => {},
+      (s) => {
+        s.courses.push({
+          ...structuredClone(c),
+          id: "new-required-common-version",
+          parentId: c.id,
+          version: c.version + 1,
+          releaseVersion: { major: 1, minor: 1 },
+        });
+        return {};
+      },
+    );
+    const upgraded = await f.call(
+      "admin-1",
+      `/qualifications/${next.id}`,
+      { ...next, courseIds: ["new-required-common-version"] },
+      200,
+      "PUT",
+    );
+    assert.deepEqual(
+      f.store.snapshot().qualifications.find((x) => x.id === upgraded.id)!
+        .courseIds,
+      ["new-required-common-version"],
+    );
+  });
 }
 test("공통 원본 권한·유형·기본 목록 수정 확인과 사용 이력 잠금", async (t) => {
   const f = await fixture(t),
@@ -465,7 +604,7 @@ test("등록은 독립 사본·고정 선택 범위를 생성하고 원본 변�
       ...f.store.snapshot().qualifications.find((x) => x.id === q.id)!,
       courseIds: [copy2.id],
     },
-    422,
+    403,
     "PUT",
   );
   const options = await f.call(
@@ -510,7 +649,7 @@ test("공통 기본값의 Ready 미정 저장 거부·기간 지정 최초 확�
   assert.equal(saved.version, 1);
   q = f.store.snapshot().qualifications.find((x) => x.id === q.id)!;
   const removed = await f.call(
-    "admin-1",
+    "operator-1",
     `/qualifications/${q.id}`,
     { ...q, courseIds: [] },
     200,
@@ -521,7 +660,7 @@ test("공통 기본값의 Ready 미정 저장 거부·기간 지정 최초 확�
     .snapshot()
     .qualifications.find((x) => x.id === removed.id)!;
   await f.call(
-    "admin-1",
+    "operator-1",
     `/qualifications/${next.id}`,
     { ...next, courseIds: q.courseIds },
     200,
@@ -587,7 +726,7 @@ test("팀 수정은 공통 구분·출처를 유지하고 위조와 다른 자�
     "admin-1",
     `/qualifications/${other.id}`,
     { ...other, courseIds: [copy.id] },
-    422,
+    403,
     "PUT",
   );
 });
@@ -741,6 +880,174 @@ test("등록 저장 실패·중복 재시도·동시 등록은 자격과 공통 
     1,
   );
 });
+
+for (const type of ["auditee", "auditor"] as const) {
+  test(`${type} 삭제 후 재등록은 현재 기본 공통을 반드시 적용하고 반복 등록은 사본을 재사용한다`, async (t) => {
+    const f = await fixture(t),
+      c1 = await f.common(type),
+      c2 = await f.common(type);
+    let base = await f.call("operator-1", "/system/qualification-templates", {
+      title: "필수 공통 재등록",
+      englishName: "Required",
+      qualificationType: type,
+      ...(type === "auditor" ? { auditorLevel: "general" } : {}),
+      defaultCommonCourseIds: [],
+    });
+    const first = await f.register(base, c1);
+    const remove = async (id: string) => {
+      const impact = await f.call(
+        "admin-1",
+        `/qualifications/${id}/deletion-impact`,
+      );
+      await f.call(
+        "admin-1",
+        `/qualifications/${id}`,
+        { ...impact, reason: "기본 공통 재등록 확인" },
+        200,
+        "DELETE",
+      );
+    };
+    await remove(first.id);
+    base = await f.call(
+      "operator-1",
+      `/system/qualification-templates/${base.id}`,
+      {
+        title: base.title,
+        englishName: base.englishName,
+        qualificationType: type,
+        revision: base.revision,
+        defaultCommonCourseIds: [c1.id, c2.id],
+        commonCourseRevisions: { [c1.id]: c1.revision, [c2.id]: c2.revision },
+      },
+      200,
+      "PUT",
+    );
+    const old = f.store.snapshot(),
+      body = {
+        templateIds: [base.id],
+        qualificationType: type,
+        templateRevisions: { [base.id]: base.revision },
+        commonCourseRevisions: { [c1.id]: c1.revision, [c2.id]: c2.revision },
+      },
+      key = randomUUID();
+    await f.call(
+      "admin-1",
+      "/qualification-templates/import",
+      { ...body, commonCourseRevisions: {} },
+      409,
+    );
+    assert.deepEqual(f.store.snapshot(), old);
+    f.store.beforeReplace = () => {
+      throw new Error("재등록 원자 저장 실패");
+    };
+    await f.call(
+      "admin-1",
+      "/qualification-templates/import",
+      body,
+      503,
+      "POST",
+      key,
+    );
+    assert.deepEqual(f.store.snapshot(), old);
+    f.store.beforeReplace = undefined;
+    const registered = await f.call(
+      "admin-1",
+      "/qualification-templates/import",
+      body,
+      200,
+      "POST",
+      key,
+    );
+    const after = f.store.snapshot(),
+      q = after.qualifications.find((q) => q.id === registered.imported[0])!;
+    assert.deepEqual(
+      await f.call(
+        "admin-1",
+        "/qualification-templates/import",
+        body,
+        200,
+        "POST",
+        key,
+      ),
+      registered,
+    );
+    assert.deepEqual(f.store.snapshot(), after);
+    assert.equal(q.entityId, first.entityId);
+    assert.equal(q.lifecycleStatus, type === "auditee" ? "Ready" : "Hold");
+    assert.equal(q.courseIds.length, 2);
+    assert.equal(q.commonCourseEntityIds.length, 2);
+    assert.deepEqual(
+      new Set(
+        q.courseIds.map(
+          (id) =>
+            after.courses.find((c) => c.id === id)!.commonCourseSource!.id,
+        ),
+      ),
+      new Set([c1.id, c2.id]),
+    );
+    assert.deepEqual(
+      after.qualifications.find((q) => q.id === first.id),
+      old.qualifications.find((q) => q.id === first.id),
+    );
+    assert.deepEqual(after.assignments, old.assignments);
+    assert.deepEqual(after.certifications, old.certifications);
+    await remove(q.id);
+    const beforeAgain = f.store.snapshot();
+    const third = await f.call(
+      "admin-1",
+      "/qualification-templates/import",
+      body,
+    );
+    const current = f.store
+      .snapshot()
+      .qualifications.find((q) => q.id === third.imported[0])!;
+    assert.deepEqual(current.courseIds, q.courseIds);
+    assert.deepEqual(current.commonCourseEntityIds, q.commonCourseEntityIds);
+    assert.equal(f.store.snapshot().courses.length, beforeAgain.courses.length);
+    // Another deleted Ready with an added default must follow the latest registration's range.
+    const c3 = await f.common(type);
+    await remove(current.id);
+    base = await f.call(
+      "operator-1",
+      `/system/qualification-templates/${base.id}`,
+      {
+        title: base.title,
+        englishName: base.englishName,
+        qualificationType: type,
+        revision: base.revision,
+        defaultCommonCourseIds: [c1.id, c2.id, c3.id],
+        commonCourseRevisions: {
+          [c1.id]: c1.revision,
+          [c2.id]: c2.revision,
+          [c3.id]: c3.revision,
+        },
+      },
+      200,
+      "PUT",
+    );
+    const next = await f.call("admin-1", "/qualification-templates/import", {
+      ...body,
+      templateRevisions: { [base.id]: base.revision },
+      commonCourseRevisions: {
+        ...body.commonCourseRevisions,
+        [c3.id]: c3.revision,
+      },
+    });
+    const latest = f.store
+      .snapshot()
+      .qualifications.find((q) => q.id === next.imported[0])!;
+    assert.equal(latest.courseIds.length, 3);
+    assert.ok(
+      q.commonCourseEntityIds.every((id) =>
+        latest.commonCourseEntityIds.includes(id),
+      ),
+    );
+    assert.equal(
+      f.store.snapshot().courses.length,
+      beforeAgain.courses.length + 1,
+    );
+  });
+}
 test("제거된 기본 목록을 본 이전 등록 화면과 공통 분류 생성 위조를 거부한다", async (t) => {
   const f = await fixture(t),
     c = await f.common(),

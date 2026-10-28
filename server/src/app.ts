@@ -933,6 +933,8 @@ export async function buildApp(
           (request.params as any).id,
           request.body,
           scope,
+          [],
+          actor(request).id,
         );
       },
     );

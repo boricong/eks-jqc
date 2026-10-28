@@ -84,10 +84,6 @@
   line-height: var(--leading-reading);
   overflow-wrap: anywhere;
 }
-.team-qualification-detail .course-selection-search {
-  max-width: 560px;
-  margin: 0 0 16px;
-}
 .team-qualification-detail .course-selection-list {
   padding: 0;
   max-height: 400px;
@@ -376,4 +372,35 @@
     display: inline-flex;
     align-items: center;
   }
+}
+
+.qualification-common-policy {
+  margin-bottom: 16px;
+}
+
+.team-qualification-facts .team-qualification-title {
+  grid-column: 1 / -1;
+}
+.team-qualification-course-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.team-qualification-course-heading h3 {
+  margin: 0;
+}
+.qualification-version-info {
+  margin-top: 32px;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+}
+.qualification-version-info h2 {
+  margin: 0 0 20px;
+  font-size: var(--text-section);
+}
+.qualification-version-info .criterion-versions {
+  margin-top: 20px;
 }

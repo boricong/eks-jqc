@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect, actor, answerConfirmation } from './fixtures';
+import { saveTemplate } from '../../server/src/qualification-templates';
 import { completePlan } from './workflow-helpers';
 
 async function open(page: Page) {
@@ -167,12 +168,34 @@ test('로드 후 자격 풀 등록·공통 복사·팀 설정·필요 조직 지
         c.qualificationType === 'auditee' &&
         c.lv1OrganizationId === 'org-photo',
     )!;
+  expect(base.defaultCommonCourseIds).toEqual([]);
+  await backend.store.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (s) => {
+      saveTemplate(s, 'operator-1', base.id, {
+        title: base.title,
+        englishName: base.englishName,
+        description: base.description,
+        qualificationType: base.qualificationType,
+        revision: base.revision,
+        defaultCommonCourseIds: [common.id],
+        commonCourseRevisions: { [common.id]: common.revision },
+      });
+      return {};
+    },
+  );
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications?type=auditee');
   await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();
   const register = page.getByRole('dialog', { name: 'Auditee 자격 등록', exact: true });
   await register.locator(`input[type="checkbox"][value="${base.id}"]`).check();
-  const firstRow = register.locator('.template-list .choice').first();
+  const firstRow = register
+    .locator('.template-list .choice')
+    .filter({ hasNotText: /공통인증Set \d+개:/ })
+    .first();
   const nameBox = await firstRow.locator('.template-choice-info > span').boundingBox();
   const metaBox = await firstRow.locator('small').first().boundingBox();
   expect(Math.abs(nameBox!.y - metaBox!.y)).toBeLessThan(8);
@@ -190,12 +213,13 @@ test('로드 후 자격 풀 등록·공통 복사·팀 설정·필요 조직 지
   let q = backend.store.snapshot().qualifications.find((q) => q.templateId === base.id)!;
   expect(q.lifecycleStatus).toBe('Ready');
   expect(q.version).toBe(null);
-  expect(q.commonCourseEntityIds).toHaveLength(0);
+  expect(q.commonCourseEntityIds).toHaveLength(1);
   await page.goto(`/admin/qualifications/${q.id}?type=auditee`);
   const commonChoice = page.getByRole('checkbox', { name: common.title, exact: true });
-  await commonChoice.focus();
-  await page.keyboard.press('Space');
   await expect(commonChoice).toBeChecked();
+  await expect(commonChoice).toBeDisabled();
+  await page.getByLabel('인증기간', { exact: true }).selectOption('months');
+  await page.getByLabel('유효 개월 수', { exact: true }).fill('12');
   await page.getByRole('link', { name: '인증Set 설정', exact: true }).click();
   await answerConfirmation(page, false);
   await expect(commonChoice).toBeChecked();
@@ -210,27 +234,27 @@ test('로드 후 자격 풀 등록·공통 복사·팀 설정·필요 조직 지
     });
   }
   await page.setViewportSize({ width: 1920, height: 1000 });
-  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(1);
   await page.getByLabel('인증기간', { exact: true }).selectOption('months');
   await page.getByLabel('유효 개월 수', { exact: true }).fill('12');
   await page.locator(`[data-course-id="${specialized.id}"]`).getByRole('checkbox').check();
   await page.getByRole('button', { name: '최초 설정 저장', exact: true }).click();
   const saveDialog = page.getByRole('dialog', { name: '기준 저장 확인', exact: true });
-  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(1);
   await page.route(`**/api/qualifications/${q.id}?*`, async (route) => {
     if (route.request().method() !== 'PUT') return route.continue();
     return route.fulfill({
       status: 503,
       contentType: 'application/json',
-      body: JSON.stringify({ message: '공통 추가 저장 실패 시험' }),
+      body: JSON.stringify({ message: '팀 설정 저장 실패 시험' }),
     });
   });
   await saveDialog
     .locator('.dialog-footer')
     .getByRole('button', { name: 'v1.0으로 최초 설정 저장', exact: true })
     .click();
-  await expect(page.locator('.editor-errors')).toContainText('공통 추가 저장 실패 시험');
-  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(0);
+  await expect(page.locator('.editor-errors')).toContainText('팀 설정 저장 실패 시험');
+  expect(backend.store.snapshot().courses.filter((c) => c.category === 'common')).toHaveLength(1);
   await expect(commonChoice).toBeChecked();
   await page.unroute(`**/api/qualifications/${q.id}?*`);
   await saveDialog
@@ -244,7 +268,7 @@ test('로드 후 자격 풀 등록·공통 복사·팀 설정·필요 조직 지
   expect(
     backend.store.snapshot().qualificationTemplates.find((t) => t.id === base.id)!
       .defaultCommonCourseIds,
-  ).toEqual([]);
+  ).toEqual([common.id]);
   expect(q.courseIds).toHaveLength(2);
   await page.goto('/admin/organization-requirements?organizationId=org-photo');
   await page.getByRole('button', { name: '자격 추가', exact: true }).click();

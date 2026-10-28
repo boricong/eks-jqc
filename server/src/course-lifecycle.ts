@@ -41,7 +41,7 @@ export function courseUsage(
       q.commonCourseEntityIds.includes(course.entityId),
     )
       ? [
-          "등록 당시 공통 선택 목록에 포함되어 있습니다. 자격 연결에서 제외할 수 있으며 사본은 보존합니다.",
+          "자격의 공통 구성에 포함된 사본은 삭제할 수 없습니다. 공통 사본과 기존 근거를 보존합니다.",
         ]
       : []),
     ...qualifications.map(

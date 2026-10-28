@@ -1,6 +1,6 @@
 import { registerFixtureQualification } from '../../server/tests/template-helpers';
 import { test, expect, actor } from './fixtures';
-import { courseSection, saveCriterion } from './catalog-helpers';
+import { courseSection, saveCriterion, reviewQualificationDeletion } from './catalog-helpers';
 
 test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조회', async ({ page, backend }) => {
   const original = backend.store.snapshot();
@@ -24,7 +24,7 @@ test('직접 편집·자동 버전·선택 버전 삭제와 삭제된 기준 조
     .snapshot()
     .qualifications.find((q) => q.parentId === 'demo-qualification')!;
   await page.goto(`/admin/qualifications/${latest.id}/edit`);
-  await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
+  await reviewQualificationDeletion(page, latest.id);
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('기존 기록의 기준은 보존');
   await dialog.getByLabel('삭제 사유').fill('이전 자격 기준 목록 정리');
@@ -46,7 +46,7 @@ test('미참조 등록 삭제 실패 입력 보존과 재시도·계보 보존',
   await page.goto('/admin/qualifications');
   const { id } = await registerFixtureQualification(backend.store);
   await page.goto(`/admin/qualifications/${id}`);
-  await page.getByRole('button', { name: '자격 삭제', exact: true }).click();
+  await reviewQualificationDeletion(page, id);
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('기존 기록의 기준은 보존');
   await dialog.getByLabel('삭제 사유').fill('미사용 자격 정리');

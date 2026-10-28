@@ -129,7 +129,8 @@ onBeforeRouteUpdate(leave);
       >
     </div>
     <p class="muted">
-      지정된 공통인증Set은 함께 등록되며, 팀 자격 설정에서 추가·수정·제외할 수 있습니다.
+      지정된 공통인증Set은 함께 등록되며 팀 관리자는 사용 해제할 수 없습니다. 특화인증Set은 팀 자격
+      설정에서 추가·제거할 수 있습니다.
     </p>
     <div class="template-list">
       <label v-for="t in listed" :key="t.id" class="choice"

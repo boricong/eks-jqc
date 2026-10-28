@@ -8,9 +8,9 @@ const props = defineProps<{
   qualificationId: string;
   revision: number;
   disabled: boolean;
-  search: string;
   additions?: { id: string; revision: number }[];
   selectionGroup?: 'selected' | 'unselected';
+  readOnly?: boolean;
 }>();
 const emit = defineEmits<{ change: [value: { id: string; revision: number }[]] }>();
 type Option = Pick<
@@ -27,8 +27,7 @@ const visibleItems = computed(() =>
     const selected = props.additions?.some((x) => x.id === c.id);
     return (
       (props.selectionGroup !== 'selected' || selected) &&
-      (props.selectionGroup !== 'unselected' || !selected) &&
-      (selected || c.title.toLocaleLowerCase().includes(props.search.trim().toLocaleLowerCase()))
+      (props.selectionGroup !== 'unselected' || !selected)
     );
   }),
 );
@@ -54,6 +53,7 @@ watch(() => [store.actorId, store.managementLv1, props.qualificationId, props.re
   immediate: true,
 });
 async function toggle(c: Option, checked: boolean) {
+  if (props.readOnly || props.disabled || !c.available) return;
   const next = (props.additions ?? []).filter((x) => x.id !== c.id);
   if (checked) next.push({ id: c.id, revision: c.revision });
   emit('change', next);
@@ -70,7 +70,11 @@ async function toggle(c: Option, checked: boolean) {
       {{ error }} <button type="button" class="text-link" @click="load">다시 불러오기</button>
     </p>
     <p v-if="visibleItems.length" class="muted">
-      공통 원본 · 선택 후 저장하면 팀 사본으로 추가됩니다.
+      {{
+        readOnly
+          ? '공통 원본 · 미적용 · 조회 전용'
+          : '공통 원본 · 선택 후 저장하면 팀 사본으로 추가됩니다.'
+      }}
     </p>
     <div v-for="c in visibleItems" :key="c.id" class="qualification-course-row">
       <label class="qualification-course-choice"
@@ -78,12 +82,13 @@ async function toggle(c: Option, checked: boolean) {
           type="checkbox"
           :data-common-course-id="c.id"
           :checked="additions?.some((x) => x.id === c.id) ?? false"
-          :disabled="disabled || !c.available"
+          :disabled="readOnly || disabled || !c.available"
           @change="toggle(c, ($event.target as HTMLInputElement).checked)"
         /><span>{{ c.title || '이름 없음' }}</span></label
       >
       <div class="qualification-course-meta">
         <span class="muted">공통 원본 · {{ releaseVersionLabel(c) }}</span
+        ><span v-if="readOnly" class="muted">미적용 · 조회 전용</span
         ><span v-if="!c.available" class="muted">원본 설정 보완 필요</span>
       </div>
       <div class="qualification-course-actions">

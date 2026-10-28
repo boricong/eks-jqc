@@ -152,6 +152,9 @@ export function validateState(
         "인증Set 계보의 공통 출처 불일치",
       );
     }
+    const qualificationOrder = new Map(
+      s.qualifications.map((q, i) => [q.id, i]),
+    );
     for (const q of s.qualifications) {
       check(
         new Set(q.commonCourseEntityIds).size ===
@@ -186,6 +189,10 @@ export function validateState(
           .every(
             (other) =>
               (other.version ?? 0) > (q.version ?? 0) ||
+              (other.version === null &&
+                q.version === null &&
+                qualificationOrder.get(other.id)! >
+                  qualificationOrder.get(q.id)!) ||
               other.commonCourseEntityIds.every((id) =>
                 q.commonCourseEntityIds.includes(id),
               ),

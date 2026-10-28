@@ -11,7 +11,7 @@ import {
   closePlanningRequest,
 } from "./organization-requirements.ts";
 import {
-  copyCommonCourses,
+  registrationCommonSelection,
   validateDefaultCommonCourses,
 } from "./common-courses.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
@@ -254,6 +254,7 @@ export function executeWorkflow(
         .filter(
           (q) => q.lv1OrganizationId === scope && q.templateId === templateId,
         )
+        .reverse()
         .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
       if (
         previous &&
@@ -286,14 +287,19 @@ export function executeWorkflow(
         auditorErrors.join(" · "),
         "AUDITOR_NOT_READY",
       );
-      const commonIds = previous ? [] : template.defaultCommonCourseIds;
+      const commonIds = template.defaultCommonCourseIds;
       validateDefaultCommonCourses(
         s,
         template.qualificationType,
         commonIds,
         body.commonCourseRevisions,
       );
-      const copies = copyCommonCourses(s, commonIds, scope);
+      const commonSelection = registrationCommonSelection(
+        s,
+        commonIds,
+        scope,
+        previous,
+      );
       const id = randomUUID();
       const maximumVersion = Math.max(
         0,
@@ -342,15 +348,13 @@ export function executeWorkflow(
               }
             : {}),
           renewalLeadMonths: 3,
-          commonCourseEntityIds:
-            previous?.commonCourseEntityIds ?? copies.map((c) => c.entityId),
-          courseIds: copies.map((c) => c.id),
+          ...commonSelection,
         }),
       );
       imported.push(id);
       audit(id, "기본 자격 가져오기", undefined, {
         templateId,
-        commonCourseIds: copies.map((c) => c.id),
+        commonCourseIds: commonSelection.courseIds,
       });
     }
     return { imported, existing };

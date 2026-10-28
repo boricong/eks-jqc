@@ -42,7 +42,7 @@ test('주요 구역의 독립적인 키보드 접기·펼치기와 입력·선�
   await saveCriterion(page, 'new');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page).not.toHaveURL(/demo-qualification$/);
-  await expect(page.locator('.team-qualification-view')).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/qualifications(?:\?|$)/);
   const saved = backend.store
     .snapshot()
     .qualifications.find((q) => q.parentId === 'demo-qualification')!;
@@ -50,7 +50,7 @@ test('주요 구역의 독립적인 키보드 접기·펼치기와 입력·선�
   expect(saved.renewalLeadMonths).toBe(2);
 });
 
-test('정확한 버전 구성만 조회하고 체크·검색·입력·초점을 보존한다', async ({ page, backend }) => {
+test('정확한 버전 구성만 조회하고 체크·입력·초점을 보존한다', async ({ page, backend }) => {
   await backend.store.transact(
     'admin-1',
     randomUUID(),
@@ -109,7 +109,7 @@ test('정확한 버전 구성만 조회하고 체크·검색·입력·초점을 
   await actor(page, 'admin-1');
   await page.goto('/admin/qualifications/demo-qualification/edit');
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
-  await page.getByLabel('필수 인증Set 검색').fill('버전별 조회 기준');
+  await expect(page.getByLabel('필수 인증Set 검색')).toHaveCount(0);
   const before = backend.store.snapshot();
   const checked = await page
     .locator('.qualification-course-choice input:checked')
@@ -138,7 +138,7 @@ test('정확한 버전 구성만 조회하고 체크·검색·입력·초점을 
     await expect(button).toBeFocused();
     await expect(row.getByRole('checkbox')).not.toBeChecked();
   }
-  await expect(page.getByLabel('필수 인증Set 검색')).toHaveValue('버전별 조회 기준');
+  await expect(page.getByLabel('필수 인증Set 검색')).toHaveCount(0);
   await expect(page.getByLabel('인증기간', { exact: true })).toHaveValue('three-years');
   expect(
     await page

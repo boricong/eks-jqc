@@ -262,6 +262,7 @@ export function prepareCatalogSave(
   body: any,
   scope: string,
   pendingCommonCopies: Course[] = [],
+  actorId?: string,
 ): CatalogItemSavePreview {
   const list = s[section];
   const source = list.find((i) => i.id === id);
@@ -355,6 +356,41 @@ export function prepareCatalogSave(
             : {}),
           templateId: (source as Qualification).templateId,
         });
+  const additions = z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          revision: z.number().int().positive(),
+        })
+        .strict(),
+    )
+    .max(100)
+    .parse(body.commonCourseAdditions ?? []);
+  if (
+    section === "qualifications" &&
+    !s.users.some(
+      (u) => u.id === actorId && u.roles.includes("system_operator"),
+    )
+  ) {
+    const commonLineages = (q: Qualification) =>
+      new Set(
+        q.courseIds.flatMap((id) => {
+          const course = s.courses.find((c) => c.id === id);
+          return course?.category === "common" ? [course.entityId] : [];
+        }),
+      );
+    const before = commonLineages(source as Qualification);
+    const after = commonLineages(candidate as Qualification);
+    demand(
+      !additions.length &&
+        before.size === after.size &&
+        [...before].every((id) => after.has(id)),
+      403,
+      "공통인증Set은 팀에서 추가하거나 사용 해제할 수 없습니다. 특화인증Set만 추가·제거해 주세요.",
+      "COMMON_COURSE_SELECTION_LOCKED",
+    );
+  }
   if (
     section === "qualifications" &&
     (candidate as Qualification).purpose !== "renewal"
@@ -367,17 +403,6 @@ export function prepareCatalogSave(
       "QUALIFICATION_VALIDITY_REQUIRED",
     );
   }
-  const additions = z
-    .array(
-      z
-        .object({
-          id: z.string().min(1),
-          revision: z.number().int().positive(),
-        })
-        .strict(),
-    )
-    .max(100)
-    .parse(body.commonCourseAdditions ?? []);
   if (additions.length) {
     demand(
       section === "qualifications",
@@ -639,6 +664,7 @@ export function saveCatalogItem(
     body,
     scope,
     pendingCommonCopies,
+    actorId,
   );
   for (const copy of pendingCommonCopies) {
     if (copy.releaseInfo) copy.releaseInfo.createdBy = actorId;
