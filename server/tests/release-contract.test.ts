@@ -45,7 +45,7 @@ async function fixture(t: TestContext) {
       headers: {
         cookie: cookies.get(actor)!,
         "idempotency-key": key,
-        ...(contract ? { "x-eks-release-contract": "2" } : {}),
+        ...(contract ? { "x-eks-release-contract": "3" } : {}),
       },
       ...(body === undefined ? {} : { payload: body }),
     });
@@ -68,7 +68,7 @@ test("공개 저장 계약·미리보기 충돌·실패 롤백·동일 요청 �
   const f = await fixture(t),
     c = f.store.snapshot().courses[0]!;
   const body = { ...c, title: "원자적 개정" };
-  await f.call(
+  const outdated = await f.call(
     "admin-1",
     "/courses/" + c.id,
     body,
@@ -77,6 +77,17 @@ test("공개 저장 계약·미리보기 충돌·실패 롤백·동일 요청 �
     randomUUID(),
     false,
   );
+  assert.equal(outdated.code, "RELEASE_CONTRACT_CHANGED");
+  const queryContract = await f.call(
+    "admin-1",
+    "/team-users?lv1OrganizationId=org-photo",
+    {},
+    409,
+    "POST",
+    randomUUID(),
+    false,
+  );
+  assert.equal(queryContract.code, "RELEASE_CONTRACT_CHANGED");
   const p = await f.call("admin-1", "/courses/" + c.id + "/save-preview", body);
   const reviewed = {
     ...body,

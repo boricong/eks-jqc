@@ -114,7 +114,9 @@ const knowledgePath = computed(
 );
 const result = computed(() => e.value?.[kind.value]);
 const isResult = computed(() => stage.value === 'result' || result.value === 'passed');
-const held = computed(() => store.actor.certificationEligibility === 'hold');
+const held = computed(
+  () => store.actor.certificationEligibility === 'hold' || store.actor.workStatus === 'deactive',
+);
 const title = computed(() =>
   isResult.value
     ? '평가 결과'
@@ -435,7 +437,8 @@ onBeforeRouteUpdate(leave);
       </section>
     </header>
     <p v-if="held" class="assessment-restriction" role="status">
-      취득 대상자 Hold · 새 응시와 제출은 중단됩니다. 저장된 답안과 결과는 확인할 수 있습니다.
+      {{ store.actor.workStatus === 'deactive' ? 'deactive' : '취득 대상자 Hold' }} · 새 응시와
+      제출은 중단됩니다. 저장된 답안과 결과는 확인할 수 있습니다.
     </p>
     <section
       v-if="isResult"

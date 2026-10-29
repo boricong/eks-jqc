@@ -23,10 +23,10 @@ export function migratePlanningSchedule(
 ) {
   const raw = structuredClone(input) as State,
     organizations = validateOrganizations(orgInput);
-  if (![28, 29].includes(raw?.schemaVersion))
+  if (![28, 29, 30].includes(raw?.schemaVersion))
     throw Error("전체 일정 이관은 업무28 또는 현행29 파일이 필요합니다.");
   validateState(raw, organizations);
-  const alreadyApplied = raw.schemaVersion === 29;
+  const alreadyApplied = raw.schemaVersion >= 29;
   const changes: { previousId: string; id: string; ready: boolean }[] = [];
   if (!alreadyApplied) {
     const actor = raw.users.find((u) => u.roles.includes("system_operator"));
@@ -68,7 +68,7 @@ export function migratePlanningSchedule(
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 29,
+      schemaVersion: state.schemaVersion,
       revision: state.revision,
       organizationRevision: organizations.revision,
       changes,

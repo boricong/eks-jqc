@@ -108,7 +108,12 @@ export const RenewalSchema = z.object({
 export type Renewal = z.infer<typeof RenewalSchema>;
 export const LifecycleEventSchema = z.object({
   id: z.string(),
-  subject: z.enum(["qualification", "eligibility", "certification"]),
+  subject: z.enum([
+    "qualification",
+    "eligibility",
+    "certification",
+    "work_status",
+  ]),
   targetId: z.string(),
   lv1OrganizationId: z.string(),
   actorId: z.string(),

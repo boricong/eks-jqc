@@ -554,6 +554,7 @@ export function previewPlanningRequest(
       );
       const requirements = effectiveRequirements(s, doc, u.organizationId);
       const reasons = [
+        ...(workDeactive(u) ? [WORK_DEACTIVE_MESSAGE] : []),
         ...(!u.roles.includes("learner") ? ["학습자 역할이 필요합니다."] : []),
         ...(!u.organizationActive ? ["사용 중지된 소속입니다."] : []),
         ...(u.certificationEligibility === "hold"
@@ -747,7 +748,8 @@ export function validateRequirements(s: State, doc: OrganizationDocument) {
     );
     if (r.closed) {
       demand(
-        s.users.some((u) => u.id === r.closed!.actorId),
+        r.closed.actorId === "system" ||
+          s.users.some((u) => u.id === r.closed!.actorId),
         422,
         "요청 종료자를 확인해 주세요.",
       );
@@ -789,3 +791,4 @@ export function validateRequirements(s: State, doc: OrganizationDocument) {
     }
   }
 }
+import { workDeactive, WORK_DEACTIVE_MESSAGE } from "@eks/contracts";

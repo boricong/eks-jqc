@@ -56,7 +56,11 @@ const contentItems = computed(() => [
   { id: 'materials', label: `학습자료 ${course.value?.materials.length || 0}개` },
 ]);
 const blocked = computed(
-  () => !!assignment.value?.excludedReason || store.actor.certificationEligibility === 'hold',
+  () =>
+    !!assignment.value?.excludedReason ||
+    !!assignment.value?.acquisitionClosedAt ||
+    store.actor.certificationEligibility === 'hold' ||
+    (!auditor.value && store.actor.workStatus === 'deactive'),
 );
 function courseStatus(enrollment: Enrollment) {
   if (store.complete(enrollment)) return '수료';

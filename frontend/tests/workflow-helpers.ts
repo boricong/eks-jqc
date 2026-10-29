@@ -12,7 +12,7 @@ export async function savePlanViaApi(
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '2',
+    'X-EKS-Release-Contract': '3',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const workspace = await (await page.request.get('/api/workspace', { headers })).json();
@@ -37,7 +37,7 @@ export async function configureNeeds(page: Page) {
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '2',
+    'X-EKS-Release-Contract': '3',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const url = `/api/organization-qualification-requirements?lv1OrganizationId=${scope}`;
@@ -71,7 +71,7 @@ export async function requestPlan(page: Page, learnerName: string) {
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '2',
+    'X-EKS-Release-Contract': '3',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const ws = await (

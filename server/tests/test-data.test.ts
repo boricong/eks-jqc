@@ -72,7 +72,7 @@ async function fixture(t: TestContext, legacy = false) {
       headers: {
         cookie: cookies.get(who)!,
         "idempotency-key": key,
-        "x-eks-release-contract": "2",
+        "x-eks-release-contract": "3",
       },
       ...(body === undefined ? {} : { payload: body }),
     });
@@ -670,7 +670,7 @@ test("세대 변경은 모든 접속 세션·이전 세대 쓰기를 차단하�
     headers: {
       cookie,
       "x-eks-data-generation": oldGeneration,
-      "x-eks-release-contract": "2",
+      "x-eks-release-contract": "3",
       "idempotency-key": reset.key,
     },
     payload: reset.body,

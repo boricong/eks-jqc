@@ -126,7 +126,11 @@ const url = z.union([
       "HTTP(S) 주소를 입력해 주세요.",
     ),
 ]);
+export * from "./work-status.ts";
+import { WorkStatusSchema, WorkDeactivationSchema } from "./work-status.ts";
 export const UserSchema = z.object({
+  workStatus: WorkStatusSchema.default("active").optional(),
+  workDeactivation: WorkDeactivationSchema.optional(),
   auditorDesignation: AuditorDesignationSchema.optional(),
   id,
   certificationEligibility: z.enum(["eligible", "hold"]).optional(),
@@ -516,6 +520,7 @@ export const StateSchema = z.object({
     z.literal(27),
     z.literal(28),
     z.literal(29),
+    z.literal(30),
   ]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)

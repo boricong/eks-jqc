@@ -3,7 +3,11 @@ import { assessmentQuestions, credentialCurrent } from '@eks/contracts';
 
 async function finishOwn(page: any, store: any) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
-  const headers = () => ({ 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() });
+  const headers = () => ({
+    'X-Session-Tab': tab!,
+    'X-EKS-Release-Contract': '3',
+    'Idempotency-Key': crypto.randomUUID(),
+  });
   const a = store.snapshot().assignments.find((a: any) => a.learnerId === 'learner-1');
   for (const e of store.snapshot().enrollments.filter((e: any) => e.assignmentId === a.id)) {
     const c = store.snapshot().courses.find((c: any) => c.id === e.courseId);

@@ -138,7 +138,7 @@ export function validateLifecycle(s: State) {
     const list =
       e.subject === "qualification"
         ? s.qualifications
-        : e.subject === "eligibility"
+        : e.subject === "eligibility" || e.subject === "work_status"
           ? s.users
           : s.certifications;
     check(

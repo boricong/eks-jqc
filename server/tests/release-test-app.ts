@@ -11,7 +11,7 @@ export async function buildApp(...args: Parameters<typeof buildProductionApp>) {
     if (typeof options === "object") {
       options = {
         ...options,
-        headers: { ...options.headers, "x-eks-release-contract": "2" },
+        headers: { ...options.headers, "x-eks-release-contract": "3" },
       };
       const path = String(options.url || "");
       let body = options.payload;

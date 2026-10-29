@@ -43,7 +43,8 @@ const history = computed(
         <dt>집계 상태</dt>
         <dd>
           {{ detail.person.eligible ? '취득 대상' : '집계 제외'
-          }}{{ detail.person.held ? ' · 대상자 Hold' : ''
+          }}{{
+            detail.person.workDeactive ? ' · deactive' : detail.person.held ? ' · 대상자 Hold' : ''
           }}{{ detail.person.inactive ? ' · 비활성 소속' : '' }}
         </dd>
       </div>

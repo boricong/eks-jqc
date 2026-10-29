@@ -59,6 +59,7 @@ import {
   lastRevoked,
 } from "./qualification-lifecycle.ts";
 import { notify } from "./notifications.ts";
+import { requireWorkActive } from "./work-status.ts";
 
 const find = <T extends { id: string }>(xs: T[], id: string): T => {
   const value = xs.find((x) => x.id === id);
@@ -196,6 +197,22 @@ export function executeWorkflow(
   scope = u.lv1OrganizationId,
   at = new Date().toISOString(),
 ) {
+  if (
+    (action.startsWith("plan.") || action.startsWith("planning.")) &&
+    !["planning.request", "planning.close"].includes(action)
+  )
+    requireWorkActive(u);
+  if (action.startsWith("plan.") && action !== "plan.create") {
+    const plan = s.plans.find((p) => p.id === target);
+    demand(
+      !plan?.assignmentId ||
+        !s.assignments.find((a) => a.id === plan.assignmentId)
+          ?.acquisitionClosedAt,
+      409,
+      "종료된 과거 취득 회차입니다. 새 계획에서 진행해 주세요.",
+      "ACQUISITION_CLOSED",
+    );
+  }
   if (
     action === "planning.schedule.save" ||
     action === "planning.schedule.complete"

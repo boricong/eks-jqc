@@ -48,6 +48,7 @@
     "data:migrate-auditor-pool": "node --import tsx server/src/cli.ts migrate-auditor-pool",
     "data:migrate-requirement-exceptions": "node --import tsx server/src/cli.ts migrate-requirement-exceptions",
     "data:migrate-releases": "node --import tsx server/src/cli.ts migrate-releases",
+    "data:migrate-work-status": "node --import tsx server/src/cli.ts migrate-work-status",
     "data:migrate-planning-schedule": "node --import tsx server/src/cli.ts migrate-planning-schedule",
     "data:migrate-objective-renewals": "node --import tsx server/src/cli.ts migrate-objective-renewals"
   },

@@ -116,7 +116,8 @@ export function planningReadiness(
       !requirementReason &&
       hasQualificationRole(u.roles, type) &&
       u.organizationActive &&
-      u.certificationEligibility !== "hold",
+      u.certificationEligibility !== "hold" &&
+      !workDeactive(u, type),
     count: rows.filter((c) => c.status === "available").length,
     draftCount: s.plans.filter(
       (p) =>
@@ -132,9 +133,11 @@ export function planningReadiness(
       ? "요청 유형에 맞는 역할이 필요합니다."
       : !u.organizationActive
         ? "사용 중지된 소속"
-        : u.certificationEligibility === "hold"
-          ? "취득 대상자 Hold"
-          : requirementReason || "계획 요청 가능",
+        : workDeactive(u, type)
+          ? WORK_DEACTIVE_MESSAGE
+          : u.certificationEligibility === "hold"
+            ? "취득 대상자 Hold"
+            : requirementReason || "계획 요청 가능",
   };
 }
 
@@ -232,3 +235,4 @@ export function changeOrganizationSettings(
   });
   return { id: target, revision: doc.revision + 1 };
 }
+import { workDeactive, WORK_DEACTIVE_MESSAGE } from "@eks/contracts";

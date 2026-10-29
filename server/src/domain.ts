@@ -76,6 +76,8 @@ import {
   executeWorkflow,
 } from "./workflow.ts";
 import { notify } from "./notifications.ts";
+import { workDeactive, WORK_DEACTIVE_MESSAGE } from "@eks/contracts";
+import { requireWorkActive } from "./work-status.ts";
 import {
   editableOrganizations,
   administersSubtree,
@@ -357,6 +359,7 @@ function reconcile(
   active(a);
   const learner = find(s.users, a.learnerId),
     q = qualificationForRecord(find(s.qualifications, a.qualificationId), a);
+  requireWorkActive(learner, c.qualificationType);
   const snapshot = (catalog: {
     title: string;
     version: number;
@@ -530,7 +533,15 @@ export function execute(
   if (action.startsWith("subjective."))
     return executeSubjective(s, u, action, target, body, at);
   reconcileLifecycle(s, at);
-  if (action.startsWith("attempt.")) requireEligible(u);
+  if (action.startsWith("attempt.")) {
+    requireEligible(u);
+    const enrollmentId =
+      action === "attempt.start"
+        ? target
+        : find(s.attempts, target).enrollmentId;
+    const ctx = context(s, enrollmentId);
+    requireWorkActive(find(s.users, ctx.a.learnerId), ctx.c.qualificationType);
+  }
   if (isWorkflowAction(action))
     return executeWorkflow(
       s,
@@ -1028,6 +1039,7 @@ export function workspace(
         (x) =>
           x.roles.includes("learner") &&
           x.certificationEligibility !== "hold" &&
+          !workDeactive(x) &&
           visibleScope(userView(x, organizations).lv1OrganizationId) &&
           (admin || x.id === u.id),
       ).length,

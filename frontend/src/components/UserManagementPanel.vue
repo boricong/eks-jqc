@@ -6,6 +6,7 @@ import { useDemo } from '../stores/demo';
 import { confirmAction } from '../composables/useConfirmation';
 import {
   roleLabels,
+  workStatusLabels,
   teamEditableRoles,
   type Role,
   type UserView,
@@ -14,6 +15,7 @@ import {
   type TeamUserView,
 } from '@eks/contracts';
 import OrganizationSelect from './OrganizationSelect.vue';
+import WorkStatusDialog from './WorkStatusDialog.vue';
 import PolicyOrganizationTree from './PolicyOrganizationTree.vue';
 import AppDialog from './AppDialog.vue';
 import ListControls from './ListControls.vue';
@@ -33,7 +35,10 @@ const roleOptions = computed(() =>
     )
     .map(([value, label]) => ({ value: value as Role, label })),
 );
-type ListedUser = UserView & Partial<Pick<TeamUserView, 'canEdit' | 'editBlockedReason'>>;
+type ListedUser = UserView &
+  Partial<Pick<TeamUserView, 'canEdit' | 'editBlockedReason' | 'workStatusInfo'>>;
+const workUser = ref<TeamUserView | null>(null),
+  workFilter = ref('');
 const users = ref<ListedUser[]>([]),
   doc = shallowRef<Pick<OrganizationView, 'revision' | 'entries'> | null>(null);
 const query = ref(''),
@@ -75,6 +80,7 @@ const listed = computed(() =>
   users.value.filter(
     (u) =>
       (!orgFilter.value || u.organizationPath.some((p) => p.id === orgFilter.value)) &&
+      (!workFilter.value || (u.workStatus || 'active') === workFilter.value) &&
       [u.name, ...u.organizationPath.map((p) => p.name)]
         .join(' ')
         .toLowerCase()
@@ -126,6 +132,7 @@ watch([addingAuditor, () => form.value.organizationId], async () => {
   }
 });
 function clearPrivateState() {
+  workUser.value = null;
   users.value = [];
   doc.value = null;
   selected.value = null;
@@ -441,6 +448,14 @@ onBeforeUnmount(() => {
     </section>
   </AppDialog>
   <div class="list-toolbar system-filters">
+    <label v-if="isTeam" class="field"
+      ><span>업무 상태 필터</span
+      ><select aria-label="업무 상태 필터" v-model="workFilter" @change="list.page = 1">
+        <option value="">전체 상태</option>
+        <option value="active">active</option>
+        <option value="deactive">deactive</option>
+      </select></label
+    >
     <label class="field"
       ><span>사용자 검색</span><input v-model="query" placeholder="이름 또는 조직 경로"
     /></label>
@@ -456,21 +471,23 @@ onBeforeUnmount(() => {
   </div>
 
   <div class="table-wrap">
-    <table>
+    <table :class="{ 'work-users-table': isTeam }">
       <thead>
         <tr>
           <th>이름</th>
           <th>역할</th>
           <th>소속 조직</th>
+          <th v-if="isTeam">업무 상태</th>
           <th>관리</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="user in list.rows" :key="user.id">
-          <td>{{ user.name }}</td>
-          <td>{{ user.roles.map((r) => labels[r]).join(' · ') }}</td>
+          <td data-label="이름">{{ user.name }}</td>
+          <td data-label="역할">{{ user.roles.map((r) => labels[r]).join(' · ') }}</td>
           <td
             class="organization-path"
+            data-label="소속 조직"
             :title="user.organizationPath.map((p) => p.name).join(' › ')"
           >
             {{
@@ -480,7 +497,43 @@ onBeforeUnmount(() => {
               ].join(' › ')
             }}<span v-if="!user.organizationActive" class="small-label"> · 사용 중지 조직</span>
           </td>
-          <td>
+          <td v-if="isTeam" data-label="업무 상태">
+            <span
+              class="status"
+              :class="user.workStatus === 'deactive' ? 'status-waiting' : 'status-certified'"
+              >{{ workStatusLabels[user.workStatus || 'active'] }}</span
+            >
+            <small v-if="user.workDeactivation" class="muted"
+              >{{ user.workDeactivation.startedOn }}부터 · 말소 기준
+              {{ user.workDeactivation.revokesOn }}</small
+            >
+            <small v-if="user.workStatusInfo?.reacquisitionRequired" class="muted"
+              >복귀 후 재취득 필요</small
+            >
+          </td>
+          <td data-label="관리">
+            <template v-if="isTeam && user.workStatusInfo">
+              <span
+                class="work-status-control"
+                :title="user.workStatusInfo.blockedReason"
+                :tabindex="user.workStatusInfo.blockedReason ? 0 : undefined"
+              >
+                <button
+                  type="button"
+                  class="text-link"
+                  :disabled="
+                    busy ||
+                    !user.workStatusInfo.canChange ||
+                    (user.workStatus !== 'deactive' && !user.workStatusInfo.canDeactivate)
+                  "
+                  :title="user.workStatusInfo.blockedReason"
+                  :aria-label="`${user.name} 업무 상태 변경`"
+                  @click="workUser = user as TeamUserView"
+                >
+                  업무 상태 변경
+                </button>
+              </span>
+            </template>
             <button
               class="text-link"
               v-if="!isTeam || user.canEdit"
@@ -504,4 +557,66 @@ onBeforeUnmount(() => {
     v-model:sort="list.sort"
   />
   <p v-if="!listed.length" class="empty-state">해당하는 사용자가 없습니다.</p>
+  <WorkStatusDialog
+    v-if="workUser && doc"
+    :user="workUser"
+    :organization-revision="doc.revision"
+    @close="workUser = null"
+    @saved="load"
+  />
 </template>
+
+<style scoped>
+.work-users-table td {
+  overflow-wrap: anywhere;
+}
+.work-users-table small {
+  display: block;
+  max-width: 24rem;
+}
+.work-users-table td[data-label='관리'] .text-link {
+  margin-right: 0.75rem;
+}
+@media (max-width: 640px) {
+  .work-users-table,
+  .work-users-table tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .work-users-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .work-users-table tr {
+    display: block;
+    border: 1px solid var(--hairline, #e3e8ee);
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+  .work-users-table td {
+    display: grid;
+    grid-template-columns: 5rem minmax(0, 1fr);
+    height: auto;
+    min-height: var(--row-compact);
+    align-items: start;
+    padding: 0.5rem;
+    border: 0;
+  }
+  .work-users-table td::before {
+    content: attr(data-label);
+    grid-column: 1;
+    font-weight: 600;
+  }
+  .work-users-table td > * {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
+    max-width: 100%;
+  }
+}
+</style>

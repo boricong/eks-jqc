@@ -23,6 +23,7 @@ import { demand, DomainError } from "./errors.ts";
 export { demand, DomainError } from "./errors.ts";
 import { validateState } from "./integrity.ts";
 import { reconcileNotifications } from "./notifications.ts";
+import { reconcileWorkStatus } from "./work-status.ts";
 import { reconcilePendingAuditor } from "./domain.ts";
 
 export class SerialQueue {
@@ -167,6 +168,7 @@ export class FileStore<T extends Document> {
   protected enqueue<R>(operation: () => Promise<R>): Promise<R> {
     return this.queue.run(operation);
   }
+  protected async beforeTransaction() {}
   async transact<R>(
     actorId: string,
     key: string,
@@ -187,6 +189,7 @@ export class FileStore<T extends Document> {
   ): Promise<R> {
     return this.enqueue(async () => {
       demand(!this.closed, 503, "저장소가 닫혔습니다.");
+      await this.beforeTransaction();
       authorize(this.state);
       const previous = this.state.requests.find(
         (r) => r.actorId === actorId && r.key === key,
@@ -317,6 +320,10 @@ export class FileStore<T extends Document> {
 }
 
 export class JsonStore extends FileStore<State> {
+  clock = () => new Date().toISOString();
+  protected override async beforeTransaction() {
+    await this.refreshNotificationsInQueue(this.clock(), true);
+  }
   async recoverMasterReplacement() {
     return this.withMaintenanceLock(() =>
       this.organizations.withMaintenanceLock(async () => {
@@ -877,38 +884,71 @@ export class JsonStore extends FileStore<State> {
     );
   }
   async refreshNotifications(at = new Date().toISOString()) {
-    return this.enqueue(async () => {
-      demand(!this.closed, 503, "저장소가 닫혔습니다.");
-      const next = structuredClone(this.state);
-      const awarded = reconcilePendingAuditor(
-        next,
-        this.organizations.snapshot(),
-        at,
-      );
-      if (!reconcileNotifications(next, at) && !awarded) return;
-      next.revision++;
-      const checked = this.validate(next);
-      await mkdir(this.backupDir, { recursive: true });
-      await this.writeAtomic(
-        path.join(this.backupDir, `state-${this.state.revision}.json`),
-        this.state,
-      );
-      await this.beforeReplace?.();
+    return this.enqueue(() => this.refreshNotificationsInQueue(at));
+  }
+  async refreshWorkStatus(at = this.clock()) {
+    if (
+      !this.state.users.some(
+        (u) =>
+          u.workStatus === "deactive" &&
+          u.workDeactivation &&
+          u.workDeactivation.revokesOn <=
+            new Date(Date.parse(at) + 9 * 3600000).toISOString().slice(0, 10),
+      )
+    )
+      return;
+    return this.enqueue(() => this.refreshNotificationsInQueue(at, true));
+  }
+  private async refreshNotificationsInQueue(at: string, workOnly = false) {
+    demand(!this.closed, 503, "저장소가 닫혔습니다.");
+    if (
+      workOnly &&
+      !this.state.users.some(
+        (u) =>
+          u.workStatus === "deactive" &&
+          u.workDeactivation &&
+          u.workDeactivation.revokesOn <=
+            new Date(Date.parse(at) + 9 * 3600000).toISOString().slice(0, 10),
+      )
+    )
+      return;
+    const next = structuredClone(this.state);
+    const workChanged = reconcileWorkStatus(
+      next,
+      this.organizations.snapshot(),
+      at,
+    );
+    const awarded =
+      !workOnly &&
+      reconcilePendingAuditor(next, this.organizations.snapshot(), at);
+    if (
+      (workOnly || !reconcileNotifications(next, at)) &&
+      !awarded &&
+      !workChanged
+    )
+      return;
+    next.revision++;
+    const checked = this.validate(next);
+    await mkdir(this.backupDir, { recursive: true });
+    await this.writeAtomic(
+      path.join(this.backupDir, `state-${this.state.revision}.json`),
+      this.state,
+    );
+    await this.beforeReplace?.();
+    try {
+      await this.writeAtomic(this.file, checked);
+    } catch (error) {
       try {
-        await this.writeAtomic(this.file, checked);
-      } catch (error) {
-        try {
-          this.state = this.validate(
-            JSON.parse(await readFile(this.file, "utf8")),
-          );
-        } catch {
-          this.closed = true;
-        }
-        throw error;
+        this.state = this.validate(
+          JSON.parse(await readFile(this.file, "utf8")),
+        );
+      } catch {
+        this.closed = true;
       }
-      this.state = checked;
-      await this.pruneBackups();
-    });
+      throw error;
+    }
+    this.state = checked;
+    await this.pruneBackups();
   }
   readonly organizations: FileStore<OrganizationDocument>;
   constructor(

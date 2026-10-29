@@ -271,6 +271,10 @@ function detailPage(page: number) {
           ><button class="button secondary" :disabled="loading" @click="load()">다시 조회</button>
         </div>
         <p v-if="changed" class="dashboard-notice info" role="status">{{ changed }}</p>
+        <p v-if="data?.snapshot.exclusions.deactivePeople" class="dashboard-notice info">
+          업무 미수행(Deactive) {{ data.snapshot.exclusions.deactivePeople }}명은 Auditee 현황
+          모수와 실적에서 제외됩니다. 전체/제외 인원 조회에서 확인할 수 있습니다.
+        </p>
         <section
           id="dashboard-tab-panel"
           role="tabpanel"
@@ -681,7 +685,11 @@ function detailPage(page: number) {
                             {{ person.name }}</button
                           ><span class="dashboard-meta">{{ person.organizationName }}</span
                           ><span v-if="!person.eligible" class="dashboard-meta">{{
-                            person.held ? '대상자 Hold' : '비활성 소속'
+                            person.workDeactive
+                              ? 'deactive'
+                              : person.held
+                                ? '대상자 Hold'
+                                : '비활성 소속'
                           }}</span>
                         </td>
                         <td v-for="q in data.matrix.columns.items" :key="q.entityId">
@@ -757,7 +765,11 @@ function detailPage(page: number) {
                           >
                             {{ person.name }}</button
                           ><small v-if="!person.eligible" class="dashboard-meta">{{
-                            person.held ? '대상자 Hold' : '비활성 소속'
+                            person.workDeactive
+                              ? 'deactive'
+                              : person.held
+                                ? '대상자 Hold'
+                                : '비활성 소속'
                           }}</small>
                         </td>
                         <td>{{ person.organizationName }}</td>

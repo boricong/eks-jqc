@@ -12,7 +12,7 @@ async function headers(page: Page) {
   return {
     'X-Session-Tab': (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!,
     'Idempotency-Key': crypto.randomUUID(),
-    'X-EKS-Release-Contract': '2',
+    'X-EKS-Release-Contract': '3',
   };
 }
 function contrast(a: string, b: string) {

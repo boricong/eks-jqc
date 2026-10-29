@@ -21,6 +21,7 @@ import {
 } from "@eks/contracts";
 import { validateWorkflow } from "./workflow-integrity.ts";
 import { validateLifecycle } from "./lifecycle-integrity.ts";
+import { validateWorkStatus } from "./work-status.ts";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`저장 데이터 무결성 오류: ${message}`);
@@ -30,7 +31,10 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && [25, 26, 27, 28, 29].includes((input as any)?.schemaVersion)) {
+  if (
+    !legacy &&
+    [25, 26, 27, 28, 29, 30].includes((input as any)?.schemaVersion)
+  ) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -79,6 +83,7 @@ export function validateState(
     ? LegacyStateSchema.parse(input)
     : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
+    validateWorkStatus(s);
     validateSubjective(s);
     if (s.schemaVersion >= 28) {
       validateRenewalStructure(s);

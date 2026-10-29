@@ -54,6 +54,7 @@ function requestLabel(u: Learner) {
   if (readiness(u.id)?.canRequest) return '요청 가능';
   if (!u.organizationActive) return '소속 중지';
   if (u.certificationEligibility === 'hold') return '대상자 Hold';
+  if (u.workStatus === 'deactive') return 'deactive';
   return '확인 필요';
 }
 const visibleLearners = computed(() => {

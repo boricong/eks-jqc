@@ -59,6 +59,10 @@ export function dashboardCharts(input: {
       eligible: p.eligible,
       held: p.held,
       inactive: p.inactive,
+      workDeactive: p.workDeactive,
+      workStatus: p.workStatus,
+      workStartedOn: p.workStartedOn,
+      workRevokesOn: p.workRevokesOn,
       key: p.userId,
     }));
   const pairRows = (pairs: Pair[]) =>
@@ -237,6 +241,10 @@ export function dashboardCharts(input: {
         eligible: p.eligible,
         held: p.held,
         inactive: p.inactive,
+        workDeactive: p.workDeactive,
+        workStatus: p.workStatus,
+        workStartedOn: p.workStartedOn,
+        workRevokesOn: p.workRevokesOn,
         key: p.certificationId,
         entityId: p.entityId,
         title: p.title,

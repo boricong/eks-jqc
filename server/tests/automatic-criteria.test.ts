@@ -345,7 +345,7 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await loadPlanningFixture(f.file);
-  assert.equal(migrated.snapshot().schemaVersion, 29);
+  assert.equal(migrated.snapshot().schemaVersion, 30);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(

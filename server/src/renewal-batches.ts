@@ -76,6 +76,7 @@ export function batchBlockers(
     q = s.qualifications.find((q) => q.id === b.qualificationId),
     a = s.assignments.find((a) => a.id === b.assignmentId);
   const reasons: string[] = [];
+  if (workDeactive(u)) reasons.push(WORK_DEACTIVE_MESSAGE);
   if (
     !u.roles.includes("learner") ||
     !u.organizationActive ||
@@ -138,6 +139,7 @@ export function renewalCandidates(
     ? qualificationUseErrors(q, s.courses)
     : ["팀의 운영 가능한 재인증 자격이 준비되지 않았습니다."];
   if (!u.organizationActive) reasons.push("사용 중인 조직이 필요합니다.");
+  if (workDeactive(u)) reasons.push(WORK_DEACTIVE_MESSAGE);
   if (u.certificationEligibility === "hold")
     reasons.push("취득 대상자 Hold 상태입니다.");
   if (
@@ -596,3 +598,4 @@ export function registerRenewalBatchRoutes(
       },
     );
 }
+import { workDeactive, WORK_DEACTIVE_MESSAGE } from "@eks/contracts";

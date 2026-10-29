@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  workDeactive,
+  WORK_DEACTIVE_MESSAGE,
   subjectiveIssues,
   type State,
   type UserView,
@@ -54,13 +56,15 @@ export function subjectiveView(
           ? "본인의 답변만 작성할 수 있습니다."
           : !u.roles.includes("learner") || !u.organizationActive
             ? "현재 학습 권한 또는 소속 조직을 확인해 주세요."
-            : u.certificationEligibility === "hold"
-              ? "취득 대상자 Hold 상태에서는 작성할 수 없습니다."
-              : a.excludedReason || a.acquisitionClosedAt
-                ? "제외되거나 종료된 취득 회차입니다."
-                : !c.subjectiveEnabled
-                  ? "주관식 평가가 설정되지 않았습니다."
-                  : subjectiveIssues(c).join(" ");
+            : workDeactive(u)
+              ? WORK_DEACTIVE_MESSAGE
+              : u.certificationEligibility === "hold"
+                ? "취득 대상자 Hold 상태에서는 작성할 수 없습니다."
+                : a.excludedReason || a.acquisitionClosedAt
+                  ? "제외되거나 종료된 취득 회차입니다."
+                  : !c.subjectiveEnabled
+                    ? "주관식 평가가 설정되지 않았습니다."
+                    : subjectiveIssues(c).join(" ");
   return {
     response: response ? structuredClone(response) : null,
     canWrite: !reason,

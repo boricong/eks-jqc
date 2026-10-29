@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  workDeactive,
+  WORK_DEACTIVE_MESSAGE,
   ScheduleSaveInputSchema,
   defaultPlanSchedule,
   kstDate,
@@ -39,6 +41,7 @@ export function planningSchedule(
   if (!u.organizationActive) errors.push("사용 중지된 소속입니다.");
   if (u.certificationEligibility === "hold")
     errors.push("취득 대상자 Hold 상태입니다.");
+  if (workDeactive(u)) errors.push(WORK_DEACTIVE_MESSAGE);
   if (!view.candidates.length)
     errors.push("현재 계획할 자격이 없어 준비를 기다리고 있습니다.");
   const rows: ScheduleRow[] = view.candidates.map((c) => {

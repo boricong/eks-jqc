@@ -14,6 +14,7 @@ import type { OrganizationDocument } from "@eks/contracts";
 import { createNetworkPolicy } from "./network.ts";
 import { registerAuditorRoutes } from "./auditor-program-routes.ts";
 import { registerTeamUserRoutes } from "./team-user-routes.ts";
+import { registerWorkStatusRoutes } from "./work-status-routes.ts";
 import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
 import { planningSchedule } from "./planning-schedule.ts";
@@ -79,6 +80,7 @@ export async function buildApp(
   });
   await app.register(cookie);
   const clock = options.clock || (() => new Date().toISOString());
+  store.clock = clock;
   const refreshNotifications = () => store.refreshNotifications(clock());
   await refreshNotifications();
   const notificationTimer = setInterval(() => {
@@ -123,27 +125,28 @@ export async function buildApp(
   };
   const requestGenerations = new WeakMap<FastifyRequest, string>();
   registerAuditorRoutes(app, store, actor, clock);
-  registerTeamUserRoutes(app, store, actor);
+  registerTeamUserRoutes(app, store, actor, clock);
+  registerWorkStatusRoutes(app, store, actor, clock);
   registerReleaseRoutes(app, store, actor);
   registerTestDataRoutes(app, store, actor, clock, () => sessions.clear());
   registerCommonCourseRoutes(app, store, actor);
   registerOrganizationRequirementRoutes(app, store, actor, clock);
   app.addHook("onRequest", async (request, reply) => {
+    requestGenerations.set(request, store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      /^\/api\/(courses|qualifications|plans|planning-requests|common-course-updates|system\/(common-courses|qualification-templates))(\/|$)/.test(
+      /^\/api\/(team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(users|common-courses|qualification-templates))(\/|\?|$)/.test(
         request.url,
       )
     ) {
       actor(request);
       demand(
-        request.headers["x-eks-release-contract"] === "2",
+        request.headers["x-eks-release-contract"] === "3",
         409,
         "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
         "RELEASE_CONTRACT_CHANGED",
       );
     }
-    requestGenerations.set(request, store.generation);
     demand(
       network.acceptsHost(request.headers.host),
       403,
@@ -163,6 +166,16 @@ export async function buildApp(
         403,
         "허용되지 않은 요청 출처입니다.",
       );
+  });
+  app.addHook("preHandler", async (request) => {
+    if (
+      /^\/api\/(workspace|team-users|dashboard|certifications|completions|planning-requests|plans|assignments|enrollments|attempts|renewals|renewal-batches|system\/users)(\/|\?|$)/.test(
+        request.url,
+      )
+    ) {
+      actor(request);
+      await store.refreshWorkStatus(clock());
+    }
   });
   app.addHook("onSend", async (_request, reply, payload) => {
     reply.header("X-EKS-Data-Generation", store.generation);
@@ -234,9 +247,13 @@ export async function buildApp(
     revision: store.snapshot().revision,
   }));
   app.get("/api/actors", async () =>
-    store
-      .snapshot()
-      .users.map((u) => userView(u, store.organizations.snapshot())),
+    store.snapshot().users.map((u) => {
+      const { workDeactivation, ...visible } = userView(
+        u,
+        store.organizations.snapshot(),
+      );
+      return visible;
+    }),
   );
   app.get("/api/session", async (request) => ({ actor: actor(request) }));
   app.post("/api/session", async (request, reply) => {

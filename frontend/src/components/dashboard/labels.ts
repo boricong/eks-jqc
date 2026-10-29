@@ -62,6 +62,7 @@ export const scheduleLabels = {
 };
 export const renewalBlockLabels: Record<string, string> = {
   TARGET_HOLD: '취득 대상자 Hold 해제가 필요합니다.',
+  WORK_DEACTIVE: 'Deactive · 관리자가 Active로 변경한 후 진행할 수 있습니다.',
   ORGANIZATION_INACTIVE: '소속 조직이 사용 중지 상태입니다.',
   CREDENTIAL_NOT_ACTIVE: '개인 자격이 Active 상태가 아닙니다.',
   VALIDITY_UNKNOWN: '인증 유효기간 확인이 필요합니다.',

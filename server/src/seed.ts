@@ -1,5 +1,6 @@
 import { initializeObjectiveRenewals } from "./objective-renewal-migration.ts";
 import { initializePlanningSchedule } from "./planning-schedule-migration.ts";
+import { initializeWorkStatus } from "./work-status-migration.ts";
 import { initializeRequirementExceptions } from "./requirement-exception-migration.ts";
 import { initializeReleases } from "./release-migration.ts";
 import { initialTemplates, metadata } from "./qualification-templates.ts";
@@ -229,10 +230,12 @@ export function seedState(testFixture = false): State {
       details: { fictional: true },
     });
   return validateState(
-    StateSchema.parse(
-      initializePlanningSchedule(
-        initializeObjectiveRenewals(
-          initializeRequirementExceptions(initializeReleases(state)),
+    initializeWorkStatus(
+      StateSchema.parse(
+        initializePlanningSchedule(
+          initializeObjectiveRenewals(
+            initializeRequirementExceptions(initializeReleases(state)),
+          ),
         ),
       ),
     ),

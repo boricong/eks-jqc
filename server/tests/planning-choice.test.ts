@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
@@ -392,7 +393,7 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     },
     migratePlanningSchedule,
   );
-  const restored = await new JsonStore(f.file).load();
+  const restored = await loadPlanningFixture(f.file);
   assert.equal(restored.snapshot().planningRequests[0]!.mode, "learner_choice");
   await restored.close();
 });
@@ -454,7 +455,7 @@ test("저장 실패는 선택·감사·요청 기록을 원복하고 동시 완�
     1,
   );
   await f.app.close();
-  const restored = await new JsonStore(f.file).load();
+  const restored = await loadPlanningFixture(f.file);
   assert.equal(
     restored.snapshot().planningRequests.find((r) => r.id === id)!.completion
       ?.evidence[0]?.planId,

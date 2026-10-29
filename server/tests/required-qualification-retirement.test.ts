@@ -444,7 +444,7 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
   );
   assert.equal((result as { schemaVersion: number }).schemaVersion, 28);
   const loaded = await loadPlanningFixture(file);
-  assert.equal(loaded.snapshot().schemaVersion, 29);
+  assert.equal(loaded.snapshot().schemaVersion, 30);
   const after = loaded.snapshot();
   const organizations = loaded.organizations.snapshot();
   await loaded.close();

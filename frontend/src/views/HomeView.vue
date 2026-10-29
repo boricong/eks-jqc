@@ -49,7 +49,12 @@ const active = computed(() =>
 );
 const planningRequests = computed(() => {
   const actor = store.actor;
-  if (!personalHome.value || actor.certificationEligibility === 'hold' || !actor.organizationActive)
+  if (
+    !personalHome.value ||
+    actor.certificationEligibility === 'hold' ||
+    !actor.organizationActive ||
+    (personalType.value === 'auditee' && actor.workStatus === 'deactive')
+  )
     return [];
   return store.data.planningRequests
     .filter(

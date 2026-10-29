@@ -1,3 +1,4 @@
+import { workDeactive } from "@eks/contracts";
 import { randomUUID } from "node:crypto";
 import {
   kstDate,
@@ -79,6 +80,11 @@ export function reconcileNotifications(
       period = latestPeriod(c);
     if (
       held ||
+      workDeactive(
+        s.users.find((u) => u.id === c.learnerId)!,
+        s.qualifications.find((q) => q.id === c.qualificationId)
+          ?.qualificationType,
+      ) ||
       a.excludedReason ||
       !period ||
       effectiveCredentialStatus(c, at) !== "Active"

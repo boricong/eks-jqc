@@ -20,7 +20,7 @@ async function apiFor(page: Page) {
       headers: {
         'X-Session-Tab': tab!,
         'Idempotency-Key': crypto.randomUUID(),
-        'X-EKS-Release-Contract': '2',
+        'X-EKS-Release-Contract': '3',
       },
     });
     expect(r.ok(), await r.text()).toBeTruthy();

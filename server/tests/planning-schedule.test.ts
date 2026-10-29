@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
@@ -346,7 +347,7 @@ test("이관 해시·교체 실패는 세 원본 보존, 명시 이관 후 재�
   disk.beforeReplace = undefined;
   assert.deepEqual(await Promise.all(files.map((p) => readFile(p))), bytes);
   await disk.migratePolicies(expected, migratePlanningSchedule);
-  const next = await new JsonStore(f.file).load();
-  assert.equal(next.snapshot().schemaVersion, 29);
+  const next = await loadPlanningFixture(f.file);
+  assert.equal(next.snapshot().schemaVersion, 30);
   await next.close();
 });

@@ -349,6 +349,7 @@ function saveUser(
     "사용 중인 조직을 선택해 주세요.",
   );
   const updated: User = {
+    workStatus: user?.workStatus || "active",
     id: user?.id ?? randomUUID(),
     name: input.name,
     organizationId: input.organizationId,

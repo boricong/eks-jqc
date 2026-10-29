@@ -74,11 +74,18 @@ const blockReasons = (codes: string[]) =>
                     progressLabels[row.progress]
                   }}</small></template
                 ><template v-else>{{ row.eligible ? '취득 대상' : '집계 제외' }}</template
-                ><small v-if="row.held || row.inactive" class="dashboard-meta">{{
-                  [row.held ? '대상자 Hold' : '', row.inactive ? '비활성 소속' : '']
-                    .filter(Boolean)
-                    .join(' · ')
-                }}</small>
+                ><small
+                  v-if="row.held || row.inactive || row.workDeactive"
+                  class="dashboard-meta"
+                  >{{
+                    [
+                      row.workDeactive ? 'deactive' : row.held ? '대상자 Hold' : '',
+                      row.inactive ? '비활성 소속' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  }}</small
+                >
                 <small v-if="row.acquisitionBlockCodes?.length" class="dashboard-meta">{{
                   blockReasons(row.acquisitionBlockCodes)
                 }}</small>

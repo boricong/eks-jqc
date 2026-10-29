@@ -153,7 +153,14 @@ export function dashboardReader(
       organizationPath: org.path,
       held: u.certificationEligibility === "hold",
       inactive: !org.effectiveActive,
-      eligible: u.certificationEligibility !== "hold" && org.effectiveActive,
+      workDeactive: workDeactive(u, type),
+      workStatus: u.workStatus || "active",
+      workStartedOn: u.workDeactivation?.startedOn,
+      workRevokesOn: u.workDeactivation?.revokesOn,
+      eligible:
+        u.certificationEligibility !== "hold" &&
+        org.effectiveActive &&
+        !workDeactive(u, type),
     };
   });
   const personById = new Map(people.map((p) => [p.userId, p]));
@@ -345,6 +352,7 @@ export function dashboardReader(
       excludedPeople: people.filter((p) => !p.eligible).length,
       heldPeople: people.filter((p) => p.held).length,
       inactivePeople: people.filter((p) => p.inactive).length,
+      deactivePeople: people.filter((p) => p.workDeactive).length,
       heldAndInactivePeople: people.filter((p) => p.held && p.inactive).length,
     },
   };
@@ -400,6 +408,7 @@ export function dashboardReader(
         renewalBlockCodes: codes,
       };
     if (person.held) codes.push("TARGET_HOLD");
+    if (person.workDeactive) codes.push("WORK_DEACTIVE");
     if (person.inactive) codes.push("ORGANIZATION_INACTIVE");
     if (effectiveCredentialStatus(c, at) !== "Active")
       codes.push("CREDENTIAL_NOT_ACTIVE");
@@ -507,6 +516,7 @@ export function dashboardReader(
       (selectedPairs.has(key) || !!assignment || !!plan);
     if (acquisitionNeeded) {
       if (person.held) acquisitionBlockCodes.push("TARGET_HOLD");
+      if (person.workDeactive) acquisitionBlockCodes.push("WORK_DEACTIVE");
       if (!assignment) {
         if (person.inactive)
           acquisitionBlockCodes.push("ORGANIZATION_INACTIVE");
@@ -957,9 +967,11 @@ export function dashboardReader(
         ),
       );
     }
-    const chartMembers = ["members", "matrix", "renewals"].includes(view)
-      ? visibleMembers
-      : metricMembers;
+    const chartMembers = (
+      ["members", "matrix", "renewals"].includes(view)
+        ? visibleMembers
+        : metricMembers
+    ).filter((p) => !p.workDeactive);
     const chartIds = new Set(chartMembers.map((p) => p.userId));
     chartModel = dashboardCharts({
       view,
@@ -1003,6 +1015,10 @@ export function dashboardReader(
       eligible: p.eligible,
       held: p.held,
       inactive: p.inactive,
+      workDeactive: p.workDeactive,
+      workStatus: p.workStatus,
+      workStartedOn: p.workStartedOn,
+      workRevokesOn: p.workRevokesOn,
       key,
     });
     const cellRow = (
@@ -1274,3 +1290,4 @@ export function dashboardReader(
   }
   return { options, dashboard, details, member, chartDetails };
 }
+import { workDeactive } from "@eks/contracts";

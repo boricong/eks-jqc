@@ -35,7 +35,7 @@ export function migrateAutomaticCriteria(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
-  if (state?.schemaVersion === 29) {
+  if ([29, 30].includes(state?.schemaVersion)) {
     const organizations = validateOrganizations(organizationInput),
       current = validateState(state, organizations);
     return {
@@ -43,7 +43,7 @@ export function migrateAutomaticCriteria(
       organizations,
       report: {
         alreadyApplied: true,
-        schemaVersion: 29,
+        schemaVersion: current.schemaVersion,
         revision: current.revision,
         organizationRevision: organizations.revision,
         progressReset: false,

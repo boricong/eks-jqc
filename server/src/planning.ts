@@ -1,4 +1,6 @@
 import {
+  workDeactive,
+  WORK_DEACTIVE_MESSAGE,
   currentTeamQualifications,
   planningDeadlineErrors,
 } from "@eks/contracts";
@@ -145,7 +147,8 @@ export function candidate(
     ["available", "draft"].includes(row.status) &&
     request.organizationId === u.organizationId &&
     u.organizationActive &&
-    u.certificationEligibility !== "hold";
+    u.certificationEligibility !== "hold" &&
+    !workDeactive(u);
   return row;
 }
 
@@ -267,6 +270,7 @@ export function planningView(
   if (!u.organizationActive) errors.push("사용 중지된 소속입니다.");
   if (u.certificationEligibility === "hold")
     errors.push("취득 대상자 Hold 상태입니다.");
+  if (workDeactive(u)) errors.push(WORK_DEACTIVE_MESSAGE);
   if (!candidates.length)
     errors.push("현재 팀 자격이 없어 자격 준비를 기다리고 있습니다.");
   if (!selected.length && !noAdditional && candidates.length)
@@ -320,6 +324,7 @@ export function planRequestErrors(
     (p.organizationId && p.organizationId !== u.organizationId)
   )
     return ["현재 소속의 본인 계획 요청을 확인해 주세요."];
+  if (workDeactive(u)) return [WORK_DEACTIVE_MESSAGE];
   if (u.certificationEligibility === "hold" || !u.organizationActive)
     return ["취득 대상자 Hold 또는 사용 중지된 소속입니다."];
   if (r.qualificationType !== q.qualificationType)

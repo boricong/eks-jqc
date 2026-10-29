@@ -142,6 +142,18 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
         불러오는 중
       </div>
       <template v-else-if="store.signedIn">
+        <aside
+          v-if="store.data.actor.workStatus === 'deactive'"
+          class="container notice-body"
+          role="status"
+        >
+          <strong>deactive</strong> · 현재 팀 Auditee 절차가 중단되어 있습니다.
+          <span v-if="store.data.actor.workDeactivation"
+            >미수행 시작 {{ store.data.actor.workDeactivation.startedOn }} · 인증 말소 기준
+            {{ store.data.actor.workDeactivation.revokesOn }}.</span
+          >
+          기존 기록은 조회할 수 있습니다. 복귀는 팀 관리자에게 요청해 주세요.
+        </aside>
         <RouterView />
       </template>
       <div v-else class="container page empty-state spacious">

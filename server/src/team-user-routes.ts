@@ -10,6 +10,7 @@ import {
 } from "@eks/contracts";
 import type { JsonStore } from "./storage.ts";
 import { managementScope } from "./management.ts";
+import { workStatusInfo } from "./work-status.ts";
 import {
   authorizeTeamUser,
   changeTeamUser,
@@ -20,6 +21,7 @@ export function registerTeamUserRoutes(
   app: FastifyInstance,
   store: JsonStore,
   actor: (r: FastifyRequest, s?: State) => UserView,
+  clock: () => string,
 ) {
   const scope = (r: FastifyRequest, s?: State) =>
     managementScope(
@@ -36,6 +38,7 @@ export function registerTeamUserRoutes(
         .filter((u) => u.lv1OrganizationId === team)
         .map((u) => ({
           ...u,
+          workStatusInfo: workStatusInfo(s, doc, actor(r, s), u, clock()),
           canEdit: !u.roles.includes("system_operator"),
           ...(u.roles.includes("system_operator")
             ? { editBlockedReason: "시스템 운영에서 관리" }

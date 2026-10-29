@@ -81,6 +81,7 @@ export interface DashboardScope {
   fullManager: boolean;
 }
 export interface DashboardExclusions {
+  deactivePeople: number;
   totalPeople: number;
   eligiblePeople: number;
   excludedPeople: number;
@@ -138,6 +139,10 @@ export interface DashboardOptions {
   qualifications: DashboardQualificationOption[];
 }
 export interface DashboardPerson {
+  workDeactive: boolean;
+  workStatus: "active" | "deactive";
+  workStartedOn?: string;
+  workRevokesOn?: string;
   userId: string;
   name: string;
   organizationId: string;

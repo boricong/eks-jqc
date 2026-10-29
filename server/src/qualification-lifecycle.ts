@@ -10,6 +10,8 @@ import {
 import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  workDeactive,
+  WORK_DEACTIVE_MESSAGE,
   LifecycleStatusSchema,
   ValiditySchema,
   validityErrors,
@@ -461,6 +463,8 @@ export function renewalAvailability(
     );
   if (learner.certificationEligibility === "hold")
     errors.push("취득 대상자 Hold 상태입니다.");
+  if (workDeactive(learner, original.qualificationType))
+    errors.push(WORK_DEACTIVE_MESSAGE);
   if (effectiveCredentialStatus(c, at) !== "Active")
     errors.push("Active인 개인 보유 자격만 재인증할 수 있습니다.");
   if (find(s.assignments, c.assignmentId).excludedReason)
