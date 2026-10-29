@@ -31,6 +31,20 @@ function request(id: string, overrides: Partial<PlanningRequest> = {}): Planning
   };
 }
 async function mock(page: Page, update: (view: Workspace) => void) {
+  await page.route('**/api/planning-requests/*/schedule', (r) =>
+    r.fulfill({
+      json: {
+        requestId: r.request().url().split('/').at(-2),
+        requestRevision: 1,
+        serverDate: '2026-10-29',
+        rows: [],
+        errors: [],
+        noAdditional: false,
+        readOnly: false,
+        canComplete: false,
+      },
+    }),
+  );
   await page.route('**/api/workspace', async (route) => {
     const response = await route.fetch();
     const view = (await response.json()) as Workspace;
@@ -301,50 +315,31 @@ test('실제 요청·알림 읽음·초안은 유지하고 자격별 확정 뒤 
   const beforeNavigation = backend.store.snapshot();
   await action(page).click();
   await expect(page).toHaveURL(new RegExp(`/plans\\?request=${id}$`));
-  await expect(page.getByRole('heading', { name: '새 자격 계획' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 일정 수립', exact: true })).toBeVisible();
   expect(backend.store.snapshot()).toEqual(beforeNavigation);
-  await page.getByLabel('취득할 자격').selectOption({ label: '평가 흐름 체험 · v1.0' });
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
-  await expect
-    .poll(() => backend.store.snapshot().plans[0]?.scheduleDefaultsAppliedAt)
-    .toBeTruthy();
+  await page.getByLabel('완료일', { exact: true }).fill('2027-02-01');
+  await expect.poll(() => backend.store.snapshot().plans.length).toBe(1);
   const draftUrl = page.url();
   await page.goto('/');
   await expect(current(page)).toHaveAttribute('data-request-id', id);
   await expect(current(page)).toContainText('작성 중');
   await page.goto(draftUrl);
-  await page.getByLabel('종료일', { exact: true }).fill('2027-02-01');
+  await page.getByLabel('완료일', { exact: true }).fill('2027-02-01');
   for (const el of await page.getByLabel('시작일', { exact: true }).all())
     await el.fill('2026-10-01');
-  for (const el of await page.getByLabel('종료일', { exact: true }).all())
+  for (const el of await page.getByLabel('완료일', { exact: true }).all())
     await el.fill('2026-10-15');
+  await page.locator('.request-schedule-row summary').click();
   await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
   for (const el of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
     await el.fill('판단 근거를 설명하고 독립적으로 수행한다.');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-  await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
-  expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
-  await page.goto('/');
-  await expect(planning(page)).toHaveCount(0);
-  await expect(action(page)).toHaveText('상세정보 보기');
-  expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
-  await page
-    .getByRole('navigation', { name: '주 메뉴' })
-    .getByRole('link', { name: '자격 취득', exact: true })
-    .click();
-  await page
-    .getByRole('navigation', { name: '자격 취득 메뉴' })
-    .getByRole('link', { name: '내 계획', exact: true })
-    .click();
-  const finish = page
-    .getByRole('region', { name: '이번 요청의 계획 현황' })
-    .getByRole('button', { name: '계획 수립 완료', exact: true });
-  await finish.click();
-  await answerConfirmation(page, true);
-  await expect.poll(() => backend.store.snapshot().planningRequests[0]!.completion).toBeTruthy();
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '전체 계획 확정 완료' })).toBeVisible();
+  expect(backend.store.snapshot().planningRequests[0]!.completion).toBeTruthy();
   await page.goto('/');
   await expect(planning(page)).toHaveCount(0);
   await expect(action(page)).toHaveText('상세정보 보기');

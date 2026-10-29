@@ -49,6 +49,7 @@ import {
   qualificationTypeLabels,
   qualificationReadinessErrors,
   validityErrors,
+  planningDeadlineErrors,
   type QualificationType,
   AUDITOR_PREPARATION_MESSAGE,
   certificationStatus,
@@ -212,7 +213,10 @@ watch(locatedIssues, (issues) => {
 const editor = computed(() => courseDraft.value || qualificationDraft.value);
 const qualificationValidityErrors = computed(() =>
   qualificationDraft.value && qualificationDraft.value.purpose !== 'renewal'
-    ? validityErrors(qualificationDraft.value.validity)
+    ? [
+        ...validityErrors(qualificationDraft.value.validity),
+        ...planningDeadlineErrors(qualificationDraft.value),
+      ]
     : [],
 );
 const relatedVersions = computed(() =>

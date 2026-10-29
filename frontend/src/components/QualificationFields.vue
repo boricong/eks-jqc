@@ -31,6 +31,25 @@ const validityChoice = computed({
 </script>
 <template>
   <div class="qualification-settings-grid">
+    <label
+      v-if="qualification.qualificationType === 'auditee' && qualification.purpose !== 'renewal'"
+      class="field"
+    >
+      <span>계획 확정 후 최대 완료 개월</span>
+      <input
+        aria-label="계획 확정 후 최대 완료 개월"
+        type="number"
+        min="1"
+        max="1200"
+        required
+        :disabled="disabled"
+        v-model.number="qualification.planningDeadlineMonths"
+        :aria-describedby="`${id}-planning-help`"
+      />
+      <span :id="`${id}-planning-help`" class="qualification-field-help"
+        >계획 확정일부터 이 개월 수 이내로 완료일을 정합니다. 이미 확정한 계획은 유지됩니다.</span
+      >
+    </label>
     <label class="field"
       ><span>인증기간</span
       ><select

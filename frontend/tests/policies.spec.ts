@@ -53,7 +53,6 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await page.goto('/admin/qualifications');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/admin/organization-settings');
-  await page.getByLabel('조직 검색').fill('Photo 공정 검증 상세 조직');
   await page.getByRole('treeitem').filter({ hasText: 'Photo 공정 검증 상세 조직' }).click();
   await page.getByLabel('조직 설명', { exact: true }).fill('상황 대응 능력 검증 조직');
   await page.getByLabel('담당 업무', { exact: true }).fill('설비 정보와 결과 기록 검토');
@@ -70,9 +69,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
   await page.goto('/plans');
   await expect(page.getByRole('region', { name: '내 소속 필수 자격' })).toHaveCount(0);
-  await expect(
-    page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
-  ).toHaveText('평가 흐름 체험 · v1.0');
+  await expect(page.locator('.request-schedule-row')).toContainText('평가 흐름 체험');
   await completePlan(page, '평가 흐름 체험', false);
   const a = backend.store.snapshot().assignments.find((a) => a.learnerId === 'learner-2')!;
   await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();
@@ -108,9 +105,7 @@ test('Lv5 조직·소속·팀 선정·필수 지정·요청·학습 안내·두 
     backend.store.snapshot().certifications.filter((c) => c.assignmentId === a.id),
   ).toHaveLength(1);
   await page.goto('/plans');
-  await expect(page.getByRole('region', { name: '이번 요청의 계획 현황' })).toContainText(
-    '유효 인증',
-  );
+  await expect(page.getByRole('heading', { name: '전체 계획 확정 완료' })).toBeVisible();
   await expect(
     page.getByLabel('취득할 자격').locator('option[value="demo-qualification"]'),
   ).toHaveCount(0);
@@ -182,7 +177,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
   const expected: Record<string, string> = {
     '/': '최신 4개',
     '/notifications': '실제 표시될 때 읽음',
-    '/plans': '요청 전체의 계획 수립 완료는 별개',
+    '/plans': '요청 전체',
     '/qualifications?stage=assessment': 'Auditor의 본인 확인은 학습 메뉴',
     '/qualifications?filter=certified': '보유 자격 · Auditee',
     '/qualifications?filter=certified&type=auditor': '보유 자격 · Auditor',
@@ -190,7 +185,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/admin/targets': '학습 확인',
     '/admin/credentials': 'Auditor는 교육·인증기준 확인',
     '/admin/organization-settings': '필요자격은 조직 필요자격 화면에서 지정',
-    '/admin/qualifications/demo-qualification': '현재 버전 저장 또는 새 버전',
+    '/admin/qualifications/demo-qualification': '저장된 값과 적용된 정확한 인증Set 버전',
     '/admin/qualifications?type=auditor': '팀 자격 설정 · Auditor',
     '/admin/courses?type=auditor': '필수 항목을 하나 이상',
     '/admin/assignments': 'Auditee 개인 계획',

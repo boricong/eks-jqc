@@ -1,5 +1,7 @@
 import {
   planErrors,
+  planningWindow,
+  kstDate,
   expirationDate,
   type State,
   type QualificationPolicySnapshot,
@@ -124,6 +126,24 @@ export function validateWorkflow(s: State, legacy = false) {
         )
       : !planErrors(p).length;
     if (p.status === "completed") {
+      if (
+        p.workflowVersion === "personal-certification-v7" &&
+        q.qualificationType === "auditee" &&
+        q.purpose !== "renewal"
+      ) {
+        const window = planningWindow(q, kstDate(p.completedAt!));
+        check(
+          window &&
+            JSON.stringify(window) === JSON.stringify(p.planningWindow) &&
+            p.endOn <= window.deadlineOn,
+          "확정 계획 기한 근거",
+        );
+        check(
+          p.qualificationPolicySnapshot?.planningDeadlineMonths ===
+            window.months,
+          "확정 계획 최대 완료 개월",
+        );
+      }
       const a = s.assignments.find((a) => a.id === p.assignmentId);
       check(
         a &&

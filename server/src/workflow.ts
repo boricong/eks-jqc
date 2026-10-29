@@ -17,6 +17,7 @@ import {
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { canContinueType } from "./personal-access.ts";
 import { candidate, planningView, planRequestErrors } from "./planning.ts";
+import { executePlanningSchedule } from "./planning-schedule.ts";
 import {
   planPolicyErrors,
   planningReadiness,
@@ -43,6 +44,9 @@ import {
   defaultPlanningDueOn,
   kstDate,
   defaultPlanSchedule,
+  planningWindow,
+  deadlinePlanErrors,
+  planningDeadlineErrors,
   type State,
   type UserView,
   type OrganizationDocument,
@@ -192,6 +196,19 @@ export function executeWorkflow(
   scope = u.lv1OrganizationId,
   at = new Date().toISOString(),
 ) {
+  if (
+    action === "planning.schedule.save" ||
+    action === "planning.schedule.complete"
+  )
+    return executePlanningSchedule(
+      s,
+      organizations,
+      u,
+      target,
+      action,
+      body,
+      at,
+    );
   if (
     [
       "plan.create",
@@ -348,6 +365,10 @@ export function executeWorkflow(
               }
             : {}),
           renewalLeadMonths: 3,
+          ...(template.qualificationType === "auditee" &&
+          template.purpose !== "renewal"
+            ? { planningDeadlineMonths: 6 }
+            : {}),
           ...commonSelection,
         }),
       );
@@ -835,7 +856,12 @@ export function executeWorkflow(
           422,
           "계획 변경 사유를 입력해 주세요.",
         );
-        const errors = planErrors(value, q.qualificationType);
+        const errors = [
+          ...planErrors(value, q.qualificationType),
+          ...(p.planningWindow && value.endOn > p.planningWindow.deadlineOn
+            ? [`완료일은 ${p.planningWindow.deadlineOn} 이내여야 합니다.`]
+            : []),
+        ];
         demand(!errors.length, 422, errors.join("\n"));
         demand(
           !find(s.assignments, p.assignmentId!).excludedReason,
@@ -869,7 +895,7 @@ export function executeWorkflow(
         "POLICY_CHANGED",
       );
       const errors = [
-        ...planErrors(p, q.qualificationType),
+        ...deadlinePlanErrors(p, q, kstDate(at)),
         ...qualificationUseErrors(currentQualification(s, q), s.courses),
       ];
       demand(
@@ -914,6 +940,8 @@ export function executeWorkflow(
       );
       Object.assign(p, {
         status: "completed",
+        workflowVersion: WORKFLOW_VERSION,
+        planningWindow: planningWindow(q, kstDate(at)),
         frozenCriteria: freezeCriteria(s, q, u.id, "plan", at),
         qualificationMetadata: metadata(currentQualification(s, q)),
         qualificationPolicySnapshot: qualificationPolicySnapshot(q),

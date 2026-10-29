@@ -11,6 +11,7 @@ import { seedState } from "../src/seed.ts";
 import { JsonStore } from "../src/storage.ts";
 import { buildApp } from "./release-test-app.ts";
 import { migratePlanning } from "../src/planning-migration.ts";
+import { migratePlanningSchedule } from "../src/planning-schedule-migration.ts";
 import { validateState } from "../src/integrity.ts";
 import { registerFixtureQualification } from "./template-helpers.ts";
 const root = "org-photo",
@@ -109,8 +110,8 @@ async function fixture(t: TestContext) {
       `/plans/${id}`,
       {
         revision: p.revision,
-        endOn: "2028-01-01",
-        startOn: "2027-01-01",
+        endOn: "2027-02-01",
+        startOn: "2026-11-01",
         goal: "독립 수행",
       },
       200,
@@ -382,6 +383,15 @@ test("12→13 명시적 이관은 원래 요청 대상·계획을 보존하고 �
     "planning",
   );
   assert.deepEqual(await readFile(f.store.organizations.file), orgBytes);
+  const upgradedBytes = await readFile(f.file);
+  await disk.migratePolicies(
+    {
+      revision: JSON.parse(upgradedBytes.toString()).revision,
+      stateHash: hash(upgradedBytes),
+      organizationHash: hash(orgBytes),
+    },
+    migratePlanningSchedule,
+  );
   const restored = await new JsonStore(f.file).load();
   assert.equal(restored.snapshot().planningRequests[0]!.mode, "learner_choice");
   await restored.close();

@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -37,7 +38,7 @@ async function fixture(
   });
   prepare?.(seed);
   await new JsonStore(file).initialize(seed);
-  const store = await new JsonStore(file).load(),
+  const store = await loadPlanningFixture(file),
     app = await buildApp(store),
     cookies = new Map<string, string>();
   t.after(async () => {
@@ -498,7 +499,7 @@ test("13→15 유형 보존 이관은 원본·개별 수정번호·발급 기간
     migrateQualificationTypes,
   );
   assert.deepEqual(await readFile(f.file), after);
-  const restarted = await new JsonStore(f.file).load();
+  const restarted = await loadPlanningFixture(f.file);
   await restarted.close();
   const broken = structuredClone(raw);
   broken.qualifications[0].qualificationType = "auditor";

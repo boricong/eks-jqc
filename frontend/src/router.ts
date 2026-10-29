@@ -11,7 +11,7 @@ import CertificateView from './views/CertificateView.vue';
 import AdminView from './views/AdminView.vue';
 import AdminLayout from './components/AdminLayout.vue';
 import SystemView from './views/SystemView.vue';
-import PlansView from './views/PlansView.vue';
+import PlansView from './views/PlanScheduleView.vue';
 import SubjectiveView from './views/SubjectiveView.vue';
 import CompletionView from './views/CompletionView.vue';
 import NotificationsView from './views/NotificationsView.vue';
@@ -273,6 +273,17 @@ router.beforeResolve(async (to) => {
           (p) => p.id === to.params.id && p.learnerId === store.actorId,
         );
         const request = store.data.planningRequests.find((r) => r.id === plan?.requestId);
+        if (
+          plan?.status === 'draft' &&
+          !plan.deletedAt &&
+          request?.qualificationType === 'auditee' &&
+          !request.closed
+        )
+          return {
+            path: '/plans',
+            query: { request: request.id, qualification: plan.qualificationId },
+            replace: true,
+          };
         if (
           (plan && request?.qualificationType === 'auditor') ||
           (!to.params.id &&

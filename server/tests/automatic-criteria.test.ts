@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { createPoolQualification } from "./auditor-fixture.ts";
@@ -23,7 +24,7 @@ async function fixture(t: TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-automatic-criteria-"));
   const file = path.join(dir, "runtime/state.json");
   await new JsonStore(file).initialize(seedState(true));
-  const store = await new JsonStore(file).load();
+  const store = await loadPlanningFixture(file);
   const app = await buildApp(store);
   t.after(async () => {
     await app.close();
@@ -187,7 +188,7 @@ test("마지막 삭제의 두 파일 실패·재시도·중간 재시작은 필�
   const partial = structuredClone(org);
   partial.revision++;
   await writeFile(f.store.organizations.file, JSON.stringify(partial));
-  const recovered = await new JsonStore(f.file).load();
+  const recovered = await loadPlanningFixture(f.file);
   assert.deepEqual(recovered.snapshot(), before);
   assert.deepEqual(
     recovered.organizations.snapshot(),
@@ -343,8 +344,8 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     migrateAutomaticCriteria,
     "automatic-criteria",
   );
-  const migrated = await new JsonStore(f.file).load();
-  assert.equal(migrated.snapshot().schemaVersion, 28);
+  const migrated = await loadPlanningFixture(f.file);
+  assert.equal(migrated.snapshot().schemaVersion, 29);
   assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(

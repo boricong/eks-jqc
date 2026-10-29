@@ -1,0 +1,136 @@
+.request-schedule-page {
+  max-width: 1200px;
+}
+.request-schedule-request {
+  max-width: 720px;
+  margin-block: 20px;
+}
+.request-schedule-request select {
+  width: 100%;
+  min-width: 0;
+}
+.request-schedule-context,
+.request-schedule-bulk,
+.request-schedule-review,
+.request-schedule-completed,
+.request-schedule-extras {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border, #e3e8ee);
+}
+.request-schedule-page h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.request-schedule-bulk-fields,
+.request-schedule-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.request-schedule-bulk-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  max-width: 840px;
+}
+.request-schedule-row {
+  border: 1px solid var(--border, #a8c3de);
+  border-radius: 6px;
+  margin-block: 16px;
+  padding: 20px;
+  min-width: 0;
+}
+.request-schedule-row header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: start;
+}
+.request-schedule-row header > div {
+  min-width: 0;
+}
+.request-schedule-window {
+  margin-block: 16px;
+  font-size: 14px;
+}
+.request-schedule-dates {
+  max-width: 720px;
+}
+.request-schedule-page input,
+.request-schedule-page textarea {
+  min-width: 0;
+  width: 100%;
+}
+.request-schedule-row details {
+  margin-top: 8px;
+}
+.request-schedule-row details summary {
+  cursor: pointer;
+  padding-block: 12px;
+}
+.request-schedule-row details .field {
+  margin-block: 12px;
+}
+.request-schedule-row .field-error:empty {
+  display: none;
+}
+.request-schedule-criteria {
+  background: #f6f9fc;
+  border-left: 3px solid #533afd;
+  padding: 12px;
+  margin-block: 12px;
+}
+.request-schedule-read-row {
+  display: flex;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  padding-block: 16px;
+  border-bottom: 1px solid #e3e8ee;
+  overflow-wrap: anywhere;
+}
+.request-schedule-read-row strong {
+  flex-basis: 100%;
+}
+.request-schedule-read-row p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.request-schedule-extras > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+}
+.request-schedule-page .error-message {
+  overflow-wrap: anywhere;
+}
+.request-schedule-error-links {
+  white-space: normal;
+}
+.request-schedule-error-links button {
+  text-align: left;
+  white-space: normal;
+}
+@media (max-width: 767px) {
+  .request-schedule-bulk-fields,
+  .request-schedule-dates {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .request-schedule-row {
+    padding: 16px 12px;
+  }
+  .request-schedule-row header {
+    flex-wrap: wrap;
+  }
+  .request-schedule-page button,
+  .request-schedule-page input,
+  .request-schedule-page select {
+    min-height: 44px;
+  }
+  .request-schedule-extras > div {
+    align-items: start;
+    flex-direction: column;
+  }
+}

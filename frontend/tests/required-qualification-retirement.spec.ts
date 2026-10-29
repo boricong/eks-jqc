@@ -104,7 +104,7 @@ test('선택 상태로 전환된 이전 대상에는 필수 표시·강제가 �
   await actor(page, 'learner-2');
   await page.goto('/plans?request=converted-request');
   await expect(page.getByText('[필수]', { exact: false })).toHaveCount(0);
-  await page.getByRole('button', { name: '요청에서 제외', exact: true }).click();
+  await page.getByRole('button', { name: '추가 계획 제외', exact: true }).click();
   await answerConfirmation(page, true);
   await expect
     .poll(
@@ -113,10 +113,10 @@ test('선택 상태로 전환된 이전 대상에는 필수 표시·강제가 �
           .selections.length,
     )
     .toBe(0);
-  await expect(page.getByRole('button', { name: '계획 수립 완료', exact: true })).toBeDisabled();
-  await page.getByLabel('취득할 자격', { exact: true }).selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await expect(page).toHaveURL(/\/plans\/[^/?]+/);
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('최소 1개');
+  await page.getByRole('button', { name: '계획에 추가' }).first().click();
+  await expect.poll(() => backend.store.snapshot().plans.length).toBe(1);
   expect(
     backend.store.snapshot().planningRequests.find((r) => r.id === 'converted-request')!.selections,
   ).toHaveLength(1);

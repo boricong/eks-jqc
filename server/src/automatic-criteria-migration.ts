@@ -2,6 +2,7 @@ import { migrateOrganizationRequirements } from "./required-qualification-migrat
 import { randomUUID } from "node:crypto";
 import { migrateReadyQualifications } from "./ready-qualification-migration.ts";
 import { validateOrganizations } from "./organizations.ts";
+import { validateState } from "./integrity.ts";
 
 /** Only explicit migration/import paths call this converter. Normal loads reject v2. */
 export function migrationOrganizations(
@@ -34,6 +35,21 @@ export function migrateAutomaticCriteria(
   at = new Date().toISOString(),
 ) {
   const state = structuredClone(input) as any;
+  if (state?.schemaVersion === 29) {
+    const organizations = validateOrganizations(organizationInput),
+      current = validateState(state, organizations);
+    return {
+      state: current,
+      organizations,
+      report: {
+        alreadyApplied: true,
+        schemaVersion: 29,
+        revision: current.revision,
+        organizationRevision: organizations.revision,
+        progressReset: false,
+      },
+    };
+  }
   if (
     ![17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].includes(
       state?.schemaVersion,

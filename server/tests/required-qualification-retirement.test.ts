@@ -1,3 +1,5 @@
+import { migratePlanningSchedule } from "../src/planning-schedule-migration.ts";
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -88,7 +90,7 @@ async function fixture(
     initial = new JsonStore(file);
   await initial.organizations.initialize(pair.organizations);
   await initial.initialize(pair.state);
-  const store = await new JsonStore(file).load(),
+  const store = await loadPlanningFixture(file),
     app = await buildApp(store, { clock: () => at }),
     cookies = new Map<string, string>();
   t.after(async () => {
@@ -406,7 +408,7 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
     await rm(dir, { recursive: true, force: true });
   });
   await store.initialize(seedState(true));
-  const initialized = await new JsonStore(file).load();
+  const initialized = await loadPlanningFixture(file);
   await initialized.close();
   const old = oldPair();
   await writeFile(file, JSON.stringify(old.state));
@@ -441,8 +443,8 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
     migrateRequiredQualifications,
   );
   assert.equal((result as { schemaVersion: number }).schemaVersion, 28);
-  const loaded = await new JsonStore(file).load();
-  assert.equal(loaded.snapshot().schemaVersion, 28);
+  const loaded = await loadPlanningFixture(file);
+  assert.equal(loaded.snapshot().schemaVersion, 29);
   const after = loaded.snapshot();
   const organizations = loaded.organizations.snapshot();
   await loaded.close();
@@ -452,7 +454,7 @@ test("명시 이관의 해시 충돌·파일 교체 실패·재시작·재실행
       stateHash: hash(await readFile(file)),
       organizationHash: hash(await readFile(store.organizations.file)),
     },
-    migrateRequiredQualifications,
+    migratePlanningSchedule,
   );
   assert.equal((again as { alreadyApplied: boolean }).alreadyApplied, true);
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), after);

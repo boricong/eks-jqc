@@ -46,154 +46,92 @@ async function startReview(page: Page, store: JsonStore, count = 2, long = false
   await catalog(store, count, long);
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/assignments');
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('review-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await page.getByLabel('종료일', { exact: true }).fill('2029-12-01');
-  await expect(page.locator('textarea[data-plan-field]')).toHaveCount(1);
-  for (const input of await page.locator('textarea[data-plan-field]').all())
-    await input.fill(long ? longGoal : '기준을 확인하고 독립적으로 수행합니다.');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  return store.snapshot().plans[0]!;
+  const row = page
+    .locator('.request-schedule-row')
+    .filter({ has: page.locator('#request-schedule-review-qualification-endOn') });
+  await row.getByLabel('완료일', { exact: true }).fill('2027-02-01');
+  await row.locator('summary').click();
+  await row
+    .getByLabel('학습 목표(선택)')
+    .fill(long ? longGoal : '기준을 확인하고 독립적으로 수행합니다.');
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+  ).toBeVisible();
+  return store.snapshot().plans.find((p) => p.qualificationId === 'review-qualification')!;
 }
-
-async function review(page: Page) {
-  await page.getByRole('button', { name: '3. 최종 확인', exact: true }).click();
-  await expect(page.locator('.plan-review')).toBeVisible();
-}
-
-test('자격별 날짜 두 개와 목표 하나·참고 인증Set·키보드 수정 초점', async ({ page, backend }) => {
-  const plan = await startReview(page, backend.store);
-  await expect(page.locator('.plan-review-summary')).toContainText('2029.12.01');
-  await expect(page.getByRole('region', { name: '포함된 인증Set' }).locator('li')).toHaveCount(2);
-  await page.getByRole('button', { name: '일정 수정', exact: true }).click();
-  await expect(page.getByLabel('시작일', { exact: true })).toBeFocused();
-  await expect(page.locator('input[type="date"]')).toHaveCount(2);
-  await expect(page.getByLabel('평가 예정일')).toHaveCount(0);
-  await page.getByLabel('종료일', { exact: true }).fill('2030-01-01');
-  await review(page);
-  await page.getByRole('button', { name: '학습 목표 수정', exact: true }).click();
-  await expect(page.getByLabel('학습 목표(선택)')).toBeFocused();
-  await page.getByLabel('학습 목표(선택)').fill('변경한 자격 목표\n줄바꿈 유지');
-  await review(page);
-  await expect(page.locator('.plan-review-goal')).toContainText('변경한 자격 목표');
-  const toggle = page.getByRole('button', { name: '요청 기준 펼치기', exact: true });
-  await toggle.focus();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('.plan-review-request')).toContainText('현재 소속');
-  expect(backend.store.snapshot().plans.find((p) => p.id === plan.id)!.endOn).toBe('2030-01-01');
-});
-
-test('목표 저장 실패·충돌에서 입력 유지와 재시도·재조회', async ({ page, backend }) => {
-  const plan = await startReview(page, backend.store);
-  await page.getByRole('button', { name: '학습 목표 수정', exact: true }).click();
-  const input = page.getByLabel('학습 목표(선택)');
-  await page.route(`**/api/plans/${plan.id}`, (r) =>
-    r.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ message: '저장 실패 시험' }),
-    }),
+for (const failure of ['response', 'refresh'] as const)
+  test(
+    '전체 확정 ' + failure + ' 유실 시 같은 키 재시도·자격별 단일 배정',
+    async ({ page, backend }) => {
+      const plan = await startReview(page, backend.store, 1),
+        request = backend.store.snapshot().planningRequests[0]!,
+        keys: string[] = [];
+      await page.route(
+        '**/api/planning-requests/' + request.id + '/schedule/complete',
+        async (r) => {
+          keys.push(r.request().headers()['idempotency-key']!);
+          if (failure === 'response' && keys.length === 1) {
+            await r.fetch();
+            await r.abort('failed');
+          } else await r.continue();
+        },
+      );
+      let failed = false;
+      if (failure === 'refresh')
+        await page.route('**/api/workspace**', async (r) => {
+          if (keys.length && !failed) {
+            failed = true;
+            await r.abort('failed');
+          } else await r.continue();
+        });
+      await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('서버에 연결할 수 없습니다.');
+      await page.getByRole('button', { name: '전체 확정 재시도', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: '전체 계획 확정 완료', exact: true }),
+      ).toBeVisible();
+      expect(new Set(keys).size).toBe(1);
+      expect(backend.store.snapshot().assignments.filter((a) => a.planId === plan.id)).toHaveLength(
+        1,
+      );
+      expect(backend.store.snapshot().planningRequests[0]!.completion).toBeDefined();
+    },
   );
-  await input.fill('보존할 목표');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(input).toHaveValue('보존할 목표');
-  await expect(page.locator('.save-error')).toContainText('저장 실패 시험');
-  await page.unroute(`**/api/plans/${plan.id}`);
-  await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
-  await expect(page.locator('.save-status')).toHaveText('저장됨');
-  await page.route(`**/api/plans/${plan.id}`, (r) =>
-    r.fulfill({
-      status: 409,
-      contentType: 'application/json',
-      body: JSON.stringify({ message: '다른 창에서 수정되었습니다.' }),
-    }),
-  );
-  await input.fill('충돌한 목표');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(input).toHaveValue('충돌한 목표');
-  await page.unroute(`**/api/plans/${plan.id}`);
-  await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-  await answerConfirmation(page, true);
-  await expect(input).toHaveValue('보존할 목표');
-});
-for (const failure of ['response', 'refresh'] as const) {
-  test(`최종 완료 ${failure === 'response' ? '응답 유실' : '재조회 실패'} 시 같은 명령 재시도와 단일 배정`, async ({
-    page,
-    backend,
-  }) => {
-    const plan = await startReview(page, backend.store, 1);
-    const keys: string[] = [];
-    await page.route(`**/api/plans/${plan.id}/complete`, async (route) => {
-      keys.push(route.request().headers()['idempotency-key']!);
-      if (failure === 'response' && keys.length === 1) {
-        await route.fetch();
-        await route.abort('failed');
-      } else await route.continue();
-    });
-    let failed = false;
-    if (failure === 'refresh')
-      await page.route('**/api/workspace**', async (route) => {
-        if (keys.length && !failed) {
-          failed = true;
-          await route.abort('failed');
-        } else await route.continue();
-      });
-    await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-    await expect(page.locator('.plan-review-submit-error')).toContainText(
-      '서버에 연결할 수 없습니다.',
-    );
-    await expect(page.locator('.plan-review-submit-error')).toBeFocused();
-    await expect(page.locator('.plan-review-submit-error')).toBeInViewport();
-    await expect(page.locator('.plan-review')).toBeVisible();
-    await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-    await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
-    expect(new Set(keys).size).toBe(1);
-    expect(keys.length).toBe(failure === 'response' ? 2 : 1);
-    expect(backend.store.snapshot().assignments.filter((a) => a.planId === plan.id)).toHaveLength(
-      1,
-    );
-    expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
-  });
-}
-
-test('확정 계획은 읽기 전용이며 서버 변경을 조회한다', async ({ page, backend }) => {
+test('확정 계획 읽기 전용·허용 기한 안에서 변경한 서버 이력 조회', async ({ page, backend }) => {
   const plan = await startReview(page, backend.store, 1);
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-  await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
-  await page.goto(`/plans/${plan.id}`);
+  await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '전체 계획 확정 완료', exact: true }),
+  ).toBeVisible();
+  await page.goto('/plans/' + plan.id);
   await expect(page.locator('input, textarea')).toHaveCount(0);
-  await savePlanViaApi(page, plan.id, { endOn: '2030-12-01', goal: '수정 이력' }, '일정 변경');
+  await savePlanViaApi(page, plan.id, { endOn: '2027-03-01', goal: '수정 이력' }, '일정 변경');
   await page.reload();
-  await expect(page.locator('.plan-review-summary')).toContainText('2030.12.01');
+  await expect(page.locator('.plan-review-summary')).toContainText('2027.03.01');
   await expect(page.locator('.plan-review-goal')).toContainText('수정 이력');
   expect(backend.store.snapshot().assignments.filter((a) => a.planId === plan.id)).toHaveLength(1);
 });
 for (const count of [1, 2, 8])
-  test(`${count}개 인증Set은 참고 목록·긴 정보·네 화면 폭·조회 불변`, async ({ page, backend }) => {
+  test(count + '개 인증Set·긴 정보·4개 화면 폭·조회 불변', async ({ page, backend }) => {
     await startReview(page, backend.store, count, true);
+    await page.getByRole('button', { name: '일정 수정', exact: true }).click();
+    const row = page.locator('#request-schedule-review-qualification');
+    await row.locator('summary').click();
     const before = backend.store.snapshot();
     for (const width of [1920, 1440, 768, 390]) {
       await page.setViewportSize({ width, height: 1000 });
-      await expect(page.getByRole('region', { name: '포함된 인증Set' }).locator('li')).toHaveCount(
-        count,
-      );
+      await expect(row.locator('li')).toHaveCount(count);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
-      await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toBeEnabled();
-      await page.screenshot({
-        path: test.info().outputPath(`qualification-plan-${count}-${width}.png`),
-        fullPage: true,
-      });
+      await expect(page.getByRole('button', { name: '전체 계획 확인', exact: true })).toBeEnabled();
     }
     expect(backend.store.snapshot()).toEqual(before);
   });
-
 test('이관된 긴 목표와 인증Set 일정은 읽기 전용 이력으로 보존한다', async ({ page, backend }) => {
   const plan = await startReview(page, backend.store);
   await backend.store.transact(

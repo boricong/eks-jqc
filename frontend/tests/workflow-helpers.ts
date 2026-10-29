@@ -12,7 +12,7 @@ export async function savePlanViaApi(
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '1',
+    'X-EKS-Release-Contract': '2',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const workspace = await (await page.request.get('/api/workspace', { headers })).json();
@@ -37,7 +37,7 @@ export async function configureNeeds(page: Page) {
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '1',
+    'X-EKS-Release-Contract': '2',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const url = `/api/organization-qualification-requirements?lv1OrganizationId=${scope}`;
@@ -71,7 +71,7 @@ export async function requestPlan(page: Page, learnerName: string) {
   const scope = new URL(page.url()).searchParams.get('lv1OrganizationId') || 'org-photo';
   const headers = {
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '1',
+    'X-EKS-Release-Contract': '2',
     'Idempotency-Key': crypto.randomUUID(),
   };
   const ws = await (
@@ -90,25 +90,35 @@ export async function requestPlan(page: Page, learnerName: string) {
 }
 export async function completePlan(page: Page, title: string, recordLearning = true) {
   await page.goto('/plans');
-  const select = page.getByLabel('취득할 자격');
-  const option = select
-    .locator('option')
-    .filter({ hasText: `${title} · v` })
-    .first();
-  await select.selectOption((await option.getAttribute('value')) as string);
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '개인 인증 계획', exact: true })).toBeVisible();
-  await page.getByLabel('종료일', { exact: true }).fill('2027-02-01');
-  for (const el of await page.getByLabel('시작일', { exact: true }).all())
-    await el.fill('2026-10-01');
-  for (const el of await page.getByLabel('종료일', { exact: true }).all())
-    await el.fill('2027-02-01');
-  await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
-  for (const el of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
-    await el.fill('판단 근거를 설명하고 도움 없이 독립적으로 수행한다.');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '자격 일정 수립', exact: true })).toBeVisible();
+  if (await page.getByRole('button', { name: '전체 계획 확인', exact: true }).count()) {
+    const extra = page.locator('.request-schedule-extras > div').filter({ hasText: title });
+    if (await extra.count())
+      await extra.first().getByRole('button', { name: '계획에 추가' }).click();
+    for (const row of await page.locator('.request-schedule-row').all()) {
+      if (!(await row.getByLabel('시작일', { exact: true }).count())) continue;
+      await row.getByLabel('시작일', { exact: true }).fill('2026-10-01');
+      await row.getByLabel('완료일', { exact: true }).fill('2027-02-01');
+      await row.locator('summary').click();
+      await row
+        .getByLabel('학습 목표(선택)', { exact: true })
+        .fill('판단 근거를 설명하고 도움 없이 독립적으로 수행한다.');
+    }
+    await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '전체 계획 확정 완료', exact: true }),
+    ).toBeVisible();
+  }
+  await page
+    .locator('.request-schedule-read-row')
+    .filter({ hasText: title })
+    .first()
+    .getByRole('link', { name: '학습·평가로 이동' })
+    .click();
   await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
   if (recordLearning) {
     await expect(page.getByRole('region', { name: '학습 안내' })).toBeVisible();

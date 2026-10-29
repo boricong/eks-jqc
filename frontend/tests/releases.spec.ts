@@ -43,10 +43,12 @@ test('계획 초안은 최신 기준을 재확인하고 확정 후 변경에도 
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
+  await page.locator('.request-schedule-row summary').click();
   await page.getByLabel('학습 목표(선택)', { exact: true }).fill('계속 보존할 목표');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+  ).toBeVisible();
   await backend.store.transact(
     'admin-1',
     crypto.randomUUID(),
@@ -66,12 +68,14 @@ test('계획 초안은 최신 기준을 재확인하고 확정 후 변경에도 
       );
     },
   );
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-  await expect(page.getByRole('region', { name: '기준 버전 변경' })).toBeVisible();
-  await page.getByRole('button', { name: '최신 기준 확인·적용', exact: true }).click();
-  await expect(page.getByRole('region', { name: '기준 버전 변경' })).toHaveCount(0);
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-  await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
+  await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+  await expect(page.locator('.request-schedule-criteria')).toBeVisible();
+  await page.getByRole('button', { name: '최신 기준 확인', exact: true }).click();
+  await answerConfirmation(page, true);
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '전체 계획 확정 완료' })).toBeVisible();
+  await page.getByRole('link', { name: '학습·평가로 이동' }).click();
   const a = backend.store.snapshot().assignments.find((a) => a.learnerId === 'learner-2')!,
     frozen = structuredClone(a.frozenCriteria);
   expect(frozen?.qualificationVersion).toEqual({ major: 1, minor: 1 });

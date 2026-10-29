@@ -387,8 +387,8 @@ test("여러 필요자격은 모두 확정해야 완료되며 기존 확정 계�
       `/plans/${p.id}`,
       {
         revision: p.revision,
-        endOn: "2028-01-01",
-        startOn: "2027-01-01",
+        endOn: "2027-02-01",
+        startOn: "2026-11-01",
         goal: p.goal,
       },
       200,

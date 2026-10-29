@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { criteriaFingerprint } from "../src/releases.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
@@ -39,7 +40,7 @@ async function fixture(
   });
   prepare?.(seed);
   await new JsonStore(file).initialize(seed);
-  const store = await new JsonStore(file).load(),
+  const store = await loadPlanningFixture(file),
     app = await buildApp(store),
     cookies = new Map<string, string>();
   t.after(async () => {
@@ -411,7 +412,7 @@ test("체크 해제·선택 항목·최종 동시 확인과 파일 실패는 수
     "PUT",
   );
   await f.app.close();
-  const restarted = await new JsonStore(f.file).load();
+  const restarted = await loadPlanningFixture(f.file);
   assert.deepEqual(
     restarted.snapshot().completions.find((c) => c.id === done.id),
     done,
@@ -523,7 +524,7 @@ test("15→16 명시적 이관·파일 실패 복구·재실행·이전 파일�
     "auditor-workflow",
   );
   assert.deepEqual(await readFile(f.file), after);
-  const fresh = await new JsonStore(f.file).load();
+  const fresh = await loadPlanningFixture(f.file);
   const master = exportMaster(
     fresh.snapshot(),
     fresh.organizations.snapshot(),

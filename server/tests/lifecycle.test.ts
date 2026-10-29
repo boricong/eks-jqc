@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { legacyRequestFixture } from "./legacy-request-fixture.ts";
@@ -74,7 +75,7 @@ async function fixture(t: TestContext, months = 12) {
     courseIds: ["renewal-course"],
   });
   await new JsonStore(file).initialize(seed);
-  let store = await new JsonStore(file).load(),
+  let store = await loadPlanningFixture(file),
     now = at;
   let app = await buildApp(store, { clock: () => now });
   const sessions = new Map<string, string>();
@@ -123,7 +124,7 @@ async function fixture(t: TestContext, months = 12) {
     },
     async restart() {
       await app.close();
-      store = await new JsonStore(file).load();
+      store = await loadPlanningFixture(file);
       app = await buildApp(store, { clock: () => now });
       sessions.clear();
     },
@@ -165,7 +166,7 @@ async function plan(f: F, requestId = undefined as string | undefined) {
     `/plans/${p.id}`,
     {
       revision: draft.revision,
-      endOn: "2030-12-31",
+      endOn: draft.endOn,
       startOn: draft.startOn,
       goal: "기준 확인과 대응 판단",
     },
@@ -820,6 +821,6 @@ test("업무8→9 이관의 영구 백업 쌍·조직 바이트 불변·교체 �
   );
   assert.deepEqual(await readFile(file), after);
   assert.equal((await readdir(store.backupDir)).length, count);
-  const loaded = await new JsonStore(file).load();
+  const loaded = await loadPlanningFixture(file);
   await loaded.close();
 });

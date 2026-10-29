@@ -141,6 +141,7 @@ export function registerReleaseRoutes(
       releaseVersion: q.releaseVersion,
       version: q.version,
       validity: q.validity,
+      planningDeadlineMonths: q.planningDeadlineMonths,
       renewalLeadMonths: q.renewalLeadMonths,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore,
       description: q.description,

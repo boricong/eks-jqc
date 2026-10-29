@@ -1,4 +1,7 @@
-import { currentTeamQualifications } from "@eks/contracts";
+import {
+  currentTeamQualifications,
+  planningDeadlineErrors,
+} from "@eks/contracts";
 import {
   effectiveCredentialStatus,
   qualificationUseErrors,
@@ -110,10 +113,16 @@ export function candidate(
       status: "blocked",
       reason: "현재 사용할 팀 자격이 없습니다.",
     });
-  else if (qualificationUseErrors(q, s.courses).length)
+  else if (
+    [...qualificationUseErrors(q, s.courses), ...planningDeadlineErrors(q)]
+      .length
+  )
     Object.assign(row, {
       status: "blocked",
-      reason: qualificationUseErrors(q, s.courses).join(" · "),
+      reason: [
+        ...qualificationUseErrors(q, s.courses),
+        ...planningDeadlineErrors(q),
+      ].join(" · "),
     });
   else if (target && target.previousCertificationId !== previous?.id)
     Object.assign(row, {

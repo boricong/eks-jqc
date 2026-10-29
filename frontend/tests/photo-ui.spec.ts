@@ -47,7 +47,7 @@ test('인증Set 필수 평가와 개별 학습 탭, 3년 인증기간, 좁은 �
     await expect(tabs).toBeVisible();
     await noPageOverflow(page);
   }
-  await page.goto('/admin/qualifications/recipe');
+  await page.goto('/admin/qualifications/recipe/edit');
   await page.getByLabel('인증기간', { exact: true }).selectOption('three-years');
   await expect(page.getByLabel('유효 개월 수')).toHaveCount(0);
   await expect(page.getByLabel('재인증 시작 N일 전 알림')).toHaveValue('7');
@@ -63,36 +63,44 @@ test('계획 단계는 날짜·저장을 검사하고 목표 없이 최종 확�
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await page.getByLabel('종료일', { exact: true }).fill('');
-  await page.getByRole('button', { name: '3. 최종 확인' }).click();
-  await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();
-  await expect(page.getByText('종료일을 입력해 주세요.')).toBeVisible();
-  await expect(page.getByLabel('종료일', { exact: true })).toBeFocused();
+
+  await page.getByLabel('완료일', { exact: true }).fill('');
+  await page.getByRole('button', { name: '전체 계획 확인' }).click();
+  await expect(page.getByRole('heading', { name: '자격 일정 수립', exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('.request-schedule-row .field-error')
+      .filter({ hasText: '완료일을 입력해 주세요.' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('완료일', { exact: true })).toBeFocused();
   await page.getByLabel('시작일', { exact: true }).fill('2026-10-01');
-  await page.getByLabel('종료일', { exact: true }).fill('2026-10-15');
-  await page.getByRole('button', { name: '3. 최종 확인' }).click();
-  await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-  await expect(page.locator('.plan-review-goal')).toContainText('미입력');
-  await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
+  await page.getByLabel('완료일', { exact: true }).fill('2026-10-15');
+  await page.getByRole('button', { name: '전체 계획 확인' }).click();
+  await expect(
+    page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.request-schedule-review')).toBeVisible();
+  await page.getByRole('button', { name: '일정 수정', exact: true }).click();
+  await page.locator('.request-schedule-row summary').click();
   await page
     .getByLabel('학습 목표(선택)', { exact: true })
     .fill('독립적으로 기준을 확인하고 결과를 기록한다.');
-  await page.getByLabel('종료일', { exact: true }).fill('2026-09-30');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByText('종료일은 시작일 이후여야 합니다.')).toBeVisible();
-  await expect(page.getByLabel('종료일', { exact: true })).toBeFocused();
-  await page.route('**/api/plans/**', async (route) => {
+  await page.getByLabel('완료일', { exact: true }).fill('2026-09-30');
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(
+    page
+      .locator('.request-schedule-row .field-error')
+      .filter({ hasText: '완료일은 시작일 이후여야 합니다.' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('완료일', { exact: true })).toBeFocused();
+  await page.route('**/api/planning-requests/*/schedule', async (route) => {
     if (route.request().method() === 'PUT') await route.abort('failed');
     else await route.continue();
   });
-  await page.getByLabel('종료일', { exact: true }).fill('2027-03-01');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '일정 수립', exact: true })).toBeVisible();
-  await expect(page.getByRole('alert').first()).toContainText(
-    '저장되지 않아 다음 단계로 이동할 수 없습니다.',
-  );
+  await page.getByLabel('완료일', { exact: true }).fill('2027-03-01');
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '자격 일정 수립', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').first()).toContainText('서버에 연결할 수 없습니다.');
 });
 
 test('학습자 홈 최근 알림·공지의 본문 대비와 읽음 상태', async ({ page }) => {

@@ -72,6 +72,7 @@ import {
   type Notification,
 } from "./workflow.ts";
 export * from "./workflow.ts";
+export * from "./planning-schedule.ts";
 import {
   OrganizationPathSchema,
   RequestRecordSchema,
@@ -273,6 +274,7 @@ export const CourseSchema = CourseContentSchema.extend({
 });
 export type Course = z.infer<typeof CourseSchema>;
 export const QualificationSchema = z.object({
+  planningDeadlineMonths: z.number().int().min(1).max(1200).optional(),
   purpose: QualificationPurposeSchema.optional(),
   auditorCriteria: AuditorCriteriaSchema.optional(),
   qualificationType: QualificationTypeSchema.default("auditee"),
@@ -513,6 +515,7 @@ export const StateSchema = z.object({
     z.literal(26),
     z.literal(27),
     z.literal(28),
+    z.literal(29),
   ]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)

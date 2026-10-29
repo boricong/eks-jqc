@@ -17,7 +17,11 @@ async function apiFor(page: Page) {
     const r = await page.request.fetch(`/api${path}`, {
       method,
       data: body,
-      headers: { 'X-Session-Tab': tab!, 'Idempotency-Key': crypto.randomUUID() },
+      headers: {
+        'X-Session-Tab': tab!,
+        'Idempotency-Key': crypto.randomUUID(),
+        'X-EKS-Release-Contract': '2',
+      },
     });
     expect(r.ok(), await r.text()).toBeTruthy();
     return r.json();
@@ -36,24 +40,23 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await expect(page.getByLabel('종료일')).toBeVisible();
-  const plan = backend.store.snapshot().plans[0]!;
+  await expect(page.getByLabel('완료일', { exact: true })).toBeVisible();
+  const request = backend.store.snapshot().planningRequests[0]!;
   let once = true;
-  await page.route(`**/api/plans/${plan.id}`, async (r) => {
+  await page.route(`**/api/planning-requests/${request.id}/schedule`, async (r) => {
     if (r.request().method() === 'PUT' && once) {
       once = false;
       await r.fetch();
       await r.abort('failed');
     } else await r.continue();
   });
-  await page.getByLabel('종료일').fill('2027-01-31');
+  await page.getByLabel('완료일', { exact: true }).fill('2027-01-31');
   await expect(page.getByRole('alert')).toContainText('다시 시도');
   await page.getByRole('button', { name: '저장 재시도', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel('종료일')).toHaveValue('2027-01-31');
+  await expect(page.getByLabel('완료일', { exact: true })).toHaveValue('2027-01-31');
+  const plan = backend.store.snapshot().plans[0]!;
   const other = await context.newPage();
   await other.goto('/');
   await actor(other, 'learner-2');
@@ -65,11 +68,11 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
     { endOn: '2027-02-28', startOn: latest.startOn, goal: latest.goal, revision: latest.revision },
     'PUT',
   );
-  await page.getByLabel('종료일').fill('2027-03-31');
+  await page.getByLabel('완료일', { exact: true }).fill('2027-03-31');
   await expect(page.getByRole('alert')).toContainText('다른 창');
-  await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await page.getByRole('button', { name: '변경된 저장 내용 확인', exact: true }).click();
   await answerConfirmation(page, true);
-  await expect(page.getByLabel('종료일')).toHaveValue('2027-02-28');
+  await expect(page.getByLabel('완료일', { exact: true })).toHaveValue('2027-03-31');
   await page.setViewportSize({ width: 390, height: 900 });
   await noOverflow(page);
   await page.screenshot({
@@ -79,14 +82,15 @@ test('개인 계획 자동 저장·응답 유실 재시도·충돌 복구·좁�
   expect(backend.store.snapshot().plans).toHaveLength(1);
   for (const field of await page.getByLabel('시작일', { exact: true }).all())
     await field.fill('2026-10-01');
-  for (const field of await page.getByLabel('종료일', { exact: true }).all())
+  for (const field of await page.getByLabel('완료일', { exact: true }).all())
     await field.fill('2026-10-15');
+  await page.locator('.request-schedule-row summary').click();
   await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
   for (const field of await page.getByLabel('학습 목표(선택)', { exact: true }).all())
     await field.fill('독립 수행 학습');
-  await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-  await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-  await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
+  await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+  await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '전체 계획 확정 완료' })).toBeVisible();
   const assignment = backend.store.snapshot().assignments.find((a) => a.planId === plan.id)!;
   await page.goto(`/plans/${plan.id}`);
   await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);

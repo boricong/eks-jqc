@@ -1,3 +1,4 @@
+import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { historicalContent } from "./historical-content.ts";
 import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
@@ -45,7 +46,7 @@ async function fixture(t: TestContext) {
     title: "추가 필수 자격",
   });
   await new JsonStore(file).initialize(linkFixtureTemplates(seed));
-  const store = await new JsonStore(file).load();
+  const store = await loadPlanningFixture(file);
   let at = "2026-10-21T03:00:00Z";
   const app = await buildApp(store, { clock: () => at }),
     cookies = new Map<string, string>();
@@ -593,11 +594,11 @@ test("6/1→8/2 백업 쌍·기존 진행 보존·실패 복구·재실행 무�
   );
   assert.equal(await readFile(result.stateBackup, "utf8"), b);
   assert.equal(await readFile(result.organizationBackup, "utf8"), o);
-  const loaded = await new JsonStore(file).load();
+  const loaded = await loadPlanningFixture(file);
   const migrated = loaded.snapshot(),
     master = loaded.organizations.snapshot();
   await loaded.close();
-  assert.equal(migrated.schemaVersion, 28);
+  assert.equal(migrated.schemaVersion, 29);
   assert.equal(master.schemaVersion, 4);
   for (const key of [
     "users",

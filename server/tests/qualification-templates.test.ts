@@ -346,7 +346,7 @@ test("팀 적용·소속 필수 조회·공통 정보 자동 반영과 확정 �
     `/plans/${p.id}`,
     {
       revision: plan.revision,
-      endOn: "2027-12-31",
+      endOn: "2027-02-01",
       startOn: plan.startOn,
       goal: "독립 수행",
     },

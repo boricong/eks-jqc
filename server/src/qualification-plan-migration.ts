@@ -84,7 +84,7 @@ export function migrateQualificationPlans(
         migratedAt: at,
         goalNeedsReview: goal.length > 2000,
       };
-      rawPlan.workflowVersion = WORKFLOW_VERSION;
+      rawPlan.workflowVersion = "personal-certification-v6";
       rawPlan.revision++;
       rawPlan.updatedAt = at;
       // Missing legacy dates must remain empty until the learner explicitly edits them.

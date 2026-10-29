@@ -35,6 +35,7 @@ import {
   CourseSchema,
   QualificationSchema,
   validityErrors,
+  planningDeadlineErrors,
   courseUseErrors,
   qualificationReadinessErrors,
   qualificationPolicySnapshot,
@@ -132,6 +133,9 @@ function editingChanges(
               : "미정",
         "재인증 시작": `${item.renewalLeadMonths}개월 전`,
         "재인증 알림": `${item.renewalNoticeDaysBefore}일 전`,
+        "계획 최대 완료": item.planningDeadlineMonths
+          ? `${item.planningDeadlineMonths}개월`
+          : "미설정",
         "인증Set 연결": item.courseIds.join("\n"),
       };
     const questions = (kind: "objective" | "practical") =>
@@ -395,7 +399,10 @@ export function prepareCatalogSave(
     section === "qualifications" &&
     (candidate as Qualification).purpose !== "renewal"
   ) {
-    const errors = validityErrors((candidate as Qualification).validity);
+    const errors = [
+      ...validityErrors((candidate as Qualification).validity),
+      ...planningDeadlineErrors(candidate as Qualification),
+    ];
     demand(
       !errors.length,
       422,

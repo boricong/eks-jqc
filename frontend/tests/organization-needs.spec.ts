@@ -136,26 +136,17 @@ test('팀 자격에서 필요 조직을 지정하고 소속별 전체 계획 요
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    const field = page.locator('.plan-start-form .field');
-    const labelBox = (await field.locator('span').boundingBox())!;
-    const selectBox = (await page.getByLabel('취득할 자격', { exact: true }).boundingBox())!;
-    expect(selectBox.x).toBeGreaterThan(labelBox.x + labelBox.width);
-    expect(
-      Math.abs(labelBox.y + labelBox.height / 2 - selectBox.y - selectBox.height / 2),
-    ).toBeLessThan(2);
+    await expect(page.locator('.request-schedule-row')).toHaveCount(1);
     await page.screenshot({
       path: test.info().outputPath(`personal-request-${width}.png`),
       fullPage: true,
     });
   }
   await page.setViewportSize({ width: 1920, height: 1000 });
-  await expect(
-    page.getByText('요청된 필요자격 전체의 계획을 수립해 주세요.', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '자격 일정 수립', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '요청에서 제외', exact: true })).toHaveCount(0);
-  await page.getByLabel('취득할 자격', { exact: true }).selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await expect(page).toHaveURL(/\/plans\/[^/?]+/);
+  await page.getByLabel('완료일', { exact: true }).fill('2027-02-01');
+  await expect.poll(() => backend.store.snapshot().plans.length).toBe(1);
   const plan = backend.store.snapshot().plans.find((p) => p.requestId === old.id)!;
   await actor(page, 'admin-1');
   await page.goto('/admin/assignments');
@@ -252,7 +243,7 @@ test('세부 관리자는 상속 출처를 읽고 자기 조직의 직접 지정
   await page.goto('/');
   await actor(page, 'learner-2');
   await page.goto('/admin/organization-requirements');
-  await expect(page.getByRole('treeitem')).toHaveCount(1);
+  await expect(page.getByRole('treeitem')).toHaveCount(9);
   await expect(page.getByRole('button', { name: '자격별', exact: true })).toHaveCount(0);
   const detail = page.getByRole('region', { name: '선택 조직 필요자격' });
   await expect(detail).toContainText('상속');
@@ -260,7 +251,7 @@ test('세부 관리자는 상속 출처를 읽고 자기 조직의 직접 지정
   await saveMapping(page);
   await detail.getByRole('button', { name: /직접 지정 해제/ }).click();
   await page.getByRole('button', { name: '변경 확인', exact: true }).click();
-  await expect(page.getByRole('dialog')).toContainText('출처만 변경 1개 조직');
+  await expect(page.getByRole('dialog')).toContainText('출처만 변경 9개 조직');
   await page.getByRole('button', { name: '전체 변경 저장', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(detail).toContainText('상속');

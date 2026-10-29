@@ -1,4 +1,5 @@
 import { initializeObjectiveRenewals } from "./objective-renewal-migration.ts";
+import { initializePlanningSchedule } from "./planning-schedule-migration.ts";
 import { initializeRequirementExceptions } from "./requirement-exception-migration.ts";
 import { initializeReleases } from "./release-migration.ts";
 import { initialTemplates, metadata } from "./qualification-templates.ts";
@@ -229,8 +230,10 @@ export function seedState(testFixture = false): State {
     });
   return validateState(
     StateSchema.parse(
-      initializeObjectiveRenewals(
-        initializeRequirementExceptions(initializeReleases(state)),
+      initializePlanningSchedule(
+        initializeObjectiveRenewals(
+          initializeRequirementExceptions(initializeReleases(state)),
+        ),
       ),
     ),
     seedOrganizations(),

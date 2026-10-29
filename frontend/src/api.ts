@@ -32,7 +32,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
         'X-Session-Tab': sessionTab,
-        'X-EKS-Release-Contract': '1',
+        'X-EKS-Release-Contract': '2',
         ...(getDataGeneration() ? { 'X-EKS-Data-Generation': getDataGeneration() } : {}),
       },
     });

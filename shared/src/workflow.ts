@@ -20,7 +20,7 @@ export const PlanStartInputSchema = z.object({
 });
 export type PlanStartInput = z.infer<typeof PlanStartInputSchema>;
 const dateOrEmpty = z.union([z.literal(""), z.iso.date()]);
-export const WORKFLOW_VERSION = "personal-certification-v6";
+export const WORKFLOW_VERSION = "personal-certification-v7";
 export const workflowSteps = [
   ["person", "신규 인력 확인"],
   ["organization", "운영 조직 지정"],
@@ -46,6 +46,7 @@ export type QualificationVersionMode = z.infer<
   typeof QualificationVersionModeSchema
 >;
 export const QualificationPolicySnapshotSchema = z.object({
+  planningDeadlineMonths: z.number().int().min(1).max(1200).optional(),
   releaseVersion: ReleaseVersionSchema.optional(),
   id,
   entityId: id,
@@ -187,6 +188,7 @@ export const PersonalPlanSchema = z.object({
     "personal-certification-v3",
     "personal-certification-v4",
     "personal-certification-v5",
+    "personal-certification-v6",
     WORKFLOW_VERSION,
   ]),
   organizationId: id.optional(),
@@ -212,6 +214,14 @@ export const PersonalPlanSchema = z.object({
     .strict()
     .optional(),
   completedAt: z.iso.datetime().optional(),
+  planningWindow: z
+    .object({
+      baseOn: z.iso.date(),
+      months: z.number().int().min(1).max(1200),
+      deadlineOn: z.iso.date(),
+    })
+    .strict()
+    .optional(),
   assignmentId: id.optional(),
   approval: z.literal("skipped_by_policy").optional(),
 });

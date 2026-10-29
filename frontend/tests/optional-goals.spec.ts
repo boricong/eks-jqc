@@ -12,23 +12,24 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
     await requestPlan(page, '정하린');
     await actor(page, 'learner-2');
     await page.goto('/plans');
-    await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-    await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-    await page.getByLabel('종료일', { exact: true }).fill('2029-12-01');
-    const plan = backend.store.snapshot().plans[0]!;
-    const goals = page.locator('textarea[data-plan-field]');
+    const row = page.locator('.request-schedule-row').first();
+    await row.getByLabel('완료일', { exact: true }).fill('2027-02-01');
+    await row.locator('summary').click();
+    const goals = row.getByLabel('학습 목표(선택)');
     if (mode !== 'skip') {
       await expect(page.getByLabel('학습 목표(선택)', { exact: true })).toBeVisible();
       if (mode === 'partial')
         await goals.first().fill('줄바꿈을 보존하는 목표\n독립적으로 기준을 설명한다.');
       else await goals.first().fill('   ');
-      await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
     }
-    await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '계획 최종 확인', exact: true })).toBeVisible();
-    await expect(page.locator('.plan-review-goal')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: '계획 완료', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: '2. 일정 수립', exact: true }).click();
+    await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '전체 계획 최종 확인', exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('.request-schedule-review')).toBeVisible();
+    await expect(page.getByRole('button', { name: '전체 계획 확정', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: '일정 수정', exact: true }).click();
+    await row.locator('summary').click();
     await expect(goals.first()).toHaveValue(
       mode === 'partial'
         ? '줄바꿈을 보존하는 목표\n독립적으로 기준을 설명한다.'
@@ -36,13 +37,17 @@ for (const mode of ['skip', 'empty', 'partial'] as const) {
           ? '   '
           : '',
     );
-    await page.getByRole('button', { name: '최종 확인', exact: true }).click();
-    await page.getByRole('button', { name: '계획 완료', exact: true }).click();
-    await expect(page).toHaveURL(/\/qualifications\/[^/?]+$/);
+    await page.getByRole('button', { name: '전체 계획 확인', exact: true }).click();
+    await page.getByRole('button', { name: '전체 계획 확정', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '전체 계획 확정 완료', exact: true }),
+    ).toBeVisible();
+    const plan = backend.store.snapshot().plans[0]!;
+    await page.getByRole('link', { name: '학습·평가로 이동', exact: true }).click();
     const summary = page.getByRole('region', { name: '인증Set 요약', exact: true });
     await expect(summary.getByRole('heading', { name: '학습 목표', exact: true })).toHaveCount(0);
     await expect(summary).not.toContainText('작성된 학습 목표가 없습니다.');
-    expect(backend.store.snapshot().planningRequests[0]!.completion).toBeUndefined();
+    expect(backend.store.snapshot().planningRequests[0]!.completion).toBeDefined();
     await page.goto(`/plans/${plan.id}`);
     await expect(page.getByRole('navigation', { name: '계획 작성 단계' })).toHaveCount(0);
     await expect(page.getByLabel('계획 변경 사유')).toHaveCount(0);

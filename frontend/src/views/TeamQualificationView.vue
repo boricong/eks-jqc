@@ -99,6 +99,14 @@ useProcessContext(() => 'readonly');
       aria-label="저장된 팀 운영 기준"
     >
       <h2>팀 운영 기준</h2>
+      <p v-if="qualification.qualificationType === 'auditee'" class="muted">
+        계획 확정 후 최대 완료 개월:
+        {{
+          qualification.planningDeadlineMonths
+            ? `${qualification.planningDeadlineMonths}개월`
+            : '당시 미설정'
+        }}
+      </p>
       <PropertyList class="team-qualification-facts"
         ><div>
           <dt>인증기간</dt>

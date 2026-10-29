@@ -426,7 +426,7 @@ test("삭제와 확정의 경합은 배정을 중복 생성하지 않으며 확�
     `/plans/${id}`,
     {
       revision: 1,
-      endOn: "2029-12-01",
+      endOn: "2027-02-01",
       startOn: p.startOn,
       goal: "독립 수행",
     },
@@ -870,7 +870,7 @@ test("계획 원자성·자동 결재 생략·일정 목표 수정·동시 변�
   assert.deepEqual(results[0], results[1]);
   const done = f.store.snapshot().plans.find((x) => x.id === p.id)!;
   assert.equal(done.approval, "skipped_by_policy");
-  assert.equal(done.workflowVersion, "personal-certification-v6");
+  assert.equal(done.workflowVersion, "personal-certification-v7");
   assert.equal(
     f.store.snapshot().assignments.filter((a) => a.planId === p.id).length,
     1,
@@ -1187,7 +1187,7 @@ test("완료 계획의 팀 설정 고정·레거시 보완·미완료 최신 적
     `/plans/${p.id}`,
     {
       revision: p.revision,
-      endOn: "2027-12-01",
+      endOn: "2027-02-01",
       startOn: "2026-10-01",
       goal: "",
     },

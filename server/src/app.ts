@@ -16,6 +16,7 @@ import { registerAuditorRoutes } from "./auditor-program-routes.ts";
 import { registerTeamUserRoutes } from "./team-user-routes.ts";
 import { canContinueType } from "./personal-access.ts";
 import { planningView } from "./planning.ts";
+import { planningSchedule } from "./planning-schedule.ts";
 import {
   prepareCatalogSave,
   qualificationDeletionImpact,
@@ -130,13 +131,13 @@ export async function buildApp(
   app.addHook("onRequest", async (request, reply) => {
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      /^\/api\/(courses|qualifications|plans|common-course-updates|system\/(common-courses|qualification-templates))(\/|$)/.test(
+      /^\/api\/(courses|qualifications|plans|planning-requests|common-course-updates|system\/(common-courses|qualification-templates))(\/|$)/.test(
         request.url,
       )
     ) {
       actor(request);
       demand(
-        request.headers["x-eks-release-contract"] === "1",
+        request.headers["x-eks-release-contract"] === "2",
         409,
         "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
         "RELEASE_CONTRACT_CHANGED",
@@ -1031,6 +1032,34 @@ export async function buildApp(
     return planningView(s, store.organizations.snapshot(), u, r, clock());
   });
   mutation("POST", "/api/plans", "plan.create", () => "");
+  app.get("/api/planning-requests/:id/schedule", async (request) =>
+    planningSchedule(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      actor(request),
+      (request.params as any).id,
+      clock(),
+    ),
+  );
+  app.post("/api/planning-requests/:id/schedule/preview", async (request) =>
+    planningSchedule(
+      store.snapshot(),
+      store.organizations.snapshot(),
+      actor(request),
+      (request.params as any).id,
+      clock(),
+    ),
+  );
+  mutation(
+    "PUT",
+    "/api/planning-requests/:id/schedule",
+    "planning.schedule.save",
+  );
+  mutation(
+    "POST",
+    "/api/planning-requests/:id/schedule/complete",
+    "planning.schedule.complete",
+  );
   mutation("PUT", "/api/plans/:id", "plan.save");
   mutation(
     "POST",

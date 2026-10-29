@@ -12,6 +12,7 @@ async function headers(page: Page) {
   return {
     'X-Session-Tab': (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!,
     'Idempotency-Key': crypto.randomUUID(),
+    'X-EKS-Release-Contract': '2',
   };
 }
 function contrast(a: string, b: string) {
@@ -189,11 +190,11 @@ test('완료 계획은 편집·저장 없이 조회하고 서버 API 수정 후 
   await savePlanViaApi(
     page,
     plan.id,
-    { endOn: '2030-12-01', goal: '서버에서 수정한 조회 목표' },
+    { endOn: '2027-03-01', goal: '서버에서 수정한 조회 목표' },
     '서버 조정',
   );
   await refresh(page);
-  await expect(page.locator('.plan-review-summary')).toContainText('2030.12.01');
+  await expect(page.locator('.plan-review-summary')).toContainText('2027.03.01');
   await expect(page.locator('.plan-review-goal').first()).toContainText(
     '서버에서 수정한 조회 목표',
   );
@@ -204,39 +205,35 @@ test('완료 계획은 편집·저장 없이 조회하고 서버 API 수정 후 
   expect(saves).toEqual([]);
 });
 
-test('다른 화면에서 완료한 계획을 재조회하면 대기 자동 저장을 취소하고 조회로 전환', async ({
+test('다른 화면에서 전체 확정하면 오래된 입력 저장을 보류하고 확정 이력을 유지한다', async ({
   page,
   backend,
 }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/assignments');
   await requestPlan(page, '정하린');
   await actor(page, 'learner-2');
   await page.goto('/plans');
-  await page.getByLabel('취득할 자격').selectOption('demo-qualification');
-  await page.getByRole('button', { name: '계획 수립 시작', exact: true }).click();
-  await page.getByLabel('종료일', { exact: true }).fill('2030-12-01');
-  await expect.poll(() => backend.store.snapshot().plans[0]!.endOn).toBe('2030-12-01');
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
-  const writes: string[] = [];
-  page.on('request', (r) => {
-    if (r.method() === 'PUT' && /\/api\/plans\//.test(r.url())) writes.push(r.url());
-  });
-  await page.getByLabel('종료일', { exact: true }).fill('2031-12-01');
-  const plan = backend.store.snapshot().plans[0]!;
-  const response = await page.request.post(`/api/plans/${plan.id}/complete`, {
-    headers: await headers(page),
-    data: { revision: plan.revision },
-  });
-  expect(response.ok(), await response.text()).toBeTruthy();
-  await refresh(page);
-  await expect(page.getByRole('heading', { name: '계획 내용', exact: true })).toBeVisible();
-  await page.clock.runFor(1000);
-  await expect(page.locator('.plan-review-summary')).toContainText('2030.12.01');
-  await expect(page.locator('[data-plan-field]')).toHaveCount(0);
-  expect(writes).toEqual([]);
-  expect(backend.store.snapshot().plans[0]!.endOn).toBe('2030-12-01');
-  await page.clock.resume();
+  await page.getByLabel('완료일', { exact: true }).fill('2027-03-01');
+  await expect.poll(() => backend.store.snapshot().plans.length).toBe(1);
+  const request = backend.store.snapshot().planningRequests[0]!,
+    h = await headers(page);
+  const preview = await (
+    await page.request.post('/api/planning-requests/' + request.id + '/schedule/preview', {
+      headers: h,
+      data: {},
+    })
+  ).json();
+  const complete = await page.request.post(
+    '/api/planning-requests/' + request.id + '/schedule/complete',
+    {
+      headers: h,
+      data: { requestRevision: preview.requestRevision, reviewToken: preview.reviewToken },
+    },
+  );
+  expect(complete.ok(), await complete.text()).toBeTruthy();
+  await page.getByLabel('완료일', { exact: true }).fill('2027-03-02');
+  await expect(page.getByRole('button', { name: '변경된 저장 내용 확인' })).toBeVisible();
+  await expect(page.getByLabel('완료일', { exact: true })).toHaveValue('2027-03-02');
+  expect(backend.store.snapshot().plans[0]!.endOn).toBe('2027-03-01');
 });

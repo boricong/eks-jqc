@@ -30,7 +30,7 @@ export function validateState(
   organizations?: OrganizationDocument,
   legacy = false,
 ): State {
-  if (!legacy && [25, 26, 27, 28].includes((input as any)?.schemaVersion)) {
+  if (!legacy && [25, 26, 27, 28, 29].includes((input as any)?.schemaVersion)) {
     const raw = input as any;
     for (const item of [
       ...(raw.courses || []),
@@ -69,7 +69,7 @@ export function validateState(
       ),
       "업무27 상속 예외 필드 누락",
     );
-  if (!legacy && (input as any)?.schemaVersion === 28) {
+  if (!legacy && (input as any)?.schemaVersion >= 28) {
     const raw = input as any;
     check(Array.isArray(raw.renewalBatches), "업무28 재인증 회차 필드 누락");
     // Older fixtures and imported archived criteria may omit the ordinary purpose;

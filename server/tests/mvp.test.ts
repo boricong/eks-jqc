@@ -1368,6 +1368,7 @@ test("정확한 합격 경계와 반올림 독립 판정", async (t) => {
       s.qualifications.push({
         commonCourseEntityIds: [],
         templateId: "rounding-fixture",
+        planningDeadlineMonths: 6,
         qualificationType: "auditee",
         templateRevision: 1,
         englishName: "",

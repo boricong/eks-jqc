@@ -691,6 +691,10 @@ onBeforeRouteUpdate(leave);
         </ul>
       </section>
       <PreviousPlanSchedule :plan="current" />
+      <p v-if="current.planningWindow" class="muted">
+        확정 당시 일정 기한: {{ current.planningWindow.baseOn }}부터
+        {{ current.planningWindow.months }}개월 · {{ current.planningWindow.deadlineOn }}까지
+      </p>
       <CollapsibleSection
         v-if="step === 3"
         v-model:open="reviewRequestOpen"

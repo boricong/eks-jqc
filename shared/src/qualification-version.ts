@@ -20,6 +20,7 @@ export function configureInitialQualification(
     JSON.stringify({
       validity: q.validity,
       courseIds: q.courseIds,
+      planningDeadlineMonths: q.planningDeadlineMonths,
       renewalLeadMonths: q.renewalLeadMonths ?? 3,
       renewalNoticeDaysBefore: q.renewalNoticeDaysBefore ?? 7,
     });
