@@ -15,6 +15,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "npm run documents:check && npm run typecheck && npm run build -w frontend",
     "documents:check": "node --import tsx scripts/check-documents.ts",
+    "documents:check:git": "node --import tsx scripts/check-documents.ts --git",
     "typecheck": "tsc -p server/tsconfig.json && npm run typecheck -w frontend",
     "test": "node --import tsx --test server/tests/*.test.ts",
     "test:e2e": "npm run test:e2e -w frontend",

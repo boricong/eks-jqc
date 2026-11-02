@@ -386,5 +386,7 @@ Auditor 최초 인증은 평가자 역할의 유형별 계획 요청과 필수 �
 
 로그인 후 헤더의 **문서 조회**에서 사이드바 없이 업무 안내를 읽을 수 있습니다. 기존 시스템 운영 문서 주소도 새 `/documents` 화면으로 연결됩니다.
 
+문서 목록과 등록된 Markdown 원문은 Git에 포함됩니다. 다른 환경은 `git pull --ff-only` → `npm ci` → `npm run documents:check:git`로 확인한 뒤 개발 서버를 재시작합니다. [문서 누락·API 오류 점검](docs/DOCUMENTS.md#다른-개발-환경에서-문서가-열리지-않을-때)을 참고하세요.
+
 - [학습자 계획·학습·평가·인증서 안내](docs/LEARNER_CERTIFICATION_GUIDE.md)
 - [시스템 운영·사용자 업무 상태·조직 관리 안내](docs/SYSTEM_OPERATIONS_GUIDE.md)
