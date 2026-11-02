@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { designateAuditor } from "./auditor-program.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -34,6 +33,13 @@ export function validateOrganizations(input: unknown): OrganizationDocument {
       "조직별 필수자격 설정 기능이 종료되었습니다.",
       "FEATURE_REMOVED",
     );
+    demand(
+      !(input as any)?.roots?.includes(node)
+        ? !Object.hasOwn(node, "auditorEnabled")
+        : true,
+      422,
+      "Auditor 대상은 Lv1 팀에만 설정할 수 있습니다.",
+    );
     visited.add(node);
     if (Array.isArray(node.children)) pending.push(...node.children);
   }
@@ -64,14 +70,12 @@ export function validateOrganizations(input: unknown): OrganizationDocument {
   return doc;
 }
 export function seedOrganizations(): OrganizationDocument {
-  return validateOrganizations(
-    JSON.parse(
-      readFileSync(
-        new URL("./organization-seed.json", import.meta.url),
-        "utf8",
-      ),
-    ),
+  const doc = JSON.parse(
+    readFileSync(new URL("./organization-seed.json", import.meta.url), "utf8"),
   );
+  doc.schemaVersion = 5;
+  for (const root of doc.roots) root.auditorEnabled = false;
+  return validateOrganizations(doc);
 }
 export function organization(doc: OrganizationDocument, id: string) {
   const entry = organizationEntries(doc).find((entry) => entry.id === id);
@@ -80,8 +84,9 @@ export function organization(doc: OrganizationDocument, id: string) {
 }
 export function userView(user: User, doc: OrganizationDocument): UserView {
   const entry = organization(doc, user.organizationId);
+  const { certificationEligibility: _legacyEligibility, ...publicUser } = user;
   return {
-    ...user,
+    ...publicUser,
     roles:
       user.organizationAdministration?.organizationId === user.organizationId
         ? [...user.roles, "organization_admin"]
@@ -89,6 +94,7 @@ export function userView(user: User, doc: OrganizationDocument): UserView {
     lv1OrganizationId: entry.lv1OrganizationId,
     organizationPath: entry.path,
     organizationActive: entry.effectiveActive,
+    auditorEnabled: entry.auditorEnabled,
   };
 }
 export function systemOperator(user: User) {
@@ -153,7 +159,13 @@ export function changeOrganization(
       422,
       "사용 중인 조직 아래에 추가해 주세요.",
     );
-    node = { id: randomUUID(), name: input.name, active: true, children: [] };
+    node = {
+      id: randomUUID(),
+      name: input.name,
+      active: true,
+      children: [],
+      ...(!parent ? { auditorEnabled: false } : {}),
+    };
   } else if (parentId !== before!.parentId) {
     demand(
       parent &&
@@ -356,14 +368,17 @@ function saveUser(
     roles: input.roles,
     revision: (user?.revision ?? 0) + 1,
   };
-  if (input.roles.includes("evaluator") && !before?.roles.includes("evaluator"))
-    designateAuditor(
-      s,
-      updated,
-      actor,
-      entry.lv1OrganizationId,
-      new Date().toISOString(),
-    );
+  demand(
+    !input.roles.includes("evaluator") || before?.roles.includes("evaluator"),
+    422,
+    "Auditor 대상은 Lv1 팀 단위로 설정합니다.",
+    "AUDITOR_TEAM_MANAGED",
+  );
+  if (
+    before?.roles.includes("evaluator") &&
+    !updated.roles.includes("evaluator")
+  )
+    updated.roles.push("evaluator");
   if (user) {
     if (
       user.organizationId !== input.organizationId &&

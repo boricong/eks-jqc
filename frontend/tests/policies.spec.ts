@@ -144,7 +144,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
       'admin-1',
       [
         '/admin/dashboard',
-        '/admin/targets',
+        '/admin/users',
         '/admin/credentials',
         '/admin/organization-settings',
         '/admin/qualifications',
@@ -168,8 +168,8 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
         '/system/overview',
 
         '/system/notices',
-        '/system/documents',
-        '/system/documents/iatf16949-competence-review',
+        '/documents',
+        '/documents/iatf16949-competence-review',
       ],
     ],
   ];
@@ -182,7 +182,7 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/qualifications?filter=certified': '보유 자격 · Auditee',
     '/qualifications?filter=certified&type=auditor': '보유 자격 · Auditor',
     '/admin/dashboard': '평가 또는 Auditor 학습 확인',
-    '/admin/targets': '학습 확인',
+    '/admin/users': '사용자',
     '/admin/credentials': 'Auditor는 교육·인증기준 확인',
     '/admin/organization-settings': '필요자격은 조직 필요자격 화면에서 지정',
     '/admin/qualifications/demo-qualification': '저장된 값과 적용된 정확한 인증Set 버전',
@@ -198,8 +198,8 @@ test('모든 페이지군·편집/조회/종료 화면에 절차 설명과 정�
     '/system/overview': '조회 전용',
 
     '/system/notices': '시스템 공지 관리',
-    '/system/documents': '운영 문서 목록',
-    '/system/documents/iatf16949-competence-review': '운영 문서 읽기',
+    '/documents': '운영 문서 목록',
+    '/documents/iatf16949-competence-review': '운영 문서 읽기',
   };
   page.on('pageerror', (e) => errors.push(e.message));
   for (const [id, paths] of cases) {

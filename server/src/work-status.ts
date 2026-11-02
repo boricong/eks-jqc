@@ -113,8 +113,8 @@ export function workStatusInfo(
     validCertifications,
     blockedReason: !canChange
       ? "업무 상태 변경 권한이 없습니다."
-      : !validCertifications
-        ? "현재 팀의 유효 Auditee 인증이 1개 이상 있어야 Deactive로 변경할 수 있습니다."
+      : target.workStatus !== "deactive" && !validCertifications
+        ? "유효한 자격 인증이 없어 deactive로 변경할 수 없습니다."
         : undefined,
   };
 }
@@ -258,7 +258,7 @@ export function reconcileWorkStatus(
       team,
       at,
       `work-revoked:${d.id}:${team}`,
-      "업무 미수행으로 Auditee 인증이 말소되었습니다",
+      "업무 미수행으로 자격 인증이 말소되었습니다",
       `${u.name} · ${reason}`,
     );
     changed = true;
@@ -268,6 +268,8 @@ export function reconcileWorkStatus(
 export function validateWorkStatus(s: State) {
   if (s.schemaVersion < 30) return;
   for (const u of s.users) {
+    if (s.schemaVersion >= 32 && u.certificationEligibility !== undefined)
+      throw Error("폐지된 취득 대상자 상태는 명시적으로 이관해 주세요.");
     if (!u.workStatus)
       throw Error("사용자 업무 상태 누락 · 명시적 이관이 필요합니다.");
     const d = u.workDeactivation;

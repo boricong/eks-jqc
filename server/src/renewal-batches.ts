@@ -83,8 +83,7 @@ export function batchBlockers(
     u.lv1OrganizationId !== b.lv1OrganizationId
   )
     reasons.push("시작 당시 팀의 활성 학습자 권한이 필요합니다.");
-  if (u.certificationEligibility === "hold")
-    reasons.push("취득 대상자 Hold 상태입니다.");
+
   if (a?.excludedReason) reasons.push("검증에서 제외된 배정입니다.");
   if (!q || q.deletedAt) reasons.push("재인증 자격을 사용할 수 없습니다.");
   else
@@ -140,8 +139,7 @@ export function renewalCandidates(
     : ["팀의 운영 가능한 재인증 자격이 준비되지 않았습니다."];
   if (!u.organizationActive) reasons.push("사용 중인 조직이 필요합니다.");
   if (workDeactive(u)) reasons.push(WORK_DEACTIVE_MESSAGE);
-  if (u.certificationEligibility === "hold")
-    reasons.push("취득 대상자 Hold 상태입니다.");
+
   if (
     s.renewalBatches.some(
       (b) =>

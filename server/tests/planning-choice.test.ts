@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
@@ -307,8 +308,10 @@ test("비활성·Hold·운영 중지는 발송 또는 계획 완료를 적절히
   assert.equal(readiness.count, 0);
   await f.finish(id, 409);
   await f.mutate((s) => {
-    s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-      "hold";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-2")!,
+      "deactive",
+    );
   });
   await f.call(
     "admin-1",

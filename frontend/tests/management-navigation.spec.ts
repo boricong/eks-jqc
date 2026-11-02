@@ -3,8 +3,6 @@ import { configureDashboardFixture, DASHBOARD_NOW } from '../../server/tests/das
 
 const menuNames = [
   '인증 현황',
-  '취득 대상자 상태',
-  'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
@@ -17,7 +15,7 @@ const menuNames = [
 ];
 const groupNames = ['현황 조회', '인증 운영', '조직 관리', '자격 기준 설정', '팀 소통'];
 
-test('다섯 그룹·12개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
+test('일반 업무 다섯 그룹·10개 메뉴·화면 제목·상세 선택과 기존 URL', async ({ page }) => {
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin');
@@ -49,7 +47,7 @@ test('다섯 그룹·12개 메뉴·화면 제목·상세 선택과 기존 URL', 
   );
 });
 
-test('세부 관리자의 네 메뉴·빈 그룹 제거·직접 URL와 일반 학습자 제한, 운영자의 팀 전환', async ({
+test('세부 관리자의 세 메뉴·빈 그룹 제거·직접 URL와 일반 학습자 제한, 운영자의 팀 전환', async ({
   page,
   backend,
 }) => {
@@ -61,18 +59,17 @@ test('세부 관리자의 네 메뉴·빈 그룹 제거·직접 URL와 일반 �
   const nav = page.getByRole('navigation', { name: '관리 메뉴', exact: true });
   await expect(nav.getByRole('link')).toHaveText([
     '인증 현황',
-    '취득 대상자 상태',
     '조직 정보·관리자',
     '조직 필요자격',
   ]);
-  await expect(nav.getByRole('heading')).toHaveText(groupNames.slice(0, 3));
+  await expect(nav.getByRole('heading')).toHaveText(['현황 조회', '조직 관리']);
   await page.goto('/admin/assignments');
   await expect(page).toHaveURL(/\/admin\/dashboard/);
   await actor(page, 'operator-1');
   await page.goto('/admin/targets?lv1OrganizationId=org-photo');
-  await expect(nav.getByRole('link')).toHaveText(menuNames);
+  await expect(nav.getByRole('link')).toHaveText([...menuNames, 'Auditor 관리']);
   await page.getByLabel('관리할 Lv1 조직').selectOption('org-etch');
-  await expect(page).toHaveURL(/\/admin\/targets\?lv1OrganizationId=org-etch/);
+  await expect(page).toHaveURL(/\/admin\/users\?lv1OrganizationId=org-etch/);
   await expect(nav.getByRole('link', { name: '팀 자격 설정', exact: true })).toHaveAttribute(
     'href',
     '/admin/qualifications?lv1OrganizationId=org-etch',

@@ -250,7 +250,7 @@ export function saveTemplate(
     qualificationType === "auditor" ||
       (!auditorLevel && !prerequisiteTemplateId),
     422,
-    "Auditee에는 Auditor 등급·선행 자격을 지정할 수 없습니다.",
+    "일반 자격에는 Auditor 등급·선행 자격을 지정할 수 없습니다.",
   );
   demand(
     !prerequisiteTemplateId ||
@@ -311,7 +311,7 @@ export function saveTemplate(
           (t) => t.id !== old?.id && t.purpose === "renewal",
         )),
     422,
-    "재인증용 Auditee 기본자격은 1개만 생성할 수 있습니다.",
+    "재인증용 일반 자격 기본자격은 1개만 생성할 수 있습니다.",
   );
   const at = new Date().toISOString();
   const next = QualificationTemplateSchema.parse({

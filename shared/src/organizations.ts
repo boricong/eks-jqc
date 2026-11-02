@@ -18,6 +18,7 @@ export interface OrganizationNode {
   children: OrganizationNode[];
   description?: string;
   duties?: string;
+  auditorEnabled?: boolean;
 }
 export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
   z.object({
@@ -27,6 +28,7 @@ export const OrganizationNodeSchema: z.ZodType<OrganizationNode> = z.lazy(() =>
     children: z.array(OrganizationNodeSchema),
     description: z.string().max(4000).default(""),
     duties: z.string().max(4000).default(""),
+    auditorEnabled: z.boolean().optional(),
   }),
 );
 /** Read-only compatibility schema. Never accepted by current organization writes. */
@@ -55,7 +57,7 @@ export const RequestRecordSchema = z.object({
   action: z.string().optional(),
 });
 export const OrganizationDocumentSchema = z.object({
-  schemaVersion: z.literal(4),
+  schemaVersion: z.union([z.literal(4), z.literal(5)]),
   revision: z.number().int().nonnegative(),
   roots: z.array(OrganizationNodeSchema).min(1),
   audits: z.array(
@@ -90,6 +92,7 @@ export interface OrganizationEntry {
   path: { id: string; name: string }[];
   description: string;
   duties: string;
+  auditorEnabled: boolean;
 }
 export function organizationEntries(
   doc: Pick<OrganizationDocument, "roots">,
@@ -116,6 +119,7 @@ export function organizationEntries(
       path: [...(parent?.path ?? []), { id: node.id, name: node.name }],
       description: node.description ?? "",
       duties: node.duties ?? "",
+      auditorEnabled: parent?.auditorEnabled ?? node.auditorEnabled ?? false,
     };
     entries.push(entry);
     for (let i = node.children.length - 1; i >= 0; i--)

@@ -1,3 +1,4 @@
+import { userView } from "./organizations.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
 import {
@@ -140,8 +141,9 @@ export function dashboardReader(
       !!orgs.get(id)?.path.some((p) => p.id === scope.organizationId));
   const allowedUsers = s.users.filter(
     (u) =>
-      u.roles.includes(type === "auditor" ? "evaluator" : "learner") &&
-      includesOrg(u.organizationId),
+      (type === "auditor"
+        ? userView(u, doc).auditorEnabled === true
+        : u.roles.includes("learner")) && includesOrg(u.organizationId),
   );
   const people = allowedUsers.map((u): DashboardPerson => {
     const org = orgs.get(u.organizationId)!;
@@ -151,16 +153,12 @@ export function dashboardReader(
       organizationId: u.organizationId,
       organizationName: org.name,
       organizationPath: org.path,
-      held: u.certificationEligibility === "hold",
       inactive: !org.effectiveActive,
       workDeactive: workDeactive(u, type),
       workStatus: u.workStatus || "active",
       workStartedOn: u.workDeactivation?.startedOn,
       workRevokesOn: u.workDeactivation?.revokesOn,
-      eligible:
-        u.certificationEligibility !== "hold" &&
-        org.effectiveActive &&
-        !workDeactive(u, type),
+      eligible: org.effectiveActive && !workDeactive(u, type),
     };
   });
   const personById = new Map(people.map((p) => [p.userId, p]));
@@ -350,10 +348,8 @@ export function dashboardReader(
       totalPeople: people.length,
       eligiblePeople: people.filter((p) => p.eligible).length,
       excludedPeople: people.filter((p) => !p.eligible).length,
-      heldPeople: people.filter((p) => p.held).length,
       inactivePeople: people.filter((p) => p.inactive).length,
       deactivePeople: people.filter((p) => p.workDeactive).length,
-      heldAndInactivePeople: people.filter((p) => p.held && p.inactive).length,
     },
   };
 
@@ -407,7 +403,7 @@ export function dashboardReader(
         renewalState: "not_applicable" as DashboardRenewalState,
         renewalBlockCodes: codes,
       };
-    if (person.held) codes.push("TARGET_HOLD");
+
     if (person.workDeactive) codes.push("WORK_DEACTIVE");
     if (person.inactive) codes.push("ORGANIZATION_INACTIVE");
     if (effectiveCredentialStatus(c, at) !== "Active")
@@ -515,7 +511,6 @@ export function dashboardReader(
       (!cert || effectiveCredentialStatus(cert, at) !== "Active") &&
       (selectedPairs.has(key) || !!assignment || !!plan);
     if (acquisitionNeeded) {
-      if (person.held) acquisitionBlockCodes.push("TARGET_HOLD");
       if (person.workDeactive) acquisitionBlockCodes.push("WORK_DEACTIVE");
       if (!assignment) {
         if (person.inactive)
@@ -1013,7 +1008,6 @@ export function dashboardReader(
       organizationName: p.organizationName,
       organizationPath: p.organizationPath,
       eligible: p.eligible,
-      held: p.held,
       inactive: p.inactive,
       workDeactive: p.workDeactive,
       workStatus: p.workStatus,

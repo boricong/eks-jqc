@@ -10,10 +10,10 @@ export function initializeWorkStatus(s: State): State {
 export function migrateWorkStatus(input: unknown, orgInput: unknown) {
   const raw = structuredClone(input) as State;
   const organizations = validateOrganizations(orgInput);
-  if (![29, 30].includes(raw?.schemaVersion))
+  if (![29, 30, 31, 32].includes(raw?.schemaVersion))
     throw Error("업무 상태 이관은 업무29 또는 현행30 파일이 필요합니다.");
   validateState(raw, organizations);
-  const alreadyApplied = raw.schemaVersion === 30;
+  const alreadyApplied = raw.schemaVersion >= 30;
   if (!alreadyApplied) {
     for (const u of raw.users) {
       if ((u.workStatus && u.workStatus !== "active") || u.workDeactivation)
@@ -28,7 +28,7 @@ export function migrateWorkStatus(input: unknown, orgInput: unknown) {
     organizations,
     report: {
       alreadyApplied,
-      schemaVersion: 30,
+      schemaVersion: raw.schemaVersion,
       revision: raw.revision,
       organizationRevision: organizations.revision,
       activeUsers: raw.users.length,

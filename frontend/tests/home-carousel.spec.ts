@@ -143,7 +143,7 @@ test('갱신 시 배정 ID 선택 유지·제거 시 첫 자격·계정 전환·
       view.assignments = [...view.assignments.slice(1), view.assignments[0]!];
     if (mode === 'removed' || mode === 'hold')
       view.assignments = view.assignments.filter((a) => a.id !== 'carousel-2');
-    if (mode === 'hold') view.actor.certificationEligibility = 'hold';
+    if (mode === 'hold') view.actor.workStatus = 'deactive';
   });
   await page.goto('/');
   await actor(page, 'learner-1');
@@ -170,7 +170,7 @@ test('갱신 시 배정 ID 선택 유지·제거 시 첫 자격·계정 전환·
   await expect(current(page)).toHaveAttribute('data-assignment-id', 'assignment-1');
   mode = 'hold';
   await refresh(page);
-  await expect(page.getByText('취득 대상자 Hold ·', { exact: false })).toBeVisible();
+  await expect(page.locator('aside[role="status"]').filter({ hasText: 'deactive' })).toBeVisible();
   await expect(detail(page)).toBeVisible();
   for (const [id, heading] of [
     ['admin-1', '기준 관리'],

@@ -56,6 +56,8 @@ export function registerAuditorRoutes(
         id: u.id,
         name: u.name,
         designated: u.designated,
+        eligible: u.eligible,
+        exclusionReason: u.exclusionReason,
         currentLevel: u.currentLevel,
         levels: u.levels.map((l) => ({
           level: l.level,
@@ -75,15 +77,25 @@ export function registerAuditorRoutes(
       scope,
       members,
       summary: {
+        eligible: members.filter((m) => m.eligible).length,
         designated: members.filter((m) => m.designated).length,
-        general: members.filter((m) => m.currentLevel === "general").length,
-        main: members.filter((m) => m.currentLevel === "main").length,
-        started: members.filter((m) => m.levels.some((l) => l.started)).length,
-        completed: members.filter((m) =>
-          m.levels.some((l) => l.historyCount || l.pendingAward),
+        excluded: members.filter((m) => !m.eligible).length,
+        general: members.filter(
+          (m) => m.eligible && m.currentLevel === "general",
         ).length,
-        learning: members.filter((m) => m.levels.some((l) => l.learning))
+        main: members.filter((m) => m.eligible && m.currentLevel === "main")
           .length,
+        started: members.filter(
+          (m) => m.eligible && m.levels.some((l) => l.started),
+        ).length,
+        completed: members.filter(
+          (m) =>
+            m.eligible &&
+            m.levels.some((l) => l.historyCount || l.pendingAward),
+        ).length,
+        learning: members.filter(
+          (m) => m.eligible && m.levels.some((l) => l.learning),
+        ).length,
       },
     };
   });
@@ -98,6 +110,16 @@ export function registerAuditorRoutes(
     (() => {
       const v = auditorProgramView(store.snapshot(), team(r));
       return {
+        teamEnabled:
+          store.organizations.snapshot().roots.find((n) => n.id === team(r))
+            ?.auditorEnabled === true,
+        members: store
+          .snapshot()
+          .users.filter(
+            (u) =>
+              userView(u, store.organizations.snapshot()).lv1OrganizationId ===
+              team(r),
+          ).length,
         readiness: v.readiness,
         program: v.program
           ? {
@@ -124,7 +146,7 @@ export function registerAuditorRoutes(
         return reply.code(410).send({
           code: "FEATURE_REMOVED",
           message:
-            "이 기능은 종료되었습니다. 팀 자격 설정과 지정 안내문 설정을 사용해 주세요.",
+            "이 기능은 종료되었습니다. Auditor 관리의 팀 기준과 안내문 설정을 사용해 주세요.",
         });
       },
       handler: async () => {},
@@ -192,11 +214,9 @@ export function registerAuditorRoutes(
             if (action === "start")
               demand(
                 current.lv1OrganizationId === scope &&
-                  current.roles.includes("evaluator") &&
-                  current.organizationActive &&
-                  current.certificationEligibility !== "hold",
+                  current.organizationActive,
                 403,
-                "현재 조직의 Auditor 지정·취득 가능 상태를 확인해 주세요.",
+                "현재 조직의 사용 여부와 취득 가능 상태를 확인해 주세요.",
               );
             if (action !== "start") team(r, s);
           },

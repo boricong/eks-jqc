@@ -53,7 +53,6 @@ const organizationPath = (u: Learner) => u.organizationPath.map((o) => o.name).j
 function requestLabel(u: Learner) {
   if (readiness(u.id)?.canRequest) return '요청 가능';
   if (!u.organizationActive) return '소속 중지';
-  if (u.certificationEligibility === 'hold') return '대상자 Hold';
   if (u.workStatus === 'deactive') return 'deactive';
   return '확인 필요';
 }
@@ -307,7 +306,7 @@ onBeforeRouteUpdate(leave);
       </button>
     </div>
     <p v-if="!ready" class="notice-body">
-      요청할 대상이 없습니다. 아래 대상자의 소속·취득 대상자 상태를 확인해 주세요.
+      요청할 대상이 없습니다. 아래 대상자의 소속·업무 상태를 확인해 주세요.
     </p>
     <div class="table-panel planning-target-table">
       <table aria-label="계획 요청 대상자 현황">

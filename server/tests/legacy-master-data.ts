@@ -64,7 +64,7 @@ export function masterPayload(
     qualifications: state.qualifications,
     courses: state.courses,
     organizations: {
-      roots: org.roots,
+      roots: org.roots.map(({ auditorEnabled, ...root }) => root),
     },
   });
 }

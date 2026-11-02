@@ -96,7 +96,7 @@ async function start(item: Status['levels'][number]) {
         }}</strong>
       </p>
       <p v-if="!data.designated" class="muted">
-        Auditor 지정이 해제되었습니다. 이미 시작한 학습과 기존 인증 이력은 유지됩니다.
+        소속 팀은 Auditor 미사용 상태입니다. 이미 시작한 학습과 기존 인증 이력은 유지됩니다.
       </p>
       <details v-if="data.notice?.title" class="auditor-notice">
         <summary>{{ data.notice.title }}</summary>

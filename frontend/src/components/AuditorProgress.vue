@@ -37,9 +37,10 @@ watch([() => route.fullPath, () => store.actorId], load, { immediate: true });
     <p v-if="error" role="alert" class="error-message">{{ error }}</p>
     <template v-if="data"
       ><p>
-        지정 {{ data.summary.designated }}명 · 학습 시작 {{ data.summary.started }}명 · 수료 이력
-        {{ data.summary.completed }}명 · 일반 {{ data.summary.general }}명 · 메인
-        {{ data.summary.main }}명 · 학습 진행 {{ data.summary.learning }}명
+        대상 {{ data.summary.eligible }}명 · 제외 {{ data.summary.excluded }}명 · 학습 시작
+        {{ data.summary.started }}명 · 수료 이력 {{ data.summary.completed }}명 · 일반
+        {{ data.summary.general }}명 · 메인 {{ data.summary.main }}명 · 학습 진행
+        {{ data.summary.learning }}명
       </p>
       <article v-for="m in data.members" :key="m.id" class="progress-person">
         <h3>
@@ -48,7 +49,7 @@ watch([() => route.fullPath, () => store.actorId], load, { immediate: true });
             m.currentLevel ? auditorLevelLabels[m.currentLevel as AuditorLevel] : '유효 등급 없음'
           }}
         </h3>
-        <p>{{ m.designated ? '지정' : '지정 해제' }}</p>
+        <p>{{ m.eligible ? '대상' : m.exclusionReason }}</p>
         <p v-for="level in m.levels" :key="level.qualificationId">
           {{ level.title }} · {{ auditorLevelLabels[level.level as AuditorLevel] }} ·
           {{

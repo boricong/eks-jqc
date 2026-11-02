@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { releaseFixture } from "./release-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
@@ -241,18 +242,22 @@ async function eligibility(
   ids = [learner],
   expected = 200,
 ) {
-  return f.call(
-    who,
-    "/certification-targets/eligibility",
-    {
-      userIds: ids,
-      eligibility: value,
-      reason: "대상자 조정",
-      revision: f.store.snapshot().revision,
-    },
-    expected,
-    "PUT",
-  );
+  if (expected !== 200)
+    return f.call(
+      who,
+      "/certification-targets/eligibility",
+      { userIds: ids },
+      expected,
+      "PUT",
+    );
+  return f.mutate((s) => {
+    for (const id of ids)
+      setWorkStatus(
+        s.users.find((u) => u.id === id)!,
+        value === "hold" ? "deactive" : "active",
+        f.now,
+      );
+  });
 }
 async function history(f: F, id: string) {
   return f.call(learner, `/certifications/${id}/history`);
@@ -379,7 +384,7 @@ test("기준 Hold/Revoke는 새 계획·확정만 막고 기존 배정의 자동
     "Revoke",
   );
 });
-test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 답안과 개인 효력은 유지", async (t) => {
+test("deactive는 평가 시작·저장·제출·요청을 막고 기존 답안과 개인 효력은 유지", async (t) => {
   const f = await fixture(t),
     a = await confirm(f, await plan(f)),
     e = f.store.snapshot().enrollments.find((e) => e.assignmentId === a)!;
@@ -399,7 +404,7 @@ test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 �
         "PUT",
       )
     ).code,
-    "TARGET_ON_HOLD",
+    "WORK_DEACTIVE",
   );
   await f.call(learner, `/attempts/${attempt.id}/submit`, { revision: 1 }, 409);
   await f.call(
@@ -420,7 +425,10 @@ test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 �
     409,
   );
   const w = await f.call("admin-1", "/workspace");
-  assert.equal(w.eligibilitySummary.held, 1);
+  assert.equal(
+    w.users.find((u: any) => u.id === learner).workStatus,
+    "deactive",
+  );
   assert.equal(
     f.store.snapshot().attempts.find((x) => x.id === attempt.id)!.status,
     "in_progress",
@@ -430,7 +438,7 @@ test("대상자 Hold는 평가 시작·저장·제출·요청을 막고 기존 �
   await eligibility(f, "hold");
   assert.equal((await history(f, c.id)).effectiveStatus, "Active");
 });
-test("세부 관리자는 하위 조직 인원도 Hold하고 기준·개인 상태·재인증 대리는 거부", async (t) => {
+test("세부 관리자의 폐지 대상자 API는410이며 기준·개인 상태·재인증 대리는 거부", async (t) => {
   const f = await fixture(t);
   const entries = f.store.organizations.snapshot().roots[0]!.children;
   const child = entries[0]!.id,
@@ -446,17 +454,14 @@ test("세부 관리자는 하위 조직 인원도 Hold하고 기준·개인 상�
     };
     s.users.find((x) => x.id === "ft-2")!.organizationId = grandchild;
   });
-  const view = await f.call("ft-1", "/certification-targets");
-  assert.deepEqual(
-    view.users.map((u: any) => u.id).sort(),
-    ["ft-1", "ft-2", learner].sort(),
+  await f.call("ft-1", "/certification-targets", undefined, 410);
+  await f.call(
+    "ft-1",
+    "/certification-targets/eligibility",
+    { userIds: [learner] },
+    410,
+    "PUT",
   );
-  for (const other of ["learner-1", "other-team"])
-    await eligibility(f, "hold", "ft-1", [other], 403);
-  await eligibility(f, "hold", "ft-1", ["ft-2"]);
-  await eligibility(f, "eligible", "ft-1", ["ft-2"]);
-  await eligibility(f, "hold", "ft-1");
-  await eligibility(f, "eligible", "ft-1");
   const c = await earn(f);
   await f.call(
     "ft-1",
@@ -586,7 +591,7 @@ test("재인증 시작 후 최신 변경에도 시작 당시 기준과 발급 �
   assert.equal(h.certification.expiresOn, c.expiresOn);
   assert.equal(h.renewal.canStart, false);
 });
-test("개인 Hold·해제·대상자 Hold와 관계없이 만료 자동 폐기·중복 알림 방지·늦은 완료 거부", async (t) => {
+test("개인 Hold·해제·deactive와 관계없이 만료 자동 폐기·중복 알림 방지·늦은 완료 거부", async (t) => {
   const f = await fixture(t),
     c = await earn(f);
   f.setTime("2026-11-01T00:00:00.000Z");

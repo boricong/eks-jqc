@@ -407,11 +407,11 @@ test('수료와 자격 취득 결과의 단일 주 행동·보조 연결·Hold �
   await page.route('**/api/workspace', async (r) => {
     const response = await r.fetch(),
       data = await response.json();
-    data.actor.certificationEligibility = 'hold';
+    data.actor.workStatus = 'deactive';
     await r.fulfill({ response, json: data });
   });
   await refresh(page);
-  await expect(page.locator('.assessment-restriction')).toContainText('Hold');
+  await expect(page.locator('.assessment-restriction')).toContainText('deactive');
   await expect(page.locator('.outcome-actions .primary')).toHaveText('인증서 보기');
   expect(backend.store.snapshot()).toEqual(before);
 });

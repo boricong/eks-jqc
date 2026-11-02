@@ -30,14 +30,18 @@ const canAccess = computed(() =>
 );
 const roleOptions = computed(() =>
   Object.entries(roleLabels)
-    .filter(([value]) =>
-      isTeam.value ? teamEditableRoles.some((r) => r === value) : value !== 'organization_admin',
+    .filter(
+      ([value]) =>
+        value !== 'evaluator' &&
+        (isTeam.value
+          ? teamEditableRoles.some((r) => r === value)
+          : value !== 'organization_admin'),
     )
     .map(([value, label]) => ({ value: value as Role, label })),
 );
 type ListedUser = UserView &
   Partial<Pick<TeamUserView, 'canEdit' | 'editBlockedReason' | 'workStatusInfo'>>;
-const workUser = ref<TeamUserView | null>(null),
+const workUser = ref<ListedUser | null>(null),
   workFilter = ref('');
 const users = ref<ListedUser[]>([]),
   doc = shallowRef<Pick<OrganizationView, 'revision' | 'entries'> | null>(null);
@@ -53,6 +57,18 @@ const comparison = ref<ListedUser | null>(null),
 const form = ref({ name: '', organizationId: '', roles: ['learner'] as Role[] });
 const baseline = ref('');
 const dirty = computed(() => editing.value && JSON.stringify(form.value) !== baseline.value);
+function workBlocked(user: ListedUser, inEditor = false) {
+  if (inEditor && dirty.value) return '사용자 정보를 먼저 저장하거나 취소해 주세요.';
+  if (!user.workStatusInfo) return '업무 상태를 불러온 뒤 다시 확인해 주세요.';
+  return user.workStatusInfo.blockedReason || '';
+}
+async function workSaved() {
+  if (!(await load())) return;
+  if (editing.value && selected.value && !dirty.value) {
+    const latest = users.value.find((u) => u.id === selected.value!.id);
+    if (latest) edit(latest);
+  }
+}
 const teamOrganizations = computed(() =>
   (doc.value?.entries || []).filter((e) => e.lv1OrganizationId === store.managementLv1),
 );
@@ -102,35 +118,7 @@ watch([query, orgFilter], () => {
     );
   } catch {}
 });
-let generation = 0,
-  auditorSequence = 0;
-const addingAuditor = computed(
-  () => form.value.roles.includes('evaluator') && !selected.value?.roles.includes('evaluator'),
-);
-const auditorPreview = ref<{
-  readiness: { ready: boolean; reasons: string[] };
-  program: {
-    notice: { title: string; body: string; links: { title: string; url: string }[] };
-  } | null;
-}>();
-const auditorError = ref('');
-watch([addingAuditor, () => form.value.organizationId], async () => {
-  const seq = ++auditorSequence;
-  auditorPreview.value = undefined;
-  auditorError.value = '';
-  const team = doc.value?.entries.find(
-    (e) => e.id === form.value.organizationId,
-  )?.lv1OrganizationId;
-  if (!editing.value || !addingAuditor.value || !team) return;
-  try {
-    const result = await api<typeof auditorPreview.value>(
-      '/auditor-program?lv1OrganizationId=' + encodeURIComponent(team),
-    );
-    if (seq === auditorSequence) auditorPreview.value = result;
-  } catch (e) {
-    if (seq === auditorSequence) auditorError.value = (e as Error).message;
-  }
-});
+let generation = 0;
 function clearPrivateState() {
   workUser.value = null;
   users.value = [];
@@ -138,8 +126,6 @@ function clearPrivateState() {
   selected.value = null;
   editing.value = false;
   comparison.value = null;
-  auditorSequence++;
-  auditorPreview.value = undefined;
 }
 async function load() {
   const seq = ++generation;
@@ -195,8 +181,7 @@ function edit(user?: ListedUser) {
 async function leave() {
   return (
     !busy.value &&
-    (!isTeam.value ||
-      !dirty.value ||
+    (!dirty.value ||
       (await confirmAction(
         '저장하지 않은 사용자 정보가 있습니다. 이동할까요?',
         '변경 버리고 이동',
@@ -294,7 +279,6 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 onBeforeUnmount(() => {
   generation++;
-  auditorSequence++;
 });
 </script>
 <template>
@@ -348,6 +332,36 @@ onBeforeUnmount(() => {
       <p v-if="selected" class="muted">
         {{ selected.organizationPath.map((p) => p.name).join(' › ') }}
       </p>
+      <section class="user-work-status" aria-label="업무 상태">
+        <div class="actions">
+          <strong>업무 상태</strong>
+          <span
+            class="status"
+            :class="selected?.workStatus === 'deactive' ? 'status-waiting' : 'status-certified'"
+            >{{ selected?.workStatus || 'active' }}</span
+          >
+          <button
+            type="button"
+            class="button secondary"
+            :disabled="busy || !selected || !!workBlocked(selected, true)"
+            aria-describedby="user-work-status-reason"
+            @click="selected && (workUser = selected)"
+          >
+            업무 상태 변경
+          </button>
+        </div>
+        <p
+          id="user-work-status-reason"
+          class="muted"
+          v-if="!selected || workBlocked(selected, true)"
+        >
+          {{
+            selected
+              ? workBlocked(selected, true)
+              : '사용자 저장 후 업무 상태를 변경할 수 있습니다.'
+          }}
+        </p>
+      </section>
       <form @submit.prevent="save">
         <label class="field"
           ><span>이름</span><input v-model="form.name" required maxlength="100" :disabled="busy"
@@ -395,30 +409,6 @@ onBeforeUnmount(() => {
         <p v-if="isTeam && selected?.roles.includes('admin')" class="notice-body">
           팀 조직 관리자 · 지정 유지. 관리자 역할은 시스템 운영에서 관리합니다.
         </p>
-        <p class="muted">
-          Auditor는 지정된 필수학습을 홈에서 시작합니다. 일반·메인 등급은 취득 인증으로 결정합니다.
-          지정 해제 후에도 이미 시작한 학습과 기존 인증은 유지됩니다.
-        </p>
-        <section v-if="addingAuditor" aria-label="Auditor 지정 안내 미리보기">
-          <p v-if="auditorError" role="alert">{{ auditorError }}</p>
-          <p v-if="!auditorError && !auditorPreview" role="status">
-            팀의 지정 준비 상태를 확인하고 있습니다.
-          </p>
-          <template v-if="auditorPreview"
-            ><p>신규 지정 준비 · {{ auditorPreview.readiness.ready ? '완료' : '확인 필요' }}</p>
-            <ul>
-              <li v-for="reason in auditorPreview.readiness.reasons" :key="reason">{{ reason }}</li>
-            </ul>
-            <h3>{{ auditorPreview.program?.notice.title }}</h3>
-            <p style="white-space: pre-wrap">{{ auditorPreview.program?.notice.body }}</p>
-            <p v-for="link in auditorPreview.program?.notice.links" :key="link.url">
-              <a :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a>
-            </p>
-            <p class="muted">
-              저장과 함께 앱 내 안내 및 Auditor 학습 진입 링크를 한 번 보냅니다.
-            </p></template
-          >
-        </section>
         <p v-if="selected?.organizationAdministration" class="notice-body">
           세부 조직 관리자 지정은 조직 정보·필요자격에서 관리합니다. 소속 조직을 변경하면 현재
           지정이 해제되며 새 소속에서 다시 지정해야 합니다.
@@ -435,8 +425,7 @@ onBeforeUnmount(() => {
               !form.name.trim() ||
               !form.organizationId ||
               !!organizationIssue ||
-              (!form.roles.length && !(isTeam && selected?.roles.includes('admin'))) ||
-              (isTeam && addingAuditor && (!auditorPreview?.readiness.ready || !!auditorError))
+              (!form.roles.length && !(isTeam && selected?.roles.includes('admin')))
             "
           >
             사용자 저장</button
@@ -471,20 +460,27 @@ onBeforeUnmount(() => {
   </div>
 
   <div class="table-wrap">
-    <table :class="{ 'work-users-table': isTeam }">
+    <table class="work-users-table">
       <thead>
         <tr>
           <th>이름</th>
           <th>역할</th>
           <th>소속 조직</th>
-          <th v-if="isTeam">업무 상태</th>
+          <th>업무 상태</th>
           <th>관리</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="user in list.rows" :key="user.id">
           <td data-label="이름">{{ user.name }}</td>
-          <td data-label="역할">{{ user.roles.map((r) => labels[r]).join(' · ') }}</td>
+          <td data-label="역할">
+            {{
+              user.roles
+                .filter((r) => r !== 'evaluator')
+                .map((r) => labels[r])
+                .join(' · ') || '사용자'
+            }}
+          </td>
           <td
             class="organization-path"
             data-label="소속 조직"
@@ -497,7 +493,7 @@ onBeforeUnmount(() => {
               ].join(' › ')
             }}<span v-if="!user.organizationActive" class="small-label"> · 사용 중지 조직</span>
           </td>
-          <td v-if="isTeam" data-label="업무 상태">
+          <td data-label="업무 상태">
             <span
               class="status"
               :class="user.workStatus === 'deactive' ? 'status-waiting' : 'status-certified'"
@@ -512,7 +508,7 @@ onBeforeUnmount(() => {
             >
           </td>
           <td data-label="관리">
-            <template v-if="isTeam && user.workStatusInfo">
+            <template v-if="user.workStatusInfo">
               <span
                 class="work-status-control"
                 :title="user.workStatusInfo.blockedReason"
@@ -528,11 +524,12 @@ onBeforeUnmount(() => {
                   "
                   :title="user.workStatusInfo.blockedReason"
                   :aria-label="`${user.name} 업무 상태 변경`"
-                  @click="workUser = user as TeamUserView"
+                  @click="workUser = user"
                 >
                   업무 상태 변경
                 </button>
               </span>
+              <small v-if="workBlocked(user)" class="muted">{{ workBlocked(user) }}</small>
             </template>
             <button
               class="text-link"
@@ -562,11 +559,26 @@ onBeforeUnmount(() => {
     :user="workUser"
     :organization-revision="doc.revision"
     @close="workUser = null"
-    @saved="load"
+    @saved="workSaved"
   />
 </template>
 
 <style scoped>
+.user-work-status {
+  padding: 1rem 0;
+  border-block: 1px solid var(--hairline);
+  margin-bottom: 1rem;
+}
+.user-work-status .actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.user-work-status .actions button {
+  margin-left: auto;
+}
+.user-work-status p.muted {
+  margin: 0.5rem 0 0;
+}
 .work-users-table td {
   overflow-wrap: anywhere;
 }

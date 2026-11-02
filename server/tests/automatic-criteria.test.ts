@@ -26,6 +26,16 @@ async function fixture(t: TestContext) {
   await new JsonStore(file).initialize(seedState(true));
   const store = await loadPlanningFixture(file);
   const app = await buildApp(store);
+  await store.organizations.transact(
+    "operator-1",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+      return {};
+    },
+  );
   t.after(async () => {
     await app.close();
     await rm(dir, { recursive: true, force: true });
@@ -345,8 +355,8 @@ test("17/2→18/3 명시 이관은 원문·팀 적용 이력·JSON7 호환과 �
     "automatic-criteria",
   );
   const migrated = await loadPlanningFixture(f.file);
-  assert.equal(migrated.snapshot().schemaVersion, 30);
-  assert.equal(migrated.organizations.snapshot().schemaVersion, 4);
+  assert.equal(migrated.snapshot().schemaVersion, 32);
+  assert.equal(migrated.organizations.snapshot().schemaVersion, 5);
   assert.deepEqual(migrated.snapshot().auditorPrograms[0]!.general, lineage);
   assert.deepEqual(
     historicalContent(migrated.snapshot().assignments),

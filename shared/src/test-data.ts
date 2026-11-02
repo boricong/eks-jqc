@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const TEST_DATA_RECIPE_VERSION = 3 as const;
+export const TEST_DATA_RECIPE_VERSION = 4 as const;
 export const testDataCountLabels = {
   qualificationTemplates: "기본자격",
   qualifications: "팀 자격 버전",
@@ -48,6 +48,7 @@ export const TestDataReceiptSchema = z
     recipeVersion: z.union([
       z.literal(1),
       z.literal(2),
+      z.literal(3),
       z.literal(TEST_DATA_RECIPE_VERSION),
     ]),
     stateRevision: z.number().int().nonnegative(),

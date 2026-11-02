@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -85,7 +86,7 @@ export function dashboardSeed() {
   state.qualifications[0]!.lifecycleStatus = "Active";
   state.qualifications[0]!.renewalLeadMonths = 3;
   const orgs: OrganizationDocument = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     revision: 0,
     audits: [],
     requests: [],
@@ -93,6 +94,7 @@ export function dashboardSeed() {
       {
         id: TEAM,
         name: "가상 Photo 팀",
+        auditorEnabled: true,
         active: true,
         children: [
           {
@@ -448,7 +450,17 @@ export async function configureDashboardFixture(store: JsonStore) {
       roles: ["learner"],
       organizationId: ORG_A,
       revision: 1,
-      certificationEligibility: "hold",
+      workStatus: "deactive",
+      workDeactivation: setWorkStatus(
+        {
+          id: "fixture",
+          revision: 1,
+          name: "",
+          roles: ["learner"],
+          organizationId: ORG_A,
+        },
+        "deactive",
+      ).workDeactivation,
     },
     {
       id: "expired-member",

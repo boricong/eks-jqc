@@ -38,7 +38,13 @@ export function createPoolQualification(
       templateIds: [template.id],
       templateRevisions: { [template.id]: template.revision },
     },
-    seedOrganizations(),
+    {
+      ...seedOrganizations(),
+      roots: seedOrganizations().roots.map((root) => ({
+        ...root,
+        auditorEnabled: root.id === team,
+      })),
+    },
     team,
     at,
   ) as { imported: string[] };

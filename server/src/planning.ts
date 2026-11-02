@@ -147,7 +147,6 @@ export function candidate(
     ["available", "draft"].includes(row.status) &&
     request.organizationId === u.organizationId &&
     u.organizationActive &&
-    u.certificationEligibility !== "hold" &&
     !workDeactive(u);
   return row;
 }
@@ -268,8 +267,7 @@ export function planningView(
       "계획 요청 이후 소속이 달라졌습니다. 현재 소속의 새 요청을 확인해 주세요.",
     );
   if (!u.organizationActive) errors.push("사용 중지된 소속입니다.");
-  if (u.certificationEligibility === "hold")
-    errors.push("취득 대상자 Hold 상태입니다.");
+
   if (workDeactive(u)) errors.push(WORK_DEACTIVE_MESSAGE);
   if (!candidates.length)
     errors.push("현재 팀 자격이 없어 자격 준비를 기다리고 있습니다.");
@@ -325,8 +323,7 @@ export function planRequestErrors(
   )
     return ["현재 소속의 본인 계획 요청을 확인해 주세요."];
   if (workDeactive(u)) return [WORK_DEACTIVE_MESSAGE];
-  if (u.certificationEligibility === "hold" || !u.organizationActive)
-    return ["취득 대상자 Hold 또는 사용 중지된 소속입니다."];
+  if (!u.organizationActive) return ["사용 중지된 소속입니다."];
   if (r.qualificationType !== q.qualificationType)
     return ["요청과 자격의 인증 유형이 다릅니다."];
   if (r.completion || r.closed)

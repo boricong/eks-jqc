@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useDemo } from '../stores/demo';
 import type { OrganizationView, OrganizationEntry } from '@eks/contracts';
 import AppDialog from './AppDialog.vue';
+import AuditorTeamSetting from './AuditorTeamSetting.vue';
 const store = useDemo();
 const doc = shallowRef<OrganizationView | null>(null),
   selectedId = ref(''),
@@ -298,6 +299,20 @@ onBeforeUnmount(() => {
           아래로 이동
         </button>
       </div>
+      <AuditorTeamSetting
+        v-if="!creating && selected?.level === 1 && doc"
+        :team="selected"
+        :revision="doc.revision"
+        :disabled="busy || dirty"
+        :disabled-reason="
+          dirty
+            ? '조직 정보의 변경사항을 먼저 저장하거나 취소해 주세요.'
+            : busy
+              ? '조직 정보를 저장하고 있습니다.'
+              : ''
+        "
+        @saved="load()"
+      />
     </section>
   </div>
   <AppDialog

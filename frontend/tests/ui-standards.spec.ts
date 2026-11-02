@@ -73,7 +73,7 @@ const routes = {
     '/',
     ...['organizations', 'users', 'overview', 'testing', 'notices'].map((s) => `/system/${s}`),
   ],
-  'learner-2': ['/', '/admin/organization-settings', '/admin/targets'],
+  'learner-2': ['/', '/admin/organization-settings', '/admin/dashboard'],
 };
 for (const [id, paths] of Object.entries(routes)) {
   test(`${id} 전체 메뉴의 네 화면 폭·글꼴·입력·조작 기준`, async ({ page, backend }, info) => {

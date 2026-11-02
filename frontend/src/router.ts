@@ -107,7 +107,7 @@ export const router = createRouter({
           path: 'auditor',
           name: 'auditor-admin',
           component: () => import('./views/AuditorAdminView.vue'),
-          meta: { management: true, managementSection: 'auditor', title: 'Auditor 운영' },
+          meta: { management: true, managementSection: 'auditor', title: 'Auditor 관리' },
         },
         {
           path: 'dashboard',
@@ -157,9 +157,18 @@ export const router = createRouter({
     { path: '/system/:retired(testing|data)', redirect: '/system/organizations' },
     { path: '/system', redirect: '/system/organizations' },
     {
-      path: '/system/:section(documents)/:id?',
-      component: SystemView,
-      meta: { role: 'system_operator', title: '문서 조회' },
+      path: '/documents/:id?',
+      name: 'documents',
+      component: () => import('./views/DocumentsView.vue'),
+      meta: { title: '문서 조회' },
+    },
+    {
+      path: '/system/documents/:id?',
+      redirect: (to) => ({
+        path: `/documents${to.params.id ? `/${encodeURIComponent(String(to.params.id))}` : ''}`,
+        query: to.query,
+        hash: to.hash,
+      }),
     },
     {
       path: '/system/:section(organizations|users|overview|notices|qualification-templates|common-courses|test-data)',
@@ -172,6 +181,12 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const store = useDemo();
   await store.initialize();
+  if (to.params.section === 'targets')
+    return {
+      path: store.fullManagement ? '/admin/users' : '/admin/dashboard',
+      query: { lv1OrganizationId: to.query.lv1OrganizationId },
+      replace: true,
+    };
   if (
     (!store.signedIn ||
       (to.meta.management && !store.canEnterManagement) ||
@@ -186,7 +201,9 @@ router.beforeEach(async (to) => {
     to.meta.management &&
     store.canEnterManagement &&
     (to.path === '/admin' ||
-      !store.canManageSection(String(to.meta.managementSection || to.params.section)))
+      !(String(to.meta.managementSection || to.params.section) === 'auditor'
+        ? store.fullManagement
+        : store.canManageSection(String(to.meta.managementSection || to.params.section))))
   )
     return {
       path: '/admin/dashboard',

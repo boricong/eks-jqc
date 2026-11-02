@@ -68,7 +68,7 @@ export function registerWorkStatusRoutes(
           current.status === "deactive" ||
           current.canDeactivate,
         422,
-        current.blockedReason || "유효 Auditee 인증이 필요합니다.",
+        current.blockedReason || "유효 자격 인증이 필요합니다.",
         "WORK_STATUS_NOT_ELIGIBLE",
       );
       for (const [key, value] of tokens)
@@ -177,7 +177,7 @@ export function registerWorkStatusRoutes(
         demand(
           next !== "deactive" || info.canDeactivate,
           422,
-          info.blockedReason || "유효 Auditee 인증이 필요합니다.",
+          info.blockedReason || "유효 자격 인증이 필요합니다.",
         );
         target.workStatus = next;
         if (next === "deactive")

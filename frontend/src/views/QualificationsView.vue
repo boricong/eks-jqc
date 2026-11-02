@@ -51,10 +51,12 @@ const owned = computed(() =>
   ),
 );
 const typeItems = computed(() =>
-  (['auditee', 'auditor'] as const).map((id) => ({
-    id,
-    label: `${id === 'auditee' ? 'Auditee' : 'Auditor'} 인증 (${owned.value.filter((a) => typeOf(a) === id).length})`,
-  })),
+  (['auditee', 'auditor'] as const)
+    .filter((id) => id !== 'auditor' || store.personalTypes.includes('auditor'))
+    .map((id) => ({
+      id,
+      label: `${id === 'auditee' ? '자격' : 'Auditor'} 인증 (${owned.value.filter((a) => typeOf(a) === id).length})`,
+    })),
 );
 function selectType(type: string) {
   void router.push({ query: { ...route.query, type: type === 'auditor' ? 'auditor' : undefined } });
@@ -120,9 +122,6 @@ const list = computed(() =>
     >
     <LearnerNav v-if="filter !== 'certified'" />
     <PersonalTypeTabs panel-id="personal-content" v-if="filter !== 'certified' && !assessments" />
-    <p v-if="store.actor.certificationEligibility === 'hold'" class="error-message">
-      취득 대상자 Hold · 새 취득·평가·재인증은 중단됩니다. 기록과 자료는 확인할 수 있습니다.
-    </p>
     <PageHeading class="page-heading">
       <h1>{{ filter === 'certified' ? '보유 자격' : assessments ? '평가' : '학습' }}</h1>
       <span class="muted">{{ store.actor.name }}</span>

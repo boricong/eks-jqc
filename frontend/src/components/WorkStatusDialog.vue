@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount, onUnmounted, onMounted, nextTick } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import { type TeamUserView, type WorkStatusPreview, workStatusLabels } from '@eks/contracts';
+import { type UserView, type WorkStatusPreview, workStatusLabels } from '@eks/contracts';
 import { api, mutate, ApiError } from '../api';
 import { useDemo } from '../stores/demo';
 import AppDialog from './AppDialog.vue';
 import { randomUUID } from '../uuid';
-const props = defineProps<{ user: TeamUserView; organizationRevision: number }>();
+const props = defineProps<{ user: UserView; organizationRevision: number }>();
 const emit = defineEmits<{ close: []; saved: [] }>();
 const store = useDemo();
 const returnFocus = document.activeElement as HTMLElement | null;
@@ -18,7 +18,7 @@ const next = computed(() => (props.user.workStatus === 'deactive' ? 'active' : '
 let sequence = 0;
 let requestKey = randomUUID();
 const path = (suffix = '') =>
-  store.managementPath(`/team-users/${props.user.id}/work-status${suffix}`);
+  `/team-users/${props.user.id}/work-status${suffix}?lv1OrganizationId=${encodeURIComponent(props.user.lv1OrganizationId)}`;
 async function preview() {
   if (busy.value) return;
   const seq = ++sequence;
@@ -27,7 +27,7 @@ async function preview() {
   try {
     // Refresh the user/organization revisions before confirming the change.
     const current = await api<import('@eks/contracts').TeamUsersView>(
-      store.managementPath('/team-users'),
+      `/team-users?lv1OrganizationId=${encodeURIComponent(props.user.lv1OrganizationId)}`,
     );
     const user = current.users.find((u) => u.id === props.user.id);
     if (seq !== sequence) return;
@@ -107,7 +107,13 @@ onUnmounted(async () => {
 });
 </script>
 <template>
-  <AppDialog :open="true" title="업무 상태 변경" class="work-status-dialog" @update:open="close">
+  <AppDialog
+    :open="true"
+    :busy="busy"
+    title="업무 상태 변경"
+    class="work-status-dialog"
+    @update:open="close"
+  >
     <div class="work-status-summary">
       <strong>{{ user.name }}</strong>
       <span

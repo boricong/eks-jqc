@@ -1,3 +1,4 @@
+import { policyScope } from "./organization-administrators.ts";
 import { reconcilePendingAuditor } from "./domain.ts";
 import { demand } from "./errors.ts";
 import { createHash } from "node:crypto";
@@ -6,7 +7,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { State, UserView } from "@eks/contracts";
 import type { JsonStore } from "./storage.ts";
 import {
-  targetsView,
   qualificationImpact,
   certificationHistory,
   authorizeLifecycle,
@@ -22,14 +22,23 @@ export function registerLifecycleRoutes(
   const scope = (r: FastifyRequest) =>
     z.object({ lv1OrganizationId: z.string().optional() }).parse(r.query)
       .lv1OrganizationId;
-  app.get("/api/certification-targets", async (r) =>
-    targetsView(
-      store.snapshot(),
-      store.organizations.snapshot(),
-      actor(r),
-      scope(r),
-    ),
-  );
+  for (const method of ["GET", "PUT"] as const)
+    app.route({
+      method,
+      url:
+        method === "GET"
+          ? "/api/certification-targets"
+          : "/api/certification-targets/eligibility",
+      handler: async (r) => {
+        policyScope(actor(r), store.organizations.snapshot(), scope(r));
+        demand(
+          false,
+          410,
+          "취득 대상자 상태 기능이 제거되었습니다. 사용자 관리에서 업무 상태를 확인해 주세요.",
+          "FEATURE_REMOVED",
+        );
+      },
+    });
   app.get("/api/qualifications/:id/lifecycle-impact", async (r) =>
     qualificationImpact(
       store.snapshot(),
@@ -60,7 +69,6 @@ export function registerLifecycleRoutes(
   });
   const routes = [
     ["POST", "/api/qualifications/:id/lifecycle", "qualification.lifecycle"],
-    ["PUT", "/api/certification-targets/eligibility", "eligibility.change"],
     ["POST", "/api/certifications/:id/status", "credential.status"],
     [
       "POST",

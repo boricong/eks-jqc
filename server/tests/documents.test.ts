@@ -69,7 +69,7 @@ async function fixture(t: TestContext) {
   };
 }
 
-test("운영자만 등록 목록·원문을 읽으며 조회는 업무·조직·원본을 변경하지 않는다", async (t) => {
+test("로그인한 모든 역할이 등록 목록·원문을 읽으며 조회는 업무·조직·원본을 변경하지 않는다", async (t) => {
   const f = await fixture(t),
     state = f.store.snapshot(),
     org = f.store.organizations.snapshot(),
@@ -77,7 +77,7 @@ test("운영자만 등록 목록·원문을 읽으며 조회는 업무·조직·
   for (const suffix of ["", "/one"]) {
     assert.equal((await f.call(suffix)).statusCode, 401);
     for (const actor of ["learner-1", "admin-1", "learner-2"])
-      assert.equal((await f.call(suffix, actor)).statusCode, 403);
+      assert.equal((await f.call(suffix, actor)).statusCode, 200);
   }
   const list = await f.call("", "operator-1");
   assert.equal(list.statusCode, 200);
@@ -206,7 +206,7 @@ test("문서 누락·디렉터리·외부 심볼릭 링크·인코딩/크기 오
   assert.equal((await f.call("", "operator-1")).statusCode, 503);
 });
 
-test("이미 발급한 세션도 역할 회수 뒤 문서 조회를 거부한다", async (t) => {
+test("시스템 운영 역할을 회수해도 로그인 사용자의 문서 읽기는 유지한다", async (t) => {
   const f = await fixture(t),
     login = await f.app.inject({
       method: "POST",
@@ -233,6 +233,6 @@ test("이미 발급한 세션도 역할 회수 뒤 문서 조회를 거부한다
         headers: { cookie },
       })
     ).statusCode,
-    403,
+    200,
   );
 });

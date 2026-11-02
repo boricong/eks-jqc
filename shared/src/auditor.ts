@@ -51,7 +51,14 @@ export const AuditorAssignmentSchema = z.object({
   pendingGeneralCertification: z.boolean().optional(),
   level: AuditorLevelSchema,
   kind: z.enum(["initial", "reacquisition"]),
-  designationId: z.string(),
+  designationId: z.string().optional(),
+  teamEligibility: z
+    .object({
+      lv1OrganizationId: z.string(),
+      organizationRevision: z.number().int().nonnegative(),
+      at: z.iso.datetime(),
+    })
+    .optional(),
   programRevision: z.number().int().positive(),
   criteriaManagerId: z.string(),
 });

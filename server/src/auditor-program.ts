@@ -1,3 +1,4 @@
+import { requireAuditorTeam } from "./auditor-team.ts";
 import { freezeCriteria } from "./releases.ts";
 import {
   auditorCriteria,
@@ -19,14 +20,12 @@ import {
   type Qualification,
   type OrganizationDocument,
   type UserView,
-  type User,
   type AuditorLevel,
   type AuditorProgram,
 } from "@eks/contracts";
 import { demand } from "./errors.ts";
 import { currentQualification, metadata } from "./qualification-templates.ts";
 import { userView } from "./organizations.ts";
-import { notify } from "./notifications.ts";
 import {
   renewalAvailability,
   reconcileLifecycle,
@@ -63,8 +62,6 @@ export function auditorProgramView(s: State, team: string) {
   const general = auditorReadiness(s, team, "general"),
     main = auditorReadiness(s, team, "main");
   const reasons = [...general.reasons];
-  if (!program?.notice.title || !program.notice.body)
-    reasons.push("지정 안내문의 제목과 본문이 필요합니다.");
   return {
     program: program || null,
     general,
@@ -139,13 +136,12 @@ export function auditorMe(
         !history.some((c) => c.assignmentId === a.id),
     );
     const reasons: string[] = [];
-    if (!u.roles.includes("evaluator"))
+    if (!u.auditorEnabled)
       reasons.push(
-        "현재 Auditor 지정이 해제되어 새 학습·갱신을 시작할 수 없습니다.",
+        "소속 팀은 Auditor 미사용 상태로 새 학습·갱신을 시작할 수 없습니다.",
       );
     if (!u.organizationActive) reasons.push("사용 중인 조직이 필요합니다.");
-    if (u.certificationEligibility === "hold")
-      reasons.push("취득 대상자 Hold 상태입니다.");
+
     if (q.lv1OrganizationId !== u.lv1OrganizationId)
       reasons.push("이전 팀의 자격 기록입니다.");
     if (certification) reasons.push("이미 유효한 자격을 보유하고 있습니다.");
@@ -226,7 +222,8 @@ export function auditorMe(
     };
   });
   return {
-    designated: u.roles.includes("evaluator"),
+    designated: u.auditorEnabled === true,
+    teamEnabled: u.auditorEnabled === true,
     currentLevel: levels.some((l) => l.level === "main" && l.certification)
       ? "main"
       : levels.some((l) => l.level === "general" && l.certification)
@@ -323,63 +320,6 @@ export function saveAuditorProgram(
   audit(s, u, team, "auditor.program.save", team, at);
   return auditorProgramView(s, team);
 }
-export function sendAuditorNotice(
-  s: State,
-  team: string,
-  recipientId: string,
-  key: string,
-  at: string,
-) {
-  const p = programFor(s, team);
-  demand(
-    p?.notice.title && p.notice.body,
-    409,
-    "지정 안내문을 먼저 준비해 주세요.",
-  );
-  notify(
-    s,
-    {
-      key,
-      recipientId,
-      lv1OrganizationId: team,
-      qualificationType: "auditor",
-      type: "auditor_designation",
-      title: p.notice.title,
-      body: p.notice.body,
-      href: "/auditor",
-      auditorNotice: structuredClone(p.notice),
-    },
-    at,
-  );
-}
-export function designateAuditor(
-  s: State,
-  user: User,
-  actor: User,
-  team: string,
-  at: string,
-) {
-  const readiness = auditorProgramView(s, team).readiness;
-  demand(
-    readiness.ready,
-    409,
-    readiness.reasons.join(" · "),
-    "AUDITOR_NOT_READY",
-  );
-  user.auditorDesignation = {
-    id: randomUUID(),
-    actorId: actor.id,
-    at,
-    source: "designation",
-  };
-  sendAuditorNotice(
-    s,
-    team,
-    user.id,
-    `auditor:designation:${user.auditorDesignation.id}`,
-    at,
-  );
-}
 export function startAuditor(
   s: State,
   doc: OrganizationDocument,
@@ -423,11 +363,9 @@ export function startAuditor(
   );
   const level = view.level;
   demand(
-    u.roles.includes("evaluator") &&
-      u.organizationActive &&
-      u.certificationEligibility !== "hold",
+    u.organizationActive,
     403,
-    "사용 중인 조직의 Auditor 지정과 취득 가능 상태가 필요합니다.",
+    "사용 중인 조직과 취득 가능 상태가 필요합니다.",
   );
   if (view.certification)
     return {
@@ -435,6 +373,7 @@ export function startAuditor(
       assignmentId: view.certification.assignmentId,
     };
   if (view.assignment) return { assignmentId: view.assignment.id };
+  requireAuditorTeam(doc, u.lv1OrganizationId);
   demand(
     view.canStart,
     409,
@@ -444,8 +383,7 @@ export function startAuditor(
   const p = programFor(s, u.lv1OrganizationId),
     criteria = auditorCriteria(s, q)!,
     template = s.qualificationTemplates.find((t) => t.id === q.templateId)!;
-  const manager =
-    p?.updatedBy || u.auditorDesignation?.actorId || template.updatedBy;
+  const manager = p?.updatedBy || template.updatedBy;
   const previous = view.history.at(-1);
   const id = randomUUID();
   s.assignments.push({
@@ -455,7 +393,11 @@ export function startAuditor(
     auditor: {
       level,
       kind: previous ? "reacquisition" : "initial",
-      designationId: u.auditorDesignation?.id || `legacy:${u.id}`,
+      teamEligibility: {
+        lv1OrganizationId: u.lv1OrganizationId,
+        organizationRevision: doc.revision,
+        at,
+      },
       programRevision: p?.revision || 1,
       criteriaManagerId: manager,
       ...(template.scope !== "team"
@@ -506,7 +448,7 @@ export function auditorMembers(
     .filter(
       (u) =>
         u.lv1OrganizationId === team &&
-        (u.roles.includes("evaluator") ||
+        (u.auditorEnabled ||
           s.assignments.some(
             (a) =>
               a.learnerId === u.id &&
@@ -514,5 +456,15 @@ export function auditorMembers(
                 ?.qualificationType === "auditor",
           )),
     )
-    .map((u) => ({ id: u.id, name: u.name, ...auditorMe(s, u, at, doc) }));
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      eligible: u.auditorEnabled === true && u.organizationActive,
+      exclusionReason: !u.auditorEnabled
+        ? "대상 팀 미사용"
+        : !u.organizationActive
+          ? "조직 사용 중지"
+          : null,
+      ...auditorMe(s, u, at, doc),
+    }));
 }

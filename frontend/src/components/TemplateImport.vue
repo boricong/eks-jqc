@@ -95,12 +95,20 @@ onBeforeRouteLeave(leave);
 onBeforeRouteUpdate(leave);
 </script>
 <template>
-  <button class="button secondary" :disabled="!store.managementReady || busy" @click="show">
-    {{ qualificationTypeLabels[qualificationType] }} 자격 등록
+  <button
+    class="button secondary"
+    :disabled="
+      !store.managementReady ||
+      busy ||
+      (qualificationType === 'auditor' && !store.managementOrganization?.auditorEnabled)
+    "
+    @click="show"
+  >
+    {{ qualificationType === 'auditor' ? 'Auditor 자격 등록' : '자격 등록' }}
   </button>
   <AppDialog
     :open="open"
-    :title="`${qualificationTypeLabels[qualificationType]} 자격 등록`"
+    :title="qualificationType === 'auditor' ? 'Auditor 자격 등록' : '자격 등록'"
     @update:open="
       (value) => {
         if (!busy) open = value;
@@ -118,7 +126,7 @@ onBeforeRouteUpdate(leave);
     </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <div v-if="!listed.length" class="empty-state">
-      <p>등록할 {{ qualificationTypeLabels[qualificationType] }} 기본자격이 없습니다.</p>
+      <p>등록할 {{ qualificationType === 'auditor' ? 'Auditor ' : '' }}기본자격이 없습니다.</p>
       <p class="muted">시스템 운영자가 해당 유형의 기본자격을 먼저 생성해야 합니다.</p>
       <RouterLink
         v-if="store.hasRole('system_operator')"

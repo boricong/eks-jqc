@@ -5,6 +5,7 @@ import type { SystemDocumentDetail, SystemDocumentSummary } from '@eks/contracts
 import { api, ApiError } from '../api';
 import { useDemo } from '../stores/demo';
 import { documentAnchor, renderDocument } from '../document-markdown';
+import { renderDocumentDiagrams } from '../document-diagrams';
 import AppIcon from './AppIcon.vue';
 import '../documents.css';
 
@@ -20,7 +21,24 @@ const query = ref(String(route.query.q || '')),
 const body = ref<HTMLElement>(),
   contentsOpen = ref(false);
 const rendered = computed(() =>
-  document.value ? renderDocument(document.value, items.value) : { html: '', headings: [] },
+  document.value
+    ? renderDocument(document.value, items.value)
+    : { html: '', headings: [], diagrams: [] },
+);
+watch(
+  rendered,
+  async (value) => {
+    const seq = sequence;
+    await nextTick();
+    if (!value.diagrams.length || !body.value || loading.value || seq !== sequence) return;
+    await renderDocumentDiagrams(
+      body.value,
+      value.diagrams,
+      () => seq === sequence && store.signedIn,
+    );
+    if (seq === sequence && route.hash) jumpTo(route.hash);
+  },
+  { flush: 'post' },
 );
 const listed = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase();
@@ -49,7 +67,7 @@ async function load() {
   contentsOpen.value = false;
   error.value = '';
   loading.value = true;
-  if (!store.hasRole('system_operator')) {
+  if (!store.signedIn) {
     loading.value = false;
     return;
   }
@@ -98,12 +116,12 @@ function follow(event: MouseEvent) {
   if (href?.startsWith('#')) {
     event.preventDefault();
     jumpTo(href, true);
-  } else if (href?.startsWith('/system/documents/')) {
+  } else if (href?.startsWith('/documents/')) {
     event.preventDefault();
     void router.push(href);
   }
 }
-watch([id, () => store.actorId, () => store.hasRole('system_operator')], () => void load(), {
+watch([id, () => store.actorId, () => store.signedIn], () => void load(), {
   immediate: true,
   flush: 'sync',
 });
@@ -128,11 +146,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="system-documents" :aria-busy="loading">
-    <RouterLink
-      v-if="id"
-      :to="{ path: '/system/documents', query: contextQuery }"
-      class="document-back"
-    >
+    <RouterLink v-if="id" :to="{ path: '/documents', query: contextQuery }" class="document-back">
       <AppIcon name="back" :size="16" />
       <span>문서 목록</span>
     </RouterLink>
@@ -163,7 +177,7 @@ onBeforeUnmount(() => {
         <RouterLink
           v-for="item in listed"
           :key="item.id"
-          :to="{ path: `/system/documents/${item.id}`, query: contextQuery }"
+          :to="{ path: `/documents/${item.id}`, query: contextQuery }"
           class="document-row"
         >
           <span class="document-row-copy"

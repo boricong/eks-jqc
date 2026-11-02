@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import { setup } from "./auditor-test-fixture.ts";
 import { createPoolQualification, startInput } from "./auditor-fixture.ts";
@@ -21,135 +22,40 @@ import {
   contentHash,
 } from "./legacy-master-data.ts";
 
-test("Auditor 지정은 준비 검사·알림과 원자적이며 재시도·일반 수정·재지정·재발송을 구별한다", async (t) => {
-  const f = await setup(t),
-    before = f.store.snapshot();
-  await f.designate(undefined, 409);
-  assert.deepEqual(f.store.snapshot(), before);
+test("개인 지정 API는 거부하고 안내 재발송은 종료 계약을 유지한다", async (t) => {
+  const f = await setup(t);
   await f.program();
-  const u = f.store.snapshot().users.find((u) => u.id === "learner-2")!,
-    key = randomUUID(),
-    body = {
+  const u = f.store.snapshot().users.find((u) => u.id === "learner-2")!;
+  await f.call(
+    "operator-1",
+    "/system/users/" + u.id,
+    {
       revision: u.revision,
       name: u.name,
       organizationId: u.organizationId,
       roles: ["learner", "evaluator"],
-    };
-  f.store.beforeReplace = () => {
-    throw new Error("simulated write failure");
-  };
-  await f.call("operator-1", `/system/users/${u.id}`, body, 503, "PATCH", key);
-  f.store.beforeReplace = undefined;
-  assert(
-    !f.store.snapshot().users.find((x) => x.id === u.id)?.auditorDesignation,
-  );
-  const result = await f.call(
-    "operator-1",
-    `/system/users/${u.id}`,
-    body,
-    200,
-    "PATCH",
-    key,
-  );
-  assert.deepEqual(
-    await f.call(
-      "operator-1",
-      `/system/users/${u.id}`,
-      body,
-      200,
-      "PATCH",
-      key,
-    ),
-    result,
-  );
-  const first = f.store
-    .snapshot()
-    .notifications.filter((n) => n.type === "auditor_designation");
-  assert.equal(first.length, 1);
-  await f.designate();
-  assert.equal(
-    f.store
-      .snapshot()
-      .notifications.filter((n) => n.type === "auditor_designation").length,
-    1,
-  );
-  await f.designate(["learner"]);
-  await f.designate();
-  assert.equal(
-    f.store
-      .snapshot()
-      .notifications.filter((n) => n.type === "auditor_designation").length,
-    2,
-  );
-  const p = (await f.call("admin-1", "/auditor-program")).program;
-  await f.call(
-    "admin-1",
-    "/auditor-program",
-    {
-      revision: p.revision,
-      notice: { title: "새 안내", body: "개정 기준", links: [] },
     },
-    200,
-    "PUT",
-  );
-  assert.deepEqual(
-    f.store.snapshot().notifications.find((n) => n.id === first[0]!.id),
-    first[0],
-  );
-  const sendKey = randomUUID(),
-    send = { revision: p.revision + 1, recipientIds: ["learner-2"] };
-  await f.call(
-    "admin-1",
-    "/auditor-program/notices/send",
-    send,
-    410,
-    "POST",
-    sendKey,
+    422,
+    "PATCH",
   );
   await f.call(
     "admin-1",
     "/auditor-program/notices/send",
-    send,
+    { recipientIds: [u.id] },
     410,
-    "POST",
-    sendKey,
   );
   assert.equal(
     f.store
       .snapshot()
       .notifications.filter((n) => n.type === "auditor_designation").length,
-    2,
+    0,
   );
   await f.call("detail-auditor", "/auditor-program", undefined, 403);
-  const scoped = await f.call("detail-auditor", "/dashboard/auditor");
-  assert(
-    scoped.members.every(
-      (m: { id: string }) =>
-        f.store.snapshot().users.find((u) => u.id === m.id)?.organizationId ===
-        "org-photo",
-    ),
-  );
-  await f.call(
-    "admin-1",
-    "/dashboard/auditor?lv1OrganizationId=org-etch",
-    undefined,
-    403,
-  );
   await f.call(
     "admin-1",
     "/auditor-program?lv1OrganizationId=org-etch",
     undefined,
     403,
-  );
-  await f.call(
-    "admin-1",
-    "/auditor-program",
-    {
-      revision: p.revision,
-      notice: { title: "stale", body: "stale", links: [] },
-    },
-    409,
-    "PUT",
   );
 });
 
@@ -230,7 +136,7 @@ test("계획 없이 일반→메인 자동 취득, 일반 Hold 중 메인 대기
     "learner-2",
     "/me/auditor/starts",
     startInput(f.store.snapshot(), "main"),
-    403,
+    200,
   );
   await f.call(
     "admin-1",
@@ -274,17 +180,6 @@ test("본인 교육·인증기준 확인 갱신은 발급 근거를 유지하고
     certificationRevision: c.revision,
   });
   const count = f.store.snapshot().completions.length;
-  await f.designate(["learner"]);
-  await f.call(
-    "learner-2",
-    `/renewals/${start.id}/complete`,
-    {
-      certificationRevision: start.certificationRevision,
-      revision: start.revision,
-      confirmation: "교육·인증기준 확인",
-    },
-    409,
-  );
   await f.designate();
   await f.call(
     "learner-2",
@@ -471,7 +366,7 @@ test("업무20·JSON10은 팀 소유 기준을 보존하고 변조·정상 시�
   );
   assert.throws(() => validateState(legacy, org));
   const bytes = await readFile(f.file);
-  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 30);
+  assert.equal(JSON.parse(bytes.toString()).schemaVersion, 32);
 });
 
 test("재시작은 수료 근거가 있는 메인 발급 대기를 보충하고 다시 시작해도 중복 발급하지 않는다", async (t) => {
@@ -662,19 +557,18 @@ test("시작 당시 기준·자료를 보존하고 과거 메인 취득자는 �
     .snapshot()
     .certifications.find((c) => c.assignmentId === main.assignmentId)!;
   await f.update((s) => {
-    s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-      "hold";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-2")!,
+      "deactive",
+    );
   });
   assert.equal((await f.call("learner-2", "/me/auditor")).currentLevel, "main");
-  await f.call(
-    "learner-2",
-    "/me/auditor/starts",
-    startInput(f.store.snapshot(), "general"),
-    403,
-  );
+  assert.equal((await f.call("learner-2", "/me/auditor")).currentLevel, "main");
   await f.update((s) => {
-    s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-      "eligible";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-2")!,
+      "active",
+    );
   });
   f.setTime("2027-10-26T15:00:00.000Z");
   await f.store.refreshNotifications("2027-10-26T15:00:00.000Z");

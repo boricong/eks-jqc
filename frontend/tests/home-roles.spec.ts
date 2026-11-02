@@ -1,3 +1,4 @@
+import { setWorkStatus } from '../../server/tests/work-status-fixture';
 import { writeFile } from 'node:fs/promises';
 import { heroContrast } from './home-helpers';
 import { test, expect, actor } from './fixtures';
@@ -385,7 +386,7 @@ test('긴 이름·소속·Hold·잘못된 기억과 비어 있는 역할 화면�
     (s) => {
       const user = s.users.find((u) => u.id === 'admin-1')!;
       user.name = '역할을 함께 수행하는 사용자 '.repeat(4);
-      user.certificationEligibility = 'hold';
+      setWorkStatus(user, 'deactive', new Date().toISOString());
       return {};
     },
   );
@@ -416,7 +417,7 @@ test('긴 이름·소속·Hold·잘못된 기억과 비어 있는 역할 화면�
         true,
       );
       if (label === '학습자 인증 · Auditee') {
-        await expect(page.locator('#home-role-content > .error-message')).toContainText('Hold');
+        await expect(page.locator('aside[role="status"]')).toContainText('deactive');
         await expect(stats(page)).toHaveText(['0', '0', '0']);
       } else {
         await expect(page.locator('#home-role-content > .error-message')).toHaveCount(0);

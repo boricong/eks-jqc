@@ -288,95 +288,21 @@ test("역할 위조 금지·기존 팀 관리자 유지·현재 사용자/조직
   await f.call("admin-1", "/team-users/leaf-member", body, 403, "PATCH", key);
 });
 
-test("Auditor 준비·안내 원자성·재시도·재지정과 비활성 조직 규칙을 재사용한다", async (t) => {
+test("팀 사용자 편집은 개인 Auditor 부여를 거부한다", async (t) => {
   const f = await fixture(t),
     before = await readFile(f.file);
   await f.call(
     "admin-1",
     "/team-users/leaf-member",
-    f.input("leaf-member", {
-      roles: ["learner", "evaluator"],
-      name: "저장 금지",
-    }),
-    409,
+    f.input("leaf-member", { roles: ["learner", "evaluator"] }),
+    422,
     "PATCH",
   );
   assert.deepEqual(await readFile(f.file), before);
-  await f.update((s) => {
-    const doc = f.store.organizations.snapshot(),
-      admin = userView(
-        s.users.find((u) => u.id === "admin-1")!,
-        doc,
-      ),
-      at = new Date().toISOString();
-    const template = saveTemplate(s, "operator-1", undefined, {
-      qualificationType: "auditor",
-      auditorLevel: "general",
-      title: "일반 Auditor",
-      englishName: "",
-    });
-    const imported = mutate(
-      s,
-      admin,
-      "template.import",
-      "",
-      {
-        templateIds: [template.id],
-        templateRevisions: { [template.id]: template.revision },
-      },
-      doc,
-    ) as { imported: string[] };
-    const result = { id: imported.imported[0] };
-    const q = s.qualifications.find((q) => q.id === result.id)!,
-      c = structuredClone(s.courses.find((c) => c.id === "demo-course-1")!);
-    c.id = randomUUID();
-    c.entityId = c.id;
-    c.qualificationType = "auditor";
-    c.assessmentKinds = [];
-    c.questions = [];
-    c.practicalQuestions = [];
-    c.learningItems = [
-      { id: randomUUID(), title: "필수 원문", required: true, type: "team" },
-    ];
-    s.courses.push(c);
-    q.courseIds = [c.id];
-    q.lifecycleStatus = "Active";
-    q.validity = { type: "unlimited", months: null, reminderDays: [] };
-    saveAuditorProgram(
-      s,
-      admin,
-      "org-photo",
-      {
-        revision: s.auditorPrograms[0]?.revision || 0,
-        notice: { title: "지정 안내", body: "교육 기준", links: [] },
-      },
-      at,
-    );
-  });
-  const body = f.input("leaf-member", { roles: ["learner", "evaluator"] }),
-    key = randomUUID();
-  f.store.beforeReplace = () => {
-    throw Error("저장 실패");
-  };
-  const snapshot = f.store.snapshot();
-  await f.call("admin-1", "/team-users/leaf-member", body, 503, "PATCH", key);
-  assert.deepEqual(f.store.snapshot(), snapshot);
-  f.store.beforeReplace = undefined;
-  await f.call("admin-1", "/team-users/leaf-member", body, 200, "PATCH", key);
-  await f.call("admin-1", "/team-users/leaf-member", body, 200, "PATCH", key);
-  assert.equal(
-    f.store
-      .snapshot()
-      .notifications.filter((n) => n.type === "auditor_designation").length,
-    1,
-  );
   await f.call(
     "admin-1",
     "/team-users/leaf-member",
-    f.input("leaf-member", {
-      roles: ["learner", "evaluator"],
-      name: "이름 수정",
-    }),
+    f.input("leaf-member", { name: "이름 수정" }),
     200,
     "PATCH",
   );
@@ -384,50 +310,6 @@ test("Auditor 준비·안내 원자성·재시도·재지정과 비활성 조직
     f.store
       .snapshot()
       .notifications.filter((n) => n.type === "auditor_designation").length,
-    1,
-  );
-  await f.call(
-    "admin-1",
-    "/team-users/leaf-member",
-    f.input("leaf-member"),
-    200,
-    "PATCH",
-  );
-  await f.call(
-    "admin-1",
-    "/team-users/leaf-member",
-    f.input("leaf-member", { roles: ["evaluator"] }),
-    200,
-    "PATCH",
-  );
-  assert.equal(
-    f.store
-      .snapshot()
-      .notifications.filter((n) => n.type === "auditor_designation").length,
-    2,
-  );
-  const audit = f.store
-    .snapshot()
-    .audits.filter((a) => a.action === "user.update")
-    .at(-1)!;
-  assert.equal((audit.details as any).source, "team-users");
-  assert.equal(audit.lv1OrganizationId, "org-photo");
-  await f.store.organizations.transact(
-    "operator-1",
-    randomUUID(),
-    randomUUID(),
-    () => {},
-    (doc) => {
-      doc.roots[0]!.active = false;
-      return {};
-    },
-  );
-  await f.call("admin-1", "/team-users", f.input(), 422);
-  await f.call(
-    "admin-1",
-    "/team-users/leaf-member",
-    f.input("leaf-member", { roles: ["evaluator"] }),
-    200,
-    "PATCH",
+    0,
   );
 });

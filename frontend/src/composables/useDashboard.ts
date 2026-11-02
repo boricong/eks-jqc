@@ -107,7 +107,7 @@ export function useDashboard() {
   const detailEntityId = computed(() => one(route.query.detailEntity));
   const context = computed(
     () =>
-      `${store.actorId}:${store.managementLv1}:${store.actor.organizationId}:${store.actor.roles.join(',')}`,
+      `${store.actorId}:${store.managementLv1}:${store.actor.organizationId}:${store.actor.roles.join(',')}:${route.query.qualificationType === 'auditor' ? 'auditor' : 'auditee'}`,
   );
   const ready = computed(
     () => !!store.actorId && !!store.managementLv1 && store.canEnterManagement,
@@ -435,6 +435,7 @@ export function useDashboard() {
     delete next.detailEntity;
     delete next.detailPage;
     Object.assign(next, memories.get(`${context.value}:${value}`) || {});
+    if (route.query.qualificationType === 'auditor') next.qualificationType = 'auditor';
     next.tab = value;
     await router.push({ query: next });
   }

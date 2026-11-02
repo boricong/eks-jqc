@@ -31,6 +31,16 @@ async function fixture(t: TestContext) {
   const store = await new JsonStore(file).load(),
     app = await buildApp(store),
     cookies = new Map<string, string>();
+  await store.organizations.transact(
+    "operator-1",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+      return {};
+    },
+  );
   t.after(async () => {
     await app.close();
     await rm(dir, { recursive: true, force: true });

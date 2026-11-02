@@ -291,7 +291,7 @@ watch(
       <label class="field"
         >인증 유형<select v-model="typeFilter" aria-label="인증 유형 필터">
           <option value="all">전체</option>
-          <option value="auditee">Auditee</option>
+          <option value="auditee">자격</option>
           <option value="auditor">Auditor</option>
         </select></label
       >
@@ -360,7 +360,7 @@ watch(
             v-model="draft.qualificationType"
             :disabled="busy || (!!draft.id && !typeEditing?.canChangeType)"
           >
-            <option value="auditee">Auditee(피심사자)</option>
+            <option value="auditee">자격 인증</option>
             <option value="auditor">Auditor(심사자)</option>
           </select></label
         >

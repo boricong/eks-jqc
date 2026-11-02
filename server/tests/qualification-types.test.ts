@@ -41,6 +41,16 @@ async function fixture(
   const store = await loadPlanningFixture(file),
     app = await buildApp(store),
     cookies = new Map<string, string>();
+  await store.organizations.transact(
+    "operator-1",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+      return {};
+    },
+  );
   t.after(async () => {
     await app.close();
     await rm(dir, { recursive: true, force: true });

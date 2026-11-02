@@ -133,6 +133,7 @@ export const UserSchema = z.object({
   workDeactivation: WorkDeactivationSchema.optional(),
   auditorDesignation: AuditorDesignationSchema.optional(),
   id,
+  // Historical schemas only. Schema32 rejects this field; UserView never exposes it.
   certificationEligibility: z.enum(["eligible", "hold"]).optional(),
   name: z.string().min(1).max(100),
   roles: z
@@ -153,7 +154,9 @@ export const UserSchema = z.object({
     .optional(),
 });
 export type User = z.infer<typeof UserSchema>;
-export interface UserView extends User {
+export interface UserView extends Omit<User, "certificationEligibility"> {
+  workStatusInfo?: import("./work-status.ts").WorkStatusInfo;
+  auditorEnabled?: boolean;
   lv1OrganizationId: string;
   organizationPath: { id: string; name: string }[];
   organizationActive: boolean;
@@ -521,6 +524,8 @@ export const StateSchema = z.object({
     z.literal(28),
     z.literal(29),
     z.literal(30),
+    z.literal(31),
+    z.literal(32),
   ]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
@@ -635,7 +640,7 @@ export interface Workspace {
   planningRequests: PlanningRequest[];
   plans: PersonalPlan[];
   notifications: Notification[];
-  eligibilitySummary: { eligible: number; held: number };
+  eligibilitySummary: { eligible: number };
 }
 
 export interface CourseUsage {
@@ -726,7 +731,7 @@ export function courseErrors(course: CourseContent): string[] {
   }
   return errors;
 }
-// Auditee completion uses assessments; only Auditor requires self-confirmable education.
+// 자격 completion uses assessments; only Auditor requires self-confirmable education.
 export function courseUseErrors(course: CourseContent): string[] {
   return [
     ...courseErrors(course),
@@ -845,7 +850,7 @@ export function comparableCourseContent(course: CourseContent) {
 export function subjectiveIssues(course: CourseContent): string[] {
   if (!course.subjectiveEnabled) return [];
   if (course.qualificationType !== "auditee")
-    return ["주관식 평가는 Auditee에서만 사용합니다."];
+    return ["주관식 평가는 자격에서만 사용합니다."];
   if (!course.subjectiveQuestions.length)
     return ["주관식 문항을 추가해 주세요."];
   return course.subjectiveQuestions.flatMap((q, i) =>
@@ -860,7 +865,7 @@ export function renewalQualificationErrors(
   if (q.purpose !== "renewal") return [];
   const c = courses.find((c) => c.id === q.courseIds[0]);
   return [
-    q.qualificationType !== "auditee" && "재인증은 Auditee만 지원합니다.",
+    q.qualificationType !== "auditee" && "재인증은 자격만 지원합니다.",
     q.courseIds.length !== 1 &&
       "재인증에는 객관식 인증Set 1개를 연결해 주세요.",
     c &&

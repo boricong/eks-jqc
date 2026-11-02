@@ -58,7 +58,7 @@ export function learnerNavigationItems(
 export const ownedQualificationsLocation = '/qualifications?filter=certified';
 export const ownedQualificationsForType = (type: QualificationType) =>
   ownedQualificationsLocation + (type === 'auditor' ? '&type=auditor' : '');
-type NavigationActor = { id: string; roles: readonly string[] };
+type NavigationActor = { auditorEnabled?: boolean; id: string; roles: readonly string[] };
 type OwnedRecord = { learnerId: string; certifiedAt?: string } | undefined;
 type NavigationRoute = Pick<RouteLocationNormalizedLoaded, 'name' | 'path' | 'query'>;
 export function isOwnedQualificationsRoute(route: Pick<NavigationRoute, 'name' | 'query'>) {
@@ -105,11 +105,12 @@ export function primaryNavigationSection(
   const learner =
     personalAccess ||
     actor.roles.includes('learner') ||
-    actor.roles.includes('evaluator') ||
+    actor.auditorEnabled === true ||
     (!!record && record.learnerId === actor.id);
   const operator = actor.roles.includes('system_operator');
   const admin = actor.roles.includes('admin');
   if (route.name === 'home') return 'home';
+  if (route.path.startsWith('/documents')) return 'documents';
   if (route.path === '/notifications') return 'notifications';
   if (route.path.startsWith('/admin')) return 'management';
   if (route.path.startsWith('/system')) return 'system';

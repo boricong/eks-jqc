@@ -83,7 +83,7 @@ test('세부 관리자는 하위 조직도 조회하고 기존 결과 권한은 
   await dashboard(page, 'learner-2');
   await expect(page.getByRole('tab', { name: '조직별', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '관리 메뉴' }).getByRole('link')).toHaveCount(
-    4,
+    3,
   );
   await page.getByRole('tab', { name: '구성원별', exact: true }).click();
   await expect(page.getByRole('button', { name: '가 직원 상세 보기', exact: true })).toBeVisible();

@@ -74,13 +74,11 @@ const items = computed<Item[]>(() => {
         title: group.name,
         links: group.sections.map((item) => ({
           key: item.id,
-          label: item.name,
-          to: withCriteriaType(
-            store.managementLink(item.path),
-            /^\/admin\/(qualifications|courses)(\/|$)/.test(route.path)
-              ? route.query.type
-              : undefined,
-          ),
+          label:
+            item.id === 'auditor' && !store.managementOrganization?.auditorEnabled
+              ? '기존 Auditor 기록'
+              : item.name,
+          to: withCriteriaType(store.managementLink(item.path), undefined),
           current:
             props.section === 'management' &&
             String(route.meta.managementSection || route.params.section) === item.id,
@@ -104,7 +102,11 @@ const items = computed<Item[]>(() => {
         },
       ],
     });
-  if (store.signedIn) result.push({ id: 'notifications', label: '알림', to: '/notifications' });
+  if (store.signedIn)
+    result.push(
+      { id: 'documents', label: '문서 조회', to: '/documents' },
+      { id: 'notifications', label: '알림', to: '/notifications' },
+    );
   return result;
 });
 function clearTimers() {

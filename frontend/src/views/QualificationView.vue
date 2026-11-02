@@ -59,7 +59,6 @@ const blocked = computed(
   () =>
     !!assignment.value?.excludedReason ||
     !!assignment.value?.acquisitionClosedAt ||
-    store.actor.certificationEligibility === 'hold' ||
     (!auditor.value && store.actor.workStatus === 'deactive'),
 );
 function courseStatus(enrollment: Enrollment) {
@@ -167,12 +166,6 @@ function chooseCourse(id: string) {
     />
     <p v-if="assignment.excludedReason" class="error-message qualification-context-note">
       검증 제외 · {{ assignment.excludedReason }}
-    </p>
-    <p
-      v-if="store.actor.certificationEligibility === 'hold'"
-      class="error-message qualification-context-note"
-    >
-      취득 대상자 Hold · 새 취득·평가는 중단됩니다. 기록과 학습자료는 확인할 수 있습니다.
     </p>
     <div v-if="selected && course" class="qualification-workspace">
       <QualificationCourseNav
@@ -370,7 +363,7 @@ function chooseCourse(id: string) {
                   blocked
                     ? assignment.excludedReason
                       ? '검증 제외로 평가를 진행할 수 없습니다.'
-                      : '취득 대상자 Hold로 평가를 진행할 수 없습니다.'
+                      : '현재 상태에서는 평가를 진행할 수 없습니다.'
                     : '지식 평가를 먼저 통과해 주세요'
                 }}
               </p>

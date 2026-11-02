@@ -205,7 +205,7 @@ test('요청만 있음·소속/Lv1/타인/완료 제외·Hold/비활성·계정 
       request('done', { completion: completed, dueOn: '2019-01-01' }),
     ];
     if (view.actor.id === 'learner-1') {
-      if (mode === 'hold') view.actor.certificationEligibility = 'hold';
+      if (mode === 'hold') view.actor.workStatus = 'deactive';
       if (mode === 'inactive') view.actor.organizationActive = false;
     }
     options(view, mode === 'waiting' ? '자격 준비 대기' : '확인 필요');

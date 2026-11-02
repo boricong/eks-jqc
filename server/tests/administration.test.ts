@@ -280,7 +280,7 @@ test("본인·자식·손자 설정과 필요자격·대상자 권한 및 이동
   });
   const targetUrl = "/certification-targets/eligibility";
   const before = store.snapshot();
-  await call(manager, targetUrl, hold([member, "learner-1"]), 403, "PUT");
+  await call(manager, targetUrl, hold([member, "learner-1"]), 410, "PUT");
   await call(
     manager,
     reqPath,
@@ -292,8 +292,8 @@ test("본인·자식·손자 설정과 필요자격·대상자 권한 및 이동
     "PUT",
   );
   assert.deepEqual(store.snapshot(), before);
-  await call(manager, targetUrl, hold([member]), 200, "PUT");
-  await call(manager, targetUrl, hold([member], "eligible"), 200, "PUT");
+  await call(manager, targetUrl, hold([member]), 410, "PUT");
+  await call(manager, targetUrl, hold([member], "eligible"), 410, "PUT");
   await call(
     "operator-1",
     `/system/organizations/${grandchild}`,
@@ -351,7 +351,7 @@ test("본인·자식·손자 설정과 필요자격·대상자 권한 및 이동
     "PUT",
     key,
   );
-  await call(manager, targetUrl, hold([member]), 403, "PUT");
+  await call(manager, targetUrl, hold([member]), 410, "PUT");
   await call(
     manager,
     reqPath,
@@ -394,7 +394,7 @@ test("본인·자식·손자 설정과 필요자격·대상자 권한 및 이동
     200,
     "PATCH",
   );
-  await call(manager, targetUrl, hold([member]), 403, "PUT");
+  await call(manager, targetUrl, hold([member]), 410, "PUT");
   await grant([]);
   await call(
     manager,

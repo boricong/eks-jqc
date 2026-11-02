@@ -1,10 +1,12 @@
 import { defineConfig } from '@playwright/test';
+const frontendPort = Number(process.env.EKS_E2E_FRONTEND_PORT || 5286);
+const apiPort = Number(process.env.EKS_E2E_API_PORT || 5287);
 export default defineConfig({
   testDir: './tests',
   workers: 1,
   timeout: 30000,
   use: {
-    baseURL: 'http://127.0.0.1:5286',
+    baseURL: `http://127.0.0.1:${frontendPort}`,
     viewport: { width: 1920, height: 900 },
     browserName: 'chromium',
     launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
@@ -14,10 +16,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev -- --port 5286',
-    url: 'http://127.0.0.1:5286',
+    command: `npm run dev -- --port ${frontendPort}`,
+    url: `http://127.0.0.1:${frontendPort}`,
     reuseExistingServer: false,
-    env: { API_TARGET: 'http://127.0.0.1:5287' },
+    env: { API_TARGET: `http://127.0.0.1:${apiPort}` },
   },
   reporter: 'list',
 });

@@ -1,4 +1,4 @@
-/** Read-only, system-operator document library. Paths are relative to docs/. */
+/** Read-only, authenticated document library. Paths are relative to docs/. */
 export interface SystemDocumentSummary {
   id: string;
   title: string;

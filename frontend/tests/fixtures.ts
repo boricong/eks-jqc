@@ -20,12 +20,13 @@ export const test = base.extend<{
       let fixedNow: string | undefined;
       const options = {
         documentsRoot,
-        origins: ['http://127.0.0.1:5286'],
+        origins: [`http://127.0.0.1:${Number(process.env.EKS_E2E_FRONTEND_PORT || 5286)}`],
         clock: () => fixedNow || new Date().toISOString(),
       };
       let store = await new JsonStore(file).load(),
         app = await buildApp(store, options);
-      await app.listen({ host: '127.0.0.1', port: 5287 });
+      const apiPort = Number(process.env.EKS_E2E_API_PORT || 5287);
+      await app.listen({ host: '127.0.0.1', port: apiPort });
       try {
         await use({
           get store() {
@@ -38,7 +39,7 @@ export const test = base.extend<{
             await app.close();
             store = await new JsonStore(file).load();
             app = await buildApp(store, options);
-            await app.listen({ host: '127.0.0.1', port: 5287 });
+            await app.listen({ host: '127.0.0.1', port: apiPort });
           },
         });
       } finally {

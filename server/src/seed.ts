@@ -229,16 +229,15 @@ export function seedState(testFixture = false): State {
       reason: "가상 데이터 초기화",
       details: { fictional: true },
     });
-  return validateState(
-    initializeWorkStatus(
-      StateSchema.parse(
-        initializePlanningSchedule(
-          initializeObjectiveRenewals(
-            initializeRequirementExceptions(initializeReleases(state)),
-          ),
+  const initialized = initializeWorkStatus(
+    StateSchema.parse(
+      initializePlanningSchedule(
+        initializeObjectiveRenewals(
+          initializeRequirementExceptions(initializeReleases(state)),
         ),
       ),
     ),
-    seedOrganizations(),
   );
+  initialized.schemaVersion = 32;
+  return validateState(initialized, seedOrganizations());
 }

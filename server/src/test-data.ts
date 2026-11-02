@@ -1,3 +1,5 @@
+const orgHasAuditor = (o: OrganizationDocument) =>
+  o.roots.some((r) => r.auditorEnabled);
 import { randomUUID } from "node:crypto";
 import {
   StateSchema,
@@ -32,7 +34,7 @@ export function testDataCounts(
         .map(([k, v]) => [k, (v as unknown[]).length]),
     ),
     organizationDetails: organizationEntries(o).filter(
-      (n) => n.description || n.duties,
+      (n) => n.description || n.duties || (n.level === 1 && n.auditorEnabled),
     ).length,
     organizationAudits: o.audits.length,
     organizationRequests: o.requests.length,
@@ -59,6 +61,7 @@ export function resetTestData(s: State, o: OrganizationDocument) {
       description: "",
       duties: "",
       children: strip(n.children),
+      ...(o.roots.some((r) => r.id === n.id) ? { auditorEnabled: false } : {}),
     }));
   return {
     state,
@@ -104,9 +107,9 @@ export function testDataStatus(
     warnings.push(
       "내장 원본에는 메인 Auditor 기본자격이 없습니다. 필요하면 일반 사용자·기본자격 관리에서 시험할 기준을 설정해 주세요.",
     );
-  if (!s.users.some((u) => u.roles.includes("evaluator")))
+  if (!orgHasAuditor(o))
     warnings.push(
-      "Auditor 지정 계정이 없습니다. 기존 사용자 관리에서 역할을 지정한 뒤 시험해 주세요.",
+      "Auditor 미사용 상태입니다. 조직 관리에서 Lv1 대상 팀을 설정한 뒤 시험해 주세요.",
     );
   const latest = new Map<string, State["qualifications"][number]>();
   for (const q of s.qualifications)
@@ -315,7 +318,7 @@ export function loadTestData(
       notice: {
         revision: 1,
         title: "테스트 Auditor 학습 안내",
-        body: "학습 정보를 확인한 뒤 필수 교육을 본인 확인해 주세요. 계정 역할과 자격 등급은 관리자가 기존 기능에서 지정합니다.",
+        body: "학습 정보를 확인한 뒤 필수 교육을 본인 확인해 주세요. 대상 팀의 모든 구성원이 취득 대상이며 자격 등급은 기본자격 관리에서 설정합니다.",
         links: [],
       },
       updatedAt: at,

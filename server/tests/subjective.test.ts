@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -248,8 +249,10 @@ test("주관식 미완성은 준비 상태를 바꾸지 않으며 Hold·타인·
   await f.change((s) => {
     s.courses.find((x) => x.id === c.id)!.subjectiveQuestions[0]!.prompt =
       "문제";
-    s.users.find((u) => u.id === "learner-1")!.certificationEligibility =
-      "hold";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-1")!,
+      "deactive",
+    );
   });
   await f.call(
     "learner-1",

@@ -8,8 +8,6 @@ const toggle = (page: Page, id: string) => main(page).locator(`[data-submenu-tog
 const panel = (page: Page, id: string) => main(page).locator(`[data-submenu-panel="${id}"]`);
 const managementNames = [
   '인증 현황',
-  '취득 대상자 상태',
-  'Auditor 운영',
   '계획 요청·진행',
   '평가·수료 결과',
   '보유 자격 관리',
@@ -72,7 +70,6 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
     '전체 업무 조회',
     '테스트 데이터 관리',
     '시스템 공지 관리',
-    '문서 조회',
   ]);
   await page.mouse.move(20, 400);
   await expect(panel(page, 'system')).toHaveCount(0);
@@ -89,15 +86,18 @@ test('권한별 공유 하위 메뉴·호버/팝업 왕복·조회/저장 없는
   await toggle(page, 'management').click();
   await expect(panel(page, 'management').getByRole('link')).toHaveText([
     '인증 현황',
-    '취득 대상자 상태',
     '조직 정보·관리자',
     '조직 필요자격',
   ]);
   await expect(toggle(page, 'system')).toHaveCount(0);
   await actor(page, 'admin-1');
-  await expect(toggle(page, 'learning')).toHaveCount(0);
+  // 대상 팀의 관리자도 역할과 무관하게 Auditor 취득에 진입할 수 있다.
+  await expect(toggle(page, 'learning')).toHaveCount(1);
   await toggle(page, 'management').click();
-  await expect(panel(page, 'management').getByRole('link')).toHaveText(managementNames);
+  await expect(panel(page, 'management').getByRole('link')).toHaveText([
+    ...managementNames,
+    'Auditor 관리',
+  ]);
 });
 
 test('키보드 펼침·위/아래·Tab·Escape 복귀·외부 클릭·목록 목적지와 뒤로 가기', async ({ page }) => {

@@ -22,7 +22,7 @@ export const workStatusLabels = {
   deactive: "deactive",
 };
 export const WORK_DEACTIVE_MESSAGE =
-  "Deactive · 업무 미수행 상태입니다. 관리자가 Active로 변경한 뒤 Auditee 절차를 진행할 수 있습니다.";
+  "Deactive · 업무 미수행 상태입니다. 관리자가 Active로 변경한 뒤 자격 절차를 진행할 수 있습니다.";
 export function workRevokesOn(startedOn: string) {
   return addCalendarDays(addCalendarMonths(startedOn, 6), 1);
 }

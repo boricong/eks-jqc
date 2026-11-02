@@ -41,7 +41,7 @@ export function validateRenewalStructure(s: State) {
     demand(
       t.qualificationType === "auditee" && t.scope !== "team",
       422,
-      "재인증 기본자격은 시스템 Auditee여야 합니다.",
+      "재인증 기본자격은 시스템 일반 자격여야 합니다.",
     );
   for (const q of s.qualifications) {
     const t = s.qualificationTemplates.find((t) => t.id === q.templateId);

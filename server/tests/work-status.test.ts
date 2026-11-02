@@ -267,7 +267,7 @@ test("6개월 초과 말소·진행 종료·복귀 후 새 계획과 두 평가�
   assert.equal(fresh.lifecycleStatus, "Active");
   assert.notEqual(fresh.id, cert.id);
 });
-test("기한 전 복귀·재전환은 새 구간이며 Hold/조직 이동과 독립적", async (t) => {
+test("기한 전 복귀·재전환은 새 구간이며 조직 이동과 독립적", async (t) => {
   const f = await setup(t);
   await finish(f);
   await change(f, "deactive");
@@ -276,7 +276,6 @@ test("기한 전 복귀·재전환은 새 구간이며 Hold/조직 이동과 독
     .users.find((u) => u.id === "learner-1")!.workDeactivation!;
   await f.update((s) => {
     const u = s.users.find((u) => u.id === "learner-1")!;
-    u.certificationEligibility = "hold";
     u.organizationId = "org-photo-fmg";
     u.revision++;
   });
@@ -289,7 +288,7 @@ test("기한 전 복귀·재전환은 새 구간이며 Hold/조직 이동과 독
   assert.equal(
     f.store.snapshot().users.find((u) => u.id === "learner-1")!
       .certificationEligibility,
-    "hold",
+    undefined,
   );
   f.setTime("2026-11-01T01:00:00.000Z");
   await change(f, "deactive");
@@ -382,7 +381,8 @@ test("모든 조회 필터의 Auditee 지표/차트는 Deactive를 제외하고 
     assert.equal(value.snapshot.exclusions.deactivePeople, 1);
   }
   assert.deepEqual(read("auditor").summary, auditor.summary);
-  alice.certificationEligibility = "hold";
+  // Deactive and inactive organization must not double count.
+  seed.orgs.roots[0]!.active = false;
   const double = read("auditee").snapshot.exclusions;
   assert.equal(
     double.excludedPeople,

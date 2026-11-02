@@ -71,7 +71,7 @@ async function people(store: JsonStore) {
           roles: ['learner'],
           revision: 1,
           organizationId: 'density-a',
-          certificationEligibility: 'hold',
+          workStatus: 'deactive',
         },
         {
           id: 'density-inactive',

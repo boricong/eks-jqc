@@ -229,14 +229,14 @@ test('빈 인증Set·학습 항목·자료와 Hold 제한은 명확하게 표시
   await page.route('**/api/workspace', async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    data.actor.certificationEligibility = 'hold';
-    data.users.find((u: { id: string }) => u.id === 'learner-1').certificationEligibility = 'hold';
+    data.actor.workStatus = 'deactive';
+    data.users.find((u: { id: string }) => u.id === 'learner-1').workStatus = 'deactive';
     if (empty)
       data.assignments.find((a: { id: string }) => a.id === 'assignment-1').enrollments = [];
     await route.fulfill({ response, json: data });
   });
   await refresh(page);
-  await expect(page.locator('.qualification-context-note')).toContainText('Hold');
+  await expect(page.locator('aside[role="status"]')).toContainText('deactive');
   await expect(page.getByRole('link', { name: '평가 시작', exact: true })).toHaveCount(0);
   await menu(page).getByRole('link', { name: '평가', exact: true }).click();
   await expect(page.locator('.assessment-grid').getByRole('link')).toHaveCount(0);

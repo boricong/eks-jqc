@@ -23,7 +23,7 @@ export function migratePlanningSchedule(
 ) {
   const raw = structuredClone(input) as State,
     organizations = validateOrganizations(orgInput);
-  if (![28, 29, 30].includes(raw?.schemaVersion))
+  if (![28, 29, 30, 31, 32].includes(raw?.schemaVersion))
     throw Error("전체 일정 이관은 업무28 또는 현행29 파일이 필요합니다.");
   validateState(raw, organizations);
   const alreadyApplied = raw.schemaVersion >= 29;

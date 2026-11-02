@@ -82,7 +82,7 @@ async function enter(page: Parameters<typeof actor>[0]) {
   await actor(page, 'operator-1');
 }
 
-test('공유 헤더/내부 메뉴·검색·실제 보고서·목차·뒤로/새로고침과 읽기 전용', async ({
+test('독립 헤더·사이드바 없음·검색·실제 보고서·목차·뒤로/새로고침과 읽기 전용', async ({
   page,
   backend,
 }) => {
@@ -93,15 +93,13 @@ test('공유 헤더/내부 메뉴·검색·실제 보고서·목차·뒤로/새�
   page.on('request', (r) => {
     if (r.url().includes('/api/') && !['GET', 'HEAD'].includes(r.method())) writes.push(r.url());
   });
-  await page.locator('[data-submenu-toggle="system"]').click();
-  await page
-    .locator('[data-submenu-panel="system"]')
-    .getByRole('link', { name: '문서 조회', exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/system\/documents$/);
-  await expect(
-    page.locator('#system-navigation').getByRole('link', { name: '문서 조회' }),
-  ).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: '문서 조회', exact: true }).click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.locator('.admin-sidebar, #system-navigation')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '문서 조회', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await expect(page.locator('.document-row')).toHaveCount(2);
   await page.getByRole('searchbox', { name: '문서 검색' }).fill('no result');
   await expect(page.getByText('검색 결과가 없습니다.', { exact: true })).toBeVisible();
@@ -141,7 +139,7 @@ test('공유 헤더/내부 메뉴·검색·실제 보고서·목차·뒤로/새�
 test('Markdown 기본 문법·중복 제목·안전한 링크/이미지와 등록 문서 간 이동', async ({ page }) => {
   await page.route('https://example.invalid/**', (r) => r.abort());
   await enter(page);
-  await page.goto('/system/documents/example');
+  await page.goto('/documents/example');
   const body = page.getByRole('article', { name: '문서 본문' });
   await expect(body.locator('strong')).toHaveText('강조');
   await expect(body.locator('em')).toHaveText('기울임');
@@ -156,7 +154,7 @@ test('Markdown 기본 문법·중복 제목·안전한 링크/이미지와 등�
   await body.getByRole('link', { name: '본문 이동' }).click();
   await expect(body.locator('#doc-같은-제목')).toBeFocused();
   await body.getByRole('link', { name: 'IATF 보고서' }).click();
-  await expect(page).toHaveURL(new RegExp(`/system/documents/${reportId}#1-`));
+  await expect(page).toHaveURL(new RegExp(`/documents/${reportId}#1-`));
   await expect(page.locator('#doc-1-결론')).toBeFocused();
 });
 
@@ -169,18 +167,18 @@ test('실패 재시도·없는 문서·빈 목록을 구분한다', async ({ pag
       await route.fulfill({ status: 503, json: { message: '문서 목록 시험 오류' } });
     } else await route.continue();
   });
-  await page.goto('/system/documents');
+  await page.goto('/documents');
   await expect(page.getByRole('alert')).toContainText('문서 목록 시험 오류');
   await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
   await expect(page.locator('.document-row')).toHaveCount(2);
-  await page.goto('/system/documents/missing');
+  await page.goto('/documents/missing');
   await expect(page.getByRole('alert')).toContainText('문서를 찾을 수 없습니다.');
   await page.route('**/api/system/documents', (route) => route.fulfill({ json: { items: [] } }));
   await page.getByRole('link', { name: '문서 목록', exact: true }).click();
   await expect(page.getByText('등록된 문서가 없습니다.', { exact: true })).toBeVisible();
 });
 
-test('문서 응답 전에 계정을 바꾸면 이전 본문이 표시되지 않고 다른 역할의 직접 진입도 차단한다', async ({
+test('문서 응답 전에 계정을 바꾸면 이전 본문이 표시되지 않고 다른 역할도 새로 문서를 조회할 수 있다', async ({
   page,
 }) => {
   await enter(page);
@@ -198,22 +196,22 @@ test('문서 응답 전에 계정을 바꾸면 이전 본문이 표시되지 않
     await gate;
     await route.fulfill({ response }).catch(() => {});
   });
-  await page.goto(`/system/documents/${reportId}`);
+  await page.goto(`/documents/${reportId}`);
   await request;
   await actor(page, 'learner-1');
   release();
   await expect(page.locator('.document-markdown')).toHaveCount(0);
   await expect(page.locator('[data-submenu-toggle="system"]')).toHaveCount(0);
-  await page.goto(`/system/documents/${reportId}`);
-  await expect(page).toHaveURL(/\/$/);
+  await page.goto(`/documents/${reportId}`);
+  await expect(page.locator('.document-markdown')).toBeVisible();
   await actor(page, 'admin-1');
-  await page.goto('/system/documents');
-  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/documents');
+  await expect(page.locator('.document-row')).toHaveCount(2);
 });
 
-test('권한 회수 후 전역 갱신은 본문을 제거한다', async ({ page, backend }) => {
+test('운영 역할 회수 후에도 로그인 사용자는 문서를 읽는다', async ({ page, backend }) => {
   await enter(page);
-  await page.goto(`/system/documents/${reportId}`);
+  await page.goto(`/documents/${reportId}`);
   await expect(page.locator('.document-markdown')).toBeVisible();
   await backend.store.transact(
     'operator-1',
@@ -227,7 +225,9 @@ test('권한 회수 후 전역 갱신은 본문을 제거한다', async ({ page,
     },
   );
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.locator('.document-markdown')).toHaveCount(0);
+  await expect(page.locator('[data-submenu-toggle="system"]')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.document-markdown')).toBeVisible();
 });
 
 test('4폭의 실제 보고서·표/코드 내부 스크롤·목차 초점·타이포그래피', async ({ page }, testInfo) => {
@@ -235,7 +235,7 @@ test('4폭의 실제 보고서·표/코드 내부 스크롤·목차 초점·타�
   const metrics = [];
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/system/documents');
+    await page.goto('/documents');
     await expect(page.locator('.document-row')).toHaveCount(2);
     await page.screenshot({
       path: testInfo.outputPath(`documents-list-${width}.png`),
@@ -313,7 +313,7 @@ test('4폭의 실제 보고서·표/코드 내부 스크롤·목차 초점·타�
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await page.screenshot({ path: testInfo.outputPath(`documents-contents-${width}.png`) });
     await page.route('https://example.invalid/**', (r) => r.abort());
-    await page.goto('/system/documents/example');
+    await page.goto('/documents/example');
     await expect(page.locator('.document-markdown pre')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

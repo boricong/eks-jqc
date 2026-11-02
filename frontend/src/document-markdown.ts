@@ -7,6 +7,11 @@ export interface DocumentHeading {
   text: string;
   level: number;
 }
+export interface DocumentDiagram {
+  id: string;
+  source: string;
+  label: string;
+}
 const slug = (value: string) =>
   value
     .normalize('NFKC')
@@ -75,7 +80,7 @@ export function renderDocument(document: SystemDocumentDetail, catalog: SystemDo
       const target = catalog.find(
         (item) => item.sourcePath === decodeURIComponent(url.pathname.slice(1)),
       );
-      return target ? `/system/documents/${target.id}${url.hash}` : '';
+      return target ? `/documents/${target.id}${url.hash}` : '';
     } catch {
       return '';
     }
@@ -127,8 +132,19 @@ export function renderDocument(document: SystemDocumentDetail, catalog: SystemDo
   md.renderer.rules.table_open = () =>
     '<div class="document-table-scroll" tabindex="0" role="region" aria-label="문서 표"><table>';
   md.renderer.rules.table_close = () => '</table></div>';
+  const diagrams: DocumentDiagram[] = [];
   const fence = md.renderer.rules.fence!;
-  md.renderer.rules.fence = (...args) => fence(...args).replace('<pre>', '<pre tabindex="0">');
+  md.renderer.rules.fence = (...args) => {
+    const token = args[0][args[1]]!;
+    if (token.info.trim().toLowerCase() !== 'mermaid')
+      return fence(...args).replace('<pre>', '<pre tabindex="0">');
+    const id = `doc-diagram-${slug(document.id)}-${diagrams.length + 1}`;
+    const label =
+      token.content.match(/^\s*accTitle:\s*(.+)$/m)?.[1]?.trim() ||
+      `다이어그램 ${diagrams.length + 1}`;
+    diagrams.push({ id, source: token.content, label });
+    return `<div class="document-diagram"><div id="${id}" class="document-diagram-canvas" tabindex="0" role="region" aria-label="${escape(label)}" aria-busy="true"><p role="status">다이어그램을 표시하는 중입니다.</p></div><details><summary>다이어그램 원문 보기</summary><pre tabindex="0"><code>${escape(token.content)}</code></pre></details></div>`;
+  };
   md.renderer.rules.code_block = (ts, i) =>
     `<pre tabindex="0"><code>${escape(ts[i]!.content)}</code></pre>`;
   const html = DOMPurify.sanitize(md.renderer.render(tokens, md.options, {}), {
@@ -160,6 +176,8 @@ export function renderDocument(document: SystemDocumentDetail, catalog: SystemDo
       'img',
       'span',
       'div',
+      'details',
+      'summary',
     ],
     ALLOWED_ATTR: [
       'id',
@@ -180,5 +198,5 @@ export function renderDocument(document: SystemDocumentDetail, catalog: SystemDo
     ],
     ALLOW_DATA_ATTR: false,
   });
-  return { html, headings };
+  return { html, headings, diagrams };
 }

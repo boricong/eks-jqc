@@ -1,3 +1,4 @@
+import { requireAuditorTeam } from "./auditor-team.ts";
 import {
   guardRenewalAttempt,
   reconcileRenewalBatch,
@@ -85,7 +86,6 @@ import {
 import { authorizeNotice, saveNotice } from "./notices.ts";
 import {
   initializeCertification,
-  requireEligible,
   reconcileLifecycle,
 } from "./qualification-lifecycle.ts";
 
@@ -108,7 +108,7 @@ export function canRead(a: StoredAssignment, u: User) {
     owner(a, u) ||
     (a.lv1OrganizationId === u.lv1OrganizationId &&
       (u.roles.includes("learner") ||
-        u.roles.includes("evaluator") ||
+        u.auditorEnabled ||
         a.qualificationMetadata?.qualificationType === "auditor") &&
       a.learnerId === u.id)
   );
@@ -334,12 +334,7 @@ export function reconcilePendingAuditor(
       !s.certifications.some((c) => c.assignmentId === a.id),
   )) {
     const u = s.users.find((u) => u.id === a.learnerId);
-    if (
-      !u ||
-      u.certificationEligibility === "hold" ||
-      !userView(u, organizations).organizationActive
-    )
-      continue;
+    if (!u || !userView(u, organizations).organizationActive) continue;
     const es = s.enrollments.filter((e) => e.assignmentId === a.id);
     if (
       es.length &&
@@ -420,10 +415,9 @@ function reconcile(
   if (
     all.length &&
     (!a.auditor ||
-      (learner.certificationEligibility !== "hold" &&
-        (a.auditor.level !== "main" ||
-          a.auditor.kind === "reacquisition" ||
-          !!assignmentPrerequisite(s, a, at)))) &&
+      a.auditor.level !== "main" ||
+      a.auditor.kind === "reacquisition" ||
+      !!assignmentPrerequisite(s, a, at)) &&
     completed.every((ev) => ev.completionId) &&
     !s.certifications.some((cert) => cert.assignmentId === a.id)
   ) {
@@ -534,7 +528,6 @@ export function execute(
     return executeSubjective(s, u, action, target, body, at);
   reconcileLifecycle(s, at);
   if (action.startsWith("attempt.")) {
-    requireEligible(u);
     const enrollmentId =
       action === "attempt.start"
         ? target
@@ -575,7 +568,7 @@ export function execute(
     );
   if (action === "checklist.update") {
     const { e, a, c } = context(s, target);
-    requireEligible(u);
+
     active(a);
     demand(
       u.organizationActive,
@@ -672,6 +665,11 @@ export function execute(
         422,
         "공통 출처는 지정할 수 없습니다.",
       );
+      if (
+        (body.content?.qualificationType || body.qualificationType) ===
+        "auditor"
+      )
+        requireAuditorTeam(organizations, scope);
       const content =
         body.content === undefined
           ? undefined
@@ -1038,15 +1036,7 @@ export function workspace(
       eligible: s.users.filter(
         (x) =>
           x.roles.includes("learner") &&
-          x.certificationEligibility !== "hold" &&
           !workDeactive(x) &&
-          visibleScope(userView(x, organizations).lv1OrganizationId) &&
-          (admin || x.id === u.id),
-      ).length,
-      held: s.users.filter(
-        (x) =>
-          x.roles.includes("learner") &&
-          x.certificationEligibility === "hold" &&
           visibleScope(userView(x, organizations).lv1OrganizationId) &&
           (admin || x.id === u.id),
       ).length,
@@ -1076,7 +1066,7 @@ export function workspace(
             (user) =>
               visibleScope(user.lv1OrganizationId) &&
               (user.roles.includes("learner") ||
-                user.roles.includes("evaluator")),
+                userView(user, organizations).auditorEnabled),
           )
           .flatMap((user) =>
             (["auditee", "auditor"] as const).map((type) =>
@@ -1104,13 +1094,7 @@ export function workspace(
         (admin || (canReadPersonal(s, u) && r.learnerId === u.id)),
     ),
     notifications: s.notifications.filter(
-      (n) =>
-        n.recipientId === u.id &&
-        !n.resolvedAt &&
-        !(
-          u.certificationEligibility === "hold" &&
-          ["planning", "renewal", "expiry"].includes(n.type)
-        ),
+      (n) => n.recipientId === u.id && !n.resolvedAt,
     ),
     management: {
       lv1OrganizationId: operator

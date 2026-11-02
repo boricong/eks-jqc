@@ -240,7 +240,7 @@ export function previewRequirements(
           version.qualificationType === "auditee" &&
           version.purpose !== "renewal",
         422,
-        "같은 팀의 Auditee 자격만 지정할 수 있습니다.",
+        "같은 팀의 일반 자격만 지정할 수 있습니다.",
       );
       if (!before.includes(id))
         demand(
@@ -302,7 +302,7 @@ export function previewRequirements(
               !q.deletedAt,
           ),
         422,
-        "같은 팀 하위 조직의 Auditee 상속만 제외할 수 있습니다.",
+        "같은 팀 하위 조직의 일반 자격 상속만 제외할 수 있습니다.",
       );
       const old = oldExclusions.find((o) => o.entityId === e.entityId);
       if (!old)
@@ -557,9 +557,6 @@ export function previewPlanningRequest(
         ...(workDeactive(u) ? [WORK_DEACTIVE_MESSAGE] : []),
         ...(!u.roles.includes("learner") ? ["학습자 역할이 필요합니다."] : []),
         ...(!u.organizationActive ? ["사용 중지된 소속입니다."] : []),
-        ...(u.certificationEligibility === "hold"
-          ? ["취득 대상자 Hold 상태입니다."]
-          : []),
         ...requirements.flatMap((r) => r.issues.map((i) => `${r.title}: ${i}`)),
       ];
       return {
@@ -617,7 +614,7 @@ export function closePlanningRequest(
   demand(
     r && r.lv1OrganizationId === scope && r.qualificationType === "auditee",
     403,
-    "선택한 팀의 Auditee 요청만 종료할 수 있습니다.",
+    "선택한 팀의 일반 자격 요청만 종료할 수 있습니다.",
   );
   demand(
     !r.completion && !r.closed && r.revision === input.revision,

@@ -4,6 +4,7 @@ import PageHeading from '../components/PageHeading.vue';
 import PropertyList from '../components/PropertyList.vue';
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { withCriteriaType } from '../management-navigation';
 import { useDemo } from '../stores/demo';
 import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -91,18 +92,22 @@ const back = computed(() =>
   isOwnedRecordContext(route, a.value, store.actor)
     ? ownedQualificationsForType(qualificationType.value)
     : store.canEnterManagement && route.query.lv1OrganizationId
-      ? store.managementLink('/admin/results')
+      ? withCriteriaType(store.managementLink('/admin/results'), qualificationType.value)
       : store.hasRole('system_operator')
         ? '/system/overview'
         : store.hasRole('admin')
-          ? '/admin/results'
+          ? '/admin/results' + (qualificationType.value === 'auditor' ? '?type=auditor' : '')
           : ownedQualificationsForType(qualificationType.value),
 );
 </script>
 <template>
   <div v-if="a" class="container page certificate-page">
     <RouterLink :to="back" class="back-link"><AppIcon name="back" :size="16" />목록으로</RouterLink>
-    <PageHeading class="page-heading"><h1>자격 인증서</h1></PageHeading>
+    <PageHeading class="page-heading"
+      ><h1>
+        {{ qualificationType === 'auditor' ? 'Auditor 인증서' : '자격 인증서' }}
+      </h1></PageHeading
+    >
     <article class="certificate-document" aria-label="자격 발급 기록과 인증서">
       <section class="certificate-record" aria-label="발급 기록">
         <div class="certificate-record-heading">
@@ -123,7 +128,7 @@ const back = computed(() =>
       </section>
       <section class="certificate-identity" aria-label="발급 당시 자격 정보">
         <p class="certificate-eyebrow">
-          {{ qualificationTypeLabels[qualificationType] }} 자격 인증서
+          {{ qualificationType === 'auditor' ? 'Auditor 인증서' : '자격 인증서' }}
         </p>
         <h2 class="certificate-title">{{ snapshot?.title || qualification?.title }}</h2>
         <p v-if="englishName" class="certificate-english-name" lang="en">{{ englishName }}</p>

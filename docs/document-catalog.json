@@ -1,9 +1,30 @@
 [
   {
+    "id": "foundry-photo-certification-workflow",
+    "title": "Foundry Photo 기술팀 자격 인증 워크플로우",
+    "description": "기본자격 준비부터 팀 자격 풀 구성, 팀·세부조직관리자의 조직별 필요자격 지정과 상속·제외·재포함, 학습자의 계획·평가·인증서 확인까지 다이어그램 5개로 설명합니다.",
+    "updatedOn": "2026-11-02",
+    "sourcePath": "FOUNDRY_PHOTO_WORKFLOW.md"
+  },
+  {
     "id": "iatf16949-competence-review",
     "title": "EKS의 IATF 16949 역량 증빙 적합성 검토와 개선안",
     "description": "공통 IATF 요구사항과 현재 구현을 대조하고 역량 증빙의 공백과 단계별 개선안을 정리한 보고서입니다.",
     "updatedOn": "2026-10-25",
     "sourcePath": "IATF16949_역량증빙_갭분석_2026-10-25.md"
+  },
+  {
+    "id": "learner-certification-guide",
+    "title": "학습자 안내 — 계획 알림부터 자격 인증서까지",
+    "description": "계획 요청 확인, 전체 자격 일정 작성·확정, 인증Set 학습·평가·수료와 자격 인증서 확인을 단계별로 안내합니다.",
+    "updatedOn": "2026-11-02",
+    "sourcePath": "LEARNER_CERTIFICATION_GUIDE.md"
+  },
+  {
+    "id": "system-operations-guide",
+    "title": "시스템 운영 상세 안내 — 사용자·조직·기준 관리",
+    "description": "시스템 운영 일곱 메뉴, 사용자 active/deactive, 조직 구조·필요자격 상속, Auditor 대상 팀과 테스트 초기화 범위를 설명합니다.",
+    "updatedOn": "2026-11-02",
+    "sourcePath": "SYSTEM_OPERATIONS_GUIDE.md"
   }
 ]

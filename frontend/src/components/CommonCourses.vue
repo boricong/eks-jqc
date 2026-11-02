@@ -316,7 +316,7 @@ watch(
         ><label class="field"
           >인증 유형<select v-model="type">
             <option value="all">전체</option>
-            <option value="auditee">Auditee</option>
+            <option value="auditee">자격</option>
             <option value="auditor">Auditor</option>
           </select></label
         ><label class="field"

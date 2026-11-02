@@ -2214,8 +2214,8 @@ input[type='radio'] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.system-shell @media (max-width: 1000px) {
-  .organization-layout {
+@media (max-width: 1000px) {
+  .system-shell .organization-layout {
     grid-template-columns: 1fr;
   }
 }

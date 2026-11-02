@@ -40,6 +40,16 @@ async function fixture(
   const store = await loadPlanningFixture(file),
     app = await buildApp(store),
     cookies = new Map<string, string>();
+  await store.organizations.transact(
+    "operator-1",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+      return {};
+    },
+  );
   t.after(async () => {
     await app.close();
     await rm(dir, { recursive: true, force: true });
@@ -131,9 +141,7 @@ test("인증Set 생성 유형·권한·입력 검증과 미사용 첫 버전의 
   assert(
     preview.changes.some(
       (x: any) =>
-        x.label === "인증 유형" &&
-        x.before === "Auditor" &&
-        x.after === "Auditee",
+        x.label === "인증 유형" && x.before === "Auditor" && x.after === "자격",
     ),
   );
   const key = randomUUID(),

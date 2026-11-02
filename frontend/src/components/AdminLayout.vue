@@ -62,17 +62,14 @@ watch(
           <ul>
             <li v-for="s in group.sections" :key="s.id">
               <RouterLink
-                :to="
-                  withCriteriaType(
-                    store.managementLink(s.path),
-                    /^\/admin\/(qualifications|courses)(\/|$)/.test(route.path)
-                      ? route.query.type
-                      : undefined,
-                  )
-                "
+                :to="withCriteriaType(store.managementLink(s.path), undefined)"
                 :class="{ active: section === s.id }"
                 :aria-current="section === s.id ? 'page' : undefined"
-                ><AppIcon :name="s.icon" :size="18" /><span>{{ s.name }}</span></RouterLink
+                ><AppIcon :name="s.icon" :size="18" /><span>{{
+                  s.id === 'auditor' && !store.managementOrganization?.auditorEnabled
+                    ? '기존 Auditor 기록'
+                    : s.name
+                }}</span></RouterLink
               >
             </li>
           </ul>

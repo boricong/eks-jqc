@@ -4,6 +4,7 @@ import CourseCategory from '../components/CourseCategory.vue';
 import PageHeading from '../components/PageHeading.vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { withCriteriaType } from '../management-navigation';
 import { kindLabels, recordQualificationType } from '@eks/contracts';
 import {
   isOwnedRecordContext,
@@ -29,13 +30,13 @@ const back = computed(() =>
   isOwnedRecordContext(route, a.value, store.actor)
     ? ownedCertificateLocation(a.value!.id, qualificationType.value)
     : route.query.lv1OrganizationId && store.canEnterManagement
-      ? store.managementLink('/admin/results')
+      ? withCriteriaType(store.managementLink('/admin/results'), qualificationType.value)
       : a.value?.learnerId === store.actorId
         ? `/qualifications/${a.value?.id}?course=${e.value?.courseId}${route.query.stage === 'assessment' ? '&stage=assessment' : ''}`
         : store.hasRole('system_operator')
           ? '/system/overview'
           : store.hasRole('admin')
-            ? '/admin/results'
+            ? '/admin/results' + (qualificationType.value === 'auditor' ? '?type=auditor' : '')
             : '/',
 );
 </script>

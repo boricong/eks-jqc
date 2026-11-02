@@ -1,3 +1,4 @@
+import { setWorkStatus } from '../../server/tests/work-status-fixture';
 import { test, expect, actor, answerConfirmation } from './fixtures';
 import { courseSection, createCourse, saveCriterion } from './catalog-helpers';
 import { randomUUID } from 'node:crypto';
@@ -146,12 +147,16 @@ test('저장 실패·이동 취소와 서버 Hold 잠금에서도 입력을 보�
     'hold',
     () => {},
     (s) => {
-      s.users.find((u) => u.id === 'learner-1')!.certificationEligibility = 'hold';
+      setWorkStatus(
+        s.users.find((u) => u.id === 'learner-1')!,
+        'deactive',
+        new Date().toISOString(),
+      );
       return {};
     },
   );
   await page.getByLabel('주관식 답변', { exact: true }).fill('충돌 후에도 보존');
-  await expect(page.getByRole('alert')).toContainText('Hold');
+  await expect(page.getByRole('alert')).toContainText(/deactive/i);
   await expect(page.getByLabel('주관식 답변', { exact: true })).toHaveValue('충돌 후에도 보존');
 });
 

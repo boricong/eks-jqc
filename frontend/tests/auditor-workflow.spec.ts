@@ -1,64 +1,58 @@
 import { createPoolQualification as createAuditorQualification } from '../../server/tests/auditor-fixture';
 import { configureNeeds } from './workflow-helpers';
-import { test, expect, actor } from './fixtures';
+import { test, expect, actor, answerConfirmation } from './fixtures';
 import type { Page } from '@playwright/test';
-import { saveAuditorProgram, designateAuditor } from '../../server/src/auditor-program';
+import { saveAuditorProgram } from '../../server/src/auditor-program';
 import { userView } from '../../server/src/organizations';
 import { carouselContrast } from './carousel-visual-helpers';
 
-test('사용자 관리의 Auditor 준비 검사·안내 미리보기·원자적 지정과 일반 수정 시 미발송', async ({
-  page,
-  backend,
-}) => {
+test('Lv1 대상 팀 지정과 개인 지정 제거·일반 메뉴 분리', async ({ page, backend }) => {
   await page.goto('/');
   await actor(page, 'operator-1');
   await page.goto('/system/users');
   await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByRole('checkbox', { name: 'Auditor', exact: true }).check();
-  await expect(dialog.getByRole('region', { name: 'Auditor 지정 안내 미리보기' })).toContainText(
-    '확인 필요',
-  );
-  await dialog.getByLabel('이름', { exact: true }).fill('보존할 이름');
-  await dialog.getByRole('button', { name: '사용자 저장', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('준비');
-  await expect(dialog.getByLabel('이름', { exact: true })).toHaveValue('보존할 이름');
-  expect(backend.store.snapshot().users.find((u) => u.id === 'learner-2')!.name).toBe('정하린');
-  await dialog.getByRole('button', { name: '취소', exact: true }).click();
-  await prepare(backend);
-  await backend.store.transact(
-    'operator-1',
-    crypto.randomUUID(),
-    'isolated designation withdrawal',
-    () => {},
-    (s) => {
-      s.users.find((u) => u.id === 'learner-2')!.roles = ['learner'];
-      return {};
-    },
-  );
+  await expect(
+    page.getByRole('dialog').getByRole('checkbox', { name: 'Auditor', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: '취소', exact: true }).click();
+  await page.goto('/system/organizations');
+  const setting = page.getByRole('region', { name: 'Auditor 대상 팀 설정' });
+  await expect(setting).toBeVisible();
+  await setting.getByRole('button', { name: 'Auditor 대상 팀 변경' }).click();
+  let dialog = page.getByRole('dialog', { name: 'Auditor 대상 팀 설정' });
+  await expect(dialog.getByRole('button', { name: '변경', exact: true })).toBeDisabled();
+  await dialog.getByRole('radio', { name: '사용', exact: true }).check();
+  for (const width of [1920, 1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(dialog.getByRole('button', { name: '변경', exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    ).toBeTruthy();
+  }
+  await dialog.getByRole('radio', { name: '사용', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(dialog.getByRole('radio', { name: '미사용', exact: true })).toBeChecked();
+  await page.keyboard.press('ArrowLeft');
+  await dialog.getByRole('button', { name: '변경', exact: true }).click();
+  await expect(dialog).toContainText('대상');
+  await dialog.getByRole('button', { name: '변경 확정' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(
+    backend.store.organizations.snapshot().roots.find((r: any) => r.id === 'org-photo')!
+      .auditorEnabled,
+  ).toBe(true);
+  expect(
+    backend.store.snapshot().notifications.filter((n: any) => n.type === 'auditor_designation'),
+  ).toHaveLength(0);
+  await page.goto('/admin/auditor?lv1OrganizationId=org-photo');
+  await expect(page.getByRole('heading', { name: 'Auditor 관리', exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
-  await dialog.getByRole('checkbox', { name: 'Auditor', exact: true }).check();
-  const preview = dialog.getByRole('region', { name: 'Auditor 지정 안내 미리보기' });
-  await expect(preview).toContainText('신규 지정 준비 · 완료');
-  await expect(preview).toContainText('Auditor 지정 교육 안내');
-  await expect(preview.getByRole('link', { name: '참고 자료' })).toHaveAttribute(
-    'href',
-    'https://example.com/training',
-  );
-  await dialog.getByRole('button', { name: '사용자 저장', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(
-    backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation'),
-  ).toHaveLength(2);
-  await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
-  await dialog.getByLabel('이름', { exact: true }).fill('정하린 수정');
-  await expect(dialog.getByRole('region', { name: 'Auditor 지정 안내 미리보기' })).toHaveCount(0);
-  await dialog.getByRole('button', { name: '사용자 저장', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(
-    backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation'),
-  ).toHaveLength(2);
+  await expect(page.getByRole('heading', { name: 'Auditor 관리', exact: true })).toBeVisible();
+  await actor(page, 'admin-1');
+  await page.goto('/admin/qualifications');
+  await expect(page.getByRole('tab', { name: /Auditee|Auditor/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '자격 등록', exact: true })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('Auditee');
 });
 
 async function call(page: Page, path: string, body?: unknown, method = 'POST') {
@@ -66,12 +60,26 @@ async function call(page: Page, path: string, body?: unknown, method = 'POST') {
   const response = await page.request.fetch('/api' + path, {
     method: body === undefined ? 'GET' : method,
     data: body,
-    headers: { 'X-Session-Tab': tab!, 'idempotency-key': crypto.randomUUID() },
+    headers: {
+      'X-Session-Tab': tab!,
+      'idempotency-key': crypto.randomUUID(),
+      'X-EKS-Release-Contract': '5',
+    },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
   return response.json();
 }
-async function prepare(backend: any, roles = ['learner', 'evaluator']) {
+async function prepare(backend: any, roles = ['learner']) {
+  await backend.store.organizations.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    'enable test team',
+    () => {},
+    (doc: any) => {
+      doc.roots.find((r: any) => r.id === 'org-photo').auditorEnabled = true;
+      return {};
+    },
+  );
   return backend.store.transact(
     'operator-1',
     crypto.randomUUID(),
@@ -141,13 +149,6 @@ async function prepare(backend: any, roles = ['learner', 'evaluator']) {
       );
       const u = s.users.find((u: any) => u.id === 'learner-2');
       u.roles = roles;
-      designateAuditor(
-        s,
-        u,
-        s.users.find((u: any) => u.id === 'operator-1'),
-        'org-photo',
-        at,
-      );
       return {};
     },
   );
@@ -214,7 +215,8 @@ test('Auditor 홈에서 일정 없이 일반·메인 취득과 반응형·키보
       .every((a) => !a.planId),
   ).toBeTruthy();
   expect(backend.store.snapshot().certifications.filter((c) => c.auditor)).toHaveLength(2);
-  await page.goto('/notifications');
+  await page.goto('/auditor');
+  await page.locator('.auditor-notice summary').click();
   await expect(page.getByRole('link', { name: '참고 자료' })).toHaveAttribute(
     'href',
     'https://example.com/training',
@@ -226,20 +228,27 @@ test('Auditor 홈에서 일정 없이 일반·메인 취득과 반응형·키보
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/dashboard?qualificationType=auditor');
+  await expect(page).toHaveURL(/qualificationType=auditor/);
   const progress = page.getByRole('region', { name: 'Auditor 학습·등급 현황', exact: true });
   await expect(progress).toContainText('메인 1명');
   await expect(progress).toContainText('학습 시작 1명');
   await expect(progress).toContainText('수료 이력 1명');
   await expect(progress).not.toContainText('계획');
+  const issued = backend.store.snapshot().certifications.find((c) => c.auditor)!;
+  await page.goto(`/certifications/${issued.assignmentId}?lv1OrganizationId=org-photo`);
+  await expect(page.getByRole('heading', { name: 'Auditor 인증서', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '목록으로', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/results.*type=auditor/);
   expect(errors).toEqual([]);
 });
 test('Auditor 갱신은 현재 교육·인증기준 원문 확인으로 처리하고 만료 후 학습으로 연결한다', async ({
   page,
   backend,
 }) => {
-  await prepare(backend, ['evaluator']);
+  await prepare(backend, ['admin']);
   await page.goto('/');
   await actor(page, 'learner-2');
+  await page.goto('/auditor');
   await page.getByRole('button', { name: '일반 Auditor 학습 시작', exact: true }).click();
   await finish(page);
   const c = backend.store.snapshot().certifications.find((c) => c.auditor)!;
@@ -282,9 +291,10 @@ test('Auditor 확인 응답 유실 재시도와 지정 해제 후 기존 학습 
   page,
   backend,
 }) => {
-  await prepare(backend, ['evaluator']);
+  await prepare(backend, ['admin']);
   await page.goto('/');
   await actor(page, 'learner-2');
+  await page.goto('/auditor');
   await page.getByRole('button', { name: '일반 Auditor 학습 시작', exact: true }).click();
   await expect(page.locator('.auditor-checklist')).toBeVisible();
   const a = backend.store.snapshot().assignments.find((a) => a.auditor)!;
@@ -302,13 +312,13 @@ test('Auditor 확인 응답 유실 재시도와 지정 해제 후 기존 학습 
   await page.getByRole('button', { name: '완료 확인 재시도' }).click();
   await expect(checks.first()).toBeEnabled();
   expect(backend.store.snapshot().learningChecklists[0]!.revision).toBe(1);
-  await backend.store.transact(
+  await backend.store.organizations.transact(
     'operator-1',
     crypto.randomUUID(),
-    'revoke isolated fixture',
+    'disable test team',
     () => {},
-    (s) => {
-      s.users.find((u) => u.id === 'learner-2')!.roles = ['learner'];
+    (doc) => {
+      doc.roots.find((r) => r.id === 'org-photo')!.auditorEnabled = false;
       return {};
     },
   );
@@ -316,7 +326,9 @@ test('Auditor 확인 응답 유실 재시도와 지정 해제 후 기존 학습 
   await checks.nth(1).check();
   await expect(checks.first()).toBeDisabled();
   await page.goto('/auditor');
-  await expect(page.getByText('Auditor 지정이 해제되었습니다.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('소속 팀은 Auditor 미사용 상태입니다.', { exact: false }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: '메인 Auditor 학습 시작', exact: true }),
   ).toHaveCount(0);
@@ -333,20 +345,60 @@ test('Auditor 안내문 전용 운영·설정 충돌 입력 보존과 Auditee �
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/auditor');
-  await expect(page.getByRole('heading', { name: 'Auditor 운영', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Auditor 관리', exact: true })).toBeVisible();
+  const menu = page.getByRole('navigation', { name: 'Auditor 업무', exact: true });
+  await expect(menu.getByRole('link')).toHaveCount(5);
+  for (const [name, path] of [
+    ['Auditor 자격 풀', 'qualifications'],
+    ['Auditor 인증Set', 'courses'],
+    ['Auditor 현황', 'dashboard'],
+    ['Auditor 결과', 'results'],
+    ['Auditor 보유 인증', 'credentials'],
+  ]) {
+    await expect(menu.getByRole('link', { name, exact: true })).toHaveAttribute(
+      'href',
+      new RegExp(
+        `/admin/${path}\\?.*${path === 'dashboard' ? 'qualificationType' : 'type'}=auditor`,
+      ),
+    );
+  }
   for (const width of [1920, 1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
+    for (const card of await menu.getByRole('link').all()) await expect(card).toBeVisible();
+    const columns = await page
+      .locator('.auditor-menu-grid')
+      .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+    expect(columns).toBe(width >= 1280 ? 3 : width >= 768 ? 2 : 1);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     ).toBeTruthy();
     await page.screenshot({ path: info.outputPath(`auditor-admin-${width}.png`), fullPage: true });
   }
   await expect(
-    page.getByRole('heading', { name: 'Auditor 지정 학습 안내문 설정', exact: true }),
+    page.getByRole('heading', { name: 'Auditor 팀 학습 안내문 설정', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '일반 Auditor 자격 생성' })).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const firstMenu = menu.getByRole('link', { name: 'Auditor 자격 풀', exact: true });
+  await firstMenu.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/admin\/qualifications.*type=auditor/);
+  await page.goBack();
+  await page.getByRole('button', { name: '학습 안내문', exact: true }).click();
+  await expect(page.getByLabel('안내 제목', { exact: true })).toBeFocused();
   await carouselContrast(page, '.auditor-admin');
   await page.getByLabel('안내 제목', { exact: true }).fill('수정한 안내');
+  await page.getByRole('button', { name: '링크 추가', exact: true }).click();
+  const extraLink = page.getByRole('group', { name: '자료 링크 2', exact: true });
+  await extraLink.getByLabel('링크 제목', { exact: true }).fill('추가 참고 자료');
+  await extraLink
+    .getByLabel('HTTP(S) 주소', { exact: true })
+    .fill('https://example.com/additional');
+  await menu.getByRole('link', { name: 'Auditor 자격 풀', exact: true }).click();
+  await answerConfirmation(page, false);
+  await expect(page.getByLabel('안내 제목', { exact: true })).toHaveValue('수정한 안내');
+  await expect(extraLink.getByLabel('링크 제목', { exact: true })).toHaveValue('추가 참고 자료');
+  await extraLink.getByRole('button', { name: '자료 링크 2 삭제', exact: true }).click();
   const p = (await call(page, '/auditor-program')).program;
   await call(
     page,
@@ -369,7 +421,7 @@ test('Auditor 안내문 전용 운영·설정 충돌 입력 보존과 Auditee �
     .toBe('수정한 안내');
   expect(
     backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation'),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
   await expect(page.getByRole('button', { name: '안내 발송', exact: true })).toHaveCount(0);
   await configureNeeds(page);
   await page.goto('/admin/assignments');

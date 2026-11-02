@@ -1,3 +1,4 @@
+import { requireAuditorTeam } from "./auditor-team.ts";
 import {
   criteriaFingerprint,
   freezeCriteria,
@@ -53,11 +54,7 @@ import {
 } from "@eks/contracts";
 import { demand, DomainError } from "./errors.ts";
 import { userView, organization } from "./organizations.ts";
-import {
-  requireEligible,
-  openAssignment,
-  lastRevoked,
-} from "./qualification-lifecycle.ts";
+import { openAssignment, lastRevoked } from "./qualification-lifecycle.ts";
 import { notify } from "./notifications.ts";
 import { requireWorkActive } from "./work-status.ts";
 
@@ -226,15 +223,6 @@ export function executeWorkflow(
       body,
       at,
     );
-  if (
-    [
-      "plan.create",
-      "plan.complete",
-      "planning.select",
-      "planning.complete",
-    ].includes(action)
-  )
-    requireEligible(u);
   const audit = (
     id: string,
     reason = "",
@@ -273,6 +261,8 @@ export function executeWorkflow(
       existing: string[] = [];
     for (const templateId of ids) {
       const template = find(s.qualificationTemplates, templateId);
+      if (template.qualificationType === "auditor")
+        requireAuditorTeam(organizations, scope);
       demand(
         template.scope !== "team",
         409,

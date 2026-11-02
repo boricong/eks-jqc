@@ -192,7 +192,7 @@ function detailPage(page: number) {
 <template>
   <section class="dashboard-page dashboard-view" aria-label="인증 현황">
     <PageHeading>
-      <h1>인증 현황</h1>
+      <h1>{{ query.qualificationType === 'auditor' ? 'Auditor 현황' : '인증 현황' }}</h1>
       <div class="dashboard-heading-actions">
         <span v-if="data" class="dashboard-meta">{{ displayTime(data.snapshot.asOf) }} 기준</span
         ><button class="button secondary" :disabled="loading || !ready" @click="load()">
@@ -202,23 +202,6 @@ function detailPage(page: number) {
     </PageHeading>
     <p v-if="!ready" class="dashboard-empty">조회할 Lv1 조직을 선택해 주세요.</p>
     <template v-else>
-      <label class="field compact-field"
-        >인증 유형<select
-          :value="query.qualificationType"
-          @change="
-            update({
-              qualificationType: valueOf($event),
-              entityId: undefined,
-              progress: undefined,
-              member: undefined,
-              metric: undefined,
-            })
-          "
-        >
-          <option value="auditee">Auditee · 학습자</option>
-          <option value="auditor">Auditor · 평가자</option>
-        </select></label
-      >
       <div v-if="options" class="dashboard-scope">
         <template v-if="!options.snapshot.scope.directOnly">
           <label class="field"
@@ -272,8 +255,8 @@ function detailPage(page: number) {
         </div>
         <p v-if="changed" class="dashboard-notice info" role="status">{{ changed }}</p>
         <p v-if="data?.snapshot.exclusions.deactivePeople" class="dashboard-notice info">
-          업무 미수행(Deactive) {{ data.snapshot.exclusions.deactivePeople }}명은 Auditee 현황
-          모수와 실적에서 제외됩니다. 전체/제외 인원 조회에서 확인할 수 있습니다.
+          업무 미수행(Deactive) {{ data.snapshot.exclusions.deactivePeople }}명은 자격 현황 모수와
+          실적에서 제외됩니다. 전체/제외 인원 조회에서 확인할 수 있습니다.
         </p>
         <section
           id="dashboard-tab-panel"
@@ -685,11 +668,7 @@ function detailPage(page: number) {
                             {{ person.name }}</button
                           ><span class="dashboard-meta">{{ person.organizationName }}</span
                           ><span v-if="!person.eligible" class="dashboard-meta">{{
-                            person.workDeactive
-                              ? 'deactive'
-                              : person.held
-                                ? '대상자 Hold'
-                                : '비활성 소속'
+                            person.workDeactive ? 'deactive' : '비활성 소속'
                           }}</span>
                         </td>
                         <td v-for="q in data.matrix.columns.items" :key="q.entityId">
@@ -765,11 +744,7 @@ function detailPage(page: number) {
                           >
                             {{ person.name }}</button
                           ><small v-if="!person.eligible" class="dashboard-meta">{{
-                            person.workDeactive
-                              ? 'deactive'
-                              : person.held
-                                ? '대상자 Hold'
-                                : '비활성 소속'
+                            person.workDeactive ? 'deactive' : '비활성 소속'
                           }}</small>
                         </td>
                         <td>{{ person.organizationName }}</td>

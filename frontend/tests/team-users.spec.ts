@@ -343,73 +343,33 @@ test('수정 충돌 비교·입력 보존·응답 유실 재시도와 미저장 
   await expect(dialog).not.toBeVisible();
 });
 
-test('Auditor 준비 안내·저장 제한과 준비 후 지정 알림을 재사용한다', async ({ page, backend }) => {
+test('개인 Auditor 체크를 제거하고 일반 편집은 과거 역할을 보존한다', async ({ page, backend }) => {
+  await backend.store.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    'legacy role fixture',
+    () => {},
+    (s) => {
+      s.users.find((u) => u.id === 'learner-2')!.roles.push('evaluator');
+      return {};
+    },
+  );
   await page.goto('/');
   await actor(page, 'admin-1');
   await page.goto('/admin/users');
   await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('checkbox', { name: 'Auditor', exact: true }).check();
-  await expect(dialog.getByRole('region', { name: 'Auditor 지정 안내 미리보기' })).toContainText(
-    '확인 필요',
-  );
-  await expect(dialog.getByRole('button', { name: '사용자 저장', exact: true })).toBeDisabled();
-  await dialog.getByRole('button', { name: '취소', exact: true }).click();
-  await answerConfirmation(page, true);
-  await backend.store.transact(
-    'operator-1',
-    crypto.randomUUID(),
-    crypto.randomUUID(),
-    () => {},
-    (s) => {
-      const at = new Date().toISOString(),
-        admin = userView(
-          s.users.find((u) => u.id === 'admin-1')!,
-          backend.store.organizations.snapshot(),
-        );
-      const created = createAuditorQualification(
-        s,
-        admin,
-        'org-photo',
-        { revision: 0, level: 'general', title: '일반 심사원' },
-        at,
-      );
-      const q = s.qualifications.find((q) => q.id === created.id)!,
-        c = structuredClone(s.courses.find((c) => c.id === 'demo-course-1')!);
-      c.id = crypto.randomUUID();
-      c.entityId = c.id;
-      c.qualificationType = 'auditor';
-      c.assessmentKinds = [];
-      c.questions = [];
-      c.practicalQuestions = [];
-      c.learningItems = [
-        { id: crypto.randomUUID(), title: '필수 교육 원문', required: true, type: 'team' },
-      ];
-      s.courses.push(c);
-      q.courseIds = [c.id];
-      q.lifecycleStatus = 'Active';
-      q.validity = { type: 'unlimited', months: null, reminderDays: [] };
-      saveAuditorProgram(
-        s,
-        admin,
-        'org-photo',
-        {
-          revision: s.auditorPrograms[0]?.revision || 0,
-          notice: { title: '팀 지정 안내', body: '본인 교육 확인', links: [] },
-        },
-        at,
-      );
-      return {};
-    },
-  );
-  await page.getByRole('button', { name: '정하린 수정', exact: true }).click();
-  await dialog.getByRole('checkbox', { name: 'Auditor', exact: true }).check();
-  await expect(dialog).toContainText('팀 지정 안내');
+  await expect(dialog.getByRole('checkbox', { name: 'Auditor', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('region', { name: 'Auditor 지정 안내 미리보기' })).toHaveCount(0);
+  await dialog.getByLabel('이름', { exact: true }).fill('정하린 정보 수정');
   await dialog.getByRole('button', { name: '사용자 저장', exact: true }).click();
   await expect(dialog).not.toBeVisible();
+  expect(backend.store.snapshot().users.find((u) => u.id === 'learner-2')!.roles).toContain(
+    'evaluator',
+  );
   expect(
     backend.store.snapshot().notifications.filter((n) => n.type === 'auditor_designation'),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
 });
 
 test('권한 회수 시 개인 목록을 지우고 운영자 팀 전환은 선택 팀만 조회한다', async ({

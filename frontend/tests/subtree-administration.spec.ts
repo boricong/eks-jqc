@@ -87,23 +87,8 @@ test('세부 관리자가 하위 조직 정보·상속 제외·대상자 상태�
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/admin/targets');
-  await page.getByRole('checkbox', { name: '박준호 선택', exact: true }).check();
-  await page.getByRole('button', { name: '대상자 상태 변경', exact: true }).click();
-  await page.getByRole('dialog').getByLabel('변경 사유').fill('하위 조직 대상 조정');
-  await page.getByRole('dialog').getByRole('button', { name: '대상 상태 저장' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(
-    backend.store.snapshot().users.find((u) => u.id === 'ft-1')!.certificationEligibility,
-  ).toBe('hold');
-  await page.getByRole('checkbox', { name: '박준호 선택', exact: true }).check();
-  await page.getByRole('button', { name: '대상자 상태 변경', exact: true }).click();
-  await page.getByRole('dialog').getByRole('combobox').selectOption('eligible');
-  await page.getByRole('dialog').getByLabel('변경 사유').fill('하위 조직 대상 복원');
-  await page.getByRole('dialog').getByRole('button', { name: '대상 상태 저장' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(
-    backend.store.snapshot().users.find((u) => u.id === 'ft-1')!.certificationEligibility,
-  ).toBe('eligible');
+  await expect(page).toHaveURL(/\/admin\/dashboard/);
+  expect(backend.store.snapshot().users.find((u) => u.id === 'ft-1')!.workStatus).toBe('active');
   await page.goto('/admin/dashboard');
   await expect(page.getByLabel('조회 조직', { exact: true })).toHaveValue(own);
   await expect(page.getByLabel('하위 조직 포함', { exact: true })).toHaveValue('true');

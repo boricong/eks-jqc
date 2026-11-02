@@ -8,7 +8,7 @@ import { validateState } from "./integrity.ts";
 import { migrationOrganizations as validateOrganizations } from "./automatic-criteria-migration.ts";
 
 export function migratePolicies(raw: any, organizationRaw: any) {
-  if ([29, 30].includes(raw?.schemaVersion)) {
+  if ([29, 30, 31, 32].includes(raw?.schemaVersion)) {
     const organizations = validateOrganizations(organizationRaw),
       state = validateState(raw, organizations);
     return {

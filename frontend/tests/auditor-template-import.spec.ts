@@ -1,6 +1,19 @@
 import { test, expect, actor } from './fixtures';
 import { saveCriterion } from './catalog-helpers';
 
+test.beforeEach(async ({ backend }) => {
+  await backend.store.organizations.transact(
+    'operator-1',
+    crypto.randomUUID(),
+    'Auditor 대상 팀 시험 준비',
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === 'org-photo')!.auditorEnabled = true;
+      return {};
+    },
+  );
+});
+
 test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 가져오고 편집한다', async ({
   page,
   backend,
@@ -53,6 +66,7 @@ test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 
   await expect(dialog.getByRole('checkbox', { name: /공통 현장 Auditor/ })).toBeDisabled();
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   await page.getByRole('link', { name: '공통 현장 Auditor', exact: true }).click();
+  await page.getByRole('link', { name: '변경', exact: true }).click();
   await page.getByLabel('인증기간', { exact: true }).selectOption('unlimited');
   await saveCriterion(page);
   await expect
@@ -68,10 +82,10 @@ test('시스템 Auditor 기본자격을 팀 관리자가 유형별 목록에서 
     .snapshot()
     .qualifications.filter((item) => item.entityId === q.entityId)
     .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0]!;
-  await page.goto(`/admin/qualifications/${saved.id}`);
+  await page.goto(`/admin/qualifications/${saved.id}/edit`);
   await expect(page.getByLabel('인증기간', { exact: true })).toHaveValue('unlimited');
   await page.goto('/admin/qualifications?type=auditee');
-  await page.getByRole('button', { name: 'Auditee 자격 등록', exact: true }).click();
+  await page.getByRole('button', { name: '자격 등록', exact: true }).click();
   await expect(
     page.getByRole('dialog').getByRole('checkbox', { name: /공통 현장 Auditor/ }),
   ).toHaveCount(0);

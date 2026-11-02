@@ -2,6 +2,7 @@
 import { releaseVersionLabel } from '@eks/contracts';
 import { computed, ref } from 'vue';
 import { useDemo } from '../stores/demo';
+import { useRoute } from 'vue-router';
 import {
   effectiveCredentialStatus,
   credentialCurrent,
@@ -9,12 +10,16 @@ import {
   kstDate,
 } from '@eks/contracts';
 const store = useDemo(),
+  route = useRoute(),
   search = ref(''),
   status = ref('all');
 const rows = computed(() =>
   store.data.assignments.filter(
     (a) =>
       a.certification &&
+      a.lv1OrganizationId === store.managementLv1 &&
+      store.qualification(a.qualificationId, a.qualificationMetadata).qualificationType ===
+        (route.query.type === 'auditor' ? 'auditor' : 'auditee') &&
       (!status.value ||
         status.value === 'all' ||
         effectiveCredentialStatus(a.certification) === status.value) &&
@@ -28,8 +33,8 @@ const rows = computed(() =>
   <section class="panel editor-panel lifecycle-panel" aria-label="보유 자격 관리">
     <h2>효력·유효기간·이력</h2>
     <p>
-      취득자의 자격 효력을 정지·해제·폐기하거나 갱신 이력을 확인합니다. 대상자 Hold와 별도로
-      적용하며 최초 취득 근거는 유지합니다.
+      취득자의 자격 효력을 정지·해제·폐기하거나 갱신 이력을 확인합니다. 업무 상태와 별도로 적용하며
+      최초 취득 근거는 유지합니다.
     </p>
     <div class="form-grid">
       <label class="field">이름·자격 검색<input v-model="search" type="search" /></label

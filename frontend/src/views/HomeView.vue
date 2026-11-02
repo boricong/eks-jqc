@@ -51,7 +51,6 @@ const planningRequests = computed(() => {
   const actor = store.actor;
   if (
     !personalHome.value ||
-    actor.certificationEligibility === 'hold' ||
     !actor.organizationActive ||
     (personalType.value === 'auditee' && actor.workStatus === 'deactive')
   )
@@ -71,7 +70,8 @@ const planningRequests = computed(() => {
 });
 const eligibleAssignment = (a: { learnerId: string; acquisitionClosedAt?: string }) =>
   !a.acquisitionClosedAt &&
-  store.data.users.find((u) => u.id === a.learnerId)?.certificationEligibility !== 'hold';
+  (personalType.value === 'auditor' ||
+    store.data.users.find((u) => u.id === a.learnerId)?.workStatus !== 'deactive');
 const attention = computed(() => [
   {
     label: '자격 설정 필요',
@@ -207,7 +207,7 @@ const stats = computed(() =>
             homeRole === 'organization_admin' ? '본인 조직 및 모든 하위 조직 기준' : '팀 전체 기준'
           }}
           <span v-if="summary.data.value">
-            · Hold 제외 {{ summary.data.value.snapshot.exclusions.heldPeople }}명</span
+            · deactive 제외 {{ summary.data.value.snapshot.exclusions.deactivePeople }}명</span
           >
         </p>
         <p v-if="summary.loading.value" class="home-summary-status" role="status">
@@ -239,13 +239,6 @@ const stats = computed(() =>
       :role="multipleRoles ? 'tabpanel' : undefined"
       :aria-labelledby="panelLabel"
     >
-      <p
-        v-if="personalHome && store.actor.certificationEligibility === 'hold'"
-        class="error-message"
-      >
-        취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다. 보유 자격 효력과 만료일은
-        별도로 유지됩니다.
-      </p>
       <nav v-if="summary.managed.value" class="home-shortcuts" aria-label="업무 바로가기">
         <template v-if="summary.managed.value">
           <RouterLink :to="summary.link('/admin/dashboard')" class="text-link"
@@ -346,9 +339,6 @@ const stats = computed(() =>
               /></RouterLink>
               <RouterLink :to="summary.link('/admin/organization-settings')" class="simple-row"
                 >조직 정보·필요자격<AppIcon name="chevron"
-              /></RouterLink>
-              <RouterLink :to="summary.link('/admin/targets')" class="simple-row"
-                >취득 대상자 상태<AppIcon name="chevron"
               /></RouterLink>
             </template>
           </section>

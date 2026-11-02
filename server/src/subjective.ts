@@ -58,13 +58,11 @@ export function subjectiveView(
             ? "현재 학습 권한 또는 소속 조직을 확인해 주세요."
             : workDeactive(u)
               ? WORK_DEACTIVE_MESSAGE
-              : u.certificationEligibility === "hold"
-                ? "취득 대상자 Hold 상태에서는 작성할 수 없습니다."
-                : a.excludedReason || a.acquisitionClosedAt
-                  ? "제외되거나 종료된 취득 회차입니다."
-                  : !c.subjectiveEnabled
-                    ? "주관식 평가가 설정되지 않았습니다."
-                    : subjectiveIssues(c).join(" ");
+              : a.excludedReason || a.acquisitionClosedAt
+                ? "제외되거나 종료된 취득 회차입니다."
+                : !c.subjectiveEnabled
+                  ? "주관식 평가가 설정되지 않았습니다."
+                  : subjectiveIssues(c).join(" ");
   return {
     response: response ? structuredClone(response) : null,
     canWrite: !reason,
@@ -117,7 +115,7 @@ export function executeSubjective(
   demand(
     c.qualificationType === "auditee",
     409,
-    "주관식 평가는 Auditee에서만 사용합니다.",
+    "주관식 평가는 일반 자격에서만 사용합니다.",
   );
   const view = subjectiveView(s, u, enrollmentId);
   if (action === "subjective.start") {

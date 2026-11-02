@@ -1,3 +1,4 @@
+import { setWorkStatus } from '../../server/tests/work-status-fixture';
 import { heroContrast } from './home-helpers';
 import { test, expect, actor } from './fixtures';
 import type { Page } from '@playwright/test';
@@ -111,7 +112,7 @@ test('긴 개인·조직 정보와 0건·Hold 상태를 자르지 않고 분리 
     (s) => {
       const u = s.users.find((u) => u.id === user.id)!;
       u.name = '긴 이름의 검증 참여자 '.repeat(4);
-      u.certificationEligibility = 'hold';
+      setWorkStatus(u, 'deactive', new Date().toISOString());
       return {};
     },
   );
@@ -123,11 +124,9 @@ test('긴 개인·조직 정보와 0건·Hold 상태를 자르지 않고 분리 
     const hero = page.locator('.home-hero');
     await expect(hero.locator('.stat-value').first()).toHaveText('0');
     await expect(hero).not.toContainText('취득 대상자 Hold');
-    const warning = page.getByText('취득 대상자 Hold ·', { exact: false });
+    const warning = page.locator('aside[role="status"]').filter({ hasText: 'deactive' });
     await expect(warning).toBeVisible();
-    expect((await warning.boundingBox())!.y).toBeGreaterThanOrEqual(
-      (await hero.boundingBox())!.y + (await hero.boundingBox())!.height,
-    );
+    expect((await warning.boundingBox())!.y).toBeLessThan((await hero.boundingBox())!.y);
     const title = hero.locator('h1');
     const org = hero.locator('.organization-path');
     expect((await org.boundingBox())!.y).toBeGreaterThanOrEqual(

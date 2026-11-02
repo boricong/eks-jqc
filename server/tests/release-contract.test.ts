@@ -45,7 +45,7 @@ async function fixture(t: TestContext) {
       headers: {
         cookie: cookies.get(actor)!,
         "idempotency-key": key,
-        ...(contract ? { "x-eks-release-contract": "3" } : {}),
+        ...(contract ? { "x-eks-release-contract": "5" } : {}),
       },
       ...(body === undefined ? {} : { payload: body }),
     });

@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import { criteriaFingerprint } from "../src/releases.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
@@ -43,6 +44,16 @@ async function fixture(
   const store = await loadPlanningFixture(file),
     app = await buildApp(store),
     cookies = new Map<string, string>();
+  await store.organizations.transact(
+    "operator-1",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    () => {},
+    (doc) => {
+      doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+      return {};
+    },
+  );
   t.after(async () => {
     await app.close();
     await rm(dir, { recursive: true, force: true });
@@ -418,7 +429,7 @@ test("체크 해제·선택 항목·최종 동시 확인과 파일 실패는 수
     done,
   );
 });
-test("Hold·검증 제외·진행 전 요청은 확인 저장을 막고 관리자 유형 집계를 분리한다", async (t) => {
+test("Deactive는 Auditor 확인을 허용하고 검증 제외·진행 전 요청은 막으며 관리자 유형 집계를 분리한다", async (t) => {
   const f = await setupAuditor(t),
     es = await startPlan(f),
     e = es[0]!,
@@ -431,27 +442,31 @@ test("Hold·검증 제외·진행 전 요청은 확인 저장을 막고 관리�
     "hold fixture",
     () => {},
     (s) => {
-      s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-        "hold";
+      setWorkStatus(
+        s.users.find((u) => u.id === "learner-2")!,
+        "deactive",
+      );
       return {};
     },
   );
-  await f.call("learner-2", url, body, [409, 422], "PUT");
+  await f.call("learner-2", url, body, 200, "PUT");
   await f.store.transact(
     "operator-1",
     randomUUID(),
     "excluded fixture",
     () => {},
     (s) => {
-      s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-        "eligible";
+      setWorkStatus(
+        s.users.find((u) => u.id === "learner-2")!,
+        "active",
+      );
       s.assignments.find((a) => a.id === e.assignmentId)!.excludedReason =
         "fixture excluded";
       return {};
     },
   );
   await f.call("learner-2", url, body, [409, 422], "PUT");
-  assert.equal(f.store.snapshot().learningChecklists.length, 0);
+  assert.equal(f.store.snapshot().learningChecklists.length, 1);
   const auditor = await f.call(
     "admin-1",
     "/dashboard?qualificationType=auditor",
@@ -460,7 +475,7 @@ test("Hold·검증 제외·진행 전 요청은 확인 저장을 막고 관리�
     "admin-1",
     "/dashboard?qualificationType=auditee",
   );
-  assert.equal(auditor.summary.eligiblePeople, 1);
+  assert.equal(auditor.summary.eligiblePeople, 7);
   assert(auditee.summary.eligiblePeople > 1);
   await f.call(
     "admin-1",

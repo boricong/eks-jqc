@@ -103,7 +103,7 @@ defineExpose({
           ><span>인증Set명</span
           ><input v-model="course.title" data-course-field="title" :disabled="disabled"
         /></label>
-        <div class="field">
+        <div v-if="course.qualificationType === 'auditor'" class="field">
           <label :for="`${uid}-type`">인증 유형</label>
           <select
             v-if="typeEditing?.canChangeType"
@@ -112,7 +112,7 @@ defineExpose({
             :disabled="disabled"
             :aria-describedby="`${uid}-type-help`"
           >
-            <option value="auditee">Auditee(피심사자)</option>
+            <option value="auditee">자격 인증</option>
             <option value="auditor">Auditor(심사자)</option>
           </select>
           <p v-else class="criteria-type-value">

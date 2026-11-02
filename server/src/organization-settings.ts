@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   currentTeamQualifications,
   organizationEntries,
-  hasQualificationRole,
+  hasQualificationEligibility,
   type QualificationType,
   type State,
   type OrganizationDocument,
@@ -114,9 +114,8 @@ export function planningReadiness(
     learnerId: u.id,
     canRequest:
       !requirementReason &&
-      hasQualificationRole(u.roles, type) &&
+      hasQualificationEligibility(u, type) &&
       u.organizationActive &&
-      u.certificationEligibility !== "hold" &&
       !workDeactive(u, type),
     count: rows.filter((c) => c.status === "available").length,
     draftCount: s.plans.filter(
@@ -129,15 +128,13 @@ export function planningReadiness(
         !s.planningRequests.find((r) => r.id === p.requestId)?.closed &&
         !p.deletedAt,
     ).length,
-    reason: !hasQualificationRole(u.roles, type)
+    reason: !hasQualificationEligibility(u, type)
       ? "요청 유형에 맞는 역할이 필요합니다."
       : !u.organizationActive
         ? "사용 중지된 소속"
         : workDeactive(u, type)
           ? WORK_DEACTIVE_MESSAGE
-          : u.certificationEligibility === "hold"
-            ? "취득 대상자 Hold"
-            : requirementReason || "계획 요청 가능",
+          : requirementReason || "계획 요청 가능",
   };
 }
 

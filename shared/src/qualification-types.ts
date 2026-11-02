@@ -2,7 +2,7 @@ import { z } from "zod";
 export const QualificationTypeSchema = z.enum(["auditee", "auditor"]);
 export type QualificationType = z.infer<typeof QualificationTypeSchema>;
 export const qualificationTypeLabels: Record<QualificationType, string> = {
-  auditee: "Auditee",
+  auditee: "자격",
   auditor: "Auditor",
 };
 export const AUDITOR_PREPARATION_MESSAGE =
@@ -28,6 +28,7 @@ export function recordQualificationType(
   );
 }
 
+/** 과거 개인 지정 기록을 해석하는 호환 함수. 현재 권한에는 hasQualificationEligibility를 사용한다. */
 export const roleForQualificationType = (type: QualificationType) =>
   type === "auditor" ? "evaluator" : "learner";
 export const hasQualificationRole = (
@@ -36,3 +37,10 @@ export const hasQualificationRole = (
 ) => roles.includes(roleForQualificationType(type));
 export const hasPersonalRole = (roles: readonly string[]) =>
   roles.includes("learner") || roles.includes("evaluator");
+export const hasQualificationEligibility = (
+  user: { roles: readonly string[]; auditorEnabled?: boolean },
+  type: QualificationType,
+) =>
+  type === "auditor"
+    ? user.auditorEnabled === true
+    : user.roles.includes("learner");

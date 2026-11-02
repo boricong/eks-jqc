@@ -142,7 +142,7 @@ export function validateAuditorPool(s: State) {
       demand(
         !t.auditorLevel && !t.prerequisiteTemplateId,
         422,
-        "Auditee에는 Auditor 등급을 지정할 수 없습니다.",
+        "일반 자격에는 Auditor 등급을 지정할 수 없습니다.",
       );
     if (t.prerequisiteTemplateId) {
       const g = s.qualificationTemplates.find(

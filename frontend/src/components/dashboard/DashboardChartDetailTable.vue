@@ -50,8 +50,8 @@ defineEmits<{ member: [string, string?]; page: [number] }>();
             <small v-if="row.progress && row.progress !== 'none'" class="dashboard-meta">{{
               progressLabels[row.progress]
             }}</small>
-            <small v-if="row.held || row.inactive || row.workDeactive" class="dashboard-meta"
-              >{{ row.workDeactive ? 'deactive' : row.held ? '대상자 Hold' : ''
+            <small v-if="row.inactive || row.workDeactive" class="dashboard-meta"
+              >{{ row.workDeactive ? 'deactive' : ''
               }}{{ row.inactive ? ' · 비활성 소속' : '' }}</small
             >
           </td>

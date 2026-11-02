@@ -34,7 +34,7 @@ export const useDemo = defineStore('workspace', () => {
   };
   const empty = (): Workspace => ({
     actor: anonymous,
-    eligibilitySummary: { eligible: 0, held: 0 },
+    eligibilitySummary: { eligible: 0 },
     requestProgress: [],
     planningReadiness: [],
     planningOptions: [],
@@ -84,7 +84,7 @@ export const useDemo = defineStore('workspace', () => {
   const personalTypes = computed(() =>
     (['auditee', 'auditor'] as const).filter(
       (type) =>
-        hasRole(type === 'auditee' ? 'learner' : 'evaluator') ||
+        (type === 'auditee' ? hasRole('learner') : actor.value.auditorEnabled === true) ||
         (type === 'auditor' &&
           (data.value.planningRequests.some(
             (r) => r.learnerId === actorId.value && r.qualificationType === type,
@@ -105,10 +105,14 @@ export const useDemo = defineStore('workspace', () => {
   const fullManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
-    fullManagement.value ||
-    (['dashboard', 'organization-settings', 'organization-requirements', 'targets'].includes(
-      section,
-    ) &&
+    (section === 'auditor'
+      ? fullManagement.value &&
+        (!!managementOrganization.value?.auditorEnabled ||
+          data.value.qualifications.some(
+            (q) => q.lv1OrganizationId === managementLv1.value && q.qualificationType === 'auditor',
+          ))
+      : fullManagement.value) ||
+    (['dashboard', 'organization-settings', 'organization-requirements'].includes(section) &&
       hasRole('organization_admin'));
   const managementAccess = computed(
     () =>

@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -123,12 +124,12 @@ test("세부 관리자는 하위 조직까지 조회하고 상위·형제·타�
   const auditor = await f.call("dept-admin", "/dashboard/auditor");
   assert.deepEqual(
     auditor.members.map((m: any) => m.id),
-    ["child"],
+    ["alice", "dept-admin", "child"],
   );
   assert.equal(
     (await f.call("dept-admin", "/dashboard/auditor?includeDescendants=false"))
       .members.length,
-    0,
+    2,
   );
   await f.call("dept-admin", `/dashboard/auditor?organizationId=${TEAM}`, 403);
   const direct = await f.call(
@@ -185,7 +186,17 @@ test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비�
       roles: ["learner"],
       organizationId: ORG_A,
       revision: 1,
-      certificationEligibility: "hold",
+      workStatus: "deactive",
+      workDeactivation: setWorkStatus(
+        {
+          id: "fixture",
+          revision: 1,
+          name: "",
+          roles: ["learner"],
+          organizationId: ORG_A,
+        },
+        "deactive",
+      ).workDeactivation,
     },
     {
       id: "inactive",
@@ -200,7 +211,17 @@ test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비�
       roles: ["learner"],
       organizationId: ORG_INACTIVE,
       revision: 1,
-      certificationEligibility: "hold",
+      workStatus: "deactive",
+      workDeactivation: setWorkStatus(
+        {
+          id: "fixture",
+          revision: 1,
+          name: "",
+          roles: ["learner"],
+          organizationId: ORG_A,
+        },
+        "deactive",
+      ).workDeactivation,
     },
   );
   seed.state.qualifications[0]!.lifecycleStatus = "Hold";
@@ -215,7 +236,7 @@ test("필수가 없는 조직은 0%가 아닌 null이고 Hold 세 종류와 비�
   assert.equal(v.summary.eligiblePeople, 2);
   assert.equal(v.summary.uniqueActiveHolders, 1);
   assert.equal(v.snapshot.exclusions.excludedPeople, 3);
-  assert.equal(v.snapshot.exclusions.heldAndInactivePeople, 1);
+  assert.equal(v.snapshot.exclusions.deactivePeople, 2);
   const excluded = await f.call(
     "admin-1",
     `/dashboard/details?metric=excludedPeople&efficacy=Active&search=${encodeURIComponent("일치하지 않는 검색어")}`,
@@ -272,7 +293,17 @@ test("필수 미충족과 취득 차단은 원인별로 집계하며 선택하�
     roles: ["learner"],
     organizationId: ORG_A,
     revision: 1,
-    certificationEligibility: "hold",
+    workStatus: "deactive",
+    workDeactivation: setWorkStatus(
+      {
+        id: "fixture",
+        revision: 1,
+        name: "",
+        roles: ["learner"],
+        organizationId: ORG_A,
+      },
+      "deactive",
+    ).workDeactivation,
   });
   const f = await dashboardFixture(t, seed);
   const v: DashboardResponse = await f.call(

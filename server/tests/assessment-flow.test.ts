@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { historicalContent } from "./historical-content.ts";
 import { legacyPlanFixture } from "./legacy-plan-fixture.ts";
 import test, { type TestContext } from "node:test";
@@ -165,8 +166,11 @@ test("사전 알림은 회차별 한 번이며 자정·중단 보충·Hold 해�
     0,
   );
   await f.mutate((s) => {
-    s.users.find((u) => u.id === "learner-1")!.certificationEligibility =
-      "hold";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-1")!,
+      "deactive",
+      `${due}T00:00:00.000Z`,
+    );
   });
   await f.store.refreshNotifications(`${due}T01:00:00Z`);
   assert.equal(
@@ -174,8 +178,10 @@ test("사전 알림은 회차별 한 번이며 자정·중단 보충·Hold 해�
     0,
   );
   await f.mutate((s) => {
-    s.users.find((u) => u.id === "learner-1")!.certificationEligibility =
-      "eligible";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-1")!,
+      "active",
+    );
   });
   await f.store.refreshNotifications(`${due}T01:00:00Z`);
   let list = f.store

@@ -414,7 +414,7 @@ const eventLabels: Record<string, string> = {
       >
         {{
           certification.auditor
-            ? '현재 Auditor 지정 여부와 갱신 가능 상태를 확인해 주세요.'
+            ? '소속 팀의 Auditor 사용 여부와 갱신 가능 상태를 확인해 주세요.'
             : '이전 Auditor 인증·등급 미지정 기록입니다.'
         }}
       </p>

@@ -1,4 +1,5 @@
 import { validateRenewalActivation } from "./renewal-criteria.ts";
+import { requireAuditorTeam } from "./auditor-team.ts";
 import {
   courseRelease,
   qualificationChange,
@@ -147,7 +148,7 @@ function editingChanges(
         .join("\n\n");
     return {
       인증Set명: item.title,
-      "인증 유형": item.qualificationType === "auditor" ? "Auditor" : "Auditee",
+      "인증 유형": item.qualificationType === "auditor" ? "Auditor" : "자격",
       "평가 유형": item.assessmentKinds
         .map((k) => (k === "objective" ? "지식 평가" : "상황 대응 평가"))
         .join(", "),
@@ -456,6 +457,11 @@ export function prepareCatalogSave(
     );
   if (section === "courses")
     requireCourseTypeChange(s, source as Course, candidate.qualificationType);
+  if (
+    candidate.qualificationType === "auditor" &&
+    source.qualificationType !== "auditor"
+  )
+    requireAuditorTeam(org, scope);
   if (section === "courses")
     demand(
       !auditorAssessmentChanged(candidate as Course, source as Course),

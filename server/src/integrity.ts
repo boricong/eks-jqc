@@ -33,7 +33,7 @@ export function validateState(
 ): State {
   if (
     !legacy &&
-    [25, 26, 27, 28, 29, 30].includes((input as any)?.schemaVersion)
+    [25, 26, 27, 28, 29, 30, 31, 32].includes((input as any)?.schemaVersion)
   ) {
     const raw = input as any;
     for (const item of [

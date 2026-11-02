@@ -85,9 +85,7 @@ export interface DashboardExclusions {
   totalPeople: number;
   eligiblePeople: number;
   excludedPeople: number;
-  heldPeople: number;
   inactivePeople: number;
-  heldAndInactivePeople: number;
 }
 export interface DashboardSnapshot {
   asOf: string;
@@ -149,7 +147,6 @@ export interface DashboardPerson {
   organizationName: string;
   organizationPath: { id: string; name: string }[];
   eligible: boolean;
-  held: boolean;
   inactive: boolean;
 }
 export interface DashboardQualificationCell {

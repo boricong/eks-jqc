@@ -126,7 +126,14 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
           >
             <option disabled value="">계정 선택</option>
             <option v-for="user in store.actors" :key="user.id" :value="user.id">
-              {{ user.name }} · {{ user.roles.map((role) => roles[role]).join(' · ') }} ·
+              {{ user.name }} ·
+              {{
+                user.roles
+                  .filter((role) => role !== 'evaluator')
+                  .map((role) => roles[role])
+                  .join(' · ') || '사용자'
+              }}
+              ·
               {{ user.organizationPath[0]?.name.split('(')[0] }}
             </option>
           </select>
@@ -147,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
           class="container notice-body"
           role="status"
         >
-          <strong>deactive</strong> · 현재 팀 Auditee 절차가 중단되어 있습니다.
+          <strong>deactive</strong> · 현재 팀 자격 절차가 중단되어 있습니다.
           <span v-if="store.data.actor.workDeactivation"
             >미수행 시작 {{ store.data.actor.workDeactivation.startedOn }} · 인증 말소 기준
             {{ store.data.actor.workDeactivation.revokesOn }}.</span

@@ -19,7 +19,7 @@ import {
   contentHash,
 } from "./legacy-master-data.ts";
 
-export async function setup(t: TestContext) {
+export async function setup(t: TestContext, enabled = true) {
   const dir = await mkdtemp(path.join(tmpdir(), "eks-auditor-program-")),
     file = path.join(dir, "runtime/state.json");
   const seed = seedState(true);
@@ -37,6 +37,17 @@ export async function setup(t: TestContext) {
   });
   await new JsonStore(file).initialize(seed);
   const store = await new JsonStore(file).load();
+  if (enabled)
+    await store.organizations.transact(
+      "operator-1",
+      randomUUID(),
+      randomUUID(),
+      () => {},
+      (doc) => {
+        doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+        return {};
+      },
+    );
   let at = "2026-10-26T01:00:00.000Z";
   const app = await buildApp(store, { clock: () => at }),
     cookies = new Map<string, string>();
@@ -82,6 +93,16 @@ export async function setup(t: TestContext) {
     );
   }
   async function program(level: "general" | "main" = "general") {
+    await store.organizations.transact(
+      "operator-1",
+      randomUUID(),
+      randomUUID(),
+      () => {},
+      (doc) => {
+        doc.roots.find((r) => r.id === "org-photo")!.auditorEnabled = true;
+        return {};
+      },
+    );
     let created: { id: string };
     await update((s) => {
       created = createPoolQualification(
@@ -141,22 +162,24 @@ export async function setup(t: TestContext) {
     status = 200,
     key = randomUUID(),
   ) {
-    const u = store.snapshot().users.find((u) => u.id === "learner-2")!;
+    const review = await call(
+      "operator-1",
+      "/system/organizations/org-photo/auditor-eligibility/preview",
+      {
+        enabled: roles.includes("evaluator"),
+        revision: store.organizations.snapshot().revision,
+      },
+    );
     return call(
       "operator-1",
-      `/system/users/${u.id}`,
-      {
-        revision: u.revision,
-        name: u.name,
-        organizationId: u.organizationId,
-        roles,
-      },
+      "/system/organizations/org-photo/auditor-eligibility",
+      { token: review.token },
       status,
-      "PATCH",
+      "PUT",
       key,
     );
   }
-  async function complete(id: string) {
+  async function complete(id: string, actor = "learner-2") {
     for (const e of store
       .snapshot()
       .enrollments.filter((e) => e.assignmentId === id)) {
@@ -168,7 +191,7 @@ export async function setup(t: TestContext) {
             .learningChecklists.find((l) => l.enrollmentId === e.id)
             ?.revision || 0;
         await call(
-          "learner-2",
+          actor,
           `/enrollments/${e.id}/checklist`,
           { revision, itemId: item.id, checked: true },
           200,

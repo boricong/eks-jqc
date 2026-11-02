@@ -10,7 +10,7 @@ test('업무 상태 변경의 네 화면 폭·키보드·취소·간결한 표�
   await actor(page, 'learner-1');
   const headers = async () => ({
     'X-Session-Tab': (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!,
-    'X-EKS-Release-Contract': '3',
+    'X-EKS-Release-Contract': '5',
     'Idempotency-Key': crypto.randomUUID(),
   });
   for (const e of backend.store
@@ -53,9 +53,8 @@ test('업무 상태 변경의 네 화면 폭·키보드·취소·간결한 표�
   await expect(
     page.getByRole('button', { name: `${emptyUser.name} 업무 상태 변경`, exact: true }),
   ).toBeDisabled();
-  const restriction =
-    '현재 팀의 유효 Auditee 인증이 1개 이상 있어야 Deactive로 변경할 수 있습니다.';
-  await expect(page.getByText(restriction, { exact: true })).toHaveCount(0);
+  const restriction = '유효한 자격 인증이 없어 deactive로 변경할 수 없습니다.';
+  await expect(page.getByText(restriction, { exact: true }).first()).toBeVisible();
   await expect(
     page.getByRole('button', { name: `${emptyUser.name} 업무 상태 변경`, exact: true }),
   ).toHaveAttribute('title', restriction);

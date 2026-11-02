@@ -3,6 +3,7 @@ import { releaseNumber, freezeCriteria } from "./releases.ts";
 import { validateAuditorActivation } from "./auditor-pool.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { latestQualification, currentTeamQualifications } from "@eks/contracts";
+import { requireAuditorTeam } from "./auditor-team.ts";
 import {
   currentQualification,
   requireQualificationProcess,
@@ -56,14 +57,6 @@ export function checkRevision(actual: number, requested: unknown) {
     409,
     "다른 창에서 변경되었습니다. 입력을 보관하고 최신 내용을 다시 확인해 주세요.",
     "REVISION_CONFLICT",
-  );
-}
-export function requireEligible(u: { certificationEligibility?: string }) {
-  demand(
-    u.certificationEligibility !== "hold",
-    409,
-    "취득 대상자 Hold 상태입니다. 입력은 보존되며 관리자 해제 후 계속할 수 있습니다.",
-    "TARGET_ON_HOLD",
   );
 }
 export function openAssignment(s: State, a: StoredAssignment, at: string) {
@@ -266,7 +259,7 @@ function readCredential(
     a = find(s.assignments, c.assignmentId);
   if (
     (u.roles.includes("learner") ||
-      u.roles.includes("evaluator") ||
+      u.auditorEnabled ||
       find(s.qualifications, c.qualificationId).qualificationType ===
         "auditor") &&
     c.learnerId === u.id &&
@@ -275,61 +268,6 @@ function readCredential(
     return { c, a, scope: a.lv1OrganizationId };
   demand(!ownOnly, 403, "본인의 재인증만 처리할 수 있습니다.");
   return manageCredential(s, doc, u, id, requested);
-}
-function eligibilityUsers(
-  s: State,
-  doc: OrganizationDocument,
-  u: UserView,
-  requested?: string,
-) {
-  const scope = policyScope(u, doc, requested);
-  const entries = new Map(organizationEntries(doc).map((e) => [e.id, e]));
-  const users = s.users.filter(
-    (x) =>
-      (x.roles.includes("learner") ||
-        x.roles.includes("evaluator") ||
-        s.assignments.some(
-          (a) =>
-            a.learnerId === x.id &&
-            s.qualifications.find((q) => q.id === a.qualificationId)
-              ?.qualificationType === "auditor",
-        )) &&
-      userView(x, doc).lv1OrganizationId === scope &&
-      (fullManager(u) || administersSubtree(u, entries.get(x.organizationId))),
-  );
-  return { scope, users };
-}
-export function targetsView(
-  s: State,
-  doc: OrganizationDocument,
-  u: UserView,
-  scope?: string,
-) {
-  const result = eligibilityUsers(s, doc, u, scope);
-  return {
-    revision: s.revision,
-    lv1OrganizationId: result.scope,
-    users: result.users.map((x) => ({
-      id: x.id,
-      name: x.name,
-      organizationId: x.organizationId,
-      organizationPath: userView(x, doc).organizationPath,
-      revision: x.revision,
-      eligibility: x.certificationEligibility || "eligible",
-      progressCount: s.assignments.filter(
-        (a) =>
-          a.learnerId === x.id &&
-          !a.excludedReason &&
-          !s.certifications.some((c) => c.assignmentId === a.id),
-      ).length,
-      renewalCount: s.renewals.filter(
-        (r) => r.learnerId === x.id && r.status === "draft",
-      ).length,
-      lastChange: s.lifecycleEvents
-        .filter((e) => e.subject === "eligibility" && e.targetId === x.id)
-        .at(-1),
-    })),
-  };
 }
 export function qualificationImpact(
   s: State,
@@ -453,16 +391,16 @@ export function renewalAvailability(
   const errors: string[] = qualificationProcessErrors(original);
 
   if (
-    !learner.roles.includes(c.auditor ? "evaluator" : "learner") ||
+    !(c.auditor
+      ? learner.auditorEnabled || !!ongoing
+      : learner.roles.includes("learner")) ||
     !learner.organizationActive
   )
     errors.push(
       c.auditor
-        ? "사용 중인 조직의 현재 Auditor 지정이 필요합니다."
+        ? "사용 중인 소속 조직의 Lv1이 Auditor 대상 팀이어야 합니다."
         : "사용 중인 조직의 학습자 권한이 필요합니다.",
     );
-  if (learner.certificationEligibility === "hold")
-    errors.push("취득 대상자 Hold 상태입니다.");
   if (workDeactive(learner, original.qualificationType))
     errors.push(WORK_DEACTIVE_MESSAGE);
   if (effectiveCredentialStatus(c, at) !== "Active")
@@ -537,7 +475,12 @@ export function certificationHistory(
       (!!c.auditor ||
         find(s.qualifications, c.qualificationId).qualificationType ===
           "auditee") &&
-      u.roles.includes(c.auditor ? "evaluator" : "learner") &&
+      (c.auditor
+        ? u.auditorEnabled ||
+          s.renewals.some(
+            (r) => r.certificationId === c.id && r.status === "draft",
+          )
+        : u.roles.includes("learner")) &&
       u.id === c.learnerId,
   };
 }
@@ -554,16 +497,6 @@ export function authorizeLifecycle(
   if (action === "qualification.lifecycle")
     return qualificationImpact(s, doc, u, id, requested).qualification
       .lv1OrganizationId;
-  if (action === "eligibility.change") {
-    const { users, scope } = eligibilityUsers(s, doc, u, requested);
-    const ids = z.array(z.string()).min(1).max(10000).parse(body.userIds);
-    demand(
-      ids.every((id) => users.some((x) => x.id === id)),
-      403,
-      "관리 가능한 본인 조직 및 하위 조직의 대상자만 선택해 주세요.",
-    );
-    return scope;
-  }
   if (action === "credential.status" || action === "credential.validity")
     return manageCredential(s, doc, u, id, requested).scope;
   const certId =
@@ -659,55 +592,6 @@ export function executeLifecycle(
       input.status,
     );
     return { id, revision: q.revision };
-  }
-  if (action === "eligibility.change") {
-    const input = z
-      .object({
-        userIds: z.array(z.string()).min(1),
-        eligibility: z.enum(["eligible", "hold"]),
-        reason,
-        revision: z.number().int(),
-      })
-      .strict()
-      .parse(body);
-    checkRevision(s.revision, input.revision);
-    demand(
-      new Set(input.userIds).size === input.userIds.length,
-      422,
-      "중복 대상자입니다.",
-    );
-    for (const id of input.userIds) {
-      const x = find(s.users, id),
-        before = x.certificationEligibility || "eligible";
-      if (before === input.eligibility) continue;
-      x.certificationEligibility = input.eligibility;
-      x.revision++;
-      event(
-        "eligibility",
-        id,
-        "eligibility.changed",
-        input.reason,
-        before,
-        input.eligibility,
-      );
-      notify(
-        s,
-        {
-          key: `eligibility:${id}:${x.revision}`,
-          recipientId: id,
-          lv1OrganizationId: scope,
-          type: "lifecycle",
-          title:
-            input.eligibility === "hold"
-              ? "취득 대상자 Hold로 변경되었습니다"
-              : "취득 대상자 Hold가 해제되었습니다",
-          body: input.reason,
-          href: "/qualifications",
-        },
-        at,
-      );
-    }
-    return { userIds: input.userIds, revision: s.revision + 1 };
   }
   if (action === "credential.status" || action === "credential.validity") {
     const c = find(s.certifications, id),
@@ -846,8 +730,13 @@ export function executeLifecycle(
     );
   }
   requireQualificationProcess(find(s.qualifications, c.qualificationId));
-  requireEligible(find(s.users, c.learnerId));
   checkRevision(c.revision || 1, body.certificationRevision);
+  if (
+    c.auditor &&
+    action === "renewal.start" &&
+    !s.renewals.some((r) => r.certificationId === c.id && r.status === "draft")
+  )
+    requireAuditorTeam(doc, scope);
   const available = renewalAvailability(s, doc, c, at);
   demand(
     available.canStart,
@@ -872,6 +761,7 @@ export function executeLifecycle(
         revision: existing.revision,
         certificationRevision: c.revision,
       };
+    if (c.auditor) requireAuditorTeam(doc, scope);
     if (existing) {
       existing.status = "closed";
       existing.closedAt = at;

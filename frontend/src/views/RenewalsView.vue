@@ -171,7 +171,7 @@ async function act(action: 'apply' | 'close') {
             ></label
           >
           <p v-if="!data.candidates.length" class="muted">
-            현재 팀에서 취득한 Auditee 인증이 없습니다.
+            현재 팀에서 취득한 자격 인증이 없습니다.
           </p>
         </div>
         <div class="actions">

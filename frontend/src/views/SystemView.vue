@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CommonCourses from '../components/CommonCourses.vue';
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { systemSections as sections } from '../system-navigation';
 import { useDemo } from '../stores/demo';
@@ -10,7 +10,6 @@ import UserManagementPanel from '../components/UserManagementPanel.vue';
 import SystemOverview from '../components/SystemOverview.vue';
 import SystemNotices from '../components/SystemNotices.vue';
 import TestDataPanel from '../components/TestDataPanel.vue';
-const SystemDocuments = defineAsyncComponent(() => import('../components/SystemDocuments.vue'));
 const route = useRoute();
 const store = useDemo();
 const section = computed(() => String(route.params.section));
@@ -54,9 +53,7 @@ watch(
         mode="system"
       /><SystemOverview v-else-if="section === 'overview'" /><SystemNotices
         v-else-if="section === 'notices'"
-      /><SystemDocuments v-else-if="section === 'documents'" /><TestDataPanel
-        v-else-if="section === 'test-data'"
-      />
+      /><TestDataPanel v-else-if="section === 'test-data'" />
     </div>
   </div>
 </template>

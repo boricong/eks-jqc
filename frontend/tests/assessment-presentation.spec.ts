@@ -265,7 +265,7 @@ test('미설정·평가 없음·Hold·제외와 작성/통과/미통과 현황�
     const a = data.assignments.find((a: { id: string }) => a.id === 'assignment-1');
     const e = a.enrollments.find((e: { courseId: string }) => e.courseId === c.id);
     e.objective = state;
-    if (blocked === 'hold') data.actor.certificationEligibility = 'hold';
+    if (blocked === 'hold') data.actor.workStatus = 'deactive';
     if (blocked === 'excluded') a.excludedReason = '검증 제외 시험';
     await route.fulfill({ response, json: data });
   });

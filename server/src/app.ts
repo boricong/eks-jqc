@@ -1,3 +1,5 @@
+import { workStatusInfo } from "./work-status.ts";
+import { registerAuditorTeamRoutes } from "./auditor-team-routes.ts";
 import { registerRenewalBatchRoutes } from "./renewal-batches.ts";
 import { registerReleaseRoutes } from "./release-routes.ts";
 import { registerTestDataRoutes } from "./test-data-routes.ts";
@@ -127,6 +129,7 @@ export async function buildApp(
   registerAuditorRoutes(app, store, actor, clock);
   registerTeamUserRoutes(app, store, actor, clock);
   registerWorkStatusRoutes(app, store, actor, clock);
+  registerAuditorTeamRoutes(app, store, actor, clock);
   registerReleaseRoutes(app, store, actor);
   registerTestDataRoutes(app, store, actor, clock, () => sessions.clear());
   registerCommonCourseRoutes(app, store, actor);
@@ -135,13 +138,13 @@ export async function buildApp(
     requestGenerations.set(request, store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      /^\/api\/(team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(users|common-courses|qualification-templates))(\/|\?|$)/.test(
+      /^\/api\/(me\/auditor\/starts|auditor-program|team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(organizations|users|common-courses|qualification-templates))(\/|\?|$)/.test(
         request.url,
       )
     ) {
       actor(request);
       demand(
-        request.headers["x-eks-release-contract"] === "3",
+        request.headers["x-eks-release-contract"] === "5",
         409,
         "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
         "RELEASE_CONTRACT_CHANGED",
@@ -871,12 +874,16 @@ export async function buildApp(
       })),
     };
   });
-  app.get("/api/system/users", async (request) => {
-    systemOperator(actor(request));
-    return store
-      .snapshot()
-      .users.map((u) => userView(u, store.organizations.snapshot()));
-  });
+  app.get("/api/system/users", async (request) =>
+    store.consistent((s, doc) => {
+      const a = actor(request, s);
+      systemOperator(a);
+      return s.users.map((u) => ({
+        ...userView(u, doc),
+        workStatusInfo: workStatusInfo(s, doc, a, u, clock()),
+      }));
+    }),
+  );
   for (const section of ["organizations", "users"] as const) {
     for (const method of ["POST", "PATCH"] as const)
       app.route({

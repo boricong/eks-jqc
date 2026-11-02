@@ -72,7 +72,7 @@ async function fixture(t: TestContext, legacy = false) {
       headers: {
         cookie: cookies.get(who)!,
         "idempotency-key": key,
-        "x-eks-release-contract": "3",
+        "x-eks-release-contract": "5",
       },
       ...(body === undefined ? {} : { payload: body }),
     });
@@ -333,7 +333,7 @@ test("내장 19개 원본·유형·팀 범위·3/3/1 문항·학습 7종과 준�
   ] as const)
     assert.equal(s[key].length, 0, key);
   const status = testDataStatus(s, loaded.organizations);
-  assert.equal(status.recipe.version, 3);
+  assert.equal(status.recipe.version, 4);
   assert.equal(status.recipe.qualifications, 0);
   assert.equal(status.recipe.commonCopies, 0);
   assert.deepEqual(status.qualifications, []);
@@ -490,11 +490,11 @@ test("전체 초기화는 계정 전체 필드·조직 구조만 보존하고 �
   );
 });
 
-test("구성1·2 영수증은 재시작·재시도 후 보존하고 새 로드는 구성3으로 생성한다", async (t) => {
+test("구성1·2 영수증은 재시작·재시도 후 보존하고 새 로드는 구성4로 생성한다", async (t) => {
   const f = await fixture(t),
     reset = await f.apply("reset");
-  assert.equal(reset.result.recipeVersion, 3);
-  for (const version of [1, 2]) {
+  assert.equal(reset.result.recipeVersion, 4);
+  for (const version of [1, 2, 3]) {
     await f.app.close();
     const metadata = JSON.parse(
       await readFile(f.store.maintenanceFile, "utf8"),
@@ -508,7 +508,7 @@ test("구성1·2 영수증은 재시작·재시도 후 보존하고 새 로드�
       `/system/test-data?operationKey=${reset.key}`,
     );
     assert.equal(status.operation.recipeVersion, version);
-    assert.equal(status.recipe.version, 3);
+    assert.equal(status.recipe.version, 4);
     assert.deepEqual(
       await f.call(
         "operator-1",
@@ -530,10 +530,10 @@ test("구성1·2 영수증은 재시작·재시도 후 보존하고 새 로드�
   assert.equal(preview.after.qualifications, 0);
   assert.equal(preview.after.organizationQualificationRequirements, 0);
   const loaded = await f.apply("load");
-  assert.equal(loaded.result.recipeVersion, 3);
+  assert.equal(loaded.result.recipeVersion, 4);
   assert.equal(loaded.result.after.qualifications, 0);
   assert.equal(
-    TestDataReceiptSchema.safeParse({ ...reset.result, recipeVersion: 4 })
+    TestDataReceiptSchema.safeParse({ ...reset.result, recipeVersion: 5 })
       .success,
     false,
   );
@@ -670,7 +670,7 @@ test("세대 변경은 모든 접속 세션·이전 세대 쓰기를 차단하�
     headers: {
       cookie,
       "x-eks-data-generation": oldGeneration,
-      "x-eks-release-contract": "3",
+      "x-eks-release-contract": "5",
       "idempotency-key": reset.key,
     },
     payload: reset.body,
@@ -736,20 +736,19 @@ test("Auditor 풀 등급 보완·수동 등록·Active 전환 후 지정·본인
   const f = await fixture(t);
   await f.apply("reset");
   await f.apply("load");
-  const q = await registerTestQualification(f, "auditor");
-  const u = f.store.snapshot().users.find((u) => u.id === "learner-2")!;
+  const teamReview = await f.call(
+    "operator-1",
+    "/system/organizations/org-photo/auditor-eligibility/preview",
+    { enabled: true, revision: f.store.organizations.snapshot().revision },
+  );
   await f.call(
     "operator-1",
-    `/system/users/${u.id}`,
-    {
-      revision: u.revision,
-      name: u.name,
-      organizationId: u.organizationId,
-      roles: [...u.roles, "evaluator"],
-    },
+    "/system/organizations/org-photo/auditor-eligibility",
+    { token: teamReview.token },
     200,
-    "PATCH",
+    "PUT",
   );
+  const q = await registerTestQualification(f, "auditor");
   const s = f.store.snapshot();
   const start = await f.call("learner-2", "/me/auditor/starts", {
     qualificationId: q.id,

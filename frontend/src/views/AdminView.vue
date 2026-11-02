@@ -7,7 +7,6 @@ import type { QualificationTemplate } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import { randomUUID } from '../uuid';
 import PageHeading from '../components/PageHeading.vue';
-import CompactTabs from '../components/CompactTabs.vue';
 import { withCriteriaType, managementTitle } from '../management-navigation';
 import ActionBar from '../components/ActionBar.vue';
 import { confirmAction } from '../composables/useConfirmation';
@@ -29,7 +28,6 @@ import AppIcon from '../components/AppIcon.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import AppDialog from '../components/AppDialog.vue';
 import CourseLifecycle from '../components/CourseLifecycle.vue';
-import CertificationTargets from '../components/CertificationTargets.vue';
 import QualificationLifecycle from '../components/QualificationLifecycle.vue';
 import QualificationFields from '../components/QualificationFields.vue';
 import CollapsibleSection from '../components/CollapsibleSection.vue';
@@ -79,6 +77,12 @@ const organizationData = computed(() => {
 });
 const section = computed(() => String(route.params.section));
 const selectedType = computed<QualificationType>(() => {
+  if (section.value === 'results' && (route.params.id || route.query.assignmentId)) {
+    const a = organizationData.value.assignments.find(
+      (a) => a.id === (route.params.id || route.query.assignmentId),
+    );
+    if (a) return store.qualification(a.qualificationId, a.qualificationMetadata).qualificationType;
+  }
   const item = route.params.id
     ? (section.value === 'courses'
         ? organizationData.value.courses
@@ -87,19 +91,8 @@ const selectedType = computed<QualificationType>(() => {
     : undefined;
   return item?.qualificationType ?? (route.query.type === 'auditor' ? 'auditor' : 'auditee');
 });
-const typeItems = [
-  { id: 'auditee', label: 'Auditee(피심사자)' },
-  { id: 'auditor', label: 'Auditor(심사자)' },
-];
-const typeTabs = ref<InstanceType<typeof CompactTabs>>();
 const criteriaLink = (path: string, type = selectedType.value) =>
   withCriteriaType(store.managementLink(path), type);
-function selectType(type: string) {
-  void router.push({
-    path: route.path,
-    query: { ...route.query, type: type === 'auditor' ? 'auditor' : undefined },
-  });
-}
 watch(
   () => [route.path, route.query.type, selectedType.value],
   () => {
@@ -116,7 +109,7 @@ watch(
     createOpen.value = false;
     if (
       !route.params.id &&
-      ['courses', 'qualifications'].includes(section.value) &&
+      ['courses', 'qualifications', 'results', 'credentials'].includes(section.value) &&
       route.query.type
     )
       void router.replace({ path: route.path, query: { ...route.query, type: undefined } });
@@ -132,7 +125,9 @@ const createOpen = ref(false),
   createName = ref(''),
   createError = ref('');
 
-const title = computed(() => managementTitle(section.value));
+const title = computed(
+  () => (selectedType.value === 'auditor' ? 'Auditor ' : '') + managementTitle(section.value),
+);
 const busy = ref(false);
 const editingContext = ref('');
 const query = ref(''),
@@ -498,6 +493,8 @@ const resultAssignmentId = computed(() =>
 const assignments = computed(() =>
   organizationData.value.assignments.filter(
     (a) =>
+      store.qualification(a.qualificationId, a.qualificationMetadata).qualificationType ===
+        selectedType.value &&
       (section.value !== 'assignments' || !a.renewalBatchId) &&
       (resultAssignmentId.value
         ? a.id === resultAssignmentId.value
@@ -945,9 +942,11 @@ watch(
         if (!busy) createOpen = value;
       }
     "
-    :title="`${qualificationTypeLabels[selectedType]} 특화인증Set 만들기`"
+    :title="selectedType === 'auditor' ? 'Auditor 특화인증Set 만들기' : '특화인증Set 만들기'"
   >
-    <p class="muted">{{ qualificationTypeLabels[selectedType] }} 전용 인증Set을 만듭니다.</p>
+    <p v-if="selectedType === 'auditor'" class="muted">
+      필수 교육의 본인 확인으로 수료하는 Auditor 인증Set을 만듭니다.
+    </p>
     <label v-if="createOpen" class="field"
       >인증Set명<input v-model="createName" maxlength="300" :disabled="busy"
     /></label>
@@ -990,7 +989,7 @@ watch(
                 organizationData.courses.find((c) => c.id === courseDraft?.id) || courseDraft
               "
             /><span v-if="courseDraft" class="small-label">{{
-              qualificationTypeLabels[selectedType]
+              selectedType === 'auditor' ? 'Auditor' : ''
             }}</span>
             <span v-if="editor.deletedAt" class="muted"
               >삭제된 항목 · {{ editor.deletionReason }}</span
@@ -1569,7 +1568,7 @@ watch(
             "
           >
             <AppIcon name="plus" :size="18" />{{
-              qualificationTypeLabels[selectedType]
+              selectedType === 'auditor' ? 'Auditor' : ''
             }}
             특화인증Set 추가</button
           ><button
@@ -1581,16 +1580,6 @@ watch(
             <AppIcon name="plus" :size="18" />공지 등록
           </button>
         </PageHeading>
-        <CompactTabs
-          v-if="['qualifications', 'courses'].includes(section)"
-          ref="typeTabs"
-          class="criteria-type-tabs"
-          :items="typeItems"
-          :model-value="selectedType"
-          label="기준 인증 유형"
-          panel-id="criteria-type-panel"
-          @update:model-value="selectType"
-        />
         <p
           v-if="['qualifications', 'courses'].includes(section) && selectedType === 'auditor'"
           class="qualification-save-notice"
@@ -1744,7 +1733,7 @@ watch(
         <div
           v-if="
             !resultAssignmentId &&
-            !['organization-settings', 'targets', 'credentials', 'assignments'].includes(section)
+            !['organization-settings', 'credentials', 'assignments'].includes(section)
           "
           class="list-toolbar"
         >
@@ -1796,16 +1785,12 @@ watch(
         </div>
 
         <CredentialManagement v-if="section === 'credentials'" />
-        <CertificationTargets
-          v-else-if="section === 'targets'"
-          :key="`${store.actorId}:${store.managementLv1}`"
-        />
         <OrganizationSettings v-if="section === 'organization-settings'" :key="store.actorId" />
         <div
           v-if="section === 'qualifications'"
           id="criteria-type-panel"
-          role="tabpanel"
-          :aria-labelledby="typeTabs?.tabId(selectedType)"
+          role="region"
+          :aria-label="title"
           class="table-panel"
         >
           <table>
@@ -1899,15 +1884,15 @@ watch(
             {{
               query
                 ? '검색 결과가 없습니다.'
-                : `${qualificationTypeLabels[selectedType]} 팀 자격이 없습니다. 기본자격에서 등록해 주세요.`
+                : `${selectedType === 'auditor' ? 'Auditor ' : ''}팀 자격이 없습니다. 기본자격에서 등록해 주세요.`
             }}
           </p>
         </div>
         <div
           v-else-if="section === 'courses'"
           id="criteria-type-panel"
-          role="tabpanel"
-          :aria-labelledby="typeTabs?.tabId(selectedType)"
+          role="region"
+          :aria-label="title"
           class="table-panel"
         >
           <table>
@@ -1955,7 +1940,7 @@ watch(
             {{
               query
                 ? '검색 결과가 없습니다.'
-                : `${qualificationTypeLabels[selectedType]} 인증Set이 없습니다. 새 인증Set을 만들어 주세요.`
+                : `${selectedType === 'auditor' ? 'Auditor ' : ''}인증Set이 없습니다. 새 인증Set을 만들어 주세요.`
             }}
           </p>
         </div>
@@ -2177,9 +2162,7 @@ watch(
           <p v-if="!notices.length" class="empty-state">등록된 공지가 없습니다.</p>
         </div>
         <ListControls
-          v-if="
-            !['organization-settings', 'targets', 'credentials', 'assignments'].includes(section)
-          "
+          v-if="!['organization-settings', 'credentials', 'assignments'].includes(section)"
           :count="list.count"
           :pages="list.pages"
           v-model:page="list.page"

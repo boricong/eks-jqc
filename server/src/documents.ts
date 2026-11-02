@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { SystemDocumentSummary, UserView } from "@eks/contracts";
-import { systemOperator } from "./organizations.ts";
 import { DomainError, demand } from "./errors.ts";
 
 export const defaultDocumentsRoot = fileURLToPath(
@@ -101,13 +100,13 @@ export function registerDocumentRoutes(
 ) {
   const library = new DocumentLibrary(root);
   app.get("/api/system/documents", async (request) => {
-    systemOperator(actor(request));
+    actor(request);
     return { items: await library.list() };
   });
   app.get<{ Params: { id: string } }>(
     "/api/system/documents/:id",
     async (request) => {
-      systemOperator(actor(request));
+      actor(request);
       return library.read(request.params.id);
     },
   );

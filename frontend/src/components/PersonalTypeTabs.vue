@@ -10,7 +10,7 @@ const store = useDemo(),
 const items = computed(() =>
   store.personalTypes.map((id) => ({
     id,
-    label: id === 'auditor' ? '평가자 인증 · Auditor' : '학습자 인증 · Auditee',
+    label: id === 'auditor' ? 'Auditor 인증' : '자격 인증',
   })),
 );
 const selected = computed(() =>
@@ -33,6 +33,7 @@ function select(type: string) {
 </script>
 <template>
   <CompactTabs
+    v-if="items.length > 1"
     class="certification-type-tabs"
     :items="items"
     :panel-id="panelId"

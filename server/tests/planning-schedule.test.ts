@@ -1,3 +1,4 @@
+import { setWorkStatus } from "./work-status-fixture.ts";
 import { loadPlanningFixture } from "./planning-migration-helper.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -208,8 +209,10 @@ test("타인·혼합 범위·revision·Hold·저장 실패는 부분 반영 없�
   f.store.beforeReplace = undefined;
   assert.deepEqual(f.store.snapshot(), saved);
   await f.update((s) => {
-    s.users.find((u) => u.id === "learner-2")!.certificationEligibility =
-      "hold";
+    setWorkStatus(
+      s.users.find((u) => u.id === "learner-2")!,
+      "deactive",
+    );
   });
   await f.finish(review, 409);
   assert.ok(f.store.snapshot().plans.every((p) => p.status === "draft"));
@@ -348,6 +351,6 @@ test("이관 해시·교체 실패는 세 원본 보존, 명시 이관 후 재�
   assert.deepEqual(await Promise.all(files.map((p) => readFile(p))), bytes);
   await disk.migratePolicies(expected, migratePlanningSchedule);
   const next = await loadPlanningFixture(f.file);
-  assert.equal(next.snapshot().schemaVersion, 30);
+  assert.equal(next.snapshot().schemaVersion, 32);
   await next.close();
 });

@@ -198,18 +198,18 @@ watch(
         </div>
         <div>
           <dt>공통 원본</dt>
-          <dd>5개 · Auditee 3 / Auditor 2</dd>
+          <dd>5개 · 자격 3 / Auditor 2</dd>
         </div>
         <div>
           <dt>팀별 특화 인증Set</dt>
-          <dd>10개 · Auditee 6 / Auditor 4</dd>
+          <dd>10개 · 일반 6 / Auditor 4</dd>
         </div>
         <div>
           <dt>활성 팀</dt>
           <dd>{{ status.teams.length }}개</dd>
         </div>
         <div>
-          <dt>Auditee 인증Set별 문항</dt>
+          <dt>자격 인증Set별 문항</dt>
           <dd>지식 3 · 상황 3 · 주관식 1</dd>
         </div>
       </dl>
@@ -220,7 +220,7 @@ watch(
           <li>전체 데이터 초기화 → 테스트 데이터 로드 후 기존 계정을 다시 선택합니다.</li>
           <li>
             팀 자격 설정에서 자격 풀을 선택해 등록하고 인증Set·운영 기준을 설정한 뒤 Active로
-            전환합니다. Auditee는 조직 필요자격 지정 → 계획 요청 → 학습·평가 → 수료·인증서 순서로
+            전환합니다. 자격은 조직 필요자격 지정 → 계획 요청 → 학습·평가 → 수료·인증서 순서로
             시험하세요.
           </li>
           <li>
@@ -229,8 +229,9 @@ watch(
             주관식 1개는 채점·수료에 영향을 주지 않습니다.
           </li>
           <li>
-            Auditor는 기존 지정 계정의 교육 본인 확인을 사용합니다. 기본자격의 유형·등급은 자동
-            변경하지 않으며 등급 등 등록 조건이 부족하면 기본자격부터 보완합니다.
+            Auditor는 시스템 운영 → 조직 관리에서 대상 Lv1 팀을 설정한 뒤 구성원의 교육 본인 확인을
+            사용합니다. 기본자격의 유형·등급은 자동 변경하지 않으며 등급 등 등록 조건이 부족하면
+            기본자격부터 보완합니다.
           </li>
           <li>
             교육 3종·자료 4종을 제공합니다. 인증기간은 팀 자격 설정에서 지정합니다. 외부 자료 링크는
@@ -278,7 +279,7 @@ watch(
               <RouterLink
                 :to="`/admin/qualifications/${q.id}?lv1OrganizationId=${encodeURIComponent(team.id)}&type=${q.qualificationType}`"
                 >{{ q.title }} ·
-                {{ q.qualificationType === 'auditor' ? 'Auditor' : 'Auditee' }}</RouterLink
+                {{ q.qualificationType === 'auditor' ? 'Auditor' : '자격' }}</RouterLink
               >
             </li>
           </ul>

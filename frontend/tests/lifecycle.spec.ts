@@ -5,7 +5,7 @@ async function finishOwn(page: any, store: any) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const headers = () => ({
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '3',
+    'X-EKS-Release-Contract': '5',
     'Idempotency-Key': crypto.randomUUID(),
   });
   const a = store.snapshot().assignments.find((a: any) => a.learnerId === 'learner-1');
@@ -141,29 +141,21 @@ test('객관식 재인증 대상 확인·응시·갱신 결과와 4개 화면 �
   await page.getByRole('button', { name: '유효기간·갱신 근거 펼치기', exact: true }).click();
   await expect(page.getByText('객관식 재인증 평가 합격으로 갱신', { exact: true })).toBeVisible();
 });
-test('대상자 Hold 선택·실패 시 입력 보존·홈 차단 안내·개인 자격 상태 관리', async ({
-  page,
-  backend,
-}) => {
+test('deactive 변경 실패·재시도·홈 차단 안내·개인 자격 상태 관리', async ({ page, backend }) => {
   const aid = await prepared(page, backend);
   await page.goto('/');
   await actor(page, 'admin-1');
-  await page.goto('/admin/targets');
-  await page.getByRole('checkbox', { name: '김민서 선택', exact: true }).check();
-  await expect(page.getByRole('heading', { name: '선택한 인원 1명' })).toBeVisible();
-  await page.getByRole('button', { name: '대상자 상태 변경', exact: true }).click();
-  let dialog = page.getByRole('dialog');
-  await dialog.getByLabel('변경 사유').fill('대상자 제외 시험');
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: '김민서 업무 상태 변경', exact: true }).click();
+  let dialog = page.getByRole('dialog', { name: '업무 상태 변경', exact: true });
   backend.store.beforeReplace = async () => {
     throw new Error('save failure');
   };
-  await dialog.getByRole('button', { name: '대상 상태 저장' }).click();
+  await dialog.getByRole('button', { name: '변경', exact: true }).click();
   await expect(dialog.getByRole('alert')).toBeVisible();
-  await expect(dialog.getByLabel('변경 사유')).toHaveValue('대상자 제외 시험');
   backend.store.beforeReplace = undefined;
-  await dialog.getByRole('button', { name: '대상 상태 저장' }).click();
+  await dialog.getByRole('button', { name: '변경', exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByText('Hold 제외 1명', { exact: false }).first()).toBeVisible();
   await page.goto('/admin/credentials');
   await page.getByRole('link', { name: '상태·이력 관리', exact: true }).click();
   await page.getByRole('button', { name: '개인 자격 상태 변경', exact: true }).click();
@@ -179,7 +171,7 @@ test('대상자 Hold 선택·실패 시 입력 보존·홈 차단 안내·개인
   await page.goto('/');
   await actor(page, 'learner-1');
   await expect(
-    page.getByText('취득 대상자 Hold · 취득·재인증과 대상자 통계에서 제외됩니다.', {
+    page.getByText('deactive', {
       exact: false,
     }),
   ).toBeVisible();

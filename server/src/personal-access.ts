@@ -1,5 +1,5 @@
 import {
-  hasQualificationRole,
+  hasQualificationEligibility,
   type State,
   type UserView,
   type QualificationType,
@@ -13,7 +13,7 @@ export function canContinueType(
   type: QualificationType,
 ) {
   return (
-    hasQualificationRole(u.roles, type) ||
+    hasQualificationEligibility(u, type) ||
     (type === "auditor" &&
       (s.assignments.some(
         (a) =>

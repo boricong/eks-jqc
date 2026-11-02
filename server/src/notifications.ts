@@ -34,7 +34,7 @@ export function notify(
     ...(type
       ? {
           qualificationType: type,
-          title: `[${type === "auditor" ? "Auditor" : "Auditee"}] ${a?.auditor ? (a.auditor.level === "main" ? "메인 · " : "일반 · ") : ""}${input.title}`,
+          title: `[${type === "auditor" ? "Auditor" : "자격"}] ${a?.auditor ? (a.auditor.level === "main" ? "메인 · " : "일반 · ") : ""}${input.title}`,
         }
       : {}),
     id: randomUUID(),
@@ -74,12 +74,8 @@ export function reconcileNotifications(
       continue;
     const c = { ...original, ...credentialCurrent(original) },
       a = s.assignments.find((a) => a.id === c.assignmentId)!,
-      held =
-        s.users.find((u) => u.id === c.learnerId)?.certificationEligibility ===
-        "hold",
       period = latestPeriod(c);
     if (
-      held ||
       workDeactive(
         s.users.find((u) => u.id === c.learnerId)!,
         s.qualifications.find((q) => q.id === c.qualificationId)
