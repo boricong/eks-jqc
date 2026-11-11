@@ -35,6 +35,8 @@ export function seedState(testFixture = false): State {
     ),
   );
   const state: State = {
+    groupAssessments: [],
+    groupAssessmentFiles: [],
     schemaVersion: 25,
     organizationQualificationRequirements: [],
     subjectiveResponses: [],

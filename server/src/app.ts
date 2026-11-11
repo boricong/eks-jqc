@@ -1,3 +1,4 @@
+import { registerGroupPracticalRoutes } from "./group-practical-routes.ts";
 import { workStatusInfo } from "./work-status.ts";
 import { registerAuditorTeamRoutes } from "./auditor-team-routes.ts";
 import { registerRenewalBatchRoutes } from "./renewal-batches.ts";
@@ -73,6 +74,7 @@ export async function buildApp(
     serveFrontend?: boolean;
     clock?: () => string;
     documentsRoot?: string;
+    groupPracticalEnabled?: boolean;
   } = {},
 ) {
   const network = createNetworkPolicy(options.origins);
@@ -82,6 +84,9 @@ export async function buildApp(
   });
   await app.register(cookie);
   const clock = options.clock || (() => new Date().toISOString());
+  const groupPracticalEnabled =
+    options.groupPracticalEnabled ??
+    process.env.EKS_GROUP_PRACTICAL_MODE === "trial";
   store.clock = clock;
   const refreshNotifications = () => store.refreshNotifications(clock());
   await refreshNotifications();
@@ -138,13 +143,13 @@ export async function buildApp(
     requestGenerations.set(request, store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      /^\/api\/(me\/auditor\/starts|auditor-program|team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(organizations|users|common-courses|qualification-templates))(\/|\?|$)/.test(
+      /^\/api\/(group-assessments|me\/auditor\/starts|auditor-program|team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(organizations|users|common-courses|qualification-templates))(\/|\?|$)/.test(
         request.url,
       )
     ) {
       actor(request);
       demand(
-        request.headers["x-eks-release-contract"] === "5",
+        request.headers["x-eks-release-contract"] === "6",
         409,
         "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
         "RELEASE_CONTRACT_CHANGED",
@@ -172,7 +177,21 @@ export async function buildApp(
   });
   app.addHook("preHandler", async (request) => {
     if (
-      /^\/api\/(workspace|team-users|dashboard|certifications|completions|planning-requests|plans|assignments|enrollments|attempts|renewals|renewal-batches|system\/users)(\/|\?|$)/.test(
+      !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+      request.body &&
+      typeof request.body === "object" &&
+      ((request.body as any).groupPractical ||
+        (request.body as any).content?.groupPractical)
+    )
+      demand(
+        groupPracticalEnabled &&
+          store.snapshot().groupPracticalEnvironment === "trial",
+        409,
+        "그룹 실기 기준은 별도 시험환경에서만 설정할 수 있습니다.",
+        "GROUP_DISABLED",
+      );
+    if (
+      /^\/api\/(group-assessments|group-assessment-files|workspace|team-users|dashboard|certifications|completions|planning-requests|plans|assignments|enrollments|attempts|renewals|renewal-batches|system\/users)(\/|\?|$)/.test(
         request.url,
       )
     ) {
@@ -292,6 +311,9 @@ export async function buildApp(
     return { ok: true };
   });
   app.get("/api/workspace", async (request) => ({
+    groupPracticalEnabled:
+      groupPracticalEnabled &&
+      store.snapshot().groupPracticalEnvironment === "trial",
     ...workspace(
       store.snapshot(),
       actor(request),
@@ -302,6 +324,7 @@ export async function buildApp(
       clock(),
     ),
   }));
+  registerGroupPracticalRoutes(app, store, actor, clock, groupPracticalEnabled);
   app.get("/api/home", async (request) => {
     const view = workspace(
       store.snapshot(),

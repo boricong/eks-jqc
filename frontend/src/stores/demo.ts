@@ -105,13 +105,17 @@ export const useDemo = defineStore('workspace', () => {
   const fullManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
-    (section === 'auditor'
+    (section === 'group-assessments'
       ? fullManagement.value &&
-        (!!managementOrganization.value?.auditorEnabled ||
-          data.value.qualifications.some(
-            (q) => q.lv1OrganizationId === managementLv1.value && q.qualificationType === 'auditor',
-          ))
-      : fullManagement.value) ||
+        (!!data.value.groupPracticalEnabled || data.value.courses.some((c) => !!c.groupPractical))
+      : section === 'auditor'
+        ? fullManagement.value &&
+          (!!managementOrganization.value?.auditorEnabled ||
+            data.value.qualifications.some(
+              (q) =>
+                q.lv1OrganizationId === managementLv1.value && q.qualificationType === 'auditor',
+            ))
+        : fullManagement.value) ||
     (['dashboard', 'organization-settings', 'organization-requirements'].includes(section) &&
       hasRole('organization_admin'));
   const managementAccess = computed(
@@ -263,13 +267,22 @@ export const useDemo = defineStore('workspace', () => {
   const notices = computed(() =>
     data.value.homeNotices.filter((n) => n.published).sort((a, b) => b.date.localeCompare(a.date)),
   );
-  const complete = (e: Assignment['enrollments'][number]) => !!e.completion;
+  const complete = (e: Assignment['enrollments'][number]) =>
+    !!e.completion && !e.groupPractical?.invalidated;
   const completedCount = (a: Assignment) => a.enrollments.filter(complete).length;
   const assessmentCount = (a: Assignment) =>
-    a.enrollments.reduce((n, e) => n + requiredKinds(course(e.courseId)).length, 0);
+    a.enrollments.reduce(
+      (n, e) =>
+        n + (course(e.courseId).groupPractical ? 1 : requiredKinds(course(e.courseId)).length),
+      0,
+    );
   const passedCount = (a: Assignment) =>
     a.enrollments.reduce(
-      (n, e) => n + requiredKinds(course(e.courseId)).filter((k) => e[k] === 'passed').length,
+      (n, e) =>
+        n +
+        (course(e.courseId).groupPractical
+          ? Number(complete(e))
+          : requiredKinds(course(e.courseId)).filter((k) => e[k] === 'passed').length),
       0,
     );
   const username = (id: string | null | undefined) =>

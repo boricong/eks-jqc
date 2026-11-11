@@ -62,7 +62,12 @@ const blocked = computed(
     (!auditor.value && store.actor.workStatus === 'deactive'),
 );
 function courseStatus(enrollment: Enrollment) {
+  if (enrollment.groupPractical?.invalidated) return '판정 무효';
   if (store.complete(enrollment)) return '수료';
+  if (store.course(enrollment.courseId).groupPractical)
+    return enrollment.groupPractical
+      ? `그룹 실기 ${enrollment.groupPractical.completed}/3회`
+      : '그룹 지정 전';
   if (auditor.value) return enrollment.checklist?.items.length ? '학습 확인 중' : '학습 미확인';
   const kinds = store.requiredKinds(store.course(enrollment.courseId));
   if (kinds.some((kind) => enrollment[kind] === 'draft')) return '평가 중';
@@ -301,7 +306,31 @@ function chooseCourse(id: string) {
           </div>
         </section>
         <template v-else>
-          <div class="qualification-assessment-heading">
+          <section v-if="course.groupPractical" class="panel">
+            <h3>그룹 실기 · 시험운영</h3>
+            <p>평가자가 개인별 실기 3회와 외부 분석 결과를 등록하고 전원을 함께 판정합니다.</p>
+            <p v-if="selected.groupPractical">
+              {{ selected.groupPractical.runNumber }}차 · 본인 수행
+              {{ selected.groupPractical.completed }}/3회 ·
+              {{
+                selected.groupPractical.invalidated
+                  ? '판정 무효'
+                  : selected.groupPractical.result === 'passed'
+                    ? 'Pass'
+                    : selected.groupPractical.result === 'failed'
+                      ? 'Fail · 재평가 필요'
+                      : '진행 중'
+              }}
+            </p>
+            <RouterLink
+              v-if="selected.groupPractical"
+              :to="`/group-assessments/${selected.groupPractical.groupId}`"
+              class="button secondary"
+              >그룹 진행·판정 보기</RouterLink
+            >
+            <p v-else class="muted">그룹 지정 전입니다. 팀 관리자에게 문의해 주세요.</p>
+          </section>
+          <div v-if="!course.groupPractical" class="qualification-assessment-heading">
             <h3>평가 유형 선택</h3>
             <span class="muted"
               >{{ kinds.filter((k) => selected?.[k] === 'passed').length }} /
@@ -396,12 +425,15 @@ function chooseCourse(id: string) {
               >주관식 답변 보기</RouterLink
             >
           </section>
-          <p v-if="!kinds.length" class="muted">
+          <p v-if="!kinds.length && !course.groupPractical" class="muted">
             등록된 평가 유형이 없습니다. 관리자에게 확인해 주세요.
           </p>
           <section v-if="selected.completion" class="qualification-completion">
             <div>
-              <StatusBadge status="complete" />
+              <StatusBadge
+                :status="selected.groupPractical?.invalidated ? 'failed' : 'complete'"
+                :label="selected.groupPractical?.invalidated ? '판정 무효' : undefined"
+              />
               <p>수료일 {{ kstDate(selected.completion.date) }}</p>
             </div>
             <RouterLink
@@ -413,7 +445,11 @@ function chooseCourse(id: string) {
               >인증Set 수료증 보기</RouterLink
             >
           </section>
-          <details :key="selected.id" class="history qualification-history">
+          <details
+            v-if="!course.groupPractical"
+            :key="selected.id"
+            class="history qualification-history"
+          >
             <summary>
               평가 이력 <span>{{ selected.history.length }}건</span
               ><AppIcon name="down" :size="16" />

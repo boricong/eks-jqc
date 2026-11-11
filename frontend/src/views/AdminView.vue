@@ -1919,7 +1919,9 @@ watch(
                   {{
                     c.qualificationType === 'auditor'
                       ? '본인 학습 확인'
-                      : c.assessmentKinds.map((k) => labels[k]).join(' · ')
+                      : c.groupPractical
+                        ? '그룹 실기 · 개인별 3회'
+                        : c.assessmentKinds.map((k) => labels[k]).join(' · ')
                   }}
                 </td>
                 <td>

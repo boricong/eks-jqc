@@ -101,6 +101,15 @@ export const roleLabels: Record<Role, string> = {
   organization_admin: "세부 조직 관리자",
   system_operator: "시스템 운영자",
 };
+export * from "./group-practical.ts";
+import {
+  GroupPracticalConfigSchema,
+  GroupAssessmentSchema,
+  GroupFileSchema,
+  GroupCompletionEvidenceSchema,
+  groupPracticalErrors,
+  type GroupPersonalProgress,
+} from "./group-practical.ts";
 export const KindSchema = z.enum(["objective", "practical"]);
 export type Kind = z.infer<typeof KindSchema>;
 export const kindLabels: Record<Kind, string> = {
@@ -230,6 +239,8 @@ export interface SubjectiveResponseView {
   status: "unstarted" | "draft" | "submitted" | "closed";
 }
 export const CourseContentSchema = z.object({
+  // Absence is the legacy format: never inject a default into historic hashed content.
+  groupPractical: GroupPracticalConfigSchema.optional(),
   subjectiveEnabled: z.boolean().default(false),
   subjectiveQuestions: z.array(SubjectiveQuestionSchema).max(500).default([]),
   qualificationType: QualificationTypeSchema.default("auditee"),
@@ -423,7 +434,10 @@ export const LearningChecklistSchema = z.object({
 });
 export type LearningChecklist = z.infer<typeof LearningChecklistSchema>;
 export const CompletionSchema = z.object({
-  method: z.enum(["assessment", "self_confirmation"]).default("assessment"),
+  method: z
+    .enum(["assessment", "self_confirmation", "group_practical"])
+    .default("assessment"),
+  groupPractical: GroupCompletionEvidenceSchema.optional(),
   learningEvidence: z.array(LearningConfirmationSchema).max(100).default([]),
   id,
   enrollmentId: id,
@@ -435,6 +449,7 @@ export const CompletionSchema = z.object({
 });
 export type Completion = z.infer<typeof CompletionSchema>;
 export const CertificationSchema = z.object({
+  trial: z.literal(true).optional(),
   frozenCriteria: FrozenCriteriaSchema.optional(),
   auditor: AuditorCertificationSchema.optional(),
   qualificationMetadata: QualificationMetadataSchema.optional(),
@@ -526,7 +541,11 @@ export const StateSchema = z.object({
     z.literal(30),
     z.literal(31),
     z.literal(32),
+    z.literal(33),
   ]),
+  groupPracticalEnvironment: z.literal("trial").optional(),
+  groupAssessments: z.array(GroupAssessmentSchema).default([]),
+  groupAssessmentFiles: z.array(GroupFileSchema).default([]),
   organizationQualificationRequirements: z
     .array(OrganizationQualificationRequirementSchema)
     .default([]),
@@ -583,6 +602,7 @@ export interface Attempt extends Partial<Draft> {
   itemResults?: AssessmentAttempt["itemResults"];
 }
 export interface Enrollment {
+  groupPractical?: GroupPersonalProgress;
   id: string;
   courseId: string;
   subjective?: SubjectiveResponseView;
@@ -601,6 +621,7 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
+  groupPracticalEnabled?: boolean;
   currentQualifications: {
     lv1OrganizationId: string;
     entityId: string;
@@ -653,6 +674,7 @@ export interface CourseUsage {
   qualifications: Pick<Qualification, "id" | "title" | "version">[];
   successorVersions: { id: string; version: number }[];
   counts: {
+    groupAssessments?: number;
     assignments: number;
     enrollments: number;
     attempts: number;
@@ -665,9 +687,11 @@ export interface CourseUsage {
 export type DemoState = Workspace;
 export const requiredKinds = (
   course: Pick<Course, "assessmentKinds"> &
-    Partial<Pick<Course, "qualificationType">>,
+    Partial<Pick<Course, "qualificationType" | "groupPractical">>,
 ): Kind[] =>
-  course.qualificationType === "auditor" ? [] : course.assessmentKinds;
+  course.qualificationType === "auditor" || course.groupPractical
+    ? []
+    : course.assessmentKinds;
 export function assessmentPrerequisite(
   course: Pick<Course, "assessmentKinds">,
   kind: Kind,
@@ -684,8 +708,18 @@ export function assessmentPrerequisite(
 export function courseErrors(course: CourseContent): string[] {
   const errors: string[] = [];
   if (!course.title.trim()) errors.push("인증Set명을 입력해 주세요.");
+  if (course.groupPractical) {
+    errors.push(...groupPracticalErrors(course.groupPractical));
+    if (
+      course.qualificationType !== "auditee" ||
+      course.assessmentKinds.length ||
+      course.subjectiveEnabled
+    )
+      errors.push("그룹 실기는 일반 자격의 전용 인증Set으로 설정해 주세요.");
+  }
   if (
     course.qualificationType !== "auditor" &&
+    !course.groupPractical &&
     (!course.assessmentKinds.length ||
       new Set(course.assessmentKinds).size !== course.assessmentKinds.length)
   )
@@ -869,7 +903,8 @@ export function renewalQualificationErrors(
     q.courseIds.length !== 1 &&
       "재인증에는 객관식 인증Set 1개를 연결해 주세요.",
     c &&
-      (c.assessmentKinds.length !== 1 ||
+      (c.groupPractical ||
+        c.assessmentKinds.length !== 1 ||
         c.assessmentKinds[0] !== "objective" ||
         c.practicalQuestions.length ||
         c.subjectiveEnabled ||

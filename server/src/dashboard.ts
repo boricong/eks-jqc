@@ -1,3 +1,7 @@
+import {
+  usableCompletion,
+  personalGroupProgress,
+} from "./group-practical-evidence.ts";
 import { userView } from "./organizations.ts";
 import { numberedQualificationVersion } from "./qualification-templates.ts";
 import { currentTeamQualifications } from "@eks/contracts";
@@ -252,7 +256,9 @@ export function dashboardReader(
   );
   const completionsByEnrollment = new Map(
     s.completions
-      .filter((c) => enrollmentIds.has(c.enrollmentId))
+      .filter(
+        (c) => enrollmentIds.has(c.enrollmentId) && usableCompletion(s, c),
+      )
       .map((c) => [c.enrollmentId, c]),
   );
   const renewalByPeriod = new Map(
@@ -1239,6 +1245,8 @@ export function dashboardReader(
                     ? "failed"
                     : "ready";
           return {
+            groupPracticalRequired: !!course.groupPractical,
+            groupPractical: personalGroupProgress(s, e.id),
             courseId: course.id,
             qualificationType: course.qualificationType,
             requiredItems: course.learningItems.filter((i) => i.required)

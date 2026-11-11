@@ -161,7 +161,13 @@ const history = computed(
                     }}
                   </td>
                   <td v-if="c.qualificationType !== 'auditor'">
-                    {{ assessmentLabels[c.practical] }}
+                    {{
+                      c.groupPractical
+                        ? `그룹 실기 ${c.groupPractical.invalidated ? '판정 무효' : c.groupPractical.result === 'passed' ? 'Pass' : c.groupPractical.result === 'failed' ? 'Fail' : c.groupPractical.completed + '/3회'}`
+                        : c.groupPracticalRequired
+                          ? '그룹 지정 전'
+                          : assessmentLabels[c.practical]
+                    }}
                   </td>
                 </tr>
               </tbody>

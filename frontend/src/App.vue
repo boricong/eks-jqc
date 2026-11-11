@@ -149,6 +149,9 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshOnFocus));
         불러오는 중
       </div>
       <template v-else-if="store.signedIn">
+        <aside v-if="store.data.groupPracticalEnabled" class="container notice-body" role="status">
+          <strong>그룹 실기 시험환경</strong> · 시험 발급 기록을 사용하는 환경입니다.
+        </aside>
         <aside
           v-if="store.data.actor.workStatus === 'deactive'"
           class="container notice-body"

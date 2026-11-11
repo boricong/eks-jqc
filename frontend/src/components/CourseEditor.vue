@@ -5,6 +5,8 @@ import SubjectiveQuestionsEditor from './SubjectiveQuestionsEditor.vue';
 import CompactTabs from './CompactTabs.vue';
 import CourseLearningInfo from './CourseLearningInfo.vue';
 import CourseAssessmentEditor from './CourseAssessmentEditor.vue';
+import GroupPracticalEditor from './GroupPracticalEditor.vue';
+import { useDemo } from '../stores/demo';
 import type { CourseIssue } from '../course-editor';
 const props = defineProps<{
   course: CourseContent;
@@ -14,6 +16,17 @@ const props = defineProps<{
   showErrors: boolean;
   objectiveOnly?: boolean;
 }>();
+const store = useDemo();
+function toggleGroup(event: Event) {
+  if ((event.target as HTMLInputElement).checked) {
+    props.course.groupPractical = { instruction: '', method: '', criterion: '', metrics: [] };
+    props.course.assessmentKinds = [];
+    props.course.subjectiveEnabled = false;
+  } else {
+    delete props.course.groupPractical;
+    props.course.assessmentKinds = ['objective'];
+  }
+}
 const uid = useId(),
   section = ref('basic');
 const tabs = ref<InstanceType<typeof CompactTabs>>(),
@@ -24,6 +37,7 @@ const sections = computed(() =>
   [
     { id: 'basic', label: '기본정보' },
     { id: 'learning', label: '학습 정보' },
+    ...(props.course.groupPractical ? [{ id: 'group', label: '그룹 실기 기준' }] : []),
     ...(props.course.qualificationType !== 'auditor' &&
     props.course.assessmentKinds.includes('objective')
       ? [{ id: 'objective', label: '지식 평가' }]
@@ -122,7 +136,24 @@ defineExpose({
             typeEditing?.typeChangeReason || '인증 유형은 연결된 자격과 같아야 합니다.'
           }}</small>
         </div>
-        <fieldset v-if="course.qualificationType !== 'auditor'" class="assessment-kind-group">
+        <label
+          v-if="
+            course.qualificationType === 'auditee' &&
+            !objectiveOnly &&
+            (store.data.groupPracticalEnabled || course.groupPractical)
+          "
+          class="checkbox-label"
+          ><input
+            type="checkbox"
+            :checked="!!course.groupPractical"
+            :disabled="disabled"
+            @change="toggleGroup"
+          />그룹 실기 전용 · 시험운영</label
+        >
+        <fieldset
+          v-if="!course.groupPractical && course.qualificationType !== 'auditor'"
+          class="assessment-kind-group"
+        >
           <legend>평가 유형</legend>
           <div class="assessment-kind-options">
             <label class="checkbox-label"
@@ -152,12 +183,22 @@ defineExpose({
           </div>
         </fieldset>
         <p
-          v-if="course.qualificationType !== 'auditor' && !course.assessmentKinds.length"
+          v-if="
+            course.qualificationType !== 'auditor' &&
+            !course.groupPractical &&
+            !course.assessmentKinds.length
+          "
           class="muted"
         >
           평가 유형을 선택하면 해당 편집 항목이 나타납니다.
         </p>
       </div>
+      <GroupPracticalEditor
+        v-if="course.groupPractical"
+        v-show="section === 'group'"
+        :config="course.groupPractical"
+        :disabled="disabled"
+      />
       <SubjectiveQuestionsEditor
         v-if="course.qualificationType === 'auditee' && course.subjectiveEnabled"
         v-show="section === 'subjective'"

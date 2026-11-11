@@ -58,6 +58,8 @@ export function catalogReferences(
 ): Record<string, number> {
   if (section === "courses")
     return {
+      groupAssessments: s.groupAssessments.filter((g) => g.courseId === id)
+        .length,
       qualifications: s.qualifications.filter((q) => q.courseIds.includes(id))
         .length,
       enrollments: s.enrollments.filter((e) => e.courseId === id).length,
@@ -153,6 +155,9 @@ function editingChanges(
         .map((k) => (k === "objective" ? "지식 평가" : "상황 대응 평가"))
         .join(", "),
       "지식 합격 기준": String(item.passScore ?? "미정"),
+      "그룹 실기 기준": item.groupPractical
+        ? JSON.stringify(item.groupPractical)
+        : "사용 안 함",
       "상황 대응 합격 기준": String(item.practicalPassScore ?? "미정"),
       "학습 정보 · 자료": item.materials
         .map((m) =>
@@ -229,6 +234,15 @@ export function validateCatalogStructure(
     );
   } else {
     const c = item as Course;
+    demand(
+      !c.groupPractical ||
+        (s.schemaVersion >= 33 &&
+          c.qualificationType === "auditee" &&
+          !c.assessmentKinds.length &&
+          !c.subjectiveEnabled),
+      422,
+      "그룹 실기는 업무33 시험환경의 전용 인증Set으로 설정해 주세요.",
+    );
     demand(
       c.qualificationType === "auditee" ||
         (!c.subjectiveEnabled && !c.subjectiveQuestions.length),

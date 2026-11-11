@@ -48,6 +48,10 @@ const back = computed(() =>
       <span>인증Set 수료</span>
     </PageHeading>
     <section class="panel award-document">
+      <p v-if="record.groupPractical">
+        <strong>시험 발급 · 그룹 실기</strong> ·
+        {{ e.groupPractical?.invalidated ? '판정 무효화로 효력 없음' : '평가자 공동 판정 Pass' }}
+      </p>
       <p>{{ record.snapshot?.learnerName || store.username(a.learnerId) }}</p>
       <h2>{{ record.snapshot?.title || store.course(record.courseId).title }}</h2>
       <CourseCategory :course="store.course(record.courseId)" />
@@ -70,6 +74,16 @@ const back = computed(() =>
     </section>
     <section class="panel editor-panel">
       <h2>수료 근거</h2>
+      <p v-if="record.groupPractical">
+        <RouterLink
+          :to="
+            store.canEnterManagement
+              ? store.managementLink(`/admin/group-assessments/${record.groupPractical.groupId}`)
+              : `/group-assessments/${record.groupPractical.groupId}`
+          "
+          >개인별 3회 수행과 그룹 판정 근거 보기</RouterLink
+        >
+      </p>
       <p v-if="record.method === 'self_confirmation'">필수 학습항목 본인 확인으로 수료</p>
       <div v-for="item in record.learningEvidence" :key="item.itemId" class="certificate-attempt">
         <strong>{{ item.title }}</strong>

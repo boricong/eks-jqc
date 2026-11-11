@@ -3,23 +3,27 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { JsonStore } from '../../server/src/storage';
+import { groupSeed } from '../../server/tests/group-practical-fixture';
 import { seedState } from '../../server/src/seed';
 import { buildApp } from '../../server/src/app';
 
 export const test = base.extend<{
+  groupTrial: boolean;
   documentsRoot: string | undefined;
   backend: { store: JsonStore; restart: () => Promise<void>; setClock: (now?: string) => void };
 }>({
+  groupTrial: false,
   documentsRoot: undefined,
   backend: [
-    async ({ documentsRoot }, use) => {
+    async ({ documentsRoot, groupTrial }, use) => {
       const dir = await mkdtemp(path.join(os.tmpdir(), 'eks-browser-')),
         file = path.join(dir, 'runtime', 'state.json'),
-        seed = seedState(true);
+        seed = groupTrial ? groupSeed() : seedState(true);
       await new JsonStore(file).initialize(seed);
       let fixedNow: string | undefined;
       const options = {
         documentsRoot,
+        groupPracticalEnabled: groupTrial,
         origins: [`http://127.0.0.1:${Number(process.env.EKS_E2E_FRONTEND_PORT || 5286)}`],
         clock: () => fixedNow || new Date().toISOString(),
       };

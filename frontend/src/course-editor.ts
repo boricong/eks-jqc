@@ -1,6 +1,11 @@
-import { courseUseErrors, type CourseContent, type Kind } from '@eks/contracts';
+import {
+  groupPracticalErrors,
+  courseUseErrors,
+  type CourseContent,
+  type Kind,
+} from '@eks/contracts';
 export interface CourseIssue {
-  kind: Kind | 'basic' | 'learning' | 'materials';
+  kind: Kind | 'group' | 'basic' | 'learning' | 'materials';
   itemId?: string;
   field: string;
   message: string;
@@ -27,7 +32,7 @@ export function courseIssues(c: CourseContent): CourseIssue[] {
   const add = (kind: CourseIssue['kind'], field: string, message: string, itemId?: string) =>
     issues.push({ kind, field, message, itemId });
   if (!c.title.trim()) add('basic', 'title', '인증Set명을 입력해 주세요.');
-  if (c.qualificationType !== 'auditor' && !c.assessmentKinds.length)
+  if (c.qualificationType !== 'auditor' && !c.groupPractical && !c.assessmentKinds.length)
     add('basic', 'assessmentKinds', '필수 평가 유형을 선택해 주세요.');
   if (
     c.qualificationType !== 'auditor' &&
@@ -39,6 +44,9 @@ export function courseIssues(c: CourseContent): CourseIssue[] {
       'assessmentKinds',
       '상황 대응 평가를 사용하려면 지식 평가도 필수로 설정해 주세요.',
     );
+  if (c.groupPractical)
+    for (const message of groupPracticalErrors(c.groupPractical))
+      add('group', 'instruction', message);
   c.materials.forEach((m, n) => {
     if (!m.title.trim())
       add('materials', 'title', `학습 정보 · 자료 ${n + 1}번의 자료명을 입력해 주세요.`, m.id);

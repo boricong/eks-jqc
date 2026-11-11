@@ -1,3 +1,4 @@
+import { validateGroups } from "./group-practical-integrity.ts";
 import { validateRenewalBatches } from "./renewal-integrity.ts";
 import { validateRenewalStructure } from "./renewal-criteria.ts";
 import { validateReleases } from "./release-integrity.ts";
@@ -33,7 +34,7 @@ export function validateState(
 ): State {
   if (
     !legacy &&
-    [25, 26, 27, 28, 29, 30, 31, 32].includes((input as any)?.schemaVersion)
+    [25, 26, 27, 28, 29, 30, 31, 32, 33].includes((input as any)?.schemaVersion)
   ) {
     const raw = input as any;
     for (const item of [
@@ -83,6 +84,7 @@ export function validateState(
     ? LegacyStateSchema.parse(input)
     : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
+    validateGroups(s);
     validateWorkStatus(s);
     validateSubjective(s);
     if (s.schemaVersion >= 28) {
@@ -791,6 +793,7 @@ export function validateState(
       );
       continue;
     }
+    if (co.method === "group_practical") continue;
     check(
       c.qualificationType === "auditee" && co.learningEvidence.length === 0,
       "평가 수료 유형 근거",

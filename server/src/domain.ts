@@ -1,5 +1,10 @@
 import { requireAuditorTeam } from "./auditor-team.ts";
 import {
+  groupEvidence,
+  personalGroupProgress,
+  usableCompletion,
+} from "./group-practical-evidence.ts";
+import {
   guardRenewalAttempt,
   reconcileRenewalBatch,
 } from "./renewal-batches.ts";
@@ -217,6 +222,11 @@ export function authorize(
                       (action === "catalog.create" && v === body.content)) &&
                     action.startsWith("catalog.") &&
                     target === "courses") ||
+                  (key === "instruction" &&
+                    action.startsWith("catalog.") &&
+                    target === "courses" &&
+                    (v === body.groupPractical ||
+                      v === body.content?.groupPractical)) ||
                   (key === "category" &&
                     v === body &&
                     ["common", "specialized"].includes(String(value)))
@@ -344,7 +354,7 @@ export function reconcilePendingAuditor(
   }
   return before !== s.certifications.length;
 }
-function reconcile(
+export function reconcile(
   s: State,
   enrollmentId: string,
   organizations: OrganizationDocument,
@@ -380,18 +390,26 @@ function reconcile(
   }));
   const checklist = s.learningChecklists.find((v) => v.enrollmentId === e.id);
   const requiredItems = c.learningItems.filter((i) => i.required);
+  const group = c.groupPractical ? groupEvidence(s, e.id) : undefined;
   const complete =
     c.qualificationType === "auditor"
       ? requiredItems.length > 0 &&
         requiredItems.every((i) =>
           checklist?.items.some((v) => v.itemId === i.id),
         )
-      : evidence.length > 0 && evidence.every((ev) => ev.attemptId);
+      : c.groupPractical
+        ? !!group
+        : evidence.length > 0 && evidence.every((ev) => ev.attemptId);
   if (complete && !s.completions.some((co) => co.enrollmentId === e.id)) {
     newCompletion = uid();
     s.completions.push({
       method:
-        c.qualificationType === "auditor" ? "self_confirmation" : "assessment",
+        c.qualificationType === "auditor"
+          ? "self_confirmation"
+          : group
+            ? "group_practical"
+            : "assessment",
+      ...(group ? { groupPractical: group } : {}),
       learningEvidence:
         c.qualificationType === "auditor"
           ? structuredClone(checklist!.items)
@@ -410,7 +428,9 @@ function reconcile(
   const all = s.enrollments.filter((en) => en.assignmentId === a.id),
     completed = all.map((en) => ({
       enrollmentId: en.id,
-      completionId: s.completions.find((co) => co.enrollmentId === en.id)?.id,
+      completionId: s.completions.find(
+        (co) => co.enrollmentId === en.id && usableCompletion(s, co),
+      )?.id,
     }));
   if (
     all.length &&
@@ -424,6 +444,12 @@ function reconcile(
     const id = uid();
     if (a.auditor) delete a.auditor.pendingGeneralCertification;
     s.certifications.push({
+      ...(completed.some(
+        (ev) =>
+          s.completions.find((co) => co.id === ev.completionId)?.groupPractical,
+      )
+        ? { trial: true as const }
+        : {}),
       ...(a.auditor
         ? {
             auditor: {
@@ -1212,6 +1238,7 @@ export function workspace(
             return {
               id: e.id,
               courseId: e.courseId,
+              groupPractical: personalGroupProgress(s, e.id),
               subjective: (() => {
                 const v = subjectiveView(s, u, e.id);
                 return v?.response?.status === "draft"

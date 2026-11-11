@@ -34,8 +34,9 @@ test('정답 선택지 인덱스·추가 선택지·미정 정답·저장 재조
       () =>
         backend.store
           .snapshot()
-          .courses.find((c) => c.version > 1 && c.entityId === 'demo-course-1')?.questions[0]
-          ?.correct,
+          .courses.slice()
+          .sort((a, b) => b.version - a.version)
+          .find((c) => c.version > 1 && c.entityId === 'demo-course-1')?.questions[0]?.correct,
     )
     .toBe(n - 2);
   await page.reload();
@@ -63,8 +64,9 @@ test('정답 선택지 인덱스·추가 선택지·미정 정답·저장 재조
       () =>
         backend.store
           .snapshot()
-          .courses.find((c) => c.version > 1 && c.entityId === 'demo-course-1')?.questions[0]
-          ?.correct,
+          .courses.slice()
+          .sort((a, b) => b.version - a.version)
+          .find((c) => c.version > 1 && c.entityId === 'demo-course-1')?.questions[0]?.correct,
     )
     .toBeNull();
 });

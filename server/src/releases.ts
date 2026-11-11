@@ -61,8 +61,16 @@ export function courseChange(
   )
     return "none";
   return isDeepStrictEqual(
-    withoutIds([before.questions, before.practicalQuestions]),
-    withoutIds([after.questions, after.practicalQuestions]),
+    withoutIds([
+      before.questions,
+      before.practicalQuestions,
+      before.groupPractical,
+    ]),
+    withoutIds([
+      after.questions,
+      after.practicalQuestions,
+      after.groupPractical,
+    ]),
   )
     ? "minor"
     : "major";

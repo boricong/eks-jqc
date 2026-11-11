@@ -109,6 +109,9 @@ const back = computed(() =>
       </h1></PageHeading
     >
     <article class="certificate-document" aria-label="자격 발급 기록과 인증서">
+      <p v-if="a.certification?.trial" class="trial-certificate">
+        <strong>시험 발급 · 그룹 실기 시험운영 인증서</strong>
+      </p>
       <section class="certificate-record" aria-label="발급 기록">
         <div class="certificate-record-heading">
           <AppIcon name="award" :size="20" />
@@ -194,6 +197,9 @@ const back = computed(() =>
               ><AppIcon name="down" :size="16" :class="{ 'is-open': evidenceItemOpen[item.id] }" />
             </summary>
             <div class="certificate-evidence-body">
+              <p v-if="item.completion?.groupPractical">
+                그룹 실기 공동 판정 · 개인별 3회 수행 · 시험 발급
+              </p>
               <p v-if="item.completion?.method === 'self_confirmation'" class="muted">
                 본인 학습 확인으로 수료 · 필수 항목 모두 완료
               </p>

@@ -43,6 +43,11 @@ export const router = createRouter({
     },
     { path: '/plans/:id?', name: 'plans', component: PlansView, meta: { role: 'learner' } },
     { path: '/notifications', name: 'notifications', component: NotificationsView },
+    {
+      path: '/group-assessments/:id',
+      name: 'group-practical-personal',
+      component: () => import('./views/GroupAssessmentsView.vue'),
+    },
     { path: '/completions/:id', name: 'completion', component: CompletionView },
     {
       path: '/qualifications/:id/courses/:courseId/subjective',
@@ -93,6 +98,12 @@ export const router = createRouter({
       component: AdminLayout,
       meta: { management: true },
       children: [
+        {
+          path: 'group-assessments/:id?',
+          name: 'group-practical-management',
+          component: () => import('./views/GroupAssessmentsView.vue'),
+          meta: { management: true, managementSection: 'group-assessments', title: '그룹 실기' },
+        },
         {
           path: 'organization-requirements',
           name: 'organization-requirements',

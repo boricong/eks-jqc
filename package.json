@@ -53,7 +53,9 @@
     "data:migrate-planning-schedule": "node --import tsx server/src/cli.ts migrate-planning-schedule",
     "data:migrate-objective-renewals": "node --import tsx server/src/cli.ts migrate-objective-renewals",
     "data:migrate-auditor-teams": "node --import tsx server/src/cli.ts migrate-auditor-teams",
-    "data:migrate-unified-status": "node --import tsx server/src/cli.ts migrate-unified-status"
+    "data:migrate-unified-status": "node --import tsx server/src/cli.ts migrate-unified-status",
+    "data:restore-group": "node --import tsx server/src/cli.ts restore-group",
+    "data:migrate-group-practical": "node --import tsx server/src/cli.ts migrate-group-practical"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

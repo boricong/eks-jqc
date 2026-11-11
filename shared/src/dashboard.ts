@@ -314,6 +314,8 @@ export interface DashboardDetails {
   rows: DashboardPage<DashboardDetailRow>;
 }
 export interface DashboardCourseSummary {
+  groupPracticalRequired?: boolean;
+  groupPractical?: import("./group-practical.ts").GroupPersonalProgress;
   releaseVersion?: { major: number; minor: number } | null;
   qualificationType?: "auditee" | "auditor";
   confirmedItems?: number;

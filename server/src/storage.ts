@@ -1,3 +1,4 @@
+import { GroupFileStore } from "./group-practical-files.ts";
 import { migrateState } from "./migration.ts";
 import {
   mkdir,
@@ -261,11 +262,16 @@ export class FileStore<T extends Document> {
       );
     }
   }
+  protected async prepareBackup(_file: string, _state: T) {}
+  protected async prepareRestore(_file: string, _state: T) {}
+  protected async finishBackup(_file: string, _state: T) {}
   async backup() {
     return this.enqueue(async () => {
       await mkdir(this.backupDir, { recursive: true });
       const file = path.join(this.backupDir, `manual-${Date.now()}.json`);
+      await this.prepareBackup(file, this.state);
       await this.writeAtomic(file, this.state);
+      await this.finishBackup(file, this.state);
       return file;
     });
   }
@@ -276,6 +282,7 @@ export class FileStore<T extends Document> {
         JSON.parse(await readFile(source, "utf8")),
       );
       check?.(restored);
+      await this.prepareRestore(source, restored);
       await mkdir(this.backupDir, { recursive: true });
       try {
         const current = await readFile(this.file);
@@ -320,6 +327,95 @@ export class FileStore<T extends Document> {
 }
 
 export class JsonStore extends FileStore<State> {
+  get groupFiles() {
+    return new GroupFileStore(this.file);
+  }
+  protected override async prepareBackup(file: string, state: State) {
+    await this.groupFiles.backup(file, state);
+  }
+  protected override async prepareRestore(file: string, state: State) {
+    await this.groupFiles.restore(file, state);
+  }
+  protected override async finishBackup(file: string, state: State) {
+    if (state.schemaVersion !== 33) return;
+    await this.writeAtomic(
+      `${file}.organizations.json`,
+      this.organizations.snapshot(),
+    );
+    await this.writeAtomic(`${file}.maintenance.json`, this.maintenance);
+    const sha256 = async (p: string) =>
+      createHash("sha256")
+        .update(await readFile(p))
+        .digest("hex");
+    await this.writeAtomic(`${file}.bundle.json`, {
+      version: 1,
+      schemaVersion: 33,
+      environment: "trial",
+      stateHash: await sha256(file),
+      organizationHash: await sha256(`${file}.organizations.json`),
+      maintenanceHash: await sha256(`${file}.maintenance.json`),
+      evidenceFiles: state.groupAssessmentFiles.length,
+    });
+  }
+  async restoreGroupBundle(source: string) {
+    const manifest = JSON.parse(
+      await readFile(`${source}.bundle.json`, "utf8"),
+    );
+    const stateBytes = await readFile(source),
+      organizationBytes = await readFile(`${source}.organizations.json`),
+      maintenanceBytes = await readFile(`${source}.maintenance.json`);
+    const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+    demand(
+      manifest.version === 1 &&
+        manifest.schemaVersion === 33 &&
+        manifest.environment === "trial" &&
+        manifest.stateHash === hash(stateBytes) &&
+        manifest.organizationHash === hash(organizationBytes) &&
+        manifest.maintenanceHash === hash(maintenanceBytes),
+      422,
+      "그룹 시험 백업 묶음의 해시가 일치하지 않습니다.",
+    );
+    const organizations = validateOrganizations(
+        JSON.parse(organizationBytes.toString("utf8")),
+      ),
+      state = validateState(
+        JSON.parse(stateBytes.toString("utf8")),
+        organizations,
+      ),
+      maintenance = MaintenanceDocumentSchema.parse(
+        JSON.parse(maintenanceBytes.toString("utf8")),
+      );
+    demand(
+      state.schemaVersion === 33 &&
+        state.groupPracticalEnvironment === "trial" &&
+        manifest.evidenceFiles === state.groupAssessmentFiles.length,
+      422,
+      "그룹 시험 백업 묶음을 확인해 주세요.",
+    );
+    if (state.groupAssessmentFiles.length)
+      await readFile(`${source}.files/manifest.json`);
+    await this.groupFiles.restore(source, state);
+    const current = await readFile(this.file),
+      currentOrg = await readFile(this.organizations.file);
+    return this.migratePolicies(
+      {
+        revision: JSON.parse(current.toString("utf8")).revision,
+        stateHash: hash(current),
+        organizationHash: hash(currentOrg),
+      },
+      () => ({
+        state,
+        organizations,
+        report: {
+          restored: true,
+          schemaVersion: 33,
+          evidenceFiles: state.groupAssessmentFiles.length,
+        },
+      }),
+      "group-restore",
+      maintenance,
+    );
+  }
   clock = () => new Date().toISOString();
   protected override async beforeTransaction() {
     await this.refreshNotificationsInQueue(this.clock(), true);
@@ -747,6 +843,7 @@ export class JsonStore extends FileStore<State> {
       org: unknown,
     ) => { state: State; organizations: OrganizationDocument; report: unknown },
     purpose = "policies",
+    maintenanceOverride?: ReturnType<typeof MaintenanceDocumentSchema.parse>,
   ) {
     return this.withMaintenanceLock(() =>
       this.organizations.withMaintenanceLock(async () => {
@@ -779,11 +876,13 @@ export class JsonStore extends FileStore<State> {
         );
         if (
           JSON.stringify(raw) === JSON.stringify(candidate.state) &&
-          JSON.stringify(org) === JSON.stringify(candidate.organizations)
+          JSON.stringify(org) === JSON.stringify(candidate.organizations) &&
+          !maintenanceOverride
         )
           return candidate.report;
         const generationChange =
-          raw.schemaVersion !== candidate.state.schemaVersion;
+          raw.schemaVersion !== candidate.state.schemaVersion ||
+          !!maintenanceOverride;
         const maintenanceBytes = generationChange
           ? await readFile(this.maintenanceFile).catch((e) => {
               if (e.code === "ENOENT") return undefined;
@@ -791,15 +890,16 @@ export class JsonStore extends FileStore<State> {
             })
           : undefined;
         const maintenance = generationChange
-          ? maintenanceBytes
-            ? MaintenanceDocumentSchema.parse(
-                JSON.parse(maintenanceBytes.toString("utf8")),
-              )
-            : {
-                schemaVersion: 1 as const,
-                generation: randomUUID(),
-                receipts: [],
-              }
+          ? maintenanceOverride ||
+            (maintenanceBytes
+              ? MaintenanceDocumentSchema.parse(
+                  JSON.parse(maintenanceBytes.toString("utf8")),
+                )
+              : {
+                  schemaVersion: 1 as const,
+                  generation: randomUUID(),
+                  receipts: [],
+                })
           : undefined;
         const suffix = randomUUID(),
           stateBackup = path.join(
@@ -1001,6 +1101,7 @@ export class JsonStore extends FileStore<State> {
       migrateState(rawReleaseState, this.organizations.snapshot());
       await super.load();
       loaded = true;
+      await this.groupFiles.verifyAll(this.state.groupAssessmentFiles);
       try {
         this.maintenance = MaintenanceDocumentSchema.parse(
           JSON.parse(await readFile(this.maintenanceFile, "utf8")),

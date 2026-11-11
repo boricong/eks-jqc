@@ -21,7 +21,11 @@ window.addEventListener(DATASET_EVENT, () => pending.clear());
 const tabStorageKey = 'eks-session-tab';
 const sessionTab = sessionStorage.getItem(tabStorageKey) || randomUUID();
 sessionStorage.setItem(tabStorageKey, sessionTab);
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: RequestInit = {},
+  format: 'json' | 'blob' = 'json',
+): Promise<T> {
   const epoch = getDataEpoch();
   let response: Response;
   try {
@@ -32,7 +36,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
         'X-Session-Tab': sessionTab,
-        'X-EKS-Release-Contract': '5',
+        'X-EKS-Release-Contract': '6',
         ...(getDataGeneration() ? { 'X-EKS-Data-Generation': getDataGeneration() } : {}),
       },
     });
@@ -47,6 +51,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       'DATASET_CHANGED',
     );
   observeGeneration(generation);
+  if (response.ok && format === 'blob') return (await response.blob()) as T;
   let value;
   try {
     value = await response.json();
@@ -85,4 +90,14 @@ export async function mutate<T = { id: string; revision: number }>(
       pending.delete(fingerprint);
     throw error;
   }
+}
+
+export async function downloadEvidence(id: string, name: string) {
+  const blob = await api<Blob>(`/group-assessment-files/${encodeURIComponent(id)}`, {}, 'blob');
+  const url = URL.createObjectURL(blob),
+    link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
