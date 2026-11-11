@@ -29,7 +29,7 @@ const reason = z.string().trim().min(1).max(2000);
 const basic = z.object({ revision }).strict();
 export function requireGroupDataset(s: State) {
   demand(
-    s.schemaVersion === 33 && s.groupPracticalEnvironment === "trial",
+    s.schemaVersion >= 33 && s.groupPracticalEnvironment === "trial",
     409,
     "별도 시험환경을 그룹 실기 형식으로 이관해 주세요.",
     "GROUP_TRIAL_REQUIRED",

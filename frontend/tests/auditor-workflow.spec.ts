@@ -63,7 +63,7 @@ async function call(page: Page, path: string, body?: unknown, method = 'POST') {
     headers: {
       'X-Session-Tab': tab!,
       'idempotency-key': crypto.randomUUID(),
-      'X-EKS-Release-Contract': '6',
+      'X-EKS-Release-Contract': '7',
     },
   });
   expect(response.ok(), await response.text()).toBeTruthy();

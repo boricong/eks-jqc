@@ -74,9 +74,11 @@ export const useDemo = defineStore('workspace', () => {
         ? 'admin'
         : sessionActor.value?.roles.includes('learner')
           ? 'learner'
-          : sessionActor.value?.roles.includes('evaluator')
-            ? 'evaluator'
-            : 'organization_admin',
+          : sessionActor.value?.roles.includes('ft')
+            ? 'ft'
+            : sessionActor.value?.roles.includes('evaluator')
+              ? 'evaluator'
+              : 'organization_admin',
   }));
   const actorId = computed(() => actor.value.id),
     signedIn = computed(() => !!sessionActor.value);
@@ -105,17 +107,19 @@ export const useDemo = defineStore('workspace', () => {
   const fullManagement = computed(() => hasRole('admin') || hasRole('system_operator'));
   const canEnterManagement = computed(() => fullManagement.value || hasRole('organization_admin'));
   const canManageSection = (section: string) =>
-    (section === 'group-assessments'
-      ? fullManagement.value &&
-        (!!data.value.groupPracticalEnabled || data.value.courses.some((c) => !!c.groupPractical))
-      : section === 'auditor'
+    (section === 'mentor-practicals'
+      ? fullManagement.value && !!data.value.mentorPracticalEnabled
+      : section === 'group-assessments'
         ? fullManagement.value &&
-          (!!managementOrganization.value?.auditorEnabled ||
-            data.value.qualifications.some(
-              (q) =>
-                q.lv1OrganizationId === managementLv1.value && q.qualificationType === 'auditor',
-            ))
-        : fullManagement.value) ||
+          (!!data.value.groupPracticalEnabled || data.value.courses.some((c) => !!c.groupPractical))
+        : section === 'auditor'
+          ? fullManagement.value &&
+            (!!managementOrganization.value?.auditorEnabled ||
+              data.value.qualifications.some(
+                (q) =>
+                  q.lv1OrganizationId === managementLv1.value && q.qualificationType === 'auditor',
+              ))
+          : fullManagement.value) ||
     (['dashboard', 'organization-settings', 'organization-requirements'].includes(section) &&
       hasRole('organization_admin'));
   const managementAccess = computed(
@@ -273,7 +277,11 @@ export const useDemo = defineStore('workspace', () => {
   const assessmentCount = (a: Assignment) =>
     a.enrollments.reduce(
       (n, e) =>
-        n + (course(e.courseId).groupPractical ? 1 : requiredKinds(course(e.courseId)).length),
+        n +
+        (course(e.courseId).groupPractical
+          ? 1
+          : requiredKinds(course(e.courseId)).length +
+            Number(!!course(e.courseId).mentorPractical)),
       0,
     );
   const passedCount = (a: Assignment) =>
@@ -282,7 +290,8 @@ export const useDemo = defineStore('workspace', () => {
         n +
         (course(e.courseId).groupPractical
           ? Number(complete(e))
-          : requiredKinds(course(e.courseId)).filter((k) => e[k] === 'passed').length),
+          : requiredKinds(course(e.courseId)).filter((k) => e[k] === 'passed').length +
+            Number(e.mentorPractical?.status === 'passed')),
       0,
     );
   const username = (id: string | null | undefined) =>

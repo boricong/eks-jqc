@@ -240,7 +240,7 @@ export function changeTeamUser(
         ["admin", "system_operator", "organization_admin"].includes(r),
       ),
     403,
-    "팀 사용자관리에서는 학습자·Auditor 역할만 변경할 수 있습니다.",
+    "팀 사용자관리에서는 학습자·FT 멘토 역할만 변경할 수 있습니다.",
     "TEAM_USER_ROLE_FORBIDDEN",
   );
   const input = z
@@ -315,6 +315,12 @@ function saveUser(
     })
     .strict()
     .parse(body);
+  demand(
+    !input.roles.includes("ft") || s.schemaVersion >= 34,
+    409,
+    "FT 멘토 역할을 사용하려면 업무34로 이관해 주세요.",
+    "MENTOR_MIGRATION_REQUIRED",
+  );
   const entry = organization(doc, input.organizationId);
   const user = target ? s.users.find((u) => u.id === target) : undefined;
   if (target) demand(user, 404, "사용자를 찾을 수 없습니다.");

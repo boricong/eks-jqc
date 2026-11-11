@@ -109,6 +109,8 @@ export function primaryNavigationSection(
     (!!record && record.learnerId === actor.id);
   const operator = actor.roles.includes('system_operator');
   const admin = actor.roles.includes('admin');
+  if (route.path.startsWith('/mentoring')) return 'mentoring';
+  if (route.path.startsWith('/mentor-practicals')) return learner ? 'learning' : '';
   if (route.name === 'home') return 'home';
   if (route.path.startsWith('/documents')) return 'documents';
   if (route.path === '/notifications') return 'notifications';

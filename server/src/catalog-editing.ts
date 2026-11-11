@@ -155,6 +155,9 @@ function editingChanges(
         .map((k) => (k === "objective" ? "지식 평가" : "상황 대응 평가"))
         .join(", "),
       "지식 합격 기준": String(item.passScore ?? "미정"),
+      "실기(주관식) 기준": item.mentorPractical
+        ? JSON.stringify(item.mentorPractical)
+        : "사용 안 함",
       "그룹 실기 기준": item.groupPractical
         ? JSON.stringify(item.groupPractical)
         : "사용 안 함",
@@ -234,6 +237,21 @@ export function validateCatalogStructure(
     );
   } else {
     const c = item as Course;
+    demand(
+      !c.mentorPractical ||
+        (s.schemaVersion >= 34 &&
+          c.qualificationType === "auditee" &&
+          !c.groupPractical),
+      422,
+      "실기(주관식)는 업무34의 일반 자격 필수 평가로 설정해 주세요.",
+    );
+    if (c.mentorPractical)
+      demand(
+        new Set(c.mentorPractical.questions.map((q) => q.id)).size ===
+          c.mentorPractical.questions.length,
+        422,
+        "실기 문항 ID가 중복되었습니다.",
+      );
     demand(
       !c.groupPractical ||
         (s.schemaVersion >= 33 &&

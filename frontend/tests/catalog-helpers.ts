@@ -33,8 +33,9 @@ export async function saveCriterion(page: Page, mode?: 'current' | 'new') {
 }
 
 export async function createCourse(page: Page, type = 'Auditee', name = '새 인증Set') {
-  await page.getByRole('button', { name: `${type} 특화인증Set 추가`, exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: `${type} 특화인증Set 만들기`, exact: true });
+  const prefix = type === 'Auditor' ? 'Auditor ' : '';
+  await page.getByRole('button', { name: `${prefix}특화인증Set 추가`, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: `${prefix}특화인증Set 만들기`, exact: true });
   await dialog.getByLabel('인증Set명', { exact: true }).fill(name);
   await dialog.getByRole('button', { name: '생성 후 편집', exact: true }).click();
   await expect(dialog).not.toBeVisible();

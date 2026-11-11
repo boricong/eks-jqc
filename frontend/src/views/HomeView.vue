@@ -201,6 +201,11 @@ const stats = computed(() =>
         :role="multipleRoles ? 'tabpanel' : undefined"
         :aria-labelledby="panelLabel"
       >
+        <section v-if="homeRole === 'ft'" class="panel">
+          <h2>담당 실기 평가</h2>
+          <p>배정된 개인 수강의 수행 답변을 확인하고 문항별 점수와 피드백을 등록해 주세요.</p>
+          <RouterLink to="/mentoring" class="button primary">담당 실기 평가 보기</RouterLink>
+        </section>
         <p v-if="summary.managed.value" class="home-scope">
           <strong>{{ managementName }}</strong> ·
           {{
@@ -265,7 +270,7 @@ const stats = computed(() =>
             :assignments="active"
             :planning-requests="planningRequests"
           />
-          <section v-if="!personalHome" class="home-card">
+          <section v-if="!personalHome && homeRole !== 'ft'" class="home-card">
             <div class="section-heading">
               <h2>
                 {{

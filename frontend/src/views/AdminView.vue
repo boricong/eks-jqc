@@ -1921,7 +1921,10 @@ watch(
                       ? '본인 학습 확인'
                       : c.groupPractical
                         ? '그룹 실기 · 개인별 3회'
-                        : c.assessmentKinds.map((k) => labels[k]).join(' · ')
+                        : [
+                            ...c.assessmentKinds.map((k) => labels[k]),
+                            ...(c.mentorPractical ? ['실기(주관식) · FT 멘토'] : []),
+                          ].join(' · ')
                   }}
                 </td>
                 <td>

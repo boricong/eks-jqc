@@ -15,6 +15,7 @@ export const managementSections = [
   { id: 'organization-requirements', group: 'organization', name: '조직 필요자격', icon: 'list' },
   { id: 'auditor', group: 'auditor', name: 'Auditor 관리', icon: 'award' },
   { id: 'assignments', group: 'operations', name: '계획 요청·진행', icon: 'list' },
+  { id: 'mentor-practicals', group: 'operations', name: '실기 멘토 배정', icon: 'clipboard' },
   { id: 'group-assessments', group: 'operations', name: '그룹 실기', icon: 'users' },
   { id: 'results', group: 'operations', name: '평가·수료 결과', icon: 'clipboard' },
   { id: 'credentials', group: 'operations', name: '보유 자격 관리', icon: 'award' },

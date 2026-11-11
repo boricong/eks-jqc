@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mentorStatusLabels } from '@eks/contracts';
 import { releaseVersionLabel } from '@eks/contracts';
 import { computed } from 'vue';
 import type { DashboardMemberDetail } from '@eks/contracts';
@@ -166,7 +167,12 @@ const history = computed(
                         ? `그룹 실기 ${c.groupPractical.invalidated ? '판정 무효' : c.groupPractical.result === 'passed' ? 'Pass' : c.groupPractical.result === 'failed' ? 'Fail' : c.groupPractical.completed + '/3회'}`
                         : c.groupPracticalRequired
                           ? '그룹 지정 전'
-                          : assessmentLabels[c.practical]
+                          : [
+                              assessmentLabels[c.practical],
+                              ...(c.mentorPractical
+                                ? ['실기(주관식): ' + mentorStatusLabels[c.mentorPractical.status]]
+                                : []),
+                            ].join(' · ')
                     }}
                   </td>
                 </tr>

@@ -159,6 +159,21 @@ export function saveCommonCourse(
       422,
       "정답 번호가 선택지 범위를 벗어났습니다.",
     );
+  demand(
+    !input.mentorPractical ||
+      (s.schemaVersion >= 34 &&
+        input.qualificationType === "auditee" &&
+        !input.groupPractical),
+    422,
+    "실기(주관식)는 업무34의 일반 자격 필수 평가로 설정해 주세요.",
+  );
+  if (input.mentorPractical)
+    demand(
+      new Set(input.mentorPractical.questions.map((q) => q.id)).size ===
+        input.mentorPractical.questions.length,
+      422,
+      "실기 문항 ID가 중복되었습니다.",
+    );
   if (input.qualificationType === "auditor")
     demand(
       input.assessmentKinds.length === 0 &&

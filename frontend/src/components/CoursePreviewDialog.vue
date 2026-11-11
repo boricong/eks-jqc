@@ -24,7 +24,10 @@ watch(
 const assessmentSummary = computed(
   () =>
     (props.course?.groupPractical ? '그룹 실기 · 개인별 3회 · 공동 판정' : '') ||
-    props.course?.assessmentKinds.map((kind) => kindLabels[kind]).join(' · ') ||
+    [
+      ...(props.course?.assessmentKinds.map((kind) => kindLabels[kind]) || []),
+      ...(props.course?.mentorPractical ? ['실기(주관식) · FT 멘토'] : []),
+    ].join(' · ') ||
     '설정된 평가가 없습니다.',
 );
 </script>
@@ -81,6 +84,17 @@ const assessmentSummary = computed(
             </li>
           </ul>
         </section>
+        <section v-if="course.mentorPractical">
+          <h4>실기(주관식) · 수료 필수 · {{ course.mentorPractical.questions.length }}문항</h4>
+          <p>합격 기준 {{ course.mentorPractical.passScore }}% · 문항별 배점 합산</p>
+          <p
+            v-for="(q, i) in course.mentorPractical.questions"
+            :key="q.id"
+            style="white-space: pre-wrap; overflow-wrap: anywhere"
+          >
+            {{ i + 1 }}. {{ q.prompt }} ({{ q.points }}점)
+          </p>
+        </section>
         <section v-if="course.subjectiveEnabled" aria-label="주관식 문항">
           <h4>주관식 평가 · 수료에 영향 없음 · {{ course.subjectiveQuestions.length }}문항</h4>
           <p
@@ -111,7 +125,9 @@ const assessmentSummary = computed(
             </dd>
           </div>
         </dl>
-        <p v-else-if="!course.groupPractical" class="muted">설정된 평가가 없습니다.</p>
+        <p v-else-if="!course.groupPractical && !course.mentorPractical" class="muted">
+          설정된 평가가 없습니다.
+        </p>
       </section>
       <p class="release-footer">{{ releaseVersionLabel(course) }}</p>
     </div>

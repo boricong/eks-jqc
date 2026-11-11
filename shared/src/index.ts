@@ -80,13 +80,25 @@ import {
 } from "./organizations.ts";
 export * from "./organizations.ts";
 
+export * from "./mentor-practical.ts";
+import {
+  MentorPracticalConfigSchema,
+  MentorAssignmentSchema,
+  MentorAttemptSchema,
+  MentorCompletionSchema,
+  mentorPracticalErrors,
+  type MentorProgress,
+} from "./mentor-practical.ts";
+
 export const BaseRoleSchema = z.enum([
+  "ft",
   "learner",
   "evaluator",
   "admin",
   "system_operator",
 ]);
 export const RoleSchema = z.enum([
+  "ft",
   "learner",
   "evaluator",
   "admin",
@@ -95,6 +107,7 @@ export const RoleSchema = z.enum([
 ]);
 export type Role = z.infer<typeof RoleSchema>;
 export const roleLabels: Record<Role, string> = {
+  ft: "FT 멘토",
   learner: "학습자",
   evaluator: "Auditor",
   admin: "팀 조직 관리자",
@@ -240,6 +253,7 @@ export interface SubjectiveResponseView {
 }
 export const CourseContentSchema = z.object({
   // Absence is the legacy format: never inject a default into historic hashed content.
+  mentorPractical: MentorPracticalConfigSchema.optional(),
   groupPractical: GroupPracticalConfigSchema.optional(),
   subjectiveEnabled: z.boolean().default(false),
   subjectiveQuestions: z.array(SubjectiveQuestionSchema).max(500).default([]),
@@ -437,6 +451,7 @@ export const CompletionSchema = z.object({
   method: z
     .enum(["assessment", "self_confirmation", "group_practical"])
     .default("assessment"),
+  mentorPractical: MentorCompletionSchema.optional(),
   groupPractical: GroupCompletionEvidenceSchema.optional(),
   learningEvidence: z.array(LearningConfirmationSchema).max(100).default([]),
   id,
@@ -542,7 +557,10 @@ export const StateSchema = z.object({
     z.literal(31),
     z.literal(32),
     z.literal(33),
+    z.literal(34),
   ]),
+  mentorAssignments: z.array(MentorAssignmentSchema).default([]),
+  mentorAttempts: z.array(MentorAttemptSchema).default([]),
   groupPracticalEnvironment: z.literal("trial").optional(),
   groupAssessments: z.array(GroupAssessmentSchema).default([]),
   groupAssessmentFiles: z.array(GroupFileSchema).default([]),
@@ -602,6 +620,7 @@ export interface Attempt extends Partial<Draft> {
   itemResults?: AssessmentAttempt["itemResults"];
 }
 export interface Enrollment {
+  mentorPractical?: MentorProgress;
   groupPractical?: GroupPersonalProgress;
   id: string;
   courseId: string;
@@ -621,6 +640,7 @@ export interface Assignment extends StoredAssignment {
   certification?: Certification;
 }
 export interface Workspace {
+  mentorPracticalEnabled?: boolean;
   groupPracticalEnabled?: boolean;
   currentQualifications: {
     lv1OrganizationId: string;
@@ -674,6 +694,8 @@ export interface CourseUsage {
   qualifications: Pick<Qualification, "id" | "title" | "version">[];
   successorVersions: { id: string; version: number }[];
   counts: {
+    mentorAssignments?: number;
+    mentorAttempts?: number;
     groupAssessments?: number;
     assignments: number;
     enrollments: number;
@@ -708,6 +730,13 @@ export function assessmentPrerequisite(
 export function courseErrors(course: CourseContent): string[] {
   const errors: string[] = [];
   if (!course.title.trim()) errors.push("인증Set명을 입력해 주세요.");
+  if (course.mentorPractical) {
+    errors.push(...mentorPracticalErrors(course.mentorPractical));
+    if (course.qualificationType !== "auditee" || course.groupPractical)
+      errors.push(
+        "실기(주관식)는 일반 자격에서 별도 필수 평가로 설정해 주세요.",
+      );
+  }
   if (course.groupPractical) {
     errors.push(...groupPracticalErrors(course.groupPractical));
     if (
@@ -719,8 +748,9 @@ export function courseErrors(course: CourseContent): string[] {
   }
   if (
     course.qualificationType !== "auditor" &&
-    !course.groupPractical &&
-    (!course.assessmentKinds.length ||
+    ((!course.groupPractical &&
+      !course.mentorPractical &&
+      !course.assessmentKinds.length) ||
       new Set(course.assessmentKinds).size !== course.assessmentKinds.length)
   )
     errors.push("필수 평가 유형을 중복 없이 선택해 주세요.");
@@ -903,7 +933,8 @@ export function renewalQualificationErrors(
     q.courseIds.length !== 1 &&
       "재인증에는 객관식 인증Set 1개를 연결해 주세요.",
     c &&
-      (c.groupPractical ||
+      (c.mentorPractical ||
+        c.groupPractical ||
         c.assessmentKinds.length !== 1 ||
         c.assessmentKinds[0] !== "objective" ||
         c.practicalQuestions.length ||

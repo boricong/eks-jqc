@@ -42,6 +42,18 @@ export const router = createRouter({
       meta: { role: 'learner' },
     },
     { path: '/plans/:id?', name: 'plans', component: PlansView, meta: { role: 'learner' } },
+    {
+      path: '/mentoring/:id?',
+      name: 'mentoring',
+      component: () => import('./views/MentorPracticalsView.vue'),
+      meta: { role: 'ft', title: '실기 평가' },
+    },
+    {
+      path: '/mentor-practicals/:id',
+      name: 'mentor-practical-personal',
+      component: () => import('./views/MentorPracticalsView.vue'),
+      meta: { role: 'learner', title: '실기(주관식)' },
+    },
     { path: '/notifications', name: 'notifications', component: NotificationsView },
     {
       path: '/group-assessments/:id',
@@ -98,6 +110,16 @@ export const router = createRouter({
       component: AdminLayout,
       meta: { management: true },
       children: [
+        {
+          path: 'mentor-practicals/:id?',
+          name: 'mentor-practical-management',
+          component: () => import('./views/MentorPracticalsView.vue'),
+          meta: {
+            management: true,
+            managementSection: 'mentor-practicals',
+            title: '실기 멘토 배정',
+          },
+        },
         {
           path: 'group-assessments/:id?',
           name: 'group-practical-management',

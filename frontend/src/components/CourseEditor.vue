@@ -5,6 +5,7 @@ import SubjectiveQuestionsEditor from './SubjectiveQuestionsEditor.vue';
 import CompactTabs from './CompactTabs.vue';
 import CourseLearningInfo from './CourseLearningInfo.vue';
 import CourseAssessmentEditor from './CourseAssessmentEditor.vue';
+import MentorPracticalEditor from './MentorPracticalEditor.vue';
 import GroupPracticalEditor from './GroupPracticalEditor.vue';
 import { useDemo } from '../stores/demo';
 import type { CourseIssue } from '../course-editor';
@@ -22,10 +23,16 @@ function toggleGroup(event: Event) {
     props.course.groupPractical = { instruction: '', method: '', criterion: '', metrics: [] };
     props.course.assessmentKinds = [];
     props.course.subjectiveEnabled = false;
+    delete props.course.mentorPractical;
   } else {
     delete props.course.groupPractical;
     props.course.assessmentKinds = ['objective'];
   }
+}
+function toggleMentor(event: Event) {
+  if ((event.target as HTMLInputElement).checked)
+    props.course.mentorPractical = { passScore: 80, questions: [] };
+  else delete props.course.mentorPractical;
 }
 const uid = useId(),
   section = ref('basic');
@@ -37,6 +44,7 @@ const sections = computed(() =>
   [
     { id: 'basic', label: '기본정보' },
     { id: 'learning', label: '학습 정보' },
+    ...(props.course.mentorPractical ? [{ id: 'mentor', label: '실기(주관식)' }] : []),
     ...(props.course.groupPractical ? [{ id: 'group', label: '그룹 실기 기준' }] : []),
     ...(props.course.qualificationType !== 'auditor' &&
     props.course.assessmentKinds.includes('objective')
@@ -173,6 +181,16 @@ defineExpose({
                 :disabled="disabled"
               />실기 · 상황 대응 평가 <small>수료 필수</small></label
             >
+            <label
+              v-if="!objectiveOnly && (store.data.mentorPracticalEnabled || course.mentorPractical)"
+              class="checkbox-label"
+              ><input
+                type="checkbox"
+                :checked="!!course.mentorPractical"
+                :disabled="disabled"
+                @change="toggleMentor"
+              />실기(주관식) · FT 멘토 평가 <small>수료 필수</small></label
+            >
             <label v-if="!objectiveOnly" class="checkbox-label"
               ><input
                 v-model="course.subjectiveEnabled"
@@ -193,6 +211,12 @@ defineExpose({
           평가 유형을 선택하면 해당 편집 항목이 나타납니다.
         </p>
       </div>
+      <MentorPracticalEditor
+        v-if="course.mentorPractical"
+        v-show="section === 'mentor'"
+        :config="course.mentorPractical"
+        :disabled="disabled"
+      />
       <GroupPracticalEditor
         v-if="course.groupPractical"
         v-show="section === 'group'"

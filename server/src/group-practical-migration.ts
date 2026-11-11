@@ -10,14 +10,15 @@ export function migrateGroupPractical(
   at = new Date().toISOString(),
 ) {
   const raw = input as State;
-  if (![32, 33].includes(raw.schemaVersion))
-    throw Error("업무32 또는33 파일이 필요합니다.");
+  if (![32, 33, 34].includes(raw.schemaVersion))
+    throw Error("업무32~34 파일이 필요합니다.");
   const organizations = validateOrganizations(orgInput);
   if (organizations.schemaVersion !== 5)
     throw Error("조직5 파일이 필요합니다.");
   const state = validateState(structuredClone(input), organizations);
-  const alreadyApplied = state.schemaVersion === 33;
-  if (alreadyApplied && state.groupPracticalEnvironment !== "trial")
+  const alreadyApplied =
+    state.schemaVersion >= 33 && state.groupPracticalEnvironment === "trial";
+  if (state.schemaVersion === 33 && !alreadyApplied)
     throw Error("업무33 시험환경 표시가 없습니다.");
   if (!alreadyApplied) {
     if (
@@ -30,7 +31,11 @@ export function migrateGroupPractical(
       u.roles.includes("system_operator"),
     );
     if (!operator) throw Error("이관 기록을 남길 시스템 운영자가 필요합니다.");
-    state.schemaVersion = 33;
+    const fromSchema = state.schemaVersion;
+    state.schemaVersion = Math.max(
+      33,
+      state.schemaVersion,
+    ) as State["schemaVersion"];
     state.groupPracticalEnvironment = "trial";
     state.revision++;
     state.audits.push({
@@ -40,7 +45,7 @@ export function migrateGroupPractical(
       action: "migration.group-practical",
       targetId: "group-practical-v33",
       reason: "별도 시험환경 그룹 실기 기능 이관 · 과거 인증 근거 보존",
-      details: { fromSchema: 32, environment: "trial" },
+      details: { fromSchema, environment: "trial" },
     });
   }
   return {

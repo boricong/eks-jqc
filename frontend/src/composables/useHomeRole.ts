@@ -7,6 +7,7 @@ const prefix = 'eks-home-role-';
 const choices: { id: Role; label: string }[] = [
   { id: 'learner', label: '자격 인증' },
   { id: 'evaluator', label: 'Auditor 인증' },
+  { id: 'ft', label: 'FT 멘토' },
   { id: 'admin', label: '팀 관리' },
   { id: 'organization_admin', label: '조직 관리' },
   { id: 'system_operator', label: '시스템 운영' },

@@ -51,7 +51,7 @@ export function registerGroupPracticalRoutes(
     return {
       enabled:
         enabled &&
-        s.schemaVersion === 33 &&
+        s.schemaVersion >= 33 &&
         s.groupPracticalEnvironment === "trial",
       environment: s.groupPracticalEnvironment || null,
       maxFileBytes: files.maxBytes,

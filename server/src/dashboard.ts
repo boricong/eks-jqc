@@ -1,3 +1,4 @@
+import { mentorProgress } from "./mentor-practical-evidence.ts";
 import {
   usableCompletion,
   personalGroupProgress,
@@ -1245,6 +1246,7 @@ export function dashboardReader(
                     ? "failed"
                     : "ready";
           return {
+            mentorPractical: mentorProgress(s, e.id),
             groupPracticalRequired: !!course.groupPractical,
             groupPractical: personalGroupProgress(s, e.id),
             courseId: course.id,

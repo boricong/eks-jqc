@@ -32,7 +32,11 @@ async function setup(page: Page, store: JsonStore, practical = false) {
   await actor(page, 'learner-1');
   if (practical) {
     const session = (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!;
-    const headers = () => ({ 'X-Session-Tab': session, 'Idempotency-Key': crypto.randomUUID() });
+    const headers = () => ({
+      'X-Session-Tab': session,
+      'Idempotency-Key': crypto.randomUUID(),
+      'X-EKS-Release-Contract': '7',
+    });
     const start = await page.request.post('/api/enrollments/assignment-1:demo-course-2/attempts', {
       headers: headers(),
       data: { kind: 'objective' },
@@ -170,6 +174,7 @@ test('번호 탭과 문항의 연결·상황/문항/보기 위계·답안 번호
     headers: {
       'X-Session-Tab': (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!,
       'Idempotency-Key': crypto.randomUUID(),
+      'X-EKS-Release-Contract': '7',
     },
     data: {
       revision: attempt.revision,
@@ -248,7 +253,7 @@ test('평가 현황 다섯 열 중앙 정렬·반응형·선행 안내와 조회
   await writeFile(info.outputPath('status-layout.json'), JSON.stringify(metrics, null, 2));
 });
 
-test('미설정·평가 없음·Hold·제외와 작성/통과/미통과 현황의 행동 유지', async ({
+test('미설정·평가 없음·deactive·제외와 작성/통과/미통과 현황의 행동 유지', async ({
   page,
   backend,
 }, info) => {
@@ -265,7 +270,7 @@ test('미설정·평가 없음·Hold·제외와 작성/통과/미통과 현황�
     const a = data.assignments.find((a: { id: string }) => a.id === 'assignment-1');
     const e = a.enrollments.find((e: { courseId: string }) => e.courseId === c.id);
     e.objective = state;
-    if (blocked === 'hold') data.actor.workStatus = 'deactive';
+    if (blocked === 'deactive') data.actor.workStatus = 'deactive';
     if (blocked === 'excluded') a.excludedReason = '검증 제외 시험';
     await route.fulfill({ response, json: data });
   });
@@ -282,12 +287,12 @@ test('미설정·평가 없음·Hold·제외와 작성/통과/미통과 현황�
     await expect(row.locator('.assessment-threshold')).toContainText('미설정');
     await expect(row.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
-  for (const value of ['hold', 'excluded']) {
+  for (const value of ['deactive', 'excluded']) {
     blocked = value;
     await page.reload();
     await expect(page.locator('.assessment-grid').getByRole('link')).toHaveCount(0);
     await expect(page.locator('.assessment-row-notice').first()).toContainText(
-      value === 'hold' ? 'Hold' : '검증 제외',
+      value === 'deactive' ? '현재 상태에서는 평가를 진행할 수 없습니다.' : '검증 제외',
     );
     await page.screenshot({ path: info.outputPath(`status-${value}.png`), fullPage: true });
   }

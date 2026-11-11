@@ -1,3 +1,4 @@
+import { mentorEvidence, mentorProgress } from "./mentor-practical-evidence.ts";
 import { requireAuditorTeam } from "./auditor-team.ts";
 import {
   groupEvidence,
@@ -390,6 +391,7 @@ export function reconcile(
   }));
   const checklist = s.learningChecklists.find((v) => v.enrollmentId === e.id);
   const requiredItems = c.learningItems.filter((i) => i.required);
+  const mentor = c.mentorPractical ? mentorEvidence(s, e.id) : undefined;
   const group = c.groupPractical ? groupEvidence(s, e.id) : undefined;
   const complete =
     c.qualificationType === "auditor"
@@ -399,7 +401,9 @@ export function reconcile(
         )
       : c.groupPractical
         ? !!group
-        : evidence.length > 0 && evidence.every((ev) => ev.attemptId);
+        : (evidence.length > 0 || !!c.mentorPractical) &&
+          evidence.every((ev) => ev.attemptId) &&
+          (!c.mentorPractical || !!mentor);
   if (complete && !s.completions.some((co) => co.enrollmentId === e.id)) {
     newCompletion = uid();
     s.completions.push({
@@ -410,6 +414,7 @@ export function reconcile(
             ? "group_practical"
             : "assessment",
       ...(group ? { groupPractical: group } : {}),
+      ...(mentor ? { mentorPractical: mentor } : {}),
       learningEvidence:
         c.qualificationType === "auditor"
           ? structuredClone(checklist!.items)
@@ -1239,6 +1244,7 @@ export function workspace(
               id: e.id,
               courseId: e.courseId,
               groupPractical: personalGroupProgress(s, e.id),
+              mentorPractical: mentorProgress(s, e.id),
               subjective: (() => {
                 const v = subjectiveView(s, u, e.id);
                 return v?.response?.status === "draft"

@@ -337,7 +337,8 @@ export class JsonStore extends FileStore<State> {
     await this.groupFiles.restore(file, state);
   }
   protected override async finishBackup(file: string, state: State) {
-    if (state.schemaVersion !== 33) return;
+    if (state.schemaVersion < 33 || state.groupPracticalEnvironment !== "trial")
+      return;
     await this.writeAtomic(
       `${file}.organizations.json`,
       this.organizations.snapshot(),
@@ -349,7 +350,7 @@ export class JsonStore extends FileStore<State> {
         .digest("hex");
     await this.writeAtomic(`${file}.bundle.json`, {
       version: 1,
-      schemaVersion: 33,
+      schemaVersion: state.schemaVersion,
       environment: "trial",
       stateHash: await sha256(file),
       organizationHash: await sha256(`${file}.organizations.json`),
@@ -367,7 +368,7 @@ export class JsonStore extends FileStore<State> {
     const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
     demand(
       manifest.version === 1 &&
-        manifest.schemaVersion === 33 &&
+        [33, 34].includes(manifest.schemaVersion) &&
         manifest.environment === "trial" &&
         manifest.stateHash === hash(stateBytes) &&
         manifest.organizationHash === hash(organizationBytes) &&
@@ -386,7 +387,7 @@ export class JsonStore extends FileStore<State> {
         JSON.parse(maintenanceBytes.toString("utf8")),
       );
     demand(
-      state.schemaVersion === 33 &&
+      state.schemaVersion === manifest.schemaVersion &&
         state.groupPracticalEnvironment === "trial" &&
         manifest.evidenceFiles === state.groupAssessmentFiles.length,
       422,
@@ -408,7 +409,7 @@ export class JsonStore extends FileStore<State> {
         organizations,
         report: {
           restored: true,
-          schemaVersion: 33,
+          schemaVersion: state.schemaVersion,
           evidenceFiles: state.groupAssessmentFiles.length,
         },
       }),

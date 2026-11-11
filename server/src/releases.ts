@@ -65,11 +65,13 @@ export function courseChange(
       before.questions,
       before.practicalQuestions,
       before.groupPractical,
+      before.mentorPractical,
     ]),
     withoutIds([
       after.questions,
       after.practicalQuestions,
       after.groupPractical,
+      after.mentorPractical,
     ]),
   )
     ? "minor"

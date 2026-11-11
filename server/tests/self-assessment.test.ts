@@ -250,13 +250,13 @@ test("전환 후 새 진행은 전환 명령 재실행에 의해 삭제되지 �
   });
   assert.equal(transitionAssessments(s, org).state.planningRequests.length, 1);
 });
-test("폐지된 FT 역할·FT 변경·주관식 확정·구형 필드를 직접 호출해도 처리하지 않는다", async (t) => {
+test("업무32 FT 역할·폐지된 FT 변경·주관식 확정·구형 필드를 직접 호출해도 처리하지 않는다", async (t) => {
   const f = await fixture(t);
   await f.call(
     "operator-1",
     "/system/users",
     { name: "obsolete", organizationId: "org-photo", roles: ["ft"] },
-    422,
+    409,
   );
   await f.call(
     "admin-1",

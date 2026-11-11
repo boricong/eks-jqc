@@ -1,3 +1,4 @@
+import { registerMentorPracticalRoutes } from "./mentor-practical-routes.ts";
 import { registerGroupPracticalRoutes } from "./group-practical-routes.ts";
 import { workStatusInfo } from "./work-status.ts";
 import { registerAuditorTeamRoutes } from "./auditor-team-routes.ts";
@@ -143,13 +144,13 @@ export async function buildApp(
     requestGenerations.set(request, store.generation);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-      /^\/api\/(group-assessments|me\/auditor\/starts|auditor-program|team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(organizations|users|common-courses|qualification-templates))(\/|\?|$)/.test(
+      /^\/api\/(mentor-practicals|group-assessments|me\/auditor\/starts|auditor-program|team-users|courses|qualifications|plans|planning-requests|attempts|enrollments|renewals|renewal-batches|common-course-updates|system\/(organizations|users|common-courses|qualification-templates))(\/|\?|$)/.test(
         request.url,
       )
     ) {
       actor(request);
       demand(
-        request.headers["x-eks-release-contract"] === "6",
+        request.headers["x-eks-release-contract"] === "7",
         409,
         "버전 저장 방식이 변경되었습니다. 입력을 보관한 뒤 새로고침해 주세요.",
         "RELEASE_CONTRACT_CHANGED",
@@ -177,6 +178,16 @@ export async function buildApp(
   });
   app.addHook("preHandler", async (request) => {
     if (
+      (request.body as any)?.mentorPractical ||
+      (request.body as any)?.content?.mentorPractical
+    )
+      demand(
+        store.snapshot().schemaVersion >= 34,
+        409,
+        "FT 멘토 실기 기능을 사용하려면 업무34로 이관해 주세요.",
+        "MENTOR_MIGRATION_REQUIRED",
+      );
+    if (
       !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
       request.body &&
       typeof request.body === "object" &&
@@ -191,7 +202,7 @@ export async function buildApp(
         "GROUP_DISABLED",
       );
     if (
-      /^\/api\/(group-assessments|group-assessment-files|workspace|team-users|dashboard|certifications|completions|planning-requests|plans|assignments|enrollments|attempts|renewals|renewal-batches|system\/users)(\/|\?|$)/.test(
+      /^\/api\/(mentor-practicals|group-assessments|group-assessment-files|workspace|team-users|dashboard|certifications|completions|planning-requests|plans|assignments|enrollments|attempts|renewals|renewal-batches|system\/users)(\/|\?|$)/.test(
         request.url,
       )
     ) {
@@ -311,6 +322,7 @@ export async function buildApp(
     return { ok: true };
   });
   app.get("/api/workspace", async (request) => ({
+    mentorPracticalEnabled: store.snapshot().schemaVersion >= 34,
     groupPracticalEnabled:
       groupPracticalEnabled &&
       store.snapshot().groupPracticalEnvironment === "trial",
@@ -325,6 +337,7 @@ export async function buildApp(
     ),
   }));
   registerGroupPracticalRoutes(app, store, actor, clock, groupPracticalEnabled);
+  registerMentorPracticalRoutes(app, store, actor, clock);
   app.get("/api/home", async (request) => {
     const view = workspace(
       store.snapshot(),

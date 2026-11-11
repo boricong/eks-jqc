@@ -74,6 +74,19 @@ const back = computed(() =>
     </section>
     <section class="panel editor-panel">
       <h2>수료 근거</h2>
+      <p v-if="record.mentorPractical">
+        실기(주관식) 합격 · {{ record.mentorPractical.earned }} /
+        {{ record.mentorPractical.total }}점 · 기준 {{ record.mentorPractical.passScore }}% · FT
+        멘토 {{ store.username(record.mentorPractical.mentorId) }}
+        <RouterLink
+          :to="
+            store.fullManagement
+              ? store.managementLink(`/admin/mentor-practicals/${e.id}`)
+              : `/mentor-practicals/${e.id}`
+          "
+          >실기 채점 근거 보기</RouterLink
+        >
+      </p>
       <p v-if="record.groupPractical">
         <RouterLink
           :to="

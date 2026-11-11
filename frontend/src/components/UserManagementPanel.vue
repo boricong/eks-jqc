@@ -33,6 +33,7 @@ const roleOptions = computed(() =>
     .filter(
       ([value]) =>
         value !== 'evaluator' &&
+        (value !== 'ft' || !!store.data.mentorPracticalEnabled) &&
         (isTeam.value
           ? teamEditableRoles.some((r) => r === value)
           : value !== 'organization_admin'),

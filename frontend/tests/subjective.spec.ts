@@ -217,7 +217,8 @@ test('주관식 미제출 상태로 필수 평가를 수료하면 초안은 본�
       headers: {
         'X-Session-Tab': tab,
         'Idempotency-Key': randomUUID(),
-        Origin: 'http://127.0.0.1:5286',
+        'X-EKS-Release-Contract': '7',
+        Origin: new URL(page.url()).origin,
       },
     });
     expect(r.ok(), await r.text()).toBe(true);

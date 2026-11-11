@@ -43,7 +43,7 @@ async function fixture(
     actor = "admin-1",
     key = randomUUID(),
     binary?: Buffer,
-    contract = "6",
+    contract = "7",
     method?: "GET" | "POST" | "PUT",
   ) {
     if (!cookies.has(actor)) {
@@ -450,7 +450,7 @@ test("실제 인증Set 개정 API는 그룹 기준을 새 메이저에 고정하
     "admin-1",
     randomUUID(),
     undefined,
-    "6",
+    "7",
     "PUT",
   );
   const next = f.store.snapshot();

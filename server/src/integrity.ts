@@ -1,3 +1,4 @@
+import { validateMentorPracticals } from "./mentor-practical-integrity.ts";
 import { validateGroups } from "./group-practical-integrity.ts";
 import { validateRenewalBatches } from "./renewal-integrity.ts";
 import { validateRenewalStructure } from "./renewal-criteria.ts";
@@ -34,7 +35,9 @@ export function validateState(
 ): State {
   if (
     !legacy &&
-    [25, 26, 27, 28, 29, 30, 31, 32, 33].includes((input as any)?.schemaVersion)
+    [25, 26, 27, 28, 29, 30, 31, 32, 33, 34].includes(
+      (input as any)?.schemaVersion,
+    )
   ) {
     const raw = input as any;
     for (const item of [
@@ -80,11 +83,19 @@ export function validateState(
     // Older fixtures and imported archived criteria may omit the ordinary purpose;
     // explicit migration materializes it. Unknown values are rejected by the schema.
   }
+  if (!legacy && (input as any)?.schemaVersion >= 34) {
+    check(
+      Array.isArray((input as any).mentorAssignments) &&
+        Array.isArray((input as any).mentorAttempts),
+      "업무34 멘토 실기 필드 누락",
+    );
+  }
   const s = (legacy
     ? LegacyStateSchema.parse(input)
     : StateSchema.parse(input)) as unknown as State;
   if (!legacy) {
     validateGroups(s);
+    validateMentorPracticals(s);
     validateWorkStatus(s);
     validateSubjective(s);
     if (s.schemaVersion >= 28) {
@@ -716,7 +727,11 @@ export function validateState(
       );
     if (
       c.qualificationType === "auditee" &&
-      kinds.length > 0 &&
+      (kinds.length > 0 || !!c.mentorPractical) &&
+      (!c.mentorPractical ||
+        s.mentorAttempts.some(
+          (t) => t.enrollmentId === e.id && t.result === "passed",
+        )) &&
       !a.excludedReason &&
       kinds.every((kind) =>
         s.attempts.some(

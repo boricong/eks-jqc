@@ -24,6 +24,11 @@ export function courseUsage(
     .filter((c) => c.parentId === courseId)
     .map(({ id, version }) => ({ id, version }));
   const counts = {
+    mentorAssignments: s.mentorAssignments.filter((m) =>
+      enrollments.some((e) => e.id === m.enrollmentId),
+    ).length,
+    mentorAttempts: s.mentorAttempts.filter((t) => t.courseId === courseId)
+      .length,
     groupAssessments: s.groupAssessments.filter((g) => g.courseId === courseId)
       .length,
     assignments: assignmentIds.size,

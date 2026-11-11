@@ -1,3 +1,4 @@
+import { migrateMentorPractical } from "./mentor-practical-migration.ts";
 import { migrateGroupPractical } from "./group-practical-migration.ts";
 import { migrateUnifiedStatus } from "./unified-status-migration.ts";
 import { migrateAuditorTeams } from "./auditor-team-migration.ts";
@@ -35,6 +36,13 @@ import { migrateAdministration } from "./administration-migration.ts";
 import { migratePolicies } from "./policy-migration.ts";
 import { migrateLifecycle } from "./lifecycle-migration.ts";
 
+const practicalMigrations: Record<
+  string,
+  typeof migrateGroupPractical | typeof migrateMentorPractical
+> = {
+  "migrate-group-practical": migrateGroupPractical,
+  "migrate-mentor-practical": migrateMentorPractical,
+};
 const file = path.resolve(
   process.env.EKS_DATA_FILE ||
     fileURLToPath(new URL("../../data/runtime/state.json", import.meta.url)),
@@ -70,6 +78,7 @@ if (
     "migrate-auditor-teams",
     "migrate-unified-status",
     "migrate-group-practical",
+    "migrate-mentor-practical",
   ].includes(command)
 ) {
   const mappingFile = optionsMapping();
@@ -92,8 +101,8 @@ if (
       "그룹 실기 이관은 별도 시험환경에서 --trial 옵션으로 실행해 주세요.",
     );
   const transform =
-    command === "migrate-group-practical"
-      ? migrateGroupPractical
+    practicalMigrations[command] !== undefined
+      ? practicalMigrations[command]!
       : command === "migrate-unified-status"
         ? migrateUnifiedStatus
         : command === "migrate-auditor-teams"
@@ -182,8 +191,8 @@ if (
             organizationHash: value("--organization-sha256")!,
           },
           transform,
-          command === "migrate-group-practical"
-            ? "group-practical"
+          practicalMigrations[command]
+            ? command.slice("migrate-".length)
             : command === "migrate-unified-status"
               ? "unified-status"
               : command === "migrate-auditor-teams"

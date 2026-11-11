@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mentorStatusLabels } from '@eks/contracts';
 import { releaseVersionLabel } from '@eks/contracts';
 import CourseCategory from '../components/CourseCategory.vue';
 import AuditorChecklist from '../components/AuditorChecklist.vue';
@@ -306,6 +307,27 @@ function chooseCourse(id: string) {
           </div>
         </section>
         <template v-else>
+          <section v-if="course.mentorPractical" class="panel">
+            <h3>실기(주관식) · 수료 필수</h3>
+            <p>
+              {{ course.mentorPractical.questions.length }}문항 · 합격 기준
+              {{ course.mentorPractical.passScore }}% · 담당 FT 멘토
+              {{ selected.mentorPractical?.mentorName || '미지정' }}
+            </p>
+            <p>
+              {{
+                selected.mentorPractical
+                  ? mentorStatusLabels[selected.mentorPractical.status]
+                  : '멘토 지정 대기'
+              }}<span v-if="selected.mentorPractical?.earned !== undefined">
+                · {{ selected.mentorPractical.earned }} /
+                {{ selected.mentorPractical.total }}점</span
+              >
+            </p>
+            <RouterLink class="button secondary" :to="`/mentor-practicals/${selected.id}`"
+              >실기 답변·평가 결과 보기</RouterLink
+            >
+          </section>
           <section v-if="course.groupPractical" class="panel">
             <h3>그룹 실기 · 시험운영</h3>
             <p>평가자가 개인별 실기 3회와 외부 분석 결과를 등록하고 전원을 함께 판정합니다.</p>
@@ -333,8 +355,11 @@ function chooseCourse(id: string) {
           <div v-if="!course.groupPractical" class="qualification-assessment-heading">
             <h3>평가 유형 선택</h3>
             <span class="muted"
-              >{{ kinds.filter((k) => selected?.[k] === 'passed').length }} /
-              {{ kinds.length }} 통과</span
+              >{{
+                kinds.filter((k) => selected?.[k] === 'passed').length +
+                Number(selected.mentorPractical?.status === 'passed')
+              }}
+              / {{ kinds.length + Number(!!course.mentorPractical) }} 통과</span
             >
           </div>
           <div class="assessment-grid">
@@ -425,7 +450,10 @@ function chooseCourse(id: string) {
               >주관식 답변 보기</RouterLink
             >
           </section>
-          <p v-if="!kinds.length && !course.groupPractical" class="muted">
+          <p
+            v-if="!kinds.length && !course.groupPractical && !course.mentorPractical"
+            class="muted"
+          >
             등록된 평가 유형이 없습니다. 관리자에게 확인해 주세요.
           </p>
           <section v-if="selected.completion" class="qualification-completion">

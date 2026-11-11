@@ -64,6 +64,7 @@ const items = computed<Item[]>(() => {
       },
       { id: 'owned', label: '보유 자격', to: ownedQualificationsLocation },
     );
+  if (store.hasRole('ft')) result.push({ id: 'mentoring', label: '실기 평가', to: '/mentoring' });
   if (store.canEnterManagement)
     result.push({
       id: 'management',

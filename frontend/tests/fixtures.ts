@@ -3,22 +3,25 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { JsonStore } from '../../server/src/storage';
+import { mentorSeed } from '../../server/tests/mentor-practical-fixture';
 import { groupSeed } from '../../server/tests/group-practical-fixture';
 import { seedState } from '../../server/src/seed';
 import { buildApp } from '../../server/src/app';
 
 export const test = base.extend<{
+  mentorPractical: boolean;
   groupTrial: boolean;
   documentsRoot: string | undefined;
   backend: { store: JsonStore; restart: () => Promise<void>; setClock: (now?: string) => void };
 }>({
+  mentorPractical: false,
   groupTrial: false,
   documentsRoot: undefined,
   backend: [
-    async ({ documentsRoot, groupTrial }, use) => {
+    async ({ documentsRoot, groupTrial, mentorPractical }, use) => {
       const dir = await mkdtemp(path.join(os.tmpdir(), 'eks-browser-')),
         file = path.join(dir, 'runtime', 'state.json'),
-        seed = groupTrial ? groupSeed() : seedState(true);
+        seed = mentorPractical ? mentorSeed() : groupTrial ? groupSeed() : seedState(true);
       await new JsonStore(file).initialize(seed);
       let fixedNow: string | undefined;
       const options = {

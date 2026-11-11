@@ -5,7 +5,7 @@ async function finishOwn(page: any, store: any) {
   const tab = await page.evaluate(() => sessionStorage.getItem('eks-session-tab'));
   const headers = () => ({
     'X-Session-Tab': tab!,
-    'X-EKS-Release-Contract': '6',
+    'X-EKS-Release-Contract': '7',
     'Idempotency-Key': crypto.randomUUID(),
   });
   const a = store.snapshot().assignments.find((a: any) => a.learnerId === 'learner-1');

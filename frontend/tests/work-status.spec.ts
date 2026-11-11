@@ -10,7 +10,7 @@ test('업무 상태 변경의 네 화면 폭·키보드·취소·간결한 표�
   await actor(page, 'learner-1');
   const headers = async () => ({
     'X-Session-Tab': (await page.evaluate(() => sessionStorage.getItem('eks-session-tab')))!,
-    'X-EKS-Release-Contract': '6',
+    'X-EKS-Release-Contract': '7',
     'Idempotency-Key': crypto.randomUUID(),
   });
   for (const e of backend.store

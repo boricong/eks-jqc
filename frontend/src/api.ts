@@ -36,7 +36,7 @@ export async function api<T>(
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...init.headers,
         'X-Session-Tab': sessionTab,
-        'X-EKS-Release-Contract': '6',
+        'X-EKS-Release-Contract': '7',
         ...(getDataGeneration() ? { 'X-EKS-Data-Generation': getDataGeneration() } : {}),
       },
     });

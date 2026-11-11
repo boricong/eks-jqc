@@ -55,6 +55,7 @@
     "data:migrate-auditor-teams": "node --import tsx server/src/cli.ts migrate-auditor-teams",
     "data:migrate-unified-status": "node --import tsx server/src/cli.ts migrate-unified-status",
     "data:restore-group": "node --import tsx server/src/cli.ts restore-group",
+    "data:migrate-mentor-practical": "node --import tsx server/src/cli.ts migrate-mentor-practical",
     "data:migrate-group-practical": "node --import tsx server/src/cli.ts migrate-group-practical"
   },
   "devDependencies": {

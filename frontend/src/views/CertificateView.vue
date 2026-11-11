@@ -197,6 +197,11 @@ const back = computed(() =>
               ><AppIcon name="down" :size="16" :class="{ 'is-open': evidenceItemOpen[item.id] }" />
             </summary>
             <div class="certificate-evidence-body">
+              <p v-if="item.completion?.mentorPractical">
+                실기(주관식) 합격 · {{ item.completion.mentorPractical.earned }} /
+                {{ item.completion.mentorPractical.total }}점 · FT 멘토
+                {{ store.username(item.completion.mentorPractical.mentorId) }}
+              </p>
               <p v-if="item.completion?.groupPractical">
                 그룹 실기 공동 판정 · 개인별 3회 수행 · 시험 발급
               </p>

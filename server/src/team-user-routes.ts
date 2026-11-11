@@ -55,7 +55,9 @@ export function registerTeamUserRoutes(
               userCount: users.filter((u) => u.organizationId === o.id).length,
             })),
         },
-        editableRoles: [...teamEditableRoles],
+        editableRoles: teamEditableRoles.filter(
+          (role) => role !== "ft" || s.schemaVersion >= 34,
+        ),
       };
     }),
   );
